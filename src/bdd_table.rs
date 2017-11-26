@@ -100,7 +100,8 @@ struct MutRobinHoodTable {
     elem: Vec<ToplessBdd>,
     var: VarLabel,
     tbl_id: TableIndex,
-    cap: TableIndex
+    cap: TableIndex,
+    len: TableIndex
 }
 
 
@@ -110,7 +111,8 @@ impl MutRobinHoodTable {
             elem: Vec::with_capacity(sz as usize),
             var: var,
             tbl_id: tbl_id,
-            cap: sz
+            cap: sz,
+            len: 0
         };
         // zero the vector and set its length
         unsafe {
@@ -155,8 +157,9 @@ impl MutRobinHoodTable {
     /// Inserts an element from the table. Panics if same element is inserted
     /// twice, as this is likely an error. Invalidates references.
     fn insert(&mut self, bdd: ToplessBdd) -> () {
-        let sz = (((self.elem.len() + 1) as f64) * RH_LOAD_FACTOR) / (self.cap as f64);
+        let sz = (((self.len + 1) as f64) * RH_LOAD_FACTOR) / (self.cap as f64);
         assert!(sz < self.cap as f64);
+        self.len += 1;
         // capacity is met, find an adjacent spot by probing forwards until one is found.
         let mut pos = compute_pos(self.cap.clone(), bdd.low.get_index(), bdd.high.get_index());
         let mut cur_v = bdd.clone();
@@ -245,7 +248,8 @@ impl MutRobinHoodTable {
             elem: tbl.elem,
             var: tbl.var,
             tbl_id: tbl.tbl_id,
-            cap: tbl.cap
+            cap: tbl.cap,
+            len: tbl.len
         }
     }
 }
@@ -255,7 +259,8 @@ struct ImmutRobinHoodTable {
     elem: Vec<ToplessBdd>,
     var: VarLabel,
     tbl_id: TableIndex,
-    cap: TableIndex
+    cap: TableIndex,
+    len: TableIndex
 }
 
 impl ImmutRobinHoodTable {
@@ -264,7 +269,8 @@ impl ImmutRobinHoodTable {
             elem: tbl.elem,
             var: tbl.var,
             tbl_id: tbl.tbl_id,
-            cap: tbl.cap
+            cap: tbl.cap,
+            len: tbl.len
         }
     }
 
@@ -273,7 +279,8 @@ impl ImmutRobinHoodTable {
             elem: Vec::new(),
             var: var,
             tbl_id: tbl_id,
-            cap: 0
+            cap: 0, 
+            len: 0
         }
     }
 
@@ -324,7 +331,8 @@ struct LinearBddTable {
     elem: Vec<ToplessBdd>,
     cap: TableIndex,
     var: VarLabel,
-    tbl_id: TableIndex
+    tbl_id: TableIndex,
+    len: TableIndex
 }
 
 impl LinearBddTable {
@@ -333,7 +341,8 @@ impl LinearBddTable {
                 elem: Vec::with_capacity(sz as usize),
                 cap: sz,
                 var: var,
-                tbl_id: tbl_id
+                tbl_id: tbl_id,
+                len: 0
         };
         // zero the vector and set its length
         unsafe {
@@ -359,8 +368,8 @@ impl LinearBddTable {
 
     /// either fetches an existing BDD at the location, or inserts a fresh BDD at
     /// that location
-    fn get_or_insert(&mut self, table: TableIndex, bddlow: BddPtr, bddhigh: BddPtr) -> BddPtr {
-        assert!(self.elem.len() + 1 < self.cap as usize);
+    fn get_or_insert(&mut self, bddlow: BddPtr, bddhigh: BddPtr) -> BddPtr {
+        assert!((self.elem.len() + 1) as f64 * LINEAR_LOAD_FACTOR < self.cap as f64);
         let mut pos = compute_pos(self.cap, bddlow.get_index(), bddhigh.get_index());
         // probe forward from pos until an open slot is found, or we find the
         // inserted BDD
@@ -370,6 +379,7 @@ impl LinearBddTable {
                 // found an empty slot, insert our guy
                 let n = ToplessBdd::new(bddlow.clone(), bddhigh.clone());
                 self.set_pos(pos as usize, n.clone());
+                self.len += 1;
                 return BddPtr::new(self.var, self.tbl_id, pos)
             } else {
                 if b.low == bddlow && b.high == bddhigh {
@@ -448,13 +458,12 @@ impl BddSubTable {
                 let l = self.short_store.last().unwrap().elem.len() as usize;
                 let cap = self.short_store[l].cap as f64;
                 if (l as f64) < (LINEAR_LOAD_FACTOR * cap) {
-                    self.short_store[l]
-                        .get_or_insert(l as TableIndex, bddlow, bddhigh)
+                    self.short_store[l].get_or_insert(bddlow, bddhigh)
                 } else {
                     // allocate a new short store and push into it
                     self.short_store.push(
                         LinearBddTable::new(DEFAULT_LINEAR_SIZE, self.var, (l + 1) as TableIndex));
-                    self.short_store[l+1].get_or_insert((l+1) as TableIndex, bddlow, bddhigh)
+                    self.short_store[l+1].get_or_insert(bddlow, bddhigh)
                 }
             }
         }
@@ -467,11 +476,12 @@ impl BddSubTable {
 
 ////////////////////////////////////////////////////////////////////////////////
 /// Tests
+fn mk_ptr(i: TableIndex) -> BddPtr {
+    BddPtr {var: 0, idx: i}
+}
+
 #[test]
 fn test_simple_rh_insert() {
-    fn mk_ptr(i: TableIndex) -> BddPtr {
-        BddPtr {var: 0, idx: i}
-    }
     let mut cell = MutRobinHoodTable::new(DEFAULT_RH_SIZE, 0, 0);
     cell.insert_fresh(mk_ptr(0), mk_ptr(0));
     cell.insert_fresh(mk_ptr(0), mk_ptr(0));
@@ -487,9 +497,6 @@ fn test_simple_rh_insert() {
 
 #[test]
 fn test_many_rh_insert() {
-    fn mk_ptr(i: TableIndex) -> BddPtr {
-        BddPtr {var: 0, idx: i}
-    }
     let mut cell = MutRobinHoodTable::new(DEFAULT_RH_SIZE, 0, 0);
     for i in 0..3000 {
         println!("inserting {}", i);
@@ -504,9 +511,6 @@ fn test_many_rh_insert() {
 
 #[test]
 fn test_grow_rh() {
-    fn mk_ptr(i: TableIndex) -> BddPtr {
-        BddPtr {var: 0, idx: i}
-    }
     let mut cell = MutRobinHoodTable::new(8192, 0, 0);
     println!("initial");
     for i in 0..3000 {
@@ -532,5 +536,14 @@ fn test_grow_rh() {
         cell.insert_fresh(mk_ptr(i), mk_ptr(i));
         let r2 = cell.get(mk_ptr(i), mk_ptr(i));
         assert_eq!(r1, r2);
+    }
+}
+
+#[test]
+fn test_linear_tbl() {
+    let mut tbl = LinearBddTable::new(DEFAULT_LINEAR_SIZE, 0, 0);
+    for i in 0..DEFAULT_LINEAR_SIZE {
+        tbl.get_or_insert(mk_ptr(i), mk_ptr(i));
+        tbl.find(mk_ptr(i), mk_ptr(i));
     }
 }
