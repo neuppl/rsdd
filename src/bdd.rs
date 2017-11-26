@@ -25,14 +25,7 @@ pub struct Bdd {
     pub high: BddPtr,
 }
 
-/// A reference-counted BDD
-#[derive(Debug, Hash)]
-pub struct BddRc {
-    pub var: VarLabel,
-    pub low: BddPtr,
-    pub high: BddPtr,
-    pub rc: RefCount
-}
+
 
 #[derive(Debug)]
 pub enum Op {
