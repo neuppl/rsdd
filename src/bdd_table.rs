@@ -15,7 +15,7 @@ const RH_LOAD_FACTOR : f64 = 0.9;
 /// Default table size for robin hood tables
 const DEFAULT_RH_SIZE : TableIndex = 8192;
 const LINEAR_LOAD_FACTOR : f64 = 0.7;
-const DEFAULT_LINEAR_SIZE: TableIndex = 8192;
+const DEFAULT_LINEAR_SIZE: TableIndex = 32768;
 const MAX_TABLE_SIZE : TableIndex = std::u32::MAX >> 8;
 
 /// Tracks the current cache level for the BDD node
@@ -173,8 +173,12 @@ impl MutRobinHoodTable {
                 if this_bdd.low == bdd.low && this_bdd.high == bdd.high {
                     return () // we found the BDD in the table, do nothing
                 } else {
-                    // check if this item's position is closer than ours
-                    let existing_dist = self.probe_distance(pos as usize);
+                    // check if this item's position is closer than ours this
+                    // hash can be optimized away by storing the probe distance
+                    // in each element; this is probably not worthwhile though,
+                    // since it increases the element size and we very
+                    // infrequently insert into this table.
+                    let existing_dist = self.probe_distance(pos as usize); 
                     if existing_dist < cur_probe_dist {
                         // swap out our position for this one
                         let tmp = self.get_pos(pos as usize);
@@ -226,10 +230,12 @@ impl MutRobinHoodTable {
         }
     }
 
-    /// Increase the capacity and deallocate the old hash table
+    /// Increase the capacity and deallocate the old hash table. `cap` 
+    /// specifies the new desired size.
     /// Invalidates references.
-    fn grow(orig: MutRobinHoodTable) -> MutRobinHoodTable {
-        assert!(orig.cap << 1 <= MAX_TABLE_SIZE);
+    fn grow(orig: &MutRobinHoodTable, cap: usize) -> MutRobinHoodTable {
+        let new_sz = (cap as f64 * (1.0 - RH_LOAD_FACTOR)) as TableIndex;
+        assert!(new_sz <= MAX_TABLE_SIZE);
         let new_cap = orig.cap << 1;
         // insert each element of the old vector into the new one
         let mut new_map = MutRobinHoodTable::new(new_cap, orig.var, orig.tbl_id);
@@ -320,6 +326,10 @@ impl ImmutRobinHoodTable {
             None => None
         }
     }
+
+    pub fn get_mut_ref(&mut self, idx: TableIndex) -> &mut ToplessBdd {
+        &mut self.elem[idx as usize]
+    }
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -364,6 +374,10 @@ impl LinearBddTable {
     fn is_occupied(&self, pos: usize) -> bool {
         let b = self.get_pos(pos);
         b.level > CACHE_EMPTY
+    }
+
+    fn get_mut_ref(&mut self, pos: usize) -> &mut ToplessBdd {
+        &mut self.elem[pos]
     }
 
     /// either fetches an existing BDD at the location, or inserts a fresh BDD at
@@ -416,8 +430,8 @@ impl LinearBddTable {
 /// 
 /// Each BDD is initially inserted into the short_store. Then, when garbage is 
 /// collected, BDDs are transferred into the main_store.
-pub struct BddSubTable {
-    main_store: ImmutRobinHoodTable,
+struct BddSubTable {
+    main_store: Option<ImmutRobinHoodTable>,
     short_store: Vec<LinearBddTable>,
     var: VarLabel
 }
@@ -425,54 +439,90 @@ pub struct BddSubTable {
 impl BddSubTable {
     fn new(var: VarLabel) -> BddSubTable {
         BddSubTable {
-            main_store: ImmutRobinHoodTable::new(var, 0),
+            main_store: None,
             short_store: vec!(LinearBddTable::new(DEFAULT_LINEAR_SIZE, var, 1)),
             var: var
         }
     }
 
-    pub fn find(&self, bddlow: BddPtr, bddhigh: BddPtr) -> Option<BddPtr> {
-        // check if the bdd is in the main store
-        match self.main_store.find(bddlow.clone(), bddhigh.clone()) {
-            Some(a) => return Some(a),
-            None => {
-                // look in each short_store
-                for i in 0..self.short_store.len() - 1 {
-                    match self.short_store[i].find(bddlow.clone(), bddhigh.clone()) {
-                        Some(a) => return Some(a),
-                        None => {
-                            ()
-                        }
-                    }
+    /// Fetches a mutable reference to the BDD pointed to by `ptr`
+    fn get_mut_ref(&mut self, bdd: BddPtr) -> &mut ToplessBdd {
+        let tbl = bdd.get_subtable();
+        match tbl {
+            0 => match &mut self.main_store {
+                &mut Some(ref mut s) => s.get_mut_ref(bdd.get_index()),
+                &mut None => panic!("attempted lookup in uninitialized main store")
+            },
+            a => self.short_store[(a - 1) as usize].get_mut_ref(bdd.get_index() as usize)
+        }
+    }
+
+    /// Finds the element in the table corresponding with `bddlow` as a low BDD 
+    /// and `bddhigh` as a high BDD
+    fn find(&self, bddlow: BddPtr, bddhigh: BddPtr) -> Option<BddPtr> {
+        // look in each short_store
+        for i in 0..self.short_store.len() {
+            match self.short_store[i].find(bddlow.clone(), bddhigh.clone()) {
+                Some(a) => return Some(a),
+                None => {
+                    ()
                 }
             }
         }
-        return None
+        // check if the bdd is in the main store
+        match &self.main_store {
+            &Some(ref store) => return store.find(bddlow.clone(), bddhigh.clone()),
+            &None => None
+        }
     }
 
-    /// Inserts an element into the BDD table without moving any other elements
-    pub fn stable_insert(&mut self, bddlow: BddPtr, bddhigh: BddPtr) -> BddPtr {
+    /// Inserts an element into the BDD table without moving any other elements, or
+    /// inserts a default element
+    fn get_or_insert(&mut self, bddlow: BddPtr, bddhigh: BddPtr) -> BddPtr {
         match self.find(bddlow.clone(), bddhigh.clone()) {
             Some(a) => a,
             None => {
-                let l = self.short_store.last().unwrap().elem.len() as usize;
-                let cap = self.short_store[l].cap as f64;
-                if (l as f64) < (LINEAR_LOAD_FACTOR * cap) {
-                    self.short_store[l].get_or_insert(bddlow, bddhigh)
+                let no_resize = {
+                    let cur = self.short_store.last().unwrap();
+                    let l = cur.len as usize;
+                    let cap = cur.cap as f64;
+                    (l as f64) < (LINEAR_LOAD_FACTOR * cap)
+                };
+                if no_resize {
+                    self.short_store.last_mut().unwrap().
+                        get_or_insert(bddlow, bddhigh)
                 } else {
                     // allocate a new short store and push into it
+                    let l = self.short_store.len();
                     self.short_store.push(
                         LinearBddTable::new(DEFAULT_LINEAR_SIZE, self.var, (l + 1) as TableIndex));
-                    self.short_store[l+1].get_or_insert(bddlow, bddhigh)
+                    self.short_store[l].get_or_insert(bddlow, bddhigh)
                 }
             }
         }
+    }
+
+    /// Transfers all nodes
+    fn compact(&mut self) -> () {
+
     }
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 /// Core table, stores all variables for a BDD
+pub struct BddTable {
+    subtables: Vec<BddSubTable>
+}
 
+impl BddTable {
+    fn new(variables: &Vec<VarLabel>) -> BddTable {
+        let mut v : Vec<BddSubTable> = Vec::with_capacity(variables.len());
+        for i in variables.iter() {
+            v.push(BddSubTable::new(*i));
+        }
+        BddTable {subtables: v}
+    }
+}
 
 ////////////////////////////////////////////////////////////////////////////////
 /// Tests
@@ -499,9 +549,7 @@ fn test_simple_rh_insert() {
 fn test_many_rh_insert() {
     let mut cell = MutRobinHoodTable::new(DEFAULT_RH_SIZE, 0, 0);
     for i in 0..3000 {
-        println!("inserting {}", i);
         cell.insert_fresh(mk_ptr(i), mk_ptr(i));
-        println!("getting {}", i);
         let r1 = cell.get(mk_ptr(i), mk_ptr(i));
         cell.insert_fresh(mk_ptr(i), mk_ptr(i));
         let r2 = cell.get(mk_ptr(i), mk_ptr(i));
@@ -512,7 +560,6 @@ fn test_many_rh_insert() {
 #[test]
 fn test_grow_rh() {
     let mut cell = MutRobinHoodTable::new(8192, 0, 0);
-    println!("initial");
     for i in 0..3000 {
         cell.insert_fresh(mk_ptr(i), mk_ptr(i));
         let r1 = cell.get(mk_ptr(i), mk_ptr(i));
@@ -520,8 +567,7 @@ fn test_grow_rh() {
         let r2 = cell.get(mk_ptr(i), mk_ptr(i));
         assert_eq!(r1, r2);
     }
-    println!("growing");
-    cell = MutRobinHoodTable::grow(cell);
+    cell = MutRobinHoodTable::grow(cell, 10000);
     for i in 0..6000 {
         cell.insert_fresh(mk_ptr(i), mk_ptr(i));
         let r1 = cell.get(mk_ptr(i), mk_ptr(i));
@@ -529,7 +575,7 @@ fn test_grow_rh() {
         let r2 = cell.get(mk_ptr(i), mk_ptr(i));
         assert_eq!(r1, r2);
     }
-    cell = MutRobinHoodTable::grow(cell);
+    cell = MutRobinHoodTable::grow(cell, 15000);
     for i in 0..10000{
         cell.insert_fresh(mk_ptr(i), mk_ptr(i));
         let r1 = cell.get(mk_ptr(i), mk_ptr(i));
@@ -542,8 +588,23 @@ fn test_grow_rh() {
 #[test]
 fn test_linear_tbl() {
     let mut tbl = LinearBddTable::new(DEFAULT_LINEAR_SIZE, 0, 0);
-    for i in 0..DEFAULT_LINEAR_SIZE {
+    for i in 0..(DEFAULT_LINEAR_SIZE / 2) {
         tbl.get_or_insert(mk_ptr(i), mk_ptr(i));
         tbl.find(mk_ptr(i), mk_ptr(i));
+    }
+}
+
+#[test]
+fn test_cell() {
+    let mut tbl = BddSubTable::new(0);
+    for i in 0..1000000 {
+        tbl.get_or_insert(mk_ptr(i), mk_ptr(i));
+        match tbl.find(mk_ptr(i), mk_ptr(i)) {
+            None => assert!(false),
+            Some(a) => {
+                let r = tbl.get_mut_ref(a);
+                r.level = 2
+            }
+        }
     }
 }
