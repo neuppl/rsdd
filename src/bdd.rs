@@ -1,37 +1,80 @@
 use std::hash::{Hash, Hasher};
 use twox_hash;
+#[macro_use] use util::*;
 use std::io::prelude::*;
+use std::mem;
+
+/// number of bits allocated for variable label (limit on total number of
+/// variables)
+const VAR_BITS: usize = 12;
+/// number of bits allocated for a table index (limit on total BDDs of each
+/// variable)
+const INDEX_BITS: usize = 32 - VAR_BITS;
 
 /// a label for each distinct variable in the BDD
-pub type VarLabel = u16;
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VarLabel (u32);
+impl VarLabel {
+    #[inline]
+    pub fn new(v: u32) -> VarLabel {
+        assert!(v < 1 << VAR_BITS, "Variable identifier overflow");
+        VarLabel(v)
+    }
+    #[inline]
+    pub fn value(&self) -> u32 {
+        self.0
+    }
+}
+
 /// Index into BDD table
-pub type TableIndex = u32;
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TableIndex (u32);
+impl TableIndex {
+    #[inline]
+    pub fn new(v: u32) -> TableIndex {
+        assert!(v < 1 << INDEX_BITS, "Table index overflow; too many BDDs allocated");
+        TableIndex(v)
+    }
+    #[inline]
+    pub fn value(&self) -> u32 {
+        self.0
+    }
+}
 
 /// A BDD pointer
-#[derive(Debug, Hash, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BddPtr {
-    var: VarLabel,
-    /// The index is a packed representation with the high 8-bits representing a
-    /// sub-table, and the lower 24-bits representing an index into the sub-table
-    idx: TableIndex
+    data: u32
 }
 
+BITFIELD!(BddPtr data : u32 [
+    var set_var[0..VAR_BITS],
+    idx set_idx[VAR_BITS..32],
+]);
+
 impl BddPtr {
-    pub fn get_subtable(&self) -> TableIndex {
-        self.idx >> 24
-    }
-    pub fn get_index(&self) -> TableIndex {
-        self.idx & 0xffffff
-    }
-    pub fn get_var(&self) -> VarLabel {
-        self.var
-    }
     /// Generate a new BddPtr for a particular table at index idx
-    pub fn new(var: VarLabel, table: TableIndex, idx: TableIndex) -> BddPtr {
-        let new_idx = (table << 24) | (idx & 0xffffff);
-        BddPtr {var: var, idx: new_idx}
+    #[inline]
+    pub fn new(var: VarLabel, idx: TableIndex) -> BddPtr {
+        let mut v = BddPtr { data: 0 };
+        v.set_idx(idx.value());
+        v.set_var(var.value() as u32);
+        v
+    }
+    /// fetch the raw underlying data of the pointer
+    #[inline]
+    pub fn raw(&self) -> u32 {
+        self.data
     }
 }
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Bdd {
+    low: BddPtr,
+    high: BddPtr,
+    var: VarLabel
+}
+
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GcBits {
@@ -58,16 +101,6 @@ impl ToplessBdd {
             low: low, high:high, gc: gc
         }
     }
-    /// compute a 64-bit hash of this value
-    pub fn hash(&self) -> u64 {
-        let mut hasher = twox_hash::XxHash::with_seed(0xdeadbeef);
-        hasher.write_u32(self.low.idx);
-        hasher.write_u16(self.low.var);
-        hasher.write_u32(self.high.idx);
-        hasher.write_u16(self.high.var);
-        hasher.finish()
-    }
-
 }
 
 #[derive(Debug)]

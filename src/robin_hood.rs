@@ -3,28 +3,9 @@ use std::ptr;
 use std::hash::Hasher;
 use twox_hash;
 use std::mem;
+#[macro_use] use util::*;
 
 const LOAD_FACTOR : f64 = 0.8;
-
-macro_rules! BITFIELD {
-    ($base:ident $field:ident: $fieldtype:ty [
-        $($thing:ident $set_thing:ident[$r:expr],)+
-    ]) => {
-        impl $base {$(
-            #[inline]
-            pub fn $thing(&self) -> $fieldtype {
-                let size = mem::size_of::<$fieldtype>() * 8;
-                self.$field << (size - $r.end) >> (size - $r.end + $r.start)
-            }
-            #[inline]
-            pub fn $set_thing(&mut self, val: $fieldtype) {
-                let mask = ((1 << ($r.end - $r.start)) - 1) << $r.start;
-                self.$field &= !mask;
-                self.$field |= (val << $r.start) & mask;
-            }
-        )+}
-    }
-}
 
 
 /// data structure stored inside of the hash table
@@ -45,46 +26,46 @@ impl HashTableElement{
         let mut init = HashTableElement { data: 0 };
         init.set_occupied(1);
         init.set_hash((hash >> 32) as u32); // grab some bits of the hash
-        init.set_idx(idx);
+        init.set_idx(idx.value());
         return init
     }
 }
 
 /// Implements a mutable vector-backed robin-hood linear probing hash table,
 /// whose keys are given by BDD pointers.
-struct BackedRobinHoodTable {
+pub struct BackedRobinHoodTable {
     /// hash table which stores indexes in the elem vector
     tbl: Vec<HashTableElement>,
     /// backing store for BDDs
     elem: Vec<ToplessBdd>,
     /// the variable which this table corresponds with
     var: VarLabel,
-    /// the current table ID
-    tbl_id: TableIndex,
-    /// the capacity of `tbl`; given as a particular power of 2
+   /// the capacity of `tbl`; given as a particular power of 2
     cap: usize,
     /// the length of `tbl`
     len: usize
 }
 
+#[inline]
 fn hash_pair(low: BddPtr, high: BddPtr) -> u64 {
     let mut hasher = twox_hash::XxHash::with_seed(0xdeadbeef);
-    hasher.write_u32(low.get_index());
-    hasher.write_u16(low.get_var());
-    hasher.write_u32(high.get_index());
-    hasher.write_u16(high.get_var());
+    hasher.write_u32(low.raw());
+    hasher.write_u32(high.raw());
     hasher.finish()
 }
 
+// TODO:
+// -- check for overflows in the table index
+// -- make sure that the offset never overflows
+
 impl BackedRobinHoodTable {
     /// reserve a robin-hood table capable of holding at least `sz` elements
-    fn new(sz : usize, var: VarLabel, tbl_id: TableIndex) -> BackedRobinHoodTable {
+    pub fn new(sz : usize, var: VarLabel) -> BackedRobinHoodTable {
         let tbl_sz = ((sz as f64 * (1.0 + LOAD_FACTOR)) as usize).next_power_of_two();
         let mut r = BackedRobinHoodTable {
             elem: Vec::with_capacity(sz as usize),
             tbl: Vec::with_capacity(tbl_sz as usize),
             var: var,
-            tbl_id: tbl_id,
             cap: tbl_sz,
             len: 0
         };
@@ -99,29 +80,32 @@ impl BackedRobinHoodTable {
 
 
     /// check if item at index `pos` is occupied
+    #[inline]
     fn is_occupied(&self, pos: usize) -> bool {
         self.tbl[pos].occupied() == 1
     }
 
     /// get the BDD pointed to at `pos`
+    #[inline]
     fn get_pos(&self, pos: usize) -> ToplessBdd {
         self.elem[self.tbl[pos].idx() as usize].clone()
     }
 
     /// check the distance the element at index `pos` is from its desired location
-    fn probe_distance(&self, pos: usize) -> TableIndex {
-        self.tbl[pos].offset()
+    #[inline]
+    fn probe_distance(&self, pos: usize) -> usize {
+        self.tbl[pos].offset() as usize
     }
 
     /// Get or insert a fresh (low, high) pair
-    fn get_or_insert(&mut self, low: BddPtr, high: BddPtr) -> BddPtr {
+    pub fn get_or_insert(&mut self, low: BddPtr, high: BddPtr) -> BddPtr {
         // ensure available capacity
         let sz = (((self.len + 1) as f64) * LOAD_FACTOR) / (self.cap as f64);
         assert!(sz < self.cap as f64);
         let mut found : Option<BddPtr> = None; // holds location of inserted element
         let hash_v = hash_pair(low.clone(), high.clone());
         let mut pos = (hash_v as usize) % self.cap;
-        let mut searcher = HashTableElement::new(self.elem.len() as u32, hash_v);
+        let mut searcher = HashTableElement::new(TableIndex::new(self.elem.len() as u32), hash_v);
         loop {
             let cur_itm = self.tbl[pos].clone();
             if cur_itm.occupied() == 1 {
@@ -129,8 +113,8 @@ impl BackedRobinHoodTable {
                 if cur_itm.hash() == searcher.hash() {
                     let this_bdd = self.get_pos(pos as usize);
                     if this_bdd.low == low && this_bdd.high == high {
-                        return BddPtr::new(self.var, self.tbl_id, cur_itm.idx())
-                    }
+                        return BddPtr::new(self.var.clone(), TableIndex::new(cur_itm.idx()))
+                    } else { }
                 }
                 // check if this item's position is closer than ours
                 if cur_itm.offset() < searcher.offset() {
@@ -139,10 +123,9 @@ impl BackedRobinHoodTable {
                     if found.is_none() {
                         self.elem.push(ToplessBdd::new(low.clone(), high.clone(), GcBits::new()));
                         self.len += 1;
-                        found = Some(BddPtr::new(self.var, self.tbl_id, searcher.idx()));
+                        found = Some(BddPtr::new(self.var.clone(), TableIndex::new(searcher.idx())));
                     } else { }
                     // swap out our position for this one
-                    println!("swapping {:?} and {:?}", self.tbl[pos].idx(), searcher.idx());
                     self.tbl[pos] = searcher;
                     searcher = cur_itm;
                 }
@@ -155,7 +138,7 @@ impl BackedRobinHoodTable {
                     self.elem.push(ToplessBdd::new(low, high, GcBits::new()));
                     self.len += 1;
                     self.tbl[pos] = searcher.clone();
-                    return BddPtr::new(self.var, self.tbl_id, searcher.idx())
+                    return BddPtr::new(self.var.clone(), TableIndex::new(searcher.idx()))
                 } else {
                     return found.unwrap()
                 }
@@ -169,7 +152,7 @@ impl BackedRobinHoodTable {
     pub fn find(&self, low: BddPtr, high: BddPtr) -> Option<BddPtr> {
         let hash_v = hash_pair(low.clone(), high.clone());
         let mut pos = (hash_v as usize) % self.cap;
-        let searcher = HashTableElement::new(self.elem.len() as u32, hash_v);
+        let searcher = HashTableElement::new(TableIndex::new(self.elem.len() as u32), hash_v);
         loop {
             let cur_itm = self.tbl[pos].clone();
             if cur_itm.occupied() == 1 {
@@ -177,7 +160,8 @@ impl BackedRobinHoodTable {
                 if cur_itm.hash() == searcher.hash() {
                     let this_bdd = self.get_pos(pos as usize);
                     if this_bdd.low == low && this_bdd.high == high {
-                        return Some(BddPtr::new(self.var, self.tbl_id, cur_itm.idx()))
+                        return Some(BddPtr::new(
+                            self.var.clone(), TableIndex::new(cur_itm.idx())))
                     }
                 }
                 pos = (pos + 1) % self.cap;
@@ -189,23 +173,27 @@ impl BackedRobinHoodTable {
 
     /// Dereferences a BDD pointer that lives in this table
     pub fn deref(&self, ptr: BddPtr) -> ToplessBdd {
-        assert!(ptr.get_subtable() == self.tbl_id && ptr.get_var() == self.var);
-        self.elem[ptr.get_index() as usize].clone()
+        assert!(VarLabel::new(ptr.var()) == self.var);
+        self.elem[ptr.idx() as usize].clone()
+    }
+
+    pub fn average_offset(&self) -> f64 {
+        let total = self.tbl.iter().fold(0, |sum, ref cur| cur.offset() + sum);
+        (total as f64) / (self.len as f64)
     }
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 // tests
 
-fn mk_ptr(idx: TableIndex) -> BddPtr {
-    BddPtr::new(0, 0, idx)
+fn mk_ptr(idx: u32) -> BddPtr {
+    BddPtr::new(VarLabel::new(0), TableIndex::new(idx))
 }
 
 #[test]
 fn test_simple() {
-    let mut store = BackedRobinHoodTable::new(1024, 0, 0);
-    for i in 0..1024 {
-        println!("inserting {}", i);
+    let mut store = BackedRobinHoodTable::new(100000, VarLabel::new(0));
+    for i in 0..100000 {
         let v = store.get_or_insert(mk_ptr(i), mk_ptr(i));
         match store.find(mk_ptr(i), mk_ptr(i)) {
             None => assert!(false),
@@ -215,4 +203,5 @@ fn test_simple() {
             }
         }
     }
+    println!("average offset: {}", store.average_offset());
 }
