@@ -3,15 +3,16 @@ use std::ptr;
 use std::hash::Hasher;
 use twox_hash;
 use std::mem;
-#[macro_use] use util::*;
+#[macro_use]
+use util::*;
 
-const LOAD_FACTOR : f64 = 0.8;
+const LOAD_FACTOR: f64 = 0.8;
 
 
 /// data structure stored inside of the hash table
 #[derive(Clone, Debug)]
 struct HashTableElement {
-    data: u32
+    data: u32,
 }
 
 BITFIELD!(HashTableElement data : u32 [
@@ -21,13 +22,13 @@ BITFIELD!(HashTableElement data : u32 [
     idx set_idx[10..32],         // the index into the backing store for this cell
 ]);
 
-impl HashTableElement{
+impl HashTableElement {
     fn new(idx: TableIndex, hash: u64) -> HashTableElement {
         let mut init = HashTableElement { data: 0 };
         init.set_occupied(1);
         init.set_hash((hash >> 32) as u32); // grab some bits of the hash
         init.set_idx(idx.value());
-        return init
+        return init;
     }
 }
 
@@ -40,10 +41,10 @@ pub struct BackedRobinHoodTable {
     elem: Vec<ToplessBdd>,
     /// the variable which this table corresponds with
     var: VarLabel,
-   /// the capacity of `tbl`; given as a particular power of 2
+    /// the capacity of `tbl`; given as a particular power of 2
     cap: usize,
     /// the length of `tbl`
-    len: usize
+    len: usize,
 }
 
 #[inline]
@@ -60,14 +61,14 @@ fn hash_pair(low: BddPtr, high: BddPtr) -> u64 {
 
 impl BackedRobinHoodTable {
     /// reserve a robin-hood table capable of holding at least `sz` elements
-    pub fn new(sz : usize, var: VarLabel) -> BackedRobinHoodTable {
+    pub fn new(sz: usize, var: VarLabel) -> BackedRobinHoodTable {
         let tbl_sz = ((sz as f64 * (1.0 + LOAD_FACTOR)) as usize).next_power_of_two();
         let mut r = BackedRobinHoodTable {
             elem: Vec::with_capacity(sz as usize),
             tbl: Vec::with_capacity(tbl_sz as usize),
             var: var,
             cap: tbl_sz,
-            len: 0
+            len: 0,
         };
         // zero the vector and set its length
         unsafe {
@@ -75,7 +76,7 @@ impl BackedRobinHoodTable {
             ptr::write_bytes(vec_ptr, 0, tbl_sz as usize);
             r.tbl.set_len(tbl_sz);
         }
-        return r
+        return r;
     }
 
 
@@ -102,29 +103,41 @@ impl BackedRobinHoodTable {
         // ensure available capacity
         let sz = (((self.len + 1) as f64) * LOAD_FACTOR) / (self.cap as f64);
         assert!(sz < self.cap as f64);
-        let mut found : Option<BddPtr> = None; // holds location of inserted element
+        let mut found: Option<BddPtr> = None; // holds location of inserted element
         let hash_v = hash_pair(low.clone(), high.clone());
         let mut pos = (hash_v as usize) % self.cap;
-        let mut searcher = HashTableElement::new(TableIndex::new(self.elem.len() as u32), hash_v);
+        let mut searcher = HashTableElement::new(
+            TableIndex::new(self.elem.len() as u32), hash_v);
         loop {
             let cur_itm = self.tbl[pos].clone();
             if cur_itm.occupied() == 1 {
-                // first check the hashes to see if these elements could possibly be equal
+                // first check the hashes to see if these elements could
+                // possibly be equal
                 if cur_itm.hash() == searcher.hash() {
                     let this_bdd = self.get_pos(pos as usize);
                     if this_bdd.low == low && this_bdd.high == high {
-                        return BddPtr::new(self.var.clone(), TableIndex::new(cur_itm.idx()))
-                    } else { }
+                        return BddPtr::new(
+                            self.var.clone(), TableIndex::new(cur_itm.idx()));
+                    } else {
+                    }
                 }
                 // check if this item's position is closer than ours
                 if cur_itm.offset() < searcher.offset() {
                     // check if we have inserted a fresh item; if we have not, then
                     // we need to insert the item into the backing store
                     if found.is_none() {
-                        self.elem.push(ToplessBdd::new(low.clone(), high.clone(), GcBits::new()));
+                        self.elem.push(ToplessBdd::new(
+                            low.clone(),
+                            high.clone(),
+                            GcBits::new(),
+                        ));
                         self.len += 1;
-                        found = Some(BddPtr::new(self.var.clone(), TableIndex::new(searcher.idx())));
-                    } else { }
+                        found = Some(BddPtr::new(
+                            self.var.clone(),
+                            TableIndex::new(searcher.idx()),
+                        ));
+                    } else {
+                    }
                     // swap out our position for this one
                     self.tbl[pos] = searcher;
                     searcher = cur_itm;
@@ -138,9 +151,10 @@ impl BackedRobinHoodTable {
                     self.elem.push(ToplessBdd::new(low, high, GcBits::new()));
                     self.len += 1;
                     self.tbl[pos] = searcher.clone();
-                    return BddPtr::new(self.var.clone(), TableIndex::new(searcher.idx()))
+                    return BddPtr::new(self.var.clone(),
+                                       TableIndex::new(searcher.idx()));
                 } else {
-                    return found.unwrap()
+                    return found.unwrap();
                 }
             }
         }
@@ -152,21 +166,25 @@ impl BackedRobinHoodTable {
     pub fn find(&self, low: BddPtr, high: BddPtr) -> Option<BddPtr> {
         let hash_v = hash_pair(low.clone(), high.clone());
         let mut pos = (hash_v as usize) % self.cap;
-        let searcher = HashTableElement::new(TableIndex::new(self.elem.len() as u32), hash_v);
+        let searcher = HashTableElement::new(
+            TableIndex::new(self.elem.len() as u32), hash_v);
         loop {
             let cur_itm = self.tbl[pos].clone();
             if cur_itm.occupied() == 1 {
-                // first check the hashes to see if these elements could possibly be equal
+                // first check the hashes to see if these elements could
+                // possibly be equal
                 if cur_itm.hash() == searcher.hash() {
                     let this_bdd = self.get_pos(pos as usize);
                     if this_bdd.low == low && this_bdd.high == high {
                         return Some(BddPtr::new(
-                            self.var.clone(), TableIndex::new(cur_itm.idx())))
+                            self.var.clone(),
+                            TableIndex::new(cur_itm.idx()),
+                        ));
                     }
                 }
                 pos = (pos + 1) % self.cap;
             } else {
-                return None
+                return None;
             }
         }
     }
