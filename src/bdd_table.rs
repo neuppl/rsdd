@@ -2,7 +2,7 @@ use robin_hood::BackedRobinHoodTable;
 use bdd::*;
 use var_order::VarOrder;
 
-const DEFAULT_SUBTABLE_SZ: usize = 65536;
+const DEFAULT_SUBTABLE_SZ: usize = 2000000;
 
 /// The primary storage unit for binary decision diagram nodes
 /// Each variable is associated with an individual subtable
@@ -17,7 +17,7 @@ impl BddTable {
         for i in 0..order.len() {
             v.push(BackedRobinHoodTable::new(
                 DEFAULT_SUBTABLE_SZ,
-                VarLabel::new(i as u32),
+                VarLabel::new(i as u64),
             ));
         }
         BddTable {
@@ -34,8 +34,8 @@ impl BddTable {
         match bdd {
             Bdd::BddFalse => BddPtr::false_node(),
             Bdd::BddTrue => BddPtr::true_node(),
-            Bdd::BddNode{low, high, var} => 
-                self.subtables[var.value() as usize].get_or_insert(low, high)
+            Bdd::Node(n) =>
+                self.subtables[n.var.value() as usize].get_or_insert(n.low, n.high)
         }
 
     }
@@ -44,8 +44,8 @@ impl BddTable {
         match bdd {
             Bdd::BddFalse => Some(BddPtr::false_node()),
             Bdd::BddTrue => Some(BddPtr::true_node()),
-            Bdd::BddNode{low, high, var} => 
-                self.subtables[var.value() as usize].find(low, high)
+            Bdd::Node(n) =>
+                self.subtables[n.var.value() as usize].find(n.low, n.high)
         }
     }
 

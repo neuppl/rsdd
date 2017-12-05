@@ -4,5 +4,7 @@ mod bdd_table;
 mod robin_hood;
 mod var_order;
 mod manager;
+mod boolexpr;
+mod test;
 extern crate twox_hash;
-
+extern crate rand;

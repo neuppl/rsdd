@@ -1,4 +1,5 @@
 use std::hash::{Hash, Hasher};
+use std::fmt;
 use twox_hash;
 #[macro_use]
 use util::*;
@@ -10,33 +11,33 @@ use std::mem;
 const VAR_BITS: usize = 11;
 /// number of bits allocated for a table index (limit on total BDDs of each
 /// variable)
-const INDEX_BITS: usize = 32 - VAR_BITS - 1; // reserve 1 bit for special
+const INDEX_BITS: usize = 64 - VAR_BITS - 1; // reserve 1 bit for special
 
-const TRUE_VALUE: u32 = 1; // the variable ID corresponding with a true value
-const FALSE_VALUE: u32 = 0; // the variable ID corresponding with a false value
+const TRUE_VALUE: u64 = 1; // the variable ID corresponding with a true value
+const FALSE_VALUE: u64 = 0; // the variable ID corresponding with a false value
 
 
 /// a label for each distinct variable in the BDD
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct VarLabel(u32);
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct VarLabel(u64);
 impl VarLabel {
     #[inline]
-    pub fn new(v: u32) -> VarLabel {
+    pub fn new(v: u64) -> VarLabel {
         assert!(v < 1 << VAR_BITS - 1, "Variable identifier overflow");
         VarLabel(v)
     }
     #[inline]
-    pub fn value(&self) -> u32 {
+    pub fn value(&self) -> u64 {
         self.0
     }
 }
 
 /// Index into BDD table
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TableIndex(u32);
+pub struct TableIndex(u64);
 impl TableIndex {
     #[inline]
-    pub fn new(v: u32) -> TableIndex {
+    pub fn new(v: u64) -> TableIndex {
         assert!(
             v < 1 << INDEX_BITS + 1,
             "Table index overflow; too many BDDs allocated"
@@ -44,15 +45,26 @@ impl TableIndex {
         TableIndex(v)
     }
     #[inline]
-    pub fn value(&self) -> u32 {
+    pub fn value(&self) -> u64 {
         self.0
     }
 }
 
 /// A BDD pointer
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Copy)]
+#[derive(Clone, PartialEq, Eq, Hash, Copy)]
 pub struct BddPtr {
-    data: u32,
+    data: u64,
+}
+
+impl fmt::Debug for BddPtr {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self.ptr_type() {
+            PointerType::PtrFalse => write!(f, "BddPtr(F)"),
+            PointerType::PtrTrue => write!(f, "BddPtr(T)"),
+            PointerType::PtrNode =>
+                write!(f, "BddPtr(Cur var: {}, Index: {})", self.var(), self.idx())
+        }
+    }
 }
 
 pub enum PointerType {
@@ -61,10 +73,10 @@ pub enum PointerType {
     PtrNode,
 }
 
-BITFIELD!(BddPtr data : u32 [
+BITFIELD!(BddPtr data : u64 [
     var set_var[0..VAR_BITS],                  // the variable index
     special set_special[VAR_BITS..VAR_BITS+1], // a special bit of 1 indicates a special BDD node (like true or false)
-    idx set_idx[(VAR_BITS+1)..32],
+    idx set_idx[(VAR_BITS+1)..64],
 ]);
 
 impl BddPtr {
@@ -73,12 +85,12 @@ impl BddPtr {
     pub fn new(var: VarLabel, idx: TableIndex) -> BddPtr {
         let mut v = BddPtr { data: 0 };
         v.set_idx(idx.value());
-        v.set_var(var.value() as u32);
+        v.set_var(var.value());
         v
     }
     /// fetch the raw underlying data of the pointer
     #[inline]
-    pub fn raw(&self) -> u32 {
+    pub fn raw(&self) -> u64 {
         self.data
     }
 
@@ -122,23 +134,35 @@ impl BddPtr {
     }
 }
 
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BddNode {
+    pub low: BddPtr,
+    pub high: BddPtr,
+    pub var: VarLabel,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Bdd {
-    BddNode {
-        low: BddPtr,
-        high: BddPtr,
-        var: VarLabel,
-    },
+    Node(BddNode),
     BddTrue,
     BddFalse,
 }
 
 impl Bdd {
     pub fn new_node(low: BddPtr, high: BddPtr, var: VarLabel) -> Bdd {
-        Bdd::BddNode {
+        let new_n = BddNode {
             low: low,
             high: high,
             var: var,
+        };
+        Bdd::Node(new_n)
+    }
+
+    pub fn into_node(&self) -> BddNode {
+        match self {
+            &Bdd::Node(ref n) => n.clone(),
+            _ => panic!("called into-node on non-node BDD")
         }
     }
 }
@@ -170,7 +194,7 @@ impl ToplessBdd {
     }
 }
 
-#[derive(Debug, Hash, Eq, PartialEq, Clone)]
+#[derive(Debug, Hash, Eq, PartialEq, Clone, Copy)]
 pub enum Op {
     BddOr,
     BddAnd,

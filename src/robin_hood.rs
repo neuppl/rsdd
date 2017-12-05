@@ -12,21 +12,21 @@ const LOAD_FACTOR: f64 = 0.8;
 /// data structure stored inside of the hash table
 #[derive(Clone, Debug)]
 struct HashTableElement {
-    data: u32,
+    data: u64,
 }
 
-BITFIELD!(HashTableElement data : u32 [
+BITFIELD!(HashTableElement data : u64 [
     occupied set_occupied[0..1], // whether or not the cell is occupied
     offset set_offset[1..6],     // the distance of this cell from its preferred location
     hash set_hash[6..10],        // the high-order hash bits of the BDD this cell maps to
-    idx set_idx[10..32],         // the index into the backing store for this cell
+    idx set_idx[10..64],         // the index into the backing store for this cell
 ]);
 
 impl HashTableElement {
     fn new(idx: TableIndex, hash: u64) -> HashTableElement {
         let mut init = HashTableElement { data: 0 };
         init.set_occupied(1);
-        init.set_hash((hash >> 32) as u32); // grab some bits of the hash
+        init.set_hash((hash >> 32) as u64); // grab some bits of the hash
         init.set_idx(idx.value());
         return init;
     }
@@ -50,14 +50,10 @@ pub struct BackedRobinHoodTable {
 #[inline]
 fn hash_pair(low: BddPtr, high: BddPtr) -> u64 {
     let mut hasher = twox_hash::XxHash::with_seed(0xdeadbeef);
-    hasher.write_u32(low.raw());
-    hasher.write_u32(high.raw());
+    hasher.write_u64(low.raw());
+    hasher.write_u64(high.raw());
     hasher.finish()
 }
-
-// TODO:
-// -- check for overflows in the table index
-// -- make sure that the offset never overflows
 
 impl BackedRobinHoodTable {
     /// reserve a robin-hood table capable of holding at least `sz` elements
@@ -81,9 +77,13 @@ impl BackedRobinHoodTable {
 
 
     /// check if item at index `pos` is occupied
-    #[inline]
+    #[inline(never)]
     fn is_occupied(&self, pos: usize) -> bool {
-        self.tbl[pos].occupied() == 1
+        // very oddly, this comparison is extremely costly!
+        unsafe {
+            mem::transmute::<u8, bool>(self.tbl[pos].occupied() as u8)
+        }
+        // self.tbl[pos].occupied() == 1
     }
 
     /// get the BDD pointed to at `pos`
@@ -102,15 +102,15 @@ impl BackedRobinHoodTable {
     pub fn get_or_insert(&mut self, low: BddPtr, high: BddPtr) -> BddPtr {
         // ensure available capacity
         let sz = (((self.len + 1) as f64) * LOAD_FACTOR) / (self.cap as f64);
-        assert!(sz < self.cap as f64);
+        assert!(sz + 1.0 < self.cap as f64);
         let mut found: Option<BddPtr> = None; // holds location of inserted element
         let hash_v = hash_pair(low.clone(), high.clone());
         let mut pos = (hash_v as usize) % self.cap;
         let mut searcher = HashTableElement::new(
-            TableIndex::new(self.elem.len() as u32), hash_v);
+            TableIndex::new(self.elem.len() as u64), hash_v);
         loop {
-            let cur_itm = self.tbl[pos].clone();
-            if cur_itm.occupied() == 1 {
+            if self.is_occupied(pos) {
+                let cur_itm = self.tbl[pos].clone();
                 // first check the hashes to see if these elements could
                 // possibly be equal
                 if cur_itm.hash() == searcher.hash() {
@@ -161,13 +161,15 @@ impl BackedRobinHoodTable {
     }
 
 
+
+
     /// Finds the index for a particular bdd, none if it is not found
     /// Does not invalidate references.
     pub fn find(&self, low: BddPtr, high: BddPtr) -> Option<BddPtr> {
         let hash_v = hash_pair(low.clone(), high.clone());
         let mut pos = (hash_v as usize) % self.cap;
         let searcher = HashTableElement::new(
-            TableIndex::new(self.elem.len() as u32), hash_v);
+            TableIndex::new(self.elem.len() as u64), hash_v);
         loop {
             let cur_itm = self.tbl[pos].clone();
             if cur_itm.occupied() == 1 {
@@ -190,6 +192,7 @@ impl BackedRobinHoodTable {
     }
 
     /// Dereferences a BDD pointer that lives in this table
+    #[inline(always)]
     pub fn deref(&self, ptr: BddPtr) -> ToplessBdd {
         assert!(VarLabel::new(ptr.var()) == self.var);
         self.elem[ptr.idx() as usize].clone()
@@ -204,7 +207,7 @@ impl BackedRobinHoodTable {
 ////////////////////////////////////////////////////////////////////////////////
 // tests
 
-fn mk_ptr(idx: u32) -> BddPtr {
+fn mk_ptr(idx: u64) -> BddPtr {
     BddPtr::new(VarLabel::new(0), TableIndex::new(idx))
 }
 

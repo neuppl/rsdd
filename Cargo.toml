@@ -3,5 +3,20 @@ name = "parddrs"
 version = "0.1.0"
 authors = ["Steven Holtzen <sholtzen@gmail.com>"]
 
+[lib]
+name = "ddrs"
+path = "src/lib.rs"
+
+
+[[bin]]
+name = "ddrs-bin"
+path = "src/main.rs"
+
 [dependencies]
 twox-hash = "1.1.0"
+rand = "0.3.18"
+clap = "2.28"
+
+[profile.release]
+debug = true
+
