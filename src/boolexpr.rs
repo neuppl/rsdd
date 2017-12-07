@@ -143,20 +143,20 @@ impl BoolExpr {
     }
 
     /// pushes the BDD onto the top of the manager's stack
-    pub fn into_bdd(&self, man: &mut manager::BddManager) -> () {
+    pub fn into_bdd(&self, man: &mut manager::BddManager) -> manager::ExternalRef {
         match self {
             &BoolExpr::Var(lbl, polarity) => {
-                man.var(bdd::VarLabel::new(lbl as u64), polarity);
+                man.var(bdd::VarLabel::new(lbl as u64), polarity)
             }
             &BoolExpr::And(ref l, ref r) => {
-                (*l).into_bdd(man);
-                (*r).into_bdd(man);
-                man.apply(bdd::Op::BddAnd);
+                let r1 = (*l).into_bdd(man);
+                let r2 = (*r).into_bdd(man);
+                man.apply(bdd::Op::BddAnd, r1, r2)
             }
             &BoolExpr::Or(ref l, ref r) => {
-                (*l).into_bdd(man);
-                (*r).into_bdd(man);
-                man.apply(bdd::Op::BddOr);
+                let r1 = (*l).into_bdd(man);
+                let r2 = (*r).into_bdd(man);
+                man.apply(bdd::Op::BddOr, r1, r2)
             }
         }
     }

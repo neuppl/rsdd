@@ -5,10 +5,6 @@ use std::collections::{HashMap, HashSet};
 use std::slice;
 use apply_cache::{ApplyOp, ApplyTable};
 
-struct ExternalRef {
-    ptr: BddPtr,
-}
-
 #[derive(Debug)]
 enum ControlElement {
     App(ApplyOp),
@@ -16,13 +12,100 @@ enum ControlElement {
     ApplyCache(ApplyOp),
 }
 
+#[derive(Debug, Eq, PartialEq, Hash, Clone, Copy)]
+pub struct ExternalRef(usize);
 
+/// An internal data structure which tracks external references. Maps an external
+/// ref to a particular internal pointer.
+#[derive(Debug, Eq, PartialEq, Hash, Clone, Copy)]
+struct ExternalRefElem {
+    r: ExternalRef,
+    ptr: BddPtr,
+    rc: usize
+}
+
+/// Handles tracking external references
+struct ExternalRefTable {
+    ref_table: HashMap<ExternalRef, ExternalRefElem>,
+    pointer_table: HashMap<BddPtr, ExternalRef>,
+    /// a unique counter for generating new nodes
+    count: usize
+}
+
+impl ExternalRefTable {
+    fn new() -> ExternalRefTable {
+        ExternalRefTable {
+            ref_table: HashMap::new(),
+            pointer_table: HashMap::new(),
+            count: 0
+        }
+    }
+
+
+    /// generates a new ExternalRef, or increments an existing ref's counter and
+    /// returns it
+    fn gen_or_inc(&mut self, ptr: BddPtr) -> ExternalRef {
+        let r = match self.pointer_table.get(&ptr) {
+            None => None,
+            Some(&a) => Some(a.clone())
+        };
+        match r {
+            None => {
+                let new_ext = ExternalRef(self.count);
+                let new_elem = ExternalRefElem {
+                    r: new_ext,
+                    ptr: ptr,
+                    rc: 1
+                };
+                self.count += 1;
+                self.pointer_table.insert(ptr, new_ext);
+                self.ref_table.insert(new_ext, new_elem);
+                new_ext
+            },
+            Some(v) => {
+                match self.ref_table.get_mut(&v) {
+                    None => panic!("invalid state: external ref with no internal representation"),
+                    Some(a) => {
+                        a.rc += 1;
+                        a.r.clone()
+                    }
+                }
+            }
+        }
+    }
+
+    /// increment the ref counter
+    fn incref(&mut self, r: ExternalRef) -> () {
+        match self.ref_table.get_mut(&r) {
+            None => panic!("Incrementing reference for non-existent external ref"),
+            Some(v) => v.rc += 1
+        }
+    }
+
+    /// decrement the ref counter
+    fn decref(&mut self, r: ExternalRef) -> () {
+        match self.ref_table.get_mut(&r) {
+            None => panic!("Incrementing reference for non-existent external ref"),
+            Some(v) => {
+                v.rc -= 1;
+            }
+        }
+    }
+
+    fn into_internal(&self, r: ExternalRef) -> BddPtr {
+        match self.ref_table.get(&r) {
+            None => panic!("dereferencing external pointer with no internal representation; did it get garbage collected?"),
+            Some(a) => a.ptr
+        }
+    }
+}
 
 pub struct BddManager {
     compute_table: BddTable,
     apply_table: ApplyTable,
     control_stack: Vec<ControlElement>,
     data_stack: Vec<BddPtr>,
+    external_table: ExternalRefTable
 }
 
 impl BddManager {
@@ -34,6 +117,7 @@ impl BddManager {
             apply_table: ApplyTable::new(num_vars),
             control_stack: Vec::new(),
             data_stack: Vec::new(),
+            external_table: ExternalRefTable::new(),
         }
     }
 
@@ -41,7 +125,7 @@ impl BddManager {
         self.compute_table.order()
     }
 
-    pub fn deref(&self, ptr: BddPtr) -> Bdd {
+    fn deref(&self, ptr: BddPtr) -> Bdd {
         self.compute_table.deref(ptr)
     }
 
@@ -52,7 +136,6 @@ impl BddManager {
         }
     }
 
-    #[inline(never)]
     fn insert_application(&mut self, app: ApplyOp, result: BddPtr) -> () {
         self.apply_table.insert(app, result);
     }
@@ -71,22 +154,31 @@ impl BddManager {
         b.high
     }
 
+    /// Increments the reference counter for an external reference
+    pub fn incref(&mut self, r: ExternalRef) -> () {
+        self.external_table.incref(r)
+    }
+
+    pub fn decref(&mut self, r: ExternalRef) -> () {
+        self.external_table.decref(r)
+    }
+
     /// Push a variable onto the stack
-    pub fn var(&mut self, lbl: VarLabel, is_true: bool) -> () {
+    pub fn var(&mut self, lbl: VarLabel, is_true: bool) -> ExternalRef {
         let bdd = if is_true {
             Bdd::new_node(BddPtr::false_node(), BddPtr::true_node(), lbl)
         } else {
             Bdd::new_node(BddPtr::true_node(), BddPtr::false_node(), lbl)
         };
         let ptr = self.compute_table.get_or_insert(bdd);
-        self.data_stack.push(ptr)
+        self.external_table.gen_or_inc(ptr)
     }
 
     fn get_or_insert(&mut self, bdd: Bdd) -> BddPtr {
         self.compute_table.get_or_insert(bdd)
     }
 
-    fn print_bdd(&self) -> String {
+    fn print_bdd(&self, ptr: ExternalRef) -> String {
         use bdd::PointerType::*;
         fn print_bdd_helper(t: &BddManager, ptr: BddPtr) -> String {
             match ptr.ptr_type() {
@@ -101,7 +193,7 @@ impl BddManager {
                 }
             }
         }
-        let ptr = self.data_stack.last().unwrap().clone();
+        let ptr = self.external_table.into_internal(ptr);
         print_bdd_helper(self, ptr)
     }
 
@@ -129,15 +221,13 @@ impl BddManager {
 
 
     /// pushes the resulting application onto the top of the data stack
-    pub fn apply(&mut self, op: Op) -> () {
+    pub fn apply(&mut self, op: Op, a: ExternalRef, b: ExternalRef) -> ExternalRef {
         use self::ControlElement::*;
         use bdd::Op::*;
         use bdd::PointerType::*;
-        let (a, b) = match (self.data_stack.pop(), self.data_stack.pop()) {
-            (Some(a), Some(b)) => (a, b),
-            _ => panic!("popping empty data stack"),
-        };
-        self.control_stack.push(App(ApplyOp(op, a, b)));
+        let a_ptr = self.external_table.into_internal(a);
+        let b_ptr = self.external_table.into_internal(b);
+        self.control_stack.push(App(ApplyOp(op, a_ptr, b_ptr)));
         loop {
             let top = self.control_stack.pop();
             match top {
@@ -182,15 +272,19 @@ impl BddManager {
                         }
                     }
                 }
-                None => return (),
+                None => {
+                    let v = self.data_stack.pop().unwrap();
+                    return self.external_table.gen_or_inc(v);
+                },
             }
         }
     }
 
 
+
     /// evaluates the top element of the data stack on the values found in
     /// `vars`
-    pub fn eval_bdd(&self, assgn: &HashMap<VarLabel, bool>) -> bool {
+    pub fn eval_bdd(&self, bdd: ExternalRef, assgn: &HashMap<VarLabel, bool>) -> bool {
         fn eval_bdd_helper(man: &BddManager, ptr: BddPtr, assgn: &HashMap<VarLabel, bool>) -> bool {
             let bdd = man.deref(ptr);
             match bdd {
@@ -206,16 +300,26 @@ impl BddManager {
                 }
             }
         }
-        let bdd = self.data_stack.last().unwrap();
-        eval_bdd_helper(self, *bdd, assgn)
+        let bdd = self.external_table.into_internal(bdd);
+        eval_bdd_helper(self, bdd, assgn)
+    }
+
+    /// Returns true if `a` == `b`
+    pub fn eq_bdd(&self, a: ExternalRef, b: ExternalRef) -> bool {
+        let p1 = self.external_table.into_internal(a);
+        let p2 = self.external_table.into_internal(b);
+        // the magic of BDDs!
+        p1 == p2
     }
 }
 
+// check that (a \/ b) /\ a === a
 #[test]
-fn simple_application() {
+fn simple_equality() {
     let mut man = BddManager::new_default_order(3);
-    man.var(VarLabel::new(0), true);
-    man.var(VarLabel::new(1), true);
-    man.apply(Op::BddAnd);
-    println!("{}", man.print_bdd());
+    let v1 = man.var(VarLabel::new(0), true);
+    let v2 = man.var(VarLabel::new(1), true);
+    let r1 = man.apply(Op::BddOr, v1, v2);
+    let r2 = man.apply(Op::BddAnd, r1, v1);
+    assert!(man.eq_bdd(v1, r2));
 }

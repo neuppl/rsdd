@@ -38,15 +38,17 @@ pub fn rand_bdds() -> () {
         let num_vars = 20;
         let cnf = boolexpr::rand_cnf(&mut rng, num_vars, 30);
         let mut man = manager::BddManager::new_default_order(num_vars);
-        cnf.into_bdd(&mut man);
+        let r = cnf.into_bdd(&mut man);
         // check that they evaluate to the same value for a variety of
         // assignments
         for _ in 1..100 {
             let assgn = random_assignment(num_vars);
-            assert_eq!(man.eval_bdd(&assgn), cnf.eval(&assgn));
+            assert_eq!(man.eval_bdd(r, &assgn), cnf.eval(&assgn));
         }
+        // println!("avg offset: {}", man.apply_table.a)
     }
 }
+
 
 
 // #[test]
@@ -56,12 +58,12 @@ pub fn big_bdd() -> () {
     let num_vars = 60;
     let cnf = boolexpr::rand_cnf(&mut rng, num_vars, 100);
     let mut man = manager::BddManager::new_default_order(num_vars);
-    cnf.into_bdd(&mut man);
+    let r = cnf.into_bdd(&mut man);
     // check that they evaluate to the same value for a variety of
     // assignments
     for _ in 1..100 {
         let assgn = random_assignment(num_vars);
-        assert_eq!(man.eval_bdd(&assgn), cnf.eval(&assgn));
+        assert_eq!(man.eval_bdd(r, &assgn), cnf.eval(&assgn));
     }
 }
 
@@ -73,8 +75,8 @@ pub fn from_file() -> () {
     file_contents.unwrap().read_to_string(&mut string).unwrap();
     let cnf = boolexpr::parse_cnf(string);
     let mut man = manager::BddManager::new_default_order(num_vars);
-    cnf.into_bdd(&mut man);
+    let r = cnf.into_bdd(&mut man);
     let assgn = random_assignment(num_vars);
     // println!("BDD: {}\nExpr: {:?}\nAssignment: {:?}", man.print_bdd(), cnf, assgn);
-    assert_eq!(man.eval_bdd(&assgn), cnf.eval(&assgn));
+    assert_eq!(man.eval_bdd(r, &assgn), cnf.eval(&assgn));
 }
