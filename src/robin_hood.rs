@@ -1,8 +1,9 @@
 use bdd::*;
 use std::ptr;
 use std::hash::Hasher;
-use twox_hash;
 use std::mem;
+use fnv;
+use twox_hash::XxHash;
 #[macro_use]
 use util::*;
 
@@ -18,8 +19,8 @@ struct HashTableElement {
 BITFIELD!(HashTableElement data : u64 [
     occupied set_occupied[0..1], // whether or not the cell is occupied
     offset set_offset[1..6],     // the distance of this cell from its preferred location
-    hash set_hash[6..10],        // the high-order hash bits of the BDD this cell maps to
-    idx set_idx[10..64],         // the index into the backing store for this cell
+    hash set_hash[6..16],        // the high-order hash bits of the BDD this cell maps to
+    idx set_idx[16..64],         // the index into the backing store for this cell
 ]);
 
 impl HashTableElement {
@@ -49,7 +50,7 @@ pub struct BackedRobinHoodTable {
 
 #[inline]
 fn hash_pair(low: BddPtr, high: BddPtr) -> u64 {
-    let mut hasher = twox_hash::XxHash::with_seed(0xdeadbeef);
+    let mut hasher = XxHash::with_seed(0xdeadbeef);
     hasher.write_u64(low.raw());
     hasher.write_u64(high.raw());
     hasher.finish()
@@ -59,25 +60,20 @@ impl BackedRobinHoodTable {
     /// reserve a robin-hood table capable of holding at least `sz` elements
     pub fn new(sz: usize, var: VarLabel) -> BackedRobinHoodTable {
         let tbl_sz = ((sz as f64 * (1.0 + LOAD_FACTOR)) as usize).next_power_of_two();
+        let v : Vec<HashTableElement> = zero_vec(tbl_sz);
         let mut r = BackedRobinHoodTable {
             elem: Vec::with_capacity(sz as usize),
-            tbl: Vec::with_capacity(tbl_sz as usize),
+            tbl: v,
             var: var,
             cap: tbl_sz,
             len: 0,
         };
-        // zero the vector and set its length
-        unsafe {
-            let vec_ptr = r.tbl.as_mut_ptr();
-            ptr::write_bytes(vec_ptr, 0, tbl_sz as usize);
-            r.tbl.set_len(tbl_sz);
-        }
         return r;
     }
 
 
     /// check if item at index `pos` is occupied
-    #[inline(never)]
+    // #[inline(never)]
     fn is_occupied(&self, pos: usize) -> bool {
         // very oddly, this comparison is extremely costly!
         unsafe {
@@ -87,7 +83,7 @@ impl BackedRobinHoodTable {
     }
 
     /// get the BDD pointed to at `pos`
-    #[inline]
+    #[inline(never)]
     fn get_pos(&self, pos: usize) -> ToplessBdd {
         self.elem[self.tbl[pos].idx() as usize].clone()
     }
@@ -101,8 +97,8 @@ impl BackedRobinHoodTable {
     /// Get or insert a fresh (low, high) pair
     pub fn get_or_insert(&mut self, low: BddPtr, high: BddPtr) -> BddPtr {
         // ensure available capacity
-        let sz = (((self.len + 1) as f64) * LOAD_FACTOR) / (self.cap as f64);
-        assert!(sz + 1.0 < self.cap as f64);
+        // let sz = (((self.len + 1) as f64) * LOAD_FACTOR) / (self.cap as f64);
+        assert!(self.len + 1 < self.cap, "table capacity of {} reached", self.cap);
         let mut found: Option<BddPtr> = None; // holds location of inserted element
         let hash_v = hash_pair(low.clone(), high.clone());
         let mut pos = (hash_v as usize) % self.cap;

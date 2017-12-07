@@ -1,4 +1,4 @@
-use std::mem;
+use std::ptr;
 
 #[macro_export]
 macro_rules! BITFIELD {
@@ -21,3 +21,14 @@ macro_rules! BITFIELD {
     }
 }
 
+
+/// custom allocations for zeroed vectors
+pub fn zero_vec<T>(sz: usize) -> Vec<T> {
+    let mut v : Vec<T> = Vec::with_capacity(sz);
+    unsafe {
+        let vec_ptr = v.as_mut_ptr();
+        ptr::write_bytes(vec_ptr, 0, sz as usize);
+        v.set_len(sz);
+    }
+    return v
+}

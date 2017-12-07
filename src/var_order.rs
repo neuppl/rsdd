@@ -42,6 +42,12 @@ impl VarOrder {
         if pa < pb { a } else { b }
     }
 
+    pub fn sort(&self, a: BddPtr, b: BddPtr) -> (BddPtr, BddPtr) {
+        let pa = self.get(VarLabel::new(a.var()));
+        let pb = self.get(VarLabel::new(a.var()));
+        if pa < pb { (a, b) } else { (b, a) }
+    }
+
     pub fn order_iter(&self) -> Iter<usize> {
         self.vars.iter()
     }

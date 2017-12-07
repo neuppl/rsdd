@@ -3,9 +3,10 @@ use var_order::VarOrder;
 use bdd::*;
 use std::collections::{HashMap, HashSet};
 use std::slice;
+use apply_cache::{ApplyOp, ApplyTable};
 
 struct ExternalRef {
-    ptr: BddPtr
+    ptr: BddPtr,
 }
 
 #[derive(Debug)]
@@ -15,17 +16,11 @@ enum ControlElement {
     ApplyCache(ApplyOp),
 }
 
-struct DfsApplication {
-}
-
-#[derive(Debug, Hash, Eq, PartialEq, Clone)]
-struct ApplyOp(Op, BddPtr, BddPtr);
-
 
 
 pub struct BddManager {
     compute_table: BddTable,
-    apply_table: HashMap<ApplyOp, BddPtr>,
+    apply_table: ApplyTable,
     control_stack: Vec<ControlElement>,
     data_stack: Vec<BddPtr>,
 }
@@ -36,9 +31,9 @@ impl BddManager {
         let default_order = VarOrder::linear_order(num_vars);
         BddManager {
             compute_table: BddTable::new(default_order),
-            apply_table: HashMap::with_capacity(10000),
+            apply_table: ApplyTable::new(num_vars),
             control_stack: Vec::new(),
-            data_stack: Vec::new()
+            data_stack: Vec::new(),
         }
     }
 
@@ -50,7 +45,7 @@ impl BddManager {
         self.compute_table.deref(ptr)
     }
 
-    fn get_application(&self, app: &ApplyOp) -> Option<BddPtr> {
+    fn get_application(&self, app: ApplyOp) -> Option<BddPtr> {
         match self.apply_table.get(app) {
             Some(r) => Some(r.clone()),
             None => None,
@@ -140,7 +135,7 @@ impl BddManager {
         use bdd::PointerType::*;
         let (a, b) = match (self.data_stack.pop(), self.data_stack.pop()) {
             (Some(a), Some(b)) => (a, b),
-            _ => panic!("popping empty data stack")
+            _ => panic!("popping empty data stack"),
         };
         self.control_stack.push(App(ApplyOp(op, a, b)));
         loop {
@@ -171,14 +166,14 @@ impl BddManager {
                                 (BddOr, PtrTrue, _) |
                                 (BddOr, _, PtrTrue) => self.data_stack.push(BddPtr::true_node()),
                                 (op, PtrNode, PtrNode) => {
-                                    let cached = self.get_application(&ApplyOp(o, a, b));
+                                    let (s_a, s_b) = self.get_order().sort(a, b);
+                                    let cached = self.get_application(ApplyOp(o, s_a, s_b));
                                     if cached.is_some() {
                                         self.data_stack.push(cached.unwrap());
                                         continue;
                                     };
-                                    self.control_stack.push(ApplyCache(ApplyOp(o, a, b)));
-                                    let (lbl, low_app, high_app) =
-                                        self.normalize(a, b, op);
+                                    self.control_stack.push(ApplyCache(ApplyOp(o, s_a, s_b)));
+                                    let (lbl, low_app, high_app) = self.normalize(a, b, op);
                                     self.control_stack.push(Bind(lbl));
                                     self.control_stack.push(App(high_app));
                                     self.control_stack.push(App(low_app));
@@ -187,24 +182,27 @@ impl BddManager {
                         }
                     }
                 }
-                None => return ()
+                None => return (),
             }
         }
     }
 
+
     /// evaluates the top element of the data stack on the values found in
     /// `vars`
     pub fn eval_bdd(&self, assgn: &HashMap<VarLabel, bool>) -> bool {
-        fn eval_bdd_helper(man: &BddManager, ptr: BddPtr,
-                           assgn: &HashMap<VarLabel, bool>) -> bool {
+        fn eval_bdd_helper(man: &BddManager, ptr: BddPtr, assgn: &HashMap<VarLabel, bool>) -> bool {
             let bdd = man.deref(ptr);
             match bdd {
                 Bdd::BddTrue => true,
                 Bdd::BddFalse => false,
                 Bdd::Node(n) => {
                     let value = assgn.get(&n.var).unwrap();
-                    if *value { eval_bdd_helper(man, n.high, assgn) }
-                    else { eval_bdd_helper(man, n.low, assgn) }
+                    if *value {
+                        eval_bdd_helper(man, n.high, assgn)
+                    } else {
+                        eval_bdd_helper(man, n.low, assgn)
+                    }
                 }
             }
         }

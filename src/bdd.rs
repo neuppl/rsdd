@@ -1,6 +1,5 @@
 use std::hash::{Hash, Hasher};
 use std::fmt;
-use twox_hash;
 #[macro_use]
 use util::*;
 use std::io::prelude::*;
