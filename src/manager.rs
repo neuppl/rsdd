@@ -21,7 +21,7 @@ pub struct ExternalRef(usize);
 struct ExternalRefElem {
     r: ExternalRef,
     ptr: BddPtr,
-    rc: usize
+    rc: usize,
 }
 
 /// Handles tracking external references
@@ -29,7 +29,7 @@ struct ExternalRefTable {
     ref_table: HashMap<ExternalRef, ExternalRefElem>,
     pointer_table: HashMap<BddPtr, ExternalRef>,
     /// a unique counter for generating new nodes
-    count: usize
+    count: usize,
 }
 
 impl ExternalRefTable {
@@ -37,7 +37,7 @@ impl ExternalRefTable {
         ExternalRefTable {
             ref_table: HashMap::new(),
             pointer_table: HashMap::new(),
-            count: 0
+            count: 0,
         }
     }
 
@@ -47,7 +47,7 @@ impl ExternalRefTable {
     fn gen_or_inc(&mut self, ptr: BddPtr) -> ExternalRef {
         let r = match self.pointer_table.get(&ptr) {
             None => None,
-            Some(&a) => Some(a.clone())
+            Some(&a) => Some(a.clone()),
         };
         match r {
             None => {
@@ -55,13 +55,13 @@ impl ExternalRefTable {
                 let new_elem = ExternalRefElem {
                     r: new_ext,
                     ptr: ptr,
-                    rc: 1
+                    rc: 1,
                 };
                 self.count += 1;
                 self.pointer_table.insert(ptr, new_ext);
                 self.ref_table.insert(new_ext, new_elem);
                 new_ext
-            },
+            }
             Some(v) => {
                 match self.ref_table.get_mut(&v) {
                     None => panic!("invalid state: external ref with no internal representation"),
@@ -78,7 +78,7 @@ impl ExternalRefTable {
     fn incref(&mut self, r: ExternalRef) -> () {
         match self.ref_table.get_mut(&r) {
             None => panic!("Incrementing reference for non-existent external ref"),
-            Some(v) => v.rc += 1
+            Some(v) => v.rc += 1,
         }
     }
 
@@ -94,8 +94,12 @@ impl ExternalRefTable {
 
     fn into_internal(&self, r: ExternalRef) -> BddPtr {
         match self.ref_table.get(&r) {
-            None => panic!("dereferencing external pointer with no internal representation; did it get garbage collected?"),
-            Some(a) => a.ptr
+            None => {
+                panic!(
+                    "dereferencing external pointer with no internal representation; did it get garbage collected?"
+                )
+            }
+            Some(a) => a.ptr,
         }
     }
 }
@@ -105,7 +109,7 @@ pub struct BddManager {
     apply_table: ApplyTable,
     control_stack: Vec<ControlElement>,
     data_stack: Vec<BddPtr>,
-    external_table: ExternalRefTable
+    external_table: ExternalRefTable,
 }
 
 impl BddManager {
@@ -275,7 +279,7 @@ impl BddManager {
                 None => {
                     let v = self.data_stack.pop().unwrap();
                     return self.external_table.gen_or_inc(v);
-                },
+                }
             }
         }
     }

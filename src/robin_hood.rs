@@ -7,7 +7,8 @@ use twox_hash::XxHash;
 #[macro_use]
 use util::*;
 
-const LOAD_FACTOR: f64 = 0.8;
+const LOAD_FACTOR: f64 = 0.7;
+const GROWTH_RATE: usize = 16;
 
 
 /// data structure stored inside of the hash table
@@ -59,13 +60,12 @@ fn hash_pair(low: BddPtr, high: BddPtr) -> u64 {
 impl BackedRobinHoodTable {
     /// reserve a robin-hood table capable of holding at least `sz` elements
     pub fn new(sz: usize, var: VarLabel) -> BackedRobinHoodTable {
-        let tbl_sz = ((sz as f64 * (1.0 + LOAD_FACTOR)) as usize).next_power_of_two();
-        let v : Vec<HashTableElement> = zero_vec(tbl_sz);
-        let mut r = BackedRobinHoodTable {
+        let v : Vec<HashTableElement> = zero_vec(sz);
+        let r = BackedRobinHoodTable {
             elem: Vec::with_capacity(sz as usize),
             tbl: v,
             var: var,
-            cap: tbl_sz,
+            cap: sz,
             len: 0,
         };
         return r;
@@ -96,9 +96,10 @@ impl BackedRobinHoodTable {
 
     /// Get or insert a fresh (low, high) pair
     pub fn get_or_insert(&mut self, low: BddPtr, high: BddPtr) -> BddPtr {
-        // ensure available capacity
-        // let sz = (((self.len + 1) as f64) * LOAD_FACTOR) / (self.cap as f64);
-        assert!(self.len + 1 < self.cap, "table capacity of {} reached", self.cap);
+        if (self.len + 1) as f64 > (self.cap as f64 * LOAD_FACTOR) {
+            self.grow();
+        }
+
         let mut found: Option<BddPtr> = None; // holds location of inserted element
         let hash_v = hash_pair(low.clone(), high.clone());
         let mut pos = (hash_v as usize) % self.cap;
@@ -194,6 +195,21 @@ impl BackedRobinHoodTable {
         self.elem[ptr.idx() as usize].clone()
     }
 
+
+    /// Expands the capacity of the hash table
+    pub fn grow(&mut self) -> () {
+        let new_sz = (self.cap + 1).next_power_of_two();
+        let v = self.var.clone();
+        let mut new_tbl = BackedRobinHoodTable::new(new_sz, v);
+        for itm in self.elem.iter() {
+            new_tbl.get_or_insert(itm.low, itm.high);
+        }
+        self.elem = new_tbl.elem;
+        self.cap = new_tbl.cap;
+        self.len = new_tbl.len;
+        self.tbl = new_tbl.tbl;
+    }
+
     pub fn average_offset(&self) -> f64 {
         let total = self.tbl.iter().fold(0, |sum, ref cur| cur.offset() + sum);
         (total as f64) / (self.len as f64)
@@ -209,7 +225,7 @@ fn mk_ptr(idx: u64) -> BddPtr {
 
 #[test]
 fn test_simple() {
-    let mut store = BackedRobinHoodTable::new(100000, VarLabel::new(0));
+    let mut store = BackedRobinHoodTable::new(5000, VarLabel::new(0));
     for i in 0..100000 {
         let v = store.get_or_insert(mk_ptr(i), mk_ptr(i));
         match store.find(mk_ptr(i), mk_ptr(i)) {

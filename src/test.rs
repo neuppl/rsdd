@@ -51,12 +51,12 @@ pub fn rand_bdds() -> () {
 
 
 
-// #[test]
+#[test]
 pub fn big_bdd() -> () {
     let mut rng = rand::StdRng::new().unwrap();
     rng.reseed(&[0]);
-    let num_vars = 60;
-    let cnf = boolexpr::rand_cnf(&mut rng, num_vars, 100);
+    let num_vars = 20;
+    let cnf = boolexpr::rand_cnf(&mut rng, num_vars, 60);
     let mut man = manager::BddManager::new_default_order(num_vars);
     let r = cnf.into_bdd(&mut man);
     // check that they evaluate to the same value for a variety of
@@ -67,7 +67,7 @@ pub fn big_bdd() -> () {
     }
 }
 
-#[test]
+// #[test]
 pub fn from_file() -> () {
     let num_vars = 228;
     let file_contents = File::open("/Users/sholtzen/Downloads/sdd-1.1.1/cnf/c8-easier.cnf");
