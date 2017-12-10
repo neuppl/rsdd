@@ -9,7 +9,7 @@ use ref_table::*;
 
 /// The internal vtree represents a partition of variables among BDDs
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-enum VTree {
+pub enum VTree {
     VNode(Rc<VTree>, Rc<VTree>),
     VLeaf(Vec<VarLabel>),
 }
@@ -119,9 +119,22 @@ impl VTree {
             &VTree::VNode(ref l, ref r) => l.contains(lbl) || r.contains(lbl),
         }
     }
+
+    /// generate an even vtree by splitting a variable ordering in half `num_splits`
+    /// times
+    pub fn even_split(order: &[VarLabel], num_splits: usize) -> VTree {
+        if num_splits <= 0 {
+            VTree::VLeaf(order.to_vec())
+        } else {
+            let (l_s, r_s) = order.split_at(order.len() / 2);
+            let l_tree = VTree::even_split(l_s, num_splits-1);
+            let r_tree = VTree::even_split(r_s, num_splits-1);
+            VTree::VNode(Rc::new(l_tree), Rc::new(r_tree))
+        }
+    }
 }
 
-struct SddManager {
+pub struct SddManager {
     /// Managers ordered by their order in a depth-first left-first traversal of
     /// the vtree
     bdd_managers: Vec<BddManager>,
@@ -135,7 +148,7 @@ struct SddManager {
 }
 
 impl SddManager {
-    fn new(vtree: VTree) -> SddManager {
+    pub fn new(vtree: VTree) -> SddManager {
         let mut c = SddManager {
             bdd_managers: Vec::new(),
             sdd_to_bdd: HashMap::new(),
@@ -155,13 +168,13 @@ impl SddManager {
                     v.clone(),
                     VarLabel::new(var_idx as u64),
                 );
-                c.bdd_to_sdd[tbl_idx].insert(v.clone(), VarLabel::new(var_idx as u64));
+                c.bdd_to_sdd[tbl_idx].insert(VarLabel::new(var_idx as u64), v.clone());
             }
         }
         return c;
     }
 
-    fn var(&mut self, lbl: VarLabel, is_true: bool) -> ExternalRef {
+    pub fn var(&mut self, lbl: VarLabel, is_true: bool) -> ExternalRef {
         fn var_helper(
             man: &mut SddManager,
             count: usize,
@@ -220,7 +233,7 @@ impl SddManager {
         res
     }
 
-    fn apply(&mut self, op: Op, a: ExternalRef, b: ExternalRef) -> ExternalRef {
+    pub fn apply(&mut self, op: Op, a: ExternalRef, b: ExternalRef) -> ExternalRef {
         fn helper(
             man: &mut SddManager,
             op: Op,
@@ -228,6 +241,7 @@ impl SddManager {
             b: SddPtr,
             cnt: usize,
         ) -> (SddPtr, usize) {
+            // println!("apply");
             use self::Sdd::*;
             let a_sdd = man.alloc.deref(a).clone();
             let b_sdd = man.alloc.deref(b).clone();
@@ -245,6 +259,7 @@ impl SddManager {
                     }
                     // normalize r
                     r.sort();
+                    r.dedup();
                     let new_node = man.alloc.get_or_insert(Or(r));
                     (new_node, new_cnt)
                 }
@@ -269,7 +284,7 @@ impl SddManager {
         self.external_table.gen_or_inc(r)
     }
 
-    fn eval_sdd(&self, ptr: ExternalRef, assgn: HashMap<VarLabel, bool>) -> bool {
+    pub fn eval_sdd(&self, ptr: ExternalRef, assgn: &HashMap<VarLabel, bool>) -> bool {
         fn helper(
             man: &SddManager,
             a: SddPtr,
@@ -317,11 +332,11 @@ impl SddManager {
             }
         }
         let i_a = self.external_table.into_internal(ptr);
-        let (r, _) = helper(self, i_a, 0, &assgn);
+        let (r, _) = helper(self, i_a, 0, assgn);
         r
     }
 
-    fn print_sdd(&self, ptr: ExternalRef) -> String {
+    pub fn print_sdd(&self, ptr: ExternalRef) -> String {
         fn helper(man: &SddManager, ptr: &SddPtr, cnt: usize) -> (String, usize) {
             match man.alloc.deref(ptr.clone()) {
                 &Sdd::And(ref p, ref s) => {

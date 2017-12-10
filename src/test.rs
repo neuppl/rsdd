@@ -81,3 +81,28 @@ pub fn from_file() -> () {
     // println!("BDD: {}\nExpr: {:?}\nAssignment: {:?}", man.print_bdd(), cnf, assgn);
     assert_eq!(man.eval_bdd(r, &assgn), cnf.eval(&assgn));
 }
+
+#[test]
+pub fn random_sdd() {
+    use sdd::*;
+    let mut rng = rand::StdRng::new().unwrap();
+    rng.reseed(&[0]);
+    for _ in 1..20 {
+        println!("compiling");
+        let num_vars = 5;
+        let cnf = boolexpr::rand_cnf(&mut rng, num_vars, 10);
+        let v : Vec<bdd::VarLabel> =
+            (0..num_vars).map(|x| bdd::VarLabel::new(x as u64)).collect();
+        let vtree = VTree::even_split(&v, 1);
+        let mut man = SddManager::new(vtree);
+        let r = cnf.into_sdd(&mut man);
+        // check that they evaluate to the same value for a variety of
+        // assignments
+        println!("evaluating");
+        for _ in 1..100 {
+            let assgn = random_assignment(num_vars);
+            assert_eq!(man.eval_sdd(r, &assgn), cnf.eval(&assgn));
+        }
+    }
+}
+

@@ -1,6 +1,7 @@
 use bdd;
 use std::collections::{HashMap, HashSet};
 use manager;
+use sdd;
 use ref_table::ExternalRef;
 
 #[derive(Debug, Clone)]
@@ -161,6 +162,28 @@ impl BoolExpr {
             }
         }
     }
+
+    /// pushes the BDD onto the top of the manager's stack
+    pub fn into_sdd(&self, man: &mut sdd::SddManager) -> ExternalRef {
+        match self {
+            &BoolExpr::Var(lbl, polarity) => {
+                man.var(bdd::VarLabel::new(lbl as u64), polarity)
+            }
+            &BoolExpr::And(ref l, ref r) => {
+                let r1 = (*l).into_sdd(man);
+                let r2 = (*r).into_sdd(man);
+                println!("and");
+                man.apply(bdd::Op::BddAnd, r1, r2)
+            }
+            &BoolExpr::Or(ref l, ref r) => {
+                let r1 = (*l).into_sdd(man);
+                let r2 = (*r).into_sdd(man);
+                println!("or");
+                man.apply(bdd::Op::BddOr, r1, r2)
+            }
+        }
+    }
+
 
 
     pub fn varset(&self) -> HashSet<usize> {
