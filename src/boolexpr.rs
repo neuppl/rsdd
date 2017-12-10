@@ -145,7 +145,7 @@ impl BoolExpr {
     }
 
     /// pushes the BDD onto the top of the manager's stack
-    pub fn into_bdd(&self, man: &mut manager::BddManager) -> ExternalRef {
+    pub fn into_bdd(&self, man: &mut manager::BddManager) -> bdd::BddPtr {
         match self {
             &BoolExpr::Var(lbl, polarity) => {
                 man.var(bdd::VarLabel::new(lbl as u64), polarity)

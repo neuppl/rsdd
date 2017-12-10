@@ -1,4 +1,4 @@
-use robin_hood::BackedRobinHoodTable;
+use robin_hood::{BackedRobinHoodTable, BackingPtr};
 use bdd::*;
 use var_order::VarOrder;
 
@@ -7,9 +7,10 @@ const DEFAULT_SUBTABLE_SZ: usize = 65536;
 /// The primary storage unit for binary decision diagram nodes
 /// Each variable is associated with an individual subtable
 pub struct BddTable {
-    subtables: Vec<BackedRobinHoodTable>,
+    subtables: Vec<BackedRobinHoodTable<ToplessBdd>>,
     order: VarOrder,
 }
+
 
 impl BddTable {
     pub fn new(order: VarOrder) -> BddTable {
@@ -17,7 +18,6 @@ impl BddTable {
         for i in 0..order.len() {
             v.push(BackedRobinHoodTable::new(
                 DEFAULT_SUBTABLE_SZ,
-                VarLabel::new(i as u64),
             ));
         }
         BddTable {
@@ -34,8 +34,12 @@ impl BddTable {
         match bdd {
             Bdd::BddFalse => BddPtr::false_node(),
             Bdd::BddTrue => BddPtr::true_node(),
-            Bdd::Node(n) =>
-                self.subtables[n.var.value() as usize].get_or_insert(n.low, n.high)
+            Bdd::Node(n) => {
+                let var = n.var.value();
+                let elem = ToplessBdd::new(n.low, n.high);
+                let ptr = self.subtables[var as usize].get_or_insert(elem);
+                BddPtr::new(VarLabel::new(var), TableIndex::new(ptr.0 as u64))
+            }
         }
 
     }
@@ -44,8 +48,15 @@ impl BddTable {
         match bdd {
             Bdd::BddFalse => Some(BddPtr::false_node()),
             Bdd::BddTrue => Some(BddPtr::true_node()),
-            Bdd::Node(n) =>
-                self.subtables[n.var.value() as usize].find(n.low, n.high)
+            Bdd::Node(n) => {
+                let var = n.var.value();
+                let elem = ToplessBdd::new(n.low, n.high);
+                match self.subtables[var as usize].find(elem) {
+                    Some(ptr) =>
+                        Some(BddPtr::new(VarLabel::new(var), TableIndex::new(ptr.0 as u64))),
+                    None => None
+                }
+            }
         }
     }
 
@@ -54,12 +65,13 @@ impl BddTable {
             PointerType::PtrFalse => Bdd::BddFalse,
             PointerType::PtrTrue => Bdd::BddTrue,
             PointerType::PtrNode => {
-                let topless = self.subtables[ptr.var() as usize].deref(ptr.clone());
+                let topless = self.subtables[ptr.var() as usize].deref(BackingPtr(ptr.idx() as u32));
                 Bdd::new_node(topless.low, topless.high, VarLabel::new(ptr.var()))
             }
         }
     }
 }
+
 
 
 #[test]

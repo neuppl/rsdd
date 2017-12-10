@@ -1,4 +1,5 @@
 use std::hash::{Hash, Hasher};
+use twox_hash;
 use std::fmt;
 #[macro_use]
 use util::*;
@@ -166,29 +167,25 @@ impl Bdd {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct GcBits {}
-
-impl GcBits {
-    pub fn new() -> GcBits {
-        GcBits {}
-    }
-}
-
 /// The primary BDD storage object
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Copy)]
 pub struct ToplessBdd {
     pub low: BddPtr,
     pub high: BddPtr,
-    gc: GcBits,
+}
+
+impl Hash for ToplessBdd {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.low.hash(state);
+        self.high.hash(state);
+    }
 }
 
 impl ToplessBdd {
-    pub fn new(low: BddPtr, high: BddPtr, gc: GcBits) -> ToplessBdd {
+    pub fn new(low: BddPtr, high: BddPtr) -> ToplessBdd {
         ToplessBdd {
             low: low,
             high: high,
-            gc: gc,
         }
     }
 }

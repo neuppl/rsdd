@@ -18,7 +18,6 @@ pub struct BddManager {
     apply_table: ApplyTable,
     control_stack: Vec<ControlElement>,
     data_stack: Vec<BddPtr>,
-    external_table: ExternalRefTable<BddPtr>,
 }
 
 
@@ -36,7 +35,6 @@ impl BddManager {
             apply_table: ApplyTable::new(len),
             control_stack: Vec::new(),
             data_stack: Vec::new(),
-            external_table: ExternalRefTable::new(),
         }
     }
 
@@ -73,39 +71,29 @@ impl BddManager {
         b.high
     }
 
-    /// Increments the reference counter for an external reference
-    pub fn incref(&mut self, r: ExternalRef) -> () {
-        self.external_table.incref(r)
-    }
-
-    pub fn decref(&mut self, r: ExternalRef) -> () {
-        self.external_table.decref(r)
-    }
-
     /// Push a variable onto the stack
-    pub fn var(&mut self, lbl: VarLabel, is_true: bool) -> ExternalRef {
+    pub fn var(&mut self, lbl: VarLabel, is_true: bool) -> BddPtr {
         let bdd = if is_true {
             Bdd::new_node(BddPtr::false_node(), BddPtr::true_node(), lbl)
         } else {
             Bdd::new_node(BddPtr::true_node(), BddPtr::false_node(), lbl)
         };
-        let ptr = self.compute_table.get_or_insert(bdd);
-        self.external_table.gen_or_inc(ptr)
+        self.compute_table.get_or_insert(bdd)
     }
 
-    pub fn true_ptr(&mut self) -> ExternalRef {
-        self.external_table.gen_or_inc(BddPtr::true_node())
+    pub fn true_ptr(&mut self) -> BddPtr {
+        BddPtr::true_node()
     }
 
-    pub fn false_ptr(&mut self) -> ExternalRef {
-        self.external_table.gen_or_inc(BddPtr::false_node())
+    pub fn false_ptr(&mut self) -> BddPtr {
+        BddPtr::false_node()
     }
 
     fn get_or_insert(&mut self, bdd: Bdd) -> BddPtr {
         self.compute_table.get_or_insert(bdd)
     }
 
-    pub fn print_bdd(&self, ptr: ExternalRef) -> String {
+    pub fn print_bdd(&self, ptr: BddPtr ) -> String {
         use bdd::PointerType::*;
         fn print_bdd_helper(t: &BddManager, ptr: BddPtr) -> String {
             match ptr.ptr_type() {
@@ -120,7 +108,6 @@ impl BddManager {
                 }
             }
         }
-        let ptr = self.external_table.into_internal(ptr);
         print_bdd_helper(self, ptr)
     }
 
@@ -148,13 +135,11 @@ impl BddManager {
 
 
     /// pushes the resulting application onto the top of the data stack
-    pub fn apply(&mut self, op: Op, a: ExternalRef, b: ExternalRef) -> ExternalRef {
+    pub fn apply(&mut self, op: Op, a: BddPtr, b: BddPtr) -> BddPtr {
         use self::ControlElement::*;
         use bdd::Op::*;
         use bdd::PointerType::*;
-        let a_ptr = self.external_table.into_internal(a);
-        let b_ptr = self.external_table.into_internal(b);
-        self.control_stack.push(App(ApplyOp(op, a_ptr, b_ptr)));
+        self.control_stack.push(App(ApplyOp(op, a, b)));
         loop {
             let top = self.control_stack.pop();
             match top {
@@ -200,8 +185,7 @@ impl BddManager {
                     }
                 }
                 None => {
-                    let v = self.data_stack.pop().unwrap();
-                    return self.external_table.gen_or_inc(v);
+                    return self.data_stack.pop().unwrap()
                 }
             }
         }
@@ -211,7 +195,7 @@ impl BddManager {
 
     /// evaluates the top element of the data stack on the values found in
     /// `vars`
-    pub fn eval_bdd(&self, bdd: ExternalRef, assgn: &HashMap<VarLabel, bool>) -> bool {
+    pub fn eval_bdd(&self, bdd: BddPtr, assgn: &HashMap<VarLabel, bool>) -> bool {
         fn eval_bdd_helper(man: &BddManager, ptr: BddPtr, assgn: &HashMap<VarLabel, bool>) -> bool {
             let bdd = man.deref(ptr);
             match bdd {
@@ -227,16 +211,13 @@ impl BddManager {
                 }
             }
         }
-        let bdd = self.external_table.into_internal(bdd);
         eval_bdd_helper(self, bdd, assgn)
     }
 
     /// Returns true if `a` == `b`
-    pub fn eq_bdd(&self, a: ExternalRef, b: ExternalRef) -> bool {
-        let p1 = self.external_table.into_internal(a);
-        let p2 = self.external_table.into_internal(b);
+    pub fn eq_bdd(&self, a: BddPtr, b: BddPtr) -> bool {
         // the magic of BDDs!
-        p1 == p2
+        a == b
     }
 }
 

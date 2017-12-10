@@ -5,7 +5,11 @@ use std::rc::Rc;
 use bdd::*;
 use var_order::VarOrder;
 use manager::*;
+use fnv::FnvHashMap;
 use ref_table::*;
+#[macro_use]
+use util::*;
+
 
 /// The internal vtree represents a partition of variables among BDDs
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -37,7 +41,7 @@ impl SddPtr {
 enum Sdd {
     Or(Vec<SddPtr>),
     And(SddPtr, SddPtr),
-    Bdd(ExternalRef),
+    Bdd(BddPtr),
 }
 
 impl Sdd {
@@ -50,14 +54,14 @@ impl Sdd {
 /// Handles memory management for the SDD manager
 struct SddAllocator {
     elem: Vec<Sdd>,
-    unique_tbl: HashMap<Sdd, SddPtr>,
+    unique_tbl: FnvHashMap<Sdd, SddPtr>,
 }
 
 impl SddAllocator {
     fn new() -> SddAllocator {
         SddAllocator {
             elem: Vec::with_capacity(5000),
-            unique_tbl: HashMap::with_capacity(10000),
+            unique_tbl: FnvHashMap::default(),
         }
     }
 
@@ -362,6 +366,7 @@ impl SddManager {
         r
     }
 }
+
 
 #[test]
 fn make_sdd() {
