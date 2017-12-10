@@ -4,6 +4,7 @@ use bdd::*;
 use std::collections::{HashMap, HashSet};
 use std::slice;
 use apply_cache::{ApplyOp, ApplyTable};
+use ref_table::*;
 
 #[derive(Debug)]
 enum ControlElement {
@@ -12,113 +13,27 @@ enum ControlElement {
     ApplyCache(ApplyOp),
 }
 
-#[derive(Debug, Eq, PartialEq, Hash, Clone, Copy)]
-pub struct ExternalRef(usize);
-
-/// An internal data structure which tracks external references. Maps an external
-/// ref to a particular internal pointer.
-#[derive(Debug, Eq, PartialEq, Hash, Clone, Copy)]
-struct ExternalRefElem {
-    r: ExternalRef,
-    ptr: BddPtr,
-    rc: usize,
-}
-
-/// Handles tracking external references
-struct ExternalRefTable {
-    ref_table: HashMap<ExternalRef, ExternalRefElem>,
-    pointer_table: HashMap<BddPtr, ExternalRef>,
-    /// a unique counter for generating new nodes
-    count: usize,
-}
-
-impl ExternalRefTable {
-    fn new() -> ExternalRefTable {
-        ExternalRefTable {
-            ref_table: HashMap::new(),
-            pointer_table: HashMap::new(),
-            count: 0,
-        }
-    }
-
-
-    /// generates a new ExternalRef, or increments an existing ref's counter and
-    /// returns it
-    fn gen_or_inc(&mut self, ptr: BddPtr) -> ExternalRef {
-        let r = match self.pointer_table.get(&ptr) {
-            None => None,
-            Some(&a) => Some(a.clone()),
-        };
-        match r {
-            None => {
-                let new_ext = ExternalRef(self.count);
-                let new_elem = ExternalRefElem {
-                    r: new_ext,
-                    ptr: ptr,
-                    rc: 1,
-                };
-                self.count += 1;
-                self.pointer_table.insert(ptr, new_ext);
-                self.ref_table.insert(new_ext, new_elem);
-                new_ext
-            }
-            Some(v) => {
-                match self.ref_table.get_mut(&v) {
-                    None => panic!("invalid state: external ref with no internal representation"),
-                    Some(a) => {
-                        a.rc += 1;
-                        a.r.clone()
-                    }
-                }
-            }
-        }
-    }
-
-    /// increment the ref counter
-    fn incref(&mut self, r: ExternalRef) -> () {
-        match self.ref_table.get_mut(&r) {
-            None => panic!("Incrementing reference for non-existent external ref"),
-            Some(v) => v.rc += 1,
-        }
-    }
-
-    /// decrement the ref counter
-    fn decref(&mut self, r: ExternalRef) -> () {
-        match self.ref_table.get_mut(&r) {
-            None => panic!("Incrementing reference for non-existent external ref"),
-            Some(v) => {
-                v.rc -= 1;
-            }
-        }
-    }
-
-    fn into_internal(&self, r: ExternalRef) -> BddPtr {
-        match self.ref_table.get(&r) {
-            None => {
-                panic!(
-                    "dereferencing external pointer with no internal representation; did it get garbage collected?"
-                )
-            }
-            Some(a) => a.ptr,
-        }
-    }
-}
-
 pub struct BddManager {
     compute_table: BddTable,
     apply_table: ApplyTable,
     control_stack: Vec<ControlElement>,
     data_stack: Vec<BddPtr>,
-    external_table: ExternalRefTable,
+    external_table: ExternalRefTable<BddPtr>,
 }
+
 
 impl BddManager {
     /// Make a BDD manager with a default variable ordering
     pub fn new_default_order(num_vars: usize) -> BddManager {
         let default_order = VarOrder::linear_order(num_vars);
+        BddManager::new(default_order)
+    }
+
+    pub fn new(order: VarOrder) -> BddManager {
+        let len = order.len();
         BddManager {
-            compute_table: BddTable::new(default_order),
-            apply_table: ApplyTable::new(num_vars),
+            compute_table: BddTable::new(order),
+            apply_table: ApplyTable::new(len),
             control_stack: Vec::new(),
             data_stack: Vec::new(),
             external_table: ExternalRefTable::new(),
@@ -178,11 +93,19 @@ impl BddManager {
         self.external_table.gen_or_inc(ptr)
     }
 
+    pub fn true_ptr(&mut self) -> ExternalRef {
+        self.external_table.gen_or_inc(BddPtr::true_node())
+    }
+
+    pub fn false_ptr(&mut self) -> ExternalRef {
+        self.external_table.gen_or_inc(BddPtr::false_node())
+    }
+
     fn get_or_insert(&mut self, bdd: Bdd) -> BddPtr {
         self.compute_table.get_or_insert(bdd)
     }
 
-    fn print_bdd(&self, ptr: ExternalRef) -> String {
+    pub fn print_bdd(&self, ptr: ExternalRef) -> String {
         use bdd::PointerType::*;
         fn print_bdd_helper(t: &BddManager, ptr: BddPtr) -> String {
             match ptr.ptr_type() {

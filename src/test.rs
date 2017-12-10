@@ -70,6 +70,7 @@ pub fn big_bdd() -> () {
 // #[test]
 pub fn from_file() -> () {
     let num_vars = 228;
+    // let file_contents = File::open("/Users/sholtzen/Downloads/sdd-1.1.1/cnf/c8-easier.cnf");
     let file_contents = File::open("/Users/sholtzen/Downloads/sdd-1.1.1/cnf/c8-easier.cnf");
     let mut string = String::new();
     file_contents.unwrap().read_to_string(&mut string).unwrap();

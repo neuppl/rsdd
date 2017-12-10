@@ -1,6 +1,7 @@
 use bdd;
 use std::collections::{HashMap, HashSet};
 use manager;
+use ref_table::ExternalRef;
 
 #[derive(Debug, Clone)]
 pub enum BoolExpr {
@@ -143,7 +144,7 @@ impl BoolExpr {
     }
 
     /// pushes the BDD onto the top of the manager's stack
-    pub fn into_bdd(&self, man: &mut manager::BddManager) -> manager::ExternalRef {
+    pub fn into_bdd(&self, man: &mut manager::BddManager) -> ExternalRef {
         match self {
             &BoolExpr::Var(lbl, polarity) => {
                 man.var(bdd::VarLabel::new(lbl as u64), polarity)

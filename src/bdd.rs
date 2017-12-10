@@ -17,7 +17,7 @@ const FALSE_VALUE: u64 = 0; // the variable ID corresponding with a false value
 
 
 /// a label for each distinct variable in the BDD
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Copy)]
 pub struct VarLabel(u64);
 impl VarLabel {
     #[inline]

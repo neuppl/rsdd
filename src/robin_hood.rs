@@ -73,7 +73,6 @@ impl BackedRobinHoodTable {
 
 
     /// check if item at index `pos` is occupied
-    // #[inline(never)]
     fn is_occupied(&self, pos: usize) -> bool {
         // very oddly, this comparison is extremely costly!
         unsafe {
@@ -82,14 +81,11 @@ impl BackedRobinHoodTable {
         // self.tbl[pos].occupied() == 1
     }
 
-    /// get the BDD pointed to at `pos`
-    #[inline(never)]
     fn get_pos(&self, pos: usize) -> ToplessBdd {
         self.elem[self.tbl[pos].idx() as usize].clone()
     }
 
     /// check the distance the element at index `pos` is from its desired location
-    #[inline]
     fn probe_distance(&self, pos: usize) -> usize {
         self.tbl[pos].offset() as usize
     }

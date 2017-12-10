@@ -6,6 +6,8 @@ mod var_order;
 mod manager;
 mod boolexpr;
 mod apply_cache;
+mod sdd;
+mod ref_table;
 mod test;
 extern crate rand;
 extern crate fnv;
