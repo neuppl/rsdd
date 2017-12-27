@@ -1,7 +1,7 @@
 use bdd;
 use std::collections::{HashMap, HashSet};
 use manager;
-use sdd;
+use sdd_manager;
 use ref_table::ExternalRef;
 
 #[derive(Debug, Clone)]
@@ -164,7 +164,7 @@ impl BoolExpr {
     }
 
     /// pushes the BDD onto the top of the manager's stack
-    pub fn into_sdd(&self, man: &mut sdd::SddManager) -> ExternalRef {
+    pub fn into_sdd(&self, man: &mut sdd_manager::SddManager) -> ExternalRef {
         match self {
             &BoolExpr::Var(lbl, polarity) => {
                 man.var(bdd::VarLabel::new(lbl as u64), polarity)

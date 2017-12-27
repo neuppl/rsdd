@@ -3,7 +3,7 @@ use var_order::VarOrder;
 use bdd::*;
 use std::collections::{HashMap, HashSet};
 use std::slice;
-use apply_cache::{ApplyOp, ApplyTable};
+use apply_cache::{ApplyOp, BddApplyTable};
 use ref_table::*;
 
 #[derive(Debug)]
@@ -15,7 +15,7 @@ enum ControlElement {
 
 pub struct BddManager {
     compute_table: BddTable,
-    apply_table: ApplyTable,
+    apply_table: BddApplyTable,
     control_stack: Vec<ControlElement>,
     data_stack: Vec<BddPtr>,
 }
@@ -32,7 +32,7 @@ impl BddManager {
         let len = order.len();
         BddManager {
             compute_table: BddTable::new(order),
-            apply_table: ApplyTable::new(len),
+            apply_table: BddApplyTable::new(len),
             control_stack: Vec::new(),
             data_stack: Vec::new(),
         }
@@ -81,11 +81,11 @@ impl BddManager {
         self.compute_table.get_or_insert(bdd)
     }
 
-    pub fn true_ptr(&mut self) -> BddPtr {
+    pub fn true_ptr(&self) -> BddPtr {
         BddPtr::true_node()
     }
 
-    pub fn false_ptr(&mut self) -> BddPtr {
+    pub fn false_ptr(&self) -> BddPtr {
         BddPtr::false_node()
     }
 

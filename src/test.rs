@@ -55,7 +55,7 @@ pub fn rand_bdds() -> () {
 pub fn big_bdd() -> () {
     let mut rng = rand::StdRng::new().unwrap();
     rng.reseed(&[0]);
-    let num_vars = 20;
+    let num_vars = 30;
     let cnf = boolexpr::rand_cnf(&mut rng, num_vars, 60);
     let mut man = manager::BddManager::new_default_order(num_vars);
     let r = cnf.into_bdd(&mut man);
@@ -85,15 +85,16 @@ pub fn from_file() -> () {
 #[test]
 pub fn random_sdd() {
     use sdd::*;
+    use sdd_manager::*;
     let mut rng = rand::StdRng::new().unwrap();
     rng.reseed(&[0]);
     for _ in 1..20 {
         println!("compiling");
-        let num_vars = 100;
-        let cnf = boolexpr::rand_cnf(&mut rng, num_vars, 30);
+        let num_vars = 15;
+        let cnf = boolexpr::rand_cnf(&mut rng, num_vars, 15);
         let v : Vec<bdd::VarLabel> =
             (0..num_vars).map(|x| bdd::VarLabel::new(x as u64)).collect();
-        let vtree = VTree::even_split(&v, 2);
+        let vtree = even_split(&v, 2);
         let mut man = SddManager::new(vtree);
         let r = cnf.into_sdd(&mut man);
         println!("made")

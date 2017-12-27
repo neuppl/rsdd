@@ -39,8 +39,7 @@ impl TableIndex {
     #[inline]
     pub fn new(v: u64) -> TableIndex {
         assert!(
-            v < 1 << INDEX_BITS + 1,
-            "Table index overflow; too many BDDs allocated"
+            v < 1 << INDEX_BITS + 1, "overflow"
         );
         TableIndex(v)
     }
@@ -61,8 +60,9 @@ impl fmt::Debug for BddPtr {
         match self.ptr_type() {
             PointerType::PtrFalse => write!(f, "BddPtr(F)"),
             PointerType::PtrTrue => write!(f, "BddPtr(T)"),
-            PointerType::PtrNode =>
+            PointerType::PtrNode => {
                 write!(f, "BddPtr(Cur var: {}, Index: {})", self.var(), self.idx())
+            }
         }
     }
 }
@@ -87,6 +87,10 @@ impl BddPtr {
         v.set_idx(idx.value());
         v.set_var(var.value());
         v
+    }
+
+    pub fn from_raw(raw: u64) -> BddPtr {
+        BddPtr { data: raw }
     }
     /// fetch the raw underlying data of the pointer
     #[inline]
@@ -162,7 +166,7 @@ impl Bdd {
     pub fn into_node(&self) -> BddNode {
         match self {
             &Bdd::Node(ref n) => n.clone(),
-            _ => panic!("called into-node on non-node BDD")
+            _ => panic!("called into-node on non-node BDD"),
         }
     }
 }

@@ -15,7 +15,7 @@ const GROWTH_RATE: usize = 16;
 pub struct BackingPtr(pub u32);
 
 /// data structure stored inside of the hash table
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Copy)]
 struct HashTableElement {
     data: u64,
 }
@@ -27,6 +27,7 @@ BITFIELD!(HashTableElement data : u64 [
     idx set_idx[16..64],         // the index into the backing store for this cell
 ]);
 
+
 impl HashTableElement {
     fn new(idx: BackingPtr, hash: u64) -> HashTableElement {
         let mut init = HashTableElement { data: 0 };
@@ -37,11 +38,12 @@ impl HashTableElement {
     }
 }
 
+
 /// Implements a mutable vector-backed robin-hood linear probing hash table,
 /// whose keys are given by BDD pointers.
 pub struct BackedRobinHoodTable<T>
 where
-    T: Hash + PartialEq + Eq + Clone + Copy,
+    T: Hash + PartialEq + Eq + Clone,
 {
     /// hash table which stores indexes in the elem vector
     tbl: Vec<HashTableElement>,
@@ -54,7 +56,7 @@ where
 
 impl<T> BackedRobinHoodTable<T>
 where
-    T: Hash + PartialEq + Eq + Clone + Copy,
+    T: Hash + PartialEq + Eq + Clone,
 {
     /// reserve a robin-hood table capable of holding at least `sz` elements
     pub fn new(sz: usize) -> BackedRobinHoodTable<T> {
@@ -85,13 +87,36 @@ where
         self.tbl[pos].offset() as usize
     }
 
+    /// Begin inserting `itm` from point `pos` in the hash table.
+    fn propagate(&mut self, itm: HashTableElement, pos: usize) -> () {
+        let mut searcher = itm;
+        let mut pos = pos;
+        loop {
+            if self.is_occupied(pos) {
+                let cur_itm = self.tbl[pos].clone();
+                // check if this item's position is closer than ours
+                if cur_itm.offset() < searcher.offset() {
+                    // swap the searcher and this item
+                    self.tbl[pos] = searcher;
+                    searcher = cur_itm;
+                }
+                let off = searcher.offset() + 1;
+                searcher.set_offset(off);
+                pos = (pos + 1) % self.cap; // wrap to the beginning of the array
+            } else {
+                // place the element in the current spot, we're done
+                self.tbl[pos] = searcher.clone();
+                return ();
+            }
+        }
+    }
+
     /// Get or insert a fresh (low, high) pair
     pub fn get_or_insert(&mut self, elem: T) -> BackingPtr {
         if (self.len + 1) as f64 > (self.cap as f64 * LOAD_FACTOR) {
             self.grow();
         }
 
-        let mut found: Option<BackingPtr> = None; // holds location of inserted element
         let mut hasher = XxHash::default();
         elem.hash(&mut hasher);
         let hash_v = hasher.finish();
@@ -102,6 +127,7 @@ where
                 let cur_itm = self.tbl[pos].clone();
                 // first check the hashes to see if these elements could
                 // possibly be equal
+
                 if cur_itm.hash() == searcher.hash() {
                     let this_bdd = self.get_pos(pos as usize);
                     if this_bdd == elem {
@@ -111,31 +137,23 @@ where
                 }
                 // check if this item's position is closer than ours
                 if cur_itm.offset() < searcher.offset() {
-                    // check if we have inserted a fresh item; if we have not, then
-                    // we need to insert the item into the backing store
-                    if found.is_none() {
-                        self.elem.push(elem);
-                        self.len += 1;
-                        found = Some(BackingPtr(searcher.idx() as u32));
-                    } else {
-                    }
-                    // swap out our position for this one
+                    // insert the fresh item here
+                    self.elem.push(elem);
                     self.tbl[pos] = searcher;
-                    searcher = cur_itm;
+                    self.len += 1;
+                    // propagate the element we swapped for
+                    self.propagate(cur_itm, pos);
+                    return BackingPtr(searcher.idx() as u32)
                 }
                 let off = searcher.offset() + 1;
                 searcher.set_offset(off);
                 pos = (pos + 1) % self.cap; // wrap to the beginning of the array
             } else {
                 // place the element in the current spot, we're done
-                if found.is_none() {
-                    self.elem.push(elem);
-                    self.len += 1;
-                    self.tbl[pos] = searcher.clone();
-                    return BackingPtr(searcher.idx() as u32);
-                } else {
-                    return found.unwrap();
-                }
+                self.elem.push(elem);
+                self.len += 1;
+                self.tbl[pos] = searcher.clone();
+                return BackingPtr(searcher.idx() as u32);
             }
         }
     }
@@ -169,8 +187,8 @@ where
 
     /// Dereferences a BDD pointer that lives in this table
     #[inline(always)]
-    pub fn deref(&self, ptr: BackingPtr) -> T {
-        self.elem[ptr.0 as usize].clone()
+    pub fn deref(&self, ptr: BackingPtr) -> &T {
+        &self.elem[ptr.0 as usize]
     }
 
     /// Expands the capacity of the hash table

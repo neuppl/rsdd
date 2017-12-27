@@ -1,67 +1,81 @@
 //! Stores BDD applications in an LRU cache.
 use bdd::*;
-use std::ptr;
 use util::*;
-use std::hash::Hasher;
-use fnv;
+use std::hash::{Hasher, Hash};
 use twox_hash::XxHash;
+use fnv::FnvHasher;
 
 const LOAD_FACTOR: f64 = 0.7;
 const INITIAL_CAPACITY: usize = 16392;
-const GROWTH_RATE: usize = 8;
+const GROWTH_RATE: usize = 16;
+const MAX_OFFSET: usize = 8;
 
 #[derive(Debug, Hash, Eq, PartialEq, Clone)]
 pub struct ApplyOp(pub Op, pub BddPtr, pub BddPtr);
 
 /// Data structure stored in the subtables
 #[derive(Debug, Hash, Clone)]
-struct Element {
-    a: BddPtr,
-    b: BddPtr,
-    result: BddPtr,
+struct Element<K, V>
+where
+    K: Hash + Clone + Eq + PartialEq,
+    V: Eq + PartialEq + Clone,
+{
+    key: K,
+    val: V,
     occupied: bool,
     offset: u32,
 }
 
-impl Element {
-    fn new(a: BddPtr, b: BddPtr, res: BddPtr) -> Element {
+impl<K, V> Element<K, V>
+where
+    K: Hash + Clone + Eq + PartialEq,
+    V: Eq + PartialEq + Clone,
+{
+    fn new(key: K, val: V) -> Element<K, V> {
         Element {
-            a: a,
-            b: b,
-            result: res,
+            key: key,
+            val: val,
             occupied: true,
-            offset: 0
+            offset: 0,
         }
     }
 }
 
-fn elem_eq(a: &Element, b: &Element) -> bool {
-    a.a == b.a && a.b == b.b
-}
-
 /// Each variable has an associated sub-table
-struct SubTable {
-    tbl: Vec<Element>,
+pub struct SubTable<K, V>
+where
+    K: Hash + Clone + Eq + PartialEq,
+    V: Eq + PartialEq + Clone,
+{
+    tbl: Vec<Element<K, V>>,
     len: usize,
     cap: usize,
 }
 
-struct SubTableIter<'a> {
-    tbl: &'a SubTable,
-    pos: usize
+struct SubTableIter<'a, K, V>
+where
+    K: Hash + Clone + Eq + PartialEq + 'a,
+    V: Eq + PartialEq + Clone + 'a,
+{
+    tbl: &'a SubTable<K, V>,
+    pos: usize,
 }
 
-impl<'a> Iterator for SubTableIter<'a> {
-    type Item = &'a Element;
+impl<'a, K, V> Iterator for SubTableIter<'a, K, V>
+where
+    K: Hash + Clone + Eq + PartialEq + 'a,
+    V: Eq + PartialEq + Clone + 'a,
+{
+    type Item = &'a Element<K, V>;
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.pos >= self.tbl.tbl.len() {
             None
         } else {
             self.pos += 1;
-            let itm = self.tbl.tbl[self.pos-1].clone();
+            let itm = self.tbl.tbl[self.pos - 1].clone();
             if itm.occupied {
-                Some(&self.tbl.tbl[self.pos-1])
+                Some(&self.tbl.tbl[self.pos - 1])
             } else {
                 self.next()
             }
@@ -69,18 +83,21 @@ impl<'a> Iterator for SubTableIter<'a> {
     }
 }
 
-#[inline]
-fn hash_pair(a: BddPtr, b: BddPtr) -> u64 {
-    let mut hasher = XxHash::with_seed(1123859);
-    hasher.write_u64(a.raw());
-    hasher.write_u64(b.raw());
-    hasher.finish()
+#[derive(PartialEq, Eq)]
+enum InsertResult {
+    InsufficientSpace,
+    MaxProbeHit,
+    Ok,
 }
 
-impl SubTable {
-    fn new(minimum_size: usize) -> SubTable {
+impl<K, V> SubTable<K, V>
+where
+    K: Hash + Clone + Eq + PartialEq,
+    V: Eq + PartialEq + Clone,
+{
+    pub fn new(minimum_size: usize) -> SubTable<K, V> {
         let tbl_sz = ((minimum_size as f64 * (1.0 + LOAD_FACTOR)) as usize).next_power_of_two();
-        let v: Vec<Element> = zero_vec(tbl_sz);
+        let v: Vec<Element<K, V>> = zero_vec(tbl_sz);
         SubTable {
             tbl: v,
             len: 0,
@@ -88,19 +105,44 @@ impl SubTable {
         }
     }
 
-    fn insert(&mut self, a: BddPtr, b: BddPtr, result: BddPtr) -> () {
+    pub fn insert(&mut self, key: K, val: V) -> () {
+        let mut cur_status = InsertResult::MaxProbeHit;
+        while cur_status != InsertResult::Ok {
+            let r = self.insert_helper(key.clone(), val.clone());
+            match r {
+                InsertResult::Ok => cur_status = InsertResult::Ok,
+                InsertResult::InsufficientSpace => {
+                    let mut grow_status = InsertResult::MaxProbeHit;
+                    while grow_status != InsertResult::Ok {
+                        grow_status = self.grow();
+                    }
+                }
+                InsertResult::MaxProbeHit => {
+                    let mut grow_status = InsertResult::MaxProbeHit;
+                    while grow_status != InsertResult::Ok {
+                        grow_status = self.grow();
+                    }
+                }
+            }
+        }
+    }
+
+    fn insert_helper(&mut self, key: K, val: V) -> InsertResult {
         if (self.len + 1) as f64 > (self.cap as f64 * LOAD_FACTOR) {
-            self.grow();
+            return InsertResult::InsufficientSpace;
         }
 
-        let hash_v = hash_pair(a, b);
+        let mut hasher = FnvHasher::default();
+        key.hash(&mut hasher);
+        let hash_v = hasher.finish();
         let mut pos = (hash_v as usize) % self.cap;
-        let mut searcher = Element::new(a, b, result);
+        let mut searcher = Element::new(key.clone(), val.clone());
+        let mut cur_status = InsertResult::Ok;
         loop {
             if self.tbl[pos].occupied {
                 // first, check if they are equal.
-                if elem_eq(&self.tbl[pos], &searcher) {
-                    return;
+                if self.tbl[pos].key == key {
+                    return cur_status;
                 } else {
                 }
                 // they are not equal, see if we should swap for the closer one
@@ -112,58 +154,67 @@ impl SubTable {
                 } else {
                     searcher.offset += 1;
                 }
+
+                if searcher.offset > MAX_OFFSET as u32 {
+                    cur_status = InsertResult::MaxProbeHit;
+                }
             } else {
                 // found an open spot, insert
                 self.tbl[pos] = searcher;
                 self.len += 1;
-                return;
+                return cur_status;
             }
             pos = (pos + 1) % self.cap;
         }
     }
 
-    fn iter<'a>(&'a self) -> SubTableIter<'a> {
+    fn iter<'a>(&'a self) -> SubTableIter<'a, K, V> {
         SubTableIter { tbl: self, pos: 0 }
     }
 
-    fn get(&self, a: BddPtr, b: BddPtr) -> Option<BddPtr> {
-        let hash_v = hash_pair(a, b);
+    pub fn get(&self, key: K) -> Option<V> {
+        let mut hasher = FnvHasher::default();
+        key.hash(&mut hasher);
+        let hash_v = hasher.finish();
         let mut pos = (hash_v as usize) % self.cap;
-        loop {
-            if self.tbl[pos].occupied {
-                let itm = self.tbl[pos].clone();
-                if itm.a == a && itm.b == b {
-                    return Some(self.tbl[pos].result.clone());
-                }
-            } else {
-                return None;
+        for _ in 0..MAX_OFFSET {
+            if self.tbl[pos].key == key {
+                return Some(self.tbl[pos].val.clone());
             }
             pos = (pos + 1) % self.cap;
         }
+        return None;
     }
 
     /// grow the hashtable to accomodate more elements
-    fn grow(&mut self) -> () {
+    fn grow(&mut self) -> InsertResult {
         let new_sz = self.cap * GROWTH_RATE;
         let new_v = zero_vec(new_sz);
         let mut new_tbl = SubTable {
             tbl: new_v,
             len: 0,
-            cap: new_sz
+            cap: new_sz,
         };
 
         for i in self.iter() {
-            new_tbl.insert(i.a, i.b, i.result);
+            match new_tbl.insert_helper(i.key.clone(), i.val.clone()) {
+                InsertResult::Ok => (),
+                InsertResult::InsufficientSpace => panic!("growth rate too low"),
+                InsertResult::MaxProbeHit => {
+                    return InsertResult::MaxProbeHit;
+                }
+            }
         }
 
         // copy new_tbl over the current table
         self.tbl = new_tbl.tbl;
         self.cap = new_tbl.cap;
         self.len = new_tbl.len;
+        return InsertResult::Ok;
     }
 
     fn avg_offset(&self) -> f64 {
-        let mut offs : usize = 0;
+        let mut offs: usize = 0;
         for i in self.iter() {
             offs += i.offset as usize;
         }
@@ -172,16 +223,16 @@ impl SubTable {
 }
 
 /// The top-level data structure which caches applications
-pub struct ApplyTable {
-    or_tables: Vec<SubTable>,
-    and_tables: Vec<SubTable>,
+pub struct BddApplyTable {
+    or_tables: Vec<SubTable<(BddPtr, BddPtr), BddPtr>>,
+    and_tables: Vec<SubTable<(BddPtr, BddPtr), BddPtr>>,
 }
 
-impl ApplyTable {
-    pub fn new(num_vars: usize) -> ApplyTable {
-        let mut tbl = ApplyTable {
+impl BddApplyTable {
+    pub fn new(num_vars: usize) -> BddApplyTable {
+        let mut tbl = BddApplyTable {
             or_tables: Vec::with_capacity(num_vars),
-            and_tables: Vec::with_capacity(num_vars)
+            and_tables: Vec::with_capacity(num_vars),
         };
         for _ in 0..num_vars {
             tbl.or_tables.push(SubTable::new(INITIAL_CAPACITY));
@@ -198,8 +249,8 @@ impl ApplyTable {
         let ApplyOp(op, a, b) = op;
         let tbl = a.var() as usize;
         match op {
-            Op::BddAnd => self.and_tables[tbl].insert(a, b, res),
-            Op::BddOr => self.or_tables[tbl].insert(a, b, res)
+            Op::BddAnd => self.and_tables[tbl].insert((a, b), res),
+            Op::BddOr => self.or_tables[tbl].insert((a, b), res),
         }
     }
 
@@ -207,29 +258,33 @@ impl ApplyTable {
         let ApplyOp(op, a, b) = op;
         let tbl = a.var() as usize;
         match op {
-            Op::BddAnd => self.and_tables[tbl].get(a, b),
-            Op::BddOr => self.or_tables[tbl].get(a, b)
+            Op::BddAnd => self.and_tables[tbl].get((a, b)),
+            Op::BddOr => self.or_tables[tbl].get((a, b)),
         }
     }
 }
 
 #[test]
 fn apply_cache_simple() {
-    let mut tbl = ApplyTable::new(10);
+    let mut tbl = BddApplyTable::new(10);
     for var in 0..10 {
         for i in 0..10000 {
-            let op = ApplyOp(Op::BddAnd,
-                             BddPtr::new(VarLabel::new(var), TableIndex::new(i)),
-                             BddPtr::new(VarLabel::new(var+1), TableIndex::new(i)));
+            let op = ApplyOp(
+                Op::BddAnd,
+                BddPtr::new(VarLabel::new(var), TableIndex::new(i)),
+                BddPtr::new(VarLabel::new(var + 1), TableIndex::new(i)),
+            );
             let result = BddPtr::new(VarLabel::new(var), TableIndex::new(i));
             tbl.insert(op, result);
         }
     }
     for var in 0..10 {
         for i in 0..10000 {
-            let op = ApplyOp(Op::BddAnd,
-                             BddPtr::new(VarLabel::new(var), TableIndex::new(i)),
-                             BddPtr::new(VarLabel::new(var+1), TableIndex::new(i)));
+            let op = ApplyOp(
+                Op::BddAnd,
+                BddPtr::new(VarLabel::new(var), TableIndex::new(i)),
+                BddPtr::new(VarLabel::new(var + 1), TableIndex::new(i)),
+            );
             let result = BddPtr::new(VarLabel::new(var), TableIndex::new(i));
             assert_eq!(tbl.get(op).unwrap(), result);
         }
