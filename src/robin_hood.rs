@@ -3,6 +3,7 @@ use std::hash::Hasher;
 use std::mem;
 use std::hash::Hash;
 use twox_hash::XxHash;
+use fnv::FnvHasher;
 use std::hash::BuildHasherDefault;
 #[macro_use]
 use util::*;
@@ -117,7 +118,7 @@ where
             self.grow();
         }
 
-        let mut hasher = XxHash::default();
+        let mut hasher = FnvHasher::default();
         elem.hash(&mut hasher);
         let hash_v = hasher.finish();
         let mut pos = (hash_v as usize) % self.cap;
@@ -162,7 +163,7 @@ where
     /// Finds the index for a particular bdd, none if it is not found
     /// Does not invalidate references.
     pub fn find(&self, elem: T) -> Option<BackingPtr> {
-        let mut hasher = XxHash::default();
+        let mut hasher = FnvHasher::default();
         elem.hash(&mut hasher);
         let hash_v = hasher.finish();
         let mut pos = (hash_v as usize) % self.cap;
@@ -224,7 +225,7 @@ fn rh_simple() {
         let e = ToplessBdd::new(mk_ptr(i), mk_ptr(i));
         let v = store.get_or_insert(e.clone());
         match store.find(e) {
-            None => assert!(false),
+            None => assert!(false, "Could not find {:?}", e),
             Some(a) => {
                 assert_eq!(v, a);
                 assert_eq!(store.deref(v), store.deref(a));

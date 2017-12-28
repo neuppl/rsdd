@@ -30,6 +30,10 @@ pub struct SddManager {
     app_cache: Vec<SubTable<(SddPtr, SddPtr), SddPtr>>
 }
 
+pub enum AppResult {
+    Unsat,
+    Sat(ExternalRef)
+}
 
 impl SddManager {
     pub fn new(vtree: VTree) -> SddManager {
@@ -109,86 +113,88 @@ impl SddManager {
         fn helper(
             man: &mut SddManager,
             order: &BTree<usize, usize>,
+            is_prime: bool,
             op: Op,
             a: SddPtr,
             b: SddPtr,
-        ) -> SddPtr {
-            if man.tbl.is_bdd(a) {
-                let a_bdd = a.as_bdd_ptr();
-                let b_bdd = b.as_bdd_ptr();
-                let r = man.tbl.bdd_man_mut(cnt as usize).apply(op, a_bdd, b_bdd);
-                (SddPtr::new_bdd(r, cnt), cnt + 1)
-            } else {
-                let mut r : Vec<(SddPtr, SddPtr)> = Vec::new();
-                let mut new_cnt = 0;
-                for (p1, s1) in man.tbl.sdd_or_panic(a) {
-                    for (p2, s2) in man.tbl.sdd_or_panic(b) {
-                        let (p, cnt_l) = helper(man, Op::BddAnd, p1, p2, cnt + 1);
-                        let (s, cnt_r) = helper(man, op, s1, s2, cnt_l);
-                        new_cnt = cnt_r;
-                        r.push((p, s));
+        ) -> Option<SddPtr> {
+            match order {
+                &BTree::Leaf(c) => {
+                    let a_bdd = a.as_bdd_ptr();
+                    let b_bdd = b.as_bdd_ptr();
+                    let r = man.tbl.bdd_man_mut(c).apply(op, a_bdd, b_bdd);
+                    if r.is_false() && is_prime {
+                         None
+                    } else {
+                        Some(SddPtr::new_bdd(r, c as u16))
+                    }
+                },
+                &BTree::Node(c, ref l_n, ref r_n) => {
+                    let v = man.app_cache[c].get((a, b));
+                    match v {
+                        None => {
+                            let mut r : Vec<(SddPtr, SddPtr)> = Vec::with_capacity(30);
+                            for (p1, s1) in man.tbl.sdd_or_panic(a) {
+                                for (p2, s2) in man.tbl.sdd_or_panic(b) {
+                                    let p = helper(man, l_n, true, Op::BddAnd, p1, p2);
+                                    match p {
+                                        None => (),
+                                        Some(v) => {
+                                            // unwrap, since it will never be `none`
+                                            let s = helper(man, r_n, false, op, s1, s2).unwrap();
+                                            r.push((v, s));
+                                        }
+                                    }
+                                }
+                            }
+                            quickersort::sort(&mut r[..]);
+                            r.dedup();
+                            let l = r.len();
+                            let new_v = man.tbl.get_or_insert_sdd(SddOr{nodes: r}, c);
+                            man.app_cache[c].insert((a, b), new_v.clone());
+                            if is_prime && l == 0 {
+                                None
+                            } else {
+                                Some(new_v)
+                            }
+                        },
+                        Some(v) => Some(v)
                     }
                 }
-                quickersort::sort(&mut r[..]);
-                r.dedup();
-                let new_v = man.tbl.get_or_insert_sdd(SddOr{nodes: r}, cnt as usize);
-                (new_v, new_cnt)
             }
         }
         let i_a = self.external_table.into_internal(a);
         let i_b = self.external_table.into_internal(b);
         let t = self.vtree.into_order_tree();
-        let r = helper(self, &t, op, i_a, i_b);
-        self.external_table.gen_or_inc(r)
+        let r = helper(self, &t, false, op, i_a, i_b);
+        match r {
+            Some(r) => self.external_table.gen_or_inc(r),
+            None => panic!("unsat base sdd")
+        }
     }
 
     // pub fn eval_sdd(&self, ptr: ExternalRef, assgn: &HashMap<VarLabel, bool>) -> bool {
     //     fn helper(
     //         man: &SddManager,
     //         a: SddPtr,
-    //         cnt: usize,
+    //         tree: &BTree<usize, usize>,
     //         assgn: &HashMap<VarLabel, bool>,
-    //     ) -> (bool, usize) {
-    //         use self::Sdd::*;
-    //         let a_sdd = man.alloc.deref(a).clone();
-    //         match a_sdd {
-    //             Or(va) => {
-    //                 let mut new_cnt = 0;
-    //                 let mut v = false;
-    //                 for a_sdd in va.iter() {
-    //                     let (cur_v, cur_cnt) = helper(man, a_sdd.clone(), cnt, assgn);
-    //                     v = v || cur_v;
-    //                     new_cnt = cur_cnt;
-    //                 }
-    //                 (v, new_cnt)
-    //             }
-    //             And(p1, s1) => {
-    //                 let (v1, new_cnt) = helper(man, p1, cnt, assgn);
-    //                 let (v2, final_cnt) = helper(man, s1, new_cnt, assgn);
-    //                 (v1 && v2, final_cnt)
-    //             }
-    //             Bdd(b1) => {
-    //                 // we must convert `assgn`, which is a hash map of SDD values, into a
-    //                 // hash map of BDD values
-
-    //                 // a set of all var labels which belong to this BDD
-    //                 let mut labels: HashSet<VarLabel> = HashSet::new();
-    //                 for lbl in man.bdd_to_sdd[cnt].values() {
-    //                     labels.insert(lbl.clone());
-    //                 }
-    //                 let mut new_m: HashMap<VarLabel, bool> = HashMap::new();
-    //                 for (key, value) in assgn.iter() {
-    //                     if labels.contains(key) {
-    //                         let translated = man.sdd_to_bdd.get(key).unwrap();
-    //                         new_m.insert(*translated, *value);
-    //                     }
-    //                 }
-    //                 // now new_m has the correct variable mappings in it, so we can evaluate it
-
-    //                let v = man.bdd_managers[cnt].eval_bdd(b1, &new_m);
-    //                 (v, cnt+1)
+    //     ) -> bool {
+    //         let mut labels: HashSet<VarLabel> = HashSet::new();
+    //         for lbl in man.bdd_to_sdd[cnt].values() {
+    //             labels.insert(lbl.clone());
+    //         }
+    //         let mut new_m: HashMap<VarLabel, bool> = HashMap::new();
+    //         for (key, value) in assgn.iter() {
+    //             if labels.contains(key) {
+    //                 let translated = man.sdd_to_bdd.get(key).unwrap();
+    //                 new_m.insert(*translated, *value);
     //             }
     //         }
+    //         // now new_m has the correct variable mappings in it, so we can evaluate it
+
+    //         let v = man.bdd_managers[cnt].eval_bdd(b1, &new_m);
+    //         (v, cnt+1)
     //     }
     //     let i_a = self.external_table.into_internal(ptr);
     //     let (r, _) = helper(self, i_a, 0, assgn);
@@ -240,7 +246,9 @@ fn sdd_simple_apply() {
     );
     let mut man = SddManager::new(simple_vtree);
     let v1 = man.var(VarLabel::new(1), true);
-    let v2 = man.var(VarLabel::new(3), true);
+    let v2 = man.var(VarLabel::new(1), false);
     let v3 = man.apply(Op::BddAnd, v1, v2);
+    println!("sdd1: {}", man.print_sdd(v1));
+    println!("sdd2: {}", man.print_sdd(v2));
     println!("sdd: {}", man.print_sdd(v3));
 }

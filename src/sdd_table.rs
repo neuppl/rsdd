@@ -23,12 +23,14 @@ enum SubTable {
     }
 }
 
+
 /// Handles memory management for the SDD manager
 pub struct SddTable {
     /// mapping between sdd and bdd variable labels
     pub sdd_to_bdd: HashMap<VarLabel, VarLabel>,
     tables: Vec<SubTable>
 }
+
 
 impl SddTable {
     pub fn new(vtree: &VTree) -> SddTable {
@@ -75,7 +77,6 @@ impl SddTable {
             _ => false
         }
     }
-
 
 
     /// get or insert a particular SDD node with vtree-node `vnode`

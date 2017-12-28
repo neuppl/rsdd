@@ -148,11 +148,17 @@ impl BddManager {
                         Bind(vlabel) => {
                             let high = self.data_stack.pop().unwrap();
                             let low = self.data_stack.pop().unwrap();
-                            let bdd = Bdd::new_node(low, high, vlabel);
-                            let bdd_r = self.get_or_insert(bdd);
-                            self.data_stack.push(bdd_r);
+                            let r = match (high.ptr_type(), low.ptr_type()) {
+                                (PtrTrue, PtrTrue) => BddPtr::true_node(),
+                                (PtrFalse, PtrFalse) => BddPtr::false_node(),
+                                _ => {
+                                    let bdd = Bdd::new_node(low, high, vlabel);
+                                    let bdd_r = self.get_or_insert(bdd);
+                                    bdd_r
+                                }
+                            };
+                            self.data_stack.push(r);
                         }
-
                         ApplyCache(op) => {
                             let itm = self.data_stack.last().unwrap().clone();
                             self.insert_application(op, itm)

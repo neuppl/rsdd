@@ -104,6 +104,11 @@ impl BddPtr {
     }
 
     #[inline]
+    pub fn is_false(&self) -> bool {
+        self.special() == 1 && self.var() == FALSE_VALUE
+    }
+
+    #[inline]
     pub fn is_const(&self) -> bool {
         self.special() == 1
     }
