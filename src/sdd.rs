@@ -1,4 +1,4 @@
-//! implements an SDD as a collection of BDDs
+//! implements a trimmed SDD as a collection of BDDs
 
 use std::collections::{HashSet, HashMap};
 use std::rc::Rc;
@@ -8,13 +8,16 @@ use var_order::VarOrder;
 #[macro_use]
 use util::*;
 
-
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Ord, PartialOrd, Copy)]
 pub struct SddPtr {
     /// the index into the table
-    pub idx: usize,
-    pub tbl: u16,
+    idx: usize,
+    /// the vtree index for this node
+    vtree: u16,
+    is_const: bool,
+    const_val: bool,
 }
+
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Ord, PartialOrd)]
 struct ExternalSdd {
@@ -24,25 +27,56 @@ struct ExternalSdd {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Ord, PartialOrd)]
 pub struct SddOr {
-    pub nodes: Vec<(SddPtr, SddPtr)>
+    pub nodes: Vec<(SddPtr, SddPtr)>,
 }
 
 
 impl SddPtr {
-    pub fn new(idx: usize, tbl: u16) -> SddPtr {
-        SddPtr { idx: idx, tbl: tbl }
+    pub fn new_node(idx: usize, vtree: u16) -> SddPtr {
+        SddPtr {
+            idx: idx,
+            vtree: vtree,
+            is_const: false,
+            const_val: false,
+        }
     }
-    pub fn new_bdd(ptr: BddPtr, tbl: u16) -> SddPtr {
-        SddPtr {idx: ptr.raw() as usize, tbl: tbl}
+
+    pub fn new_const(v: bool, vtree: u16) -> SddPtr {
+        SddPtr {
+            idx: 0,
+            vtree: vtree,
+            is_const: true,
+            const_val: v,
+        }
     }
+
+    pub fn new_bdd(ptr: BddPtr, vtree: u16) -> SddPtr {
+        SddPtr {
+            idx: ptr.raw() as usize,
+            vtree: vtree,
+            is_const: false,
+            const_val: false,
+        }
+    }
+
+    pub fn is_const(&self) -> bool {
+        self.is_const
+    }
+
+    pub fn is_true(&self) -> bool {
+        self.const_val && self.is_const
+    }
+
     pub fn as_bdd_ptr(&self) -> BddPtr {
         BddPtr::from_raw(self.idx as u64)
     }
+
     pub fn idx(&self) -> usize {
         self.idx
     }
-    pub fn tbl(&self) -> usize {
-        self.tbl as usize
+
+    pub fn vtree(&self) -> usize {
+        self.vtree as usize
     }
 }
 

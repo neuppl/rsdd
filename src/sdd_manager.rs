@@ -27,12 +27,65 @@ pub struct SddManager {
     tbl: SddTable,
     vtree: VTree,
     external_table: ExternalRefTable<SddPtr>,
-    app_cache: Vec<SubTable<(SddPtr, SddPtr), SddPtr>>
+    app_cache: Vec<SubTable<(SddPtr, SddPtr), SddPtr>>,
 }
 
-pub enum AppResult {
-    Unsat,
-    Sat(ExternalRef)
+/// produces a vector of pointers to vtrees such that (i) the order is given by
+/// a depth-first traversal of the vtree; (ii) each element of the vector is a
+/// tuple where the first element is the index of parent to the vtree node at
+/// that location in the order, and the second is the height of the node. This
+/// is used for an efficient implementation of least-common ancestor.
+fn into_parent_ptr_vec(vtree: &VTree) -> Vec<(Option<usize>, usize)> {
+    fn helper<'a>(
+        cur: &'a BTree<usize, usize>,
+        level: usize,
+        parent: Option<usize>,
+    ) -> Vec<(Option<usize>, usize)> {
+        match cur {
+            &BTree::Leaf(ref v) => vec![(parent, level)],
+            &BTree::Node(ref v, ref l, ref r) => {
+                let mut l = helper(l, level + 1, Some(*v));
+                let mut r = helper(r, level + 1, Some(*v));
+                let mut v = vec![(parent, level)];
+                v.append(&mut l);
+                v.append(&mut r);
+                v
+            }
+        }
+    }
+    helper(&vtree.into_order_tree(), 0, None)
+}
+
+/// find the index of the least common ancestor between `a` and `b`
+fn least_common_ancestor(
+    parent_vec: &Vec<(Option<usize>, usize)>,
+    idx_a: usize,
+    idx_b: usize,
+) -> usize {
+    // base cases
+    if idx_a == idx_b {
+        return idx_a;
+    } else {
+    }
+    let (a_par, a_h) = parent_vec[idx_a];
+    let (b_par, b_h) = parent_vec[idx_b];
+    if a_h == 0 {
+        return idx_a;
+    } else {
+    }
+    if b_h == 0 {
+        return idx_b;
+    } else {
+    }
+    if a_h == b_h {
+        least_common_ancestor(parent_vec, a_par.unwrap(), b_par.unwrap())
+    } else {
+        if a_h > b_h {
+            least_common_ancestor(parent_vec, a_par.unwrap(), idx_b)
+        } else {
+            least_common_ancestor(parent_vec, idx_a, b_par.unwrap())
+        }
+    }
 }
 
 impl SddManager {
@@ -45,68 +98,20 @@ impl SddManager {
             tbl: SddTable::new(&vtree),
             vtree: vtree,
             external_table: ExternalRefTable::new(),
-            app_cache: app_cache
+            app_cache: app_cache,
         };
         return c;
     }
 
 
+
     pub fn var(&mut self, lbl: VarLabel, is_true: bool) -> ExternalRef {
-        fn var_helper(
-            man: &mut SddManager,
-            count: u16,
-            lbl: VarLabel,
-            is_true: bool,
-            value: bool,
-            vtree: &VTree,
-        ) -> (SddPtr, u16) {
-            match vtree {
-                &BTree::Leaf(ref lbl_vec) => {
-                    if lbl_vec.iter().find(|&x| *x == lbl).is_some() {
-                        let vlbl = man.tbl.sdd_to_bdd.get(&lbl).unwrap().clone();
-                        let bdd_r = man.tbl.bdd_man_mut(count as usize).var(vlbl.clone(), is_true);
-                        (SddPtr::new_bdd(bdd_r, count), count + 1)
-                    } else {
-                        let bdd_r = if value {
-                            man.tbl.bdd_man(count as usize).true_ptr()
-                        } else {
-                            man.tbl.bdd_man(count as usize).false_ptr()
-                        };
-                        (SddPtr::new_bdd(bdd_r, count), count + 1)
-                    }
-                }
-                &BTree::Node(_, ref l, ref r) if
-                    l.contains_leaf(&|v: &Vec<VarLabel>| v.contains(&lbl)) => {
-                    let new_cnt = count + 1;
-                    let (p1, cnt_l) = var_helper(man, new_cnt, lbl, is_true, true, &l);
-                    let (p2, _) = var_helper(man, new_cnt, lbl, !is_true, true, &l);
-                    let (s1, cnt_r) = var_helper(man, cnt_l, lbl, is_true, true, &r);
-                    let (s2, _) = var_helper(man, cnt_l, lbl, is_true, false, &r);
-                    let mut r_vec = vec![(p1, s1), (p2, s2)];
-                    quickersort::sort(&mut r_vec[..]);
-                    r_vec.dedup();
-                    let new_sdd = man.tbl.get_or_insert_sdd(
-                        SddOr { nodes: r_vec },
-                        count as usize,
-                    );
-                    (new_sdd, cnt_r)
-                }
-                &BTree::Node(_, ref l, ref r) => {
-                    let (p, cnt_l) = var_helper(man, count + 1, lbl, is_true, true, &l);
-                    let (s, cnt_r) = var_helper(man, cnt_l, lbl, is_true, value, &r);
-                    let r_vec = vec![(p, s)];
-                    let new_sdd = man.tbl.get_or_insert_sdd(
-                        SddOr { nodes: r_vec },
-                        count as usize,
-                    );
-                    (new_sdd, cnt_r)
-                }
-            }
-        }
-        // TODO this is gross; cloning the vtree should definitely be avoided
-        let new_v = self.vtree.clone();
-        let (res, _) = var_helper(self, 0, lbl, is_true, true, &new_v);
-        self.external_table.gen_or_inc(res)
+        let idx = match self.vtree.find_leaf_idx(&|ref l| l.contains(&lbl)) {
+            None => panic!("var {:?} not found", lbl),
+            Some(a) => a,
+        };
+        let r = SddPtr::new_bdd(self.tbl.bdd_man_mut(idx).var(lbl, is_true), idx as u16);
+        self.external_table.gen_or_inc(r)
     }
 
     pub fn apply(&mut self, op: Op, a: ExternalRef, b: ExternalRef) -> ExternalRef {
@@ -124,16 +129,16 @@ impl SddManager {
                     let b_bdd = b.as_bdd_ptr();
                     let r = man.tbl.bdd_man_mut(c).apply(op, a_bdd, b_bdd);
                     if r.is_false() && is_prime {
-                         None
+                        None
                     } else {
                         Some(SddPtr::new_bdd(r, c as u16))
                     }
-                },
+                }
                 &BTree::Node(c, ref l_n, ref r_n) => {
                     let v = man.app_cache[c].get((a, b));
                     match v {
                         None => {
-                            let mut r : Vec<(SddPtr, SddPtr)> = Vec::with_capacity(30);
+                            let mut r: Vec<(SddPtr, SddPtr)> = Vec::with_capacity(30);
                             for (p1, s1) in man.tbl.sdd_or_panic(a) {
                                 for (p2, s2) in man.tbl.sdd_or_panic(b) {
                                     let p = helper(man, l_n, true, Op::BddAnd, p1, p2);
@@ -150,15 +155,15 @@ impl SddManager {
                             quickersort::sort(&mut r[..]);
                             r.dedup();
                             let l = r.len();
-                            let new_v = man.tbl.get_or_insert_sdd(SddOr{nodes: r}, c);
+                            let new_v = man.tbl.get_or_insert_sdd(SddOr { nodes: r }, c);
                             man.app_cache[c].insert((a, b), new_v.clone());
                             if is_prime && l == 0 {
                                 None
                             } else {
                                 Some(new_v)
                             }
-                        },
-                        Some(v) => Some(v)
+                        }
+                        Some(v) => Some(v),
                     }
                 }
             }
@@ -168,38 +173,11 @@ impl SddManager {
         let t = self.vtree.into_order_tree();
         let r = helper(self, &t, false, op, i_a, i_b);
         match r {
+
             Some(r) => self.external_table.gen_or_inc(r),
-            None => panic!("unsat base sdd")
+            None => panic!("unsat base sdd"),
         }
     }
-
-    // pub fn eval_sdd(&self, ptr: ExternalRef, assgn: &HashMap<VarLabel, bool>) -> bool {
-    //     fn helper(
-    //         man: &SddManager,
-    //         a: SddPtr,
-    //         tree: &BTree<usize, usize>,
-    //         assgn: &HashMap<VarLabel, bool>,
-    //     ) -> bool {
-    //         let mut labels: HashSet<VarLabel> = HashSet::new();
-    //         for lbl in man.bdd_to_sdd[cnt].values() {
-    //             labels.insert(lbl.clone());
-    //         }
-    //         let mut new_m: HashMap<VarLabel, bool> = HashMap::new();
-    //         for (key, value) in assgn.iter() {
-    //             if labels.contains(key) {
-    //                 let translated = man.sdd_to_bdd.get(key).unwrap();
-    //                 new_m.insert(*translated, *value);
-    //             }
-    //         }
-    //         // now new_m has the correct variable mappings in it, so we can evaluate it
-
-    //         let v = man.bdd_managers[cnt].eval_bdd(b1, &new_m);
-    //         (v, cnt+1)
-    //     }
-    //     let i_a = self.external_table.into_internal(ptr);
-    //     let (r, _) = helper(self, i_a, 0, assgn);
-    //     r
-    // }
 
     pub fn print_sdd(&self, ptr: ExternalRef) -> String {
         fn helper(man: &SddManager, ptr: SddPtr, cnt: u16) -> (String, u16) {
@@ -228,7 +206,8 @@ impl SddManager {
 
 #[test]
 fn make_sdd() {
-    let simple_vtree = BTree::Node((),
+    let simple_vtree = BTree::Node(
+        (),
         Box::new(BTree::Leaf(vec![VarLabel::new(0), VarLabel::new(1)])),
         Box::new(BTree::Leaf(vec![VarLabel::new(2), VarLabel::new(3)])),
     );
@@ -240,7 +219,8 @@ fn make_sdd() {
 
 #[test]
 fn sdd_simple_apply() {
-    let simple_vtree = BTree::Node((),
+    let simple_vtree = BTree::Node(
+        (),
         Box::new(BTree::Leaf(vec![VarLabel::new(0), VarLabel::new(1)])),
         Box::new(BTree::Leaf(vec![VarLabel::new(2), VarLabel::new(3)])),
     );
@@ -251,4 +231,27 @@ fn sdd_simple_apply() {
     println!("sdd1: {}", man.print_sdd(v1));
     println!("sdd2: {}", man.print_sdd(v2));
     println!("sdd: {}", man.print_sdd(v3));
+}
+
+#[test]
+fn test_lca() {
+    let simple_vtree = BTree::Node(
+        (),
+        Box::new(BTree::Leaf(vec![VarLabel::new(0), VarLabel::new(1)])),
+        Box::new(BTree::Leaf(vec![VarLabel::new(2), VarLabel::new(3)])),
+    );
+    //    0
+    // 1      4
+    //2 3   5  6
+    let simple_vtree2 = BTree::Node(
+        (),
+        Box::new(simple_vtree.clone()),
+        Box::new(simple_vtree.clone())
+    );
+    let par_vec = into_parent_ptr_vec(&simple_vtree2);
+    println!("parent vec: {:?}", par_vec);
+    assert_eq!(least_common_ancestor(&par_vec, 2, 3), 1);
+    assert_eq!(least_common_ancestor(&par_vec, 2, 5), 0);
+    assert_eq!(least_common_ancestor(&par_vec, 2, 1), 1);
+    assert_eq!(least_common_ancestor(&par_vec, 4, 2), 0);
 }

@@ -1,4 +1,5 @@
-/// A binary tree with leaves of type L and nodes of type N
+/// A binary tree with leaves of type L and nodes of type N, represented with
+/// child pointers
 #[derive(Clone, Debug)]
 pub enum BTree<N, L>
 where
@@ -60,6 +61,21 @@ where
         }
     }
 
+    /// Find the depth-first index of a leaf which satisfies F; None
+    /// if none is found
+    pub fn find_leaf_idx<F>(&self, f: &F) -> Option<usize>
+        where F: Fn(&L) -> bool
+    {
+        for (idx, i) in self.in_order_iter().enumerate() {
+            match i {
+                &BTree::Node(_, _, _) => (),
+                &BTree::Leaf(ref l) =>
+                    if f(l) { return Some(idx) } else {}
+            }
+        }
+        None
+    }
+
     /// generates a tree where each node is labeled with its
     /// index according to an in-order traversal of the tree
     pub fn into_order_tree(&self) -> Box<BTree<usize, usize>> {
@@ -80,5 +96,14 @@ where
         }
         let (_, r) = helper(self, 0);
         r
+    }
+
+    /// Flatten a BTree into a depth-first iteration
+    pub fn flatten(&self) -> Vec<&BTree<N, L>> {
+        let mut v = Vec::new();
+        for i in self.in_order_iter() {
+            v.push(i)
+        }
+        v
     }
 }

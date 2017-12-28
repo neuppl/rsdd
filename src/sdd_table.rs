@@ -65,14 +65,14 @@ impl SddTable {
     }
 
     pub fn is_sdd(&self, ptr: SddPtr) -> bool {
-        match self.tables[ptr.tbl as usize] {
+        match self.tables[ptr.vtree() as usize] {
             SubTable::SddSubTable{tbl: _} => true,
             _ => false
         }
     }
 
     pub fn is_bdd(&self, ptr: SddPtr) -> bool {
-        match self.tables[ptr.tbl as usize] {
+        match self.tables[ptr.vtree() as usize] {
             SubTable::BddSubTable{man: _, conv: _} => true,
             _ => false
         }
@@ -84,18 +84,19 @@ impl SddTable {
         match &mut self.tables[vnode] {
             &mut SubTable::SddSubTable{tbl: ref mut tbl} => {
                 let ptr = tbl.get_or_insert(sdd);
-                SddPtr::new(ptr.0 as usize, vnode as u16)
+                SddPtr::new_node(ptr.0 as usize, vnode as u16)
             },
             _ => panic!("invalid vnode: inserting SDD into BDD")
         }
     }
 
+
     /// Fetch the iterator for a particular SDD or-node
     /// used during application
     pub fn sdd_iter_or_panic(&self, ptr: SddPtr) -> Iter<(SddPtr, SddPtr)> {
-        match &self.tables[ptr.tbl as usize] {
+        match &self.tables[ptr.vtree() as usize] {
             &SubTable::SddSubTable{tbl: ref tbl} => {
-                tbl.deref(BackingPtr(ptr.idx as u32)).nodes.iter()
+                tbl.deref(BackingPtr(ptr.idx() as u32)).nodes.iter()
             },
             _ => panic!("dereferencing SDD into BDD")
         }
@@ -104,9 +105,9 @@ impl SddTable {
     /// Fetch the iterator for a particular SDD or-node
     /// used during application
     pub fn sdd_or_panic(&self, ptr: SddPtr) -> Vec<(SddPtr, SddPtr)> {
-        match &self.tables[ptr.tbl as usize] {
+        match &self.tables[ptr.vtree() as usize] {
             &SubTable::SddSubTable{tbl: ref tbl} => {
-                tbl.deref(BackingPtr(ptr.idx as u32)).nodes.clone()
+                tbl.deref(BackingPtr(ptr.idx() as u32)).nodes.clone()
             },
             _ => panic!("dereferencing SDD into BDD")
         }
