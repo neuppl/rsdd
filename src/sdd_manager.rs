@@ -2,7 +2,7 @@ use sdd::*;
 use bdd::{VarLabel, Op};
 use sdd_table::*;
 use std::rc::Rc;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use ref_table::*;
 use apply_cache::*;
 use quickersort;
@@ -27,7 +27,7 @@ pub struct SddManager {
     tbl: SddTable,
     vtree: VTree,
     external_table: ExternalRefTable<SddPtr>,
-    app_cache: Vec<SubTable<(SddPtr, SddPtr), SddPtr>>,
+    app_cache: Vec<SubTable<(Op, SddPtr, SddPtr), SddPtr>>,
 }
 
 /// produces a vector of pointers to vtrees such that (i) the order is given by
@@ -88,118 +88,267 @@ fn least_common_ancestor(
     }
 }
 
+
+/// evaluate two sdd pointers which are valid wrt. the same vtree; returns
+/// `None` if both of the pointers are nodes
+fn eval_op(op: Op, a: SddPtr, b: SddPtr) -> Option<SddPtr> {
+    let v = a.vtree() as u16;
+    match op {
+        Op::BddAnd => {
+            if a.is_true() {
+                Some(b)
+            } else if b.is_true() {
+                Some(a)
+            } else if a.is_false() || b.is_false() {
+                Some(SddPtr::new_const(false, v))
+            } else {
+                None
+            }
+        }
+        Op::BddOr => {
+            if a.is_false() {
+                Some(b)
+            } else if b.is_false() {
+                Some(a)
+            } else if a.is_true() || b.is_true() {
+                Some(SddPtr::new_const(true, v))
+            } else {
+                None
+            }
+        }
+    }
+}
+
+/// true if `idx_a` is prime to `idx_b`
+fn is_prime(vtree: &VTree, idx_a: usize, idx_b: usize) -> bool {
+    idx_a < idx_b
+}
+
 impl SddManager {
     pub fn new(vtree: VTree) -> SddManager {
         let mut app_cache = Vec::new();
         for _ in vtree.in_order_iter() {
             app_cache.push(SubTable::new(10000));
         }
-        let mut c = SddManager {
+        SddManager {
             tbl: SddTable::new(&vtree),
             vtree: vtree,
             external_table: ExternalRefTable::new(),
             app_cache: app_cache,
-        };
-        return c;
+        }
     }
-
-
 
     pub fn var(&mut self, lbl: VarLabel, is_true: bool) -> ExternalRef {
         let idx = match self.vtree.find_leaf_idx(&|ref l| l.contains(&lbl)) {
             None => panic!("var {:?} not found", lbl),
             Some(a) => a,
         };
-        let r = SddPtr::new_bdd(self.tbl.bdd_man_mut(idx).var(lbl, is_true), idx as u16);
+        // convert the var label into the correct BDD var label
+        let vlbl = self.tbl.sdd_to_bdd.get(&lbl).unwrap().clone();
+        let r = SddPtr::new_bdd(self.tbl.bdd_man_mut(idx).var(vlbl, is_true), idx as u16);
         self.external_table.gen_or_inc(r)
+    }
+
+    fn negate(&mut self, a: SddPtr) -> SddPtr {
+        match a.ptr_type() {
+            SddPtrType::False => SddPtr::new_const(true, a.vtree() as u16),
+            SddPtrType::True => SddPtr::new_const(false, a.vtree() as u16),
+            SddPtrType::Node => {
+                if self.tbl.is_bdd(a) {
+                    let bdd_ptr = a.as_bdd_ptr();
+                    let neg_bdd = self.tbl.bdd_man_mut(a.vtree()).negate(bdd_ptr);
+                    SddPtr::new_bdd(neg_bdd, a.vtree() as u16)
+                } else {
+                    let mut v = Vec::new();
+                    for (p, s) in self.tbl.sdd_or_panic(a) {
+                        v.push((p, self.negate(s)))
+                    }
+                    quickersort::sort(&mut v[..]);
+                    v.dedup();
+                    self.tbl.get_or_insert_sdd(SddOr { nodes: v }, a.vtree())
+                }
+            }
+        }
     }
 
     pub fn apply(&mut self, op: Op, a: ExternalRef, b: ExternalRef) -> ExternalRef {
         fn helper(
             man: &mut SddManager,
-            order: &BTree<usize, usize>,
-            is_prime: bool,
             op: Op,
             a: SddPtr,
             b: SddPtr,
-        ) -> Option<SddPtr> {
-            match order {
-                &BTree::Leaf(c) => {
+            parent_ptr: &Vec<(Option<usize>, usize)>,
+        ) -> SddPtr {
+            // normalize the pointers to increase cache hit rate
+            let (a, b) = if a < b { (a, b) } else { (b, a) };
+            // println!("applying({:?}) , {} to {}",
+            //          op, man.print_sdd_internal(a), man.print_sdd_internal(b));
+            let r = if a.vtree() == b.vtree() {
+                if man.tbl.is_bdd(a) {
+                    // both nodes are BDDs, so simply apply them together
+                    // and return the result
                     let a_bdd = a.as_bdd_ptr();
                     let b_bdd = b.as_bdd_ptr();
-                    let r = man.tbl.bdd_man_mut(c).apply(op, a_bdd, b_bdd);
-                    if r.is_false() && is_prime {
-                        None
+                    let r = man.tbl.bdd_man_mut(a.vtree()).apply(op, a_bdd, b_bdd);
+                    if r.is_false() {
+                        SddPtr::new_const(false, a.vtree() as u16)
+                    } else if r.is_true() {
+                        SddPtr::new_const(true, a.vtree() as u16)
                     } else {
-                        Some(SddPtr::new_bdd(r, c as u16))
+                        SddPtr::new_bdd(r, a.vtree() as u16)
                     }
-                }
-                &BTree::Node(c, ref l_n, ref r_n) => {
-                    let v = man.app_cache[c].get((a, b));
-                    match v {
-                        None => {
-                            let mut r: Vec<(SddPtr, SddPtr)> = Vec::with_capacity(30);
-                            for (p1, s1) in man.tbl.sdd_or_panic(a) {
-                                for (p2, s2) in man.tbl.sdd_or_panic(b) {
-                                    let p = helper(man, l_n, true, Op::BddAnd, p1, p2);
-                                    match p {
-                                        None => (),
-                                        Some(v) => {
-                                            // unwrap, since it will never be `none`
-                                            let s = helper(man, r_n, false, op, s1, s2).unwrap();
-                                            r.push((v, s));
-                                        }
-                                    }
-                                }
+                } else {
+                    // check if either node is a constant
+                    let v = eval_op(op, a, b);
+                    if v.is_some() {
+                        return v.unwrap();
+                    }
+                    // now, we know that both `a` and `b` are SDD nodes. First, check if
+                    // we have this application cached
+                    let c = man.app_cache[a.vtree()].get((op, a, b));
+                    if c.is_some() {
+                        return c.unwrap();
+                    }
+                    let a_sdd = man.tbl.sdd_or_panic(a);
+                    let mut r: Vec<(SddPtr, SddPtr)> = Vec::with_capacity(30);
+                    for (p1, s1) in a_sdd.into_iter() {
+                        for (p2, s2) in man.tbl.sdd_or_panic(b) {
+                            let p = helper(man, Op::BddAnd, p1, p2, parent_ptr);
+                            if p.is_false() {
+                                continue;
                             }
-                            quickersort::sort(&mut r[..]);
-                            r.dedup();
-                            let l = r.len();
-                            let new_v = man.tbl.get_or_insert_sdd(SddOr { nodes: r }, c);
-                            man.app_cache[c].insert((a, b), new_v.clone());
-                            if is_prime && l == 0 {
-                                None
-                            } else {
-                                Some(new_v)
+                            let s = helper(man, op, s1, s2, parent_ptr);
+                            if s.is_false() {
+                                continue;
                             }
+                            // check if one of the nodes is true; if it is, we can
+                            // return a `true` SddPtr here
+                            if p.is_true() && s.is_true() {
+                                let new_v = SddPtr::new_const(true, a.vtree() as u16);
+                                man.app_cache[a.vtree()].insert((op, a, b), new_v.clone());
+                                return new_v;
+                            }
+                            r.push((p, s));
                         }
-                        Some(v) => Some(v),
                     }
+                    if r.len() == 0 {
+                        let new_v = SddPtr::new_const(false, a.vtree() as u16);
+                        man.app_cache[a.vtree()].insert((op, a, b), new_v.clone());
+                        return new_v;
+                    }
+                    quickersort::sort(&mut r[..]);
+                    r.dedup();
+                    let new_v = man.tbl.get_or_insert_sdd(SddOr { nodes: r }, a.vtree());
+                    man.app_cache[a.vtree()].insert((op, a, b), new_v.clone());
+                    new_v
                 }
-            }
+            } else {
+                // normalize and re-invoke the helper
+                let av = a.vtree();
+                let bv = b.vtree();
+                let lca = least_common_ancestor(parent_ptr, av, bv);
+                if lca == av {
+                    let v = if is_prime(&man.vtree, av, bv) {
+                        vec![(SddPtr::new_const(true, av as u16), b)]
+                    } else {
+                        vec![(b, SddPtr::new_const(true, av as u16))]
+                    };
+                    let new = man.tbl.get_or_insert_sdd(SddOr { nodes: v }, av);
+                    helper(man, op, a, new, parent_ptr)
+                } else if lca == bv {
+                    let v = if is_prime(&man.vtree, bv, av) {
+                        vec![(SddPtr::new_const(true, bv as u16), a)]
+                    } else {
+                        vec![(a, SddPtr::new_const(true, bv as u16))]
+                    };
+                    let new = man.tbl.get_or_insert_sdd(SddOr { nodes: v }, bv);
+                    helper(man, op, new, b, parent_ptr)
+                } else {
+                    let (fst, snd) = if is_prime(&man.vtree, av, bv) {
+                        (a, b)
+                    } else {
+                        (b, a)
+                    };
+                    let v1 = vec![(fst, SddPtr::new_const(true, lca as u16)),
+                                  (man.negate(fst), SddPtr::new_const(false, lca as u16))
+                    ];
+                    let v2 = vec![(SddPtr::new_const(true, lca as u16), snd)];
+                    let new_1 = man.tbl.get_or_insert_sdd(SddOr { nodes: v1 }, lca);
+                    let new_2 = man.tbl.get_or_insert_sdd(SddOr { nodes: v2 }, lca);
+                    helper(man, op, new_1, new_2, parent_ptr)
+                }
+            };
+            r
         }
+        // println!("applying {} to {} with op {:?}", self.print_sdd(a), self.print_sdd(b), op);
         let i_a = self.external_table.into_internal(a);
         let i_b = self.external_table.into_internal(b);
-        let t = self.vtree.into_order_tree();
-        let r = helper(self, &t, false, op, i_a, i_b);
-        match r {
+        let pvec = into_parent_ptr_vec(&self.vtree);
+        let r = helper(self, op, i_a, i_b, &pvec);
+        let r = self.external_table.gen_or_inc(r);
+        // println!("result: {}", self.print_sdd(r));
+        r
+    }
 
-            Some(r) => self.external_table.gen_or_inc(r),
-            None => panic!("unsat base sdd"),
+    fn print_sdd_internal(&self, ptr: SddPtr) -> String {
+        if self.tbl.is_bdd(ptr) {
+            let bdd_ptr = ptr.as_bdd_ptr();
+            let m = self.tbl.bdd_conv(ptr.vtree());
+            let s = self.tbl.bdd_man(ptr.vtree()).print_bdd_lbl(bdd_ptr, m);
+            s
+        } else {
+            let mut s = String::from("\\/");
+            if ptr.is_true() {
+                return String::from("T");
+            } else if ptr.is_false() {
+                return String::from("F");
+            }
+            for &(ref prime, ref sub) in self.tbl.sdd_iter_or_panic(ptr) {
+                let new_s1 = self.print_sdd_internal(prime.clone());
+                let new_s2 = self.print_sdd_internal(sub.clone());
+                s.push_str(&format!("(/\\ {} {})", new_s1, new_s2));
+            }
+            s
         }
     }
 
     pub fn print_sdd(&self, ptr: ExternalRef) -> String {
-        fn helper(man: &SddManager, ptr: SddPtr, cnt: u16) -> (String, u16) {
-            if man.tbl.is_bdd(ptr) {
-                let bdd_ptr = ptr.as_bdd_ptr();
-                let s = man.tbl.bdd_man(cnt as usize).print_bdd(bdd_ptr);
-                (s, cnt + 1)
-            } else {
-                let mut s = String::from("\\/");
-                let mut new_cnt = 0;
-                for &(ref prime, ref sub) in man.tbl.sdd_iter_or_panic(ptr) {
-                    let (new_s1, cnt_l) = helper(man, prime.clone(), cnt + 1);
-                    let (new_s2, cnt_r) = helper(man, sub.clone(), cnt_l);
-                    new_cnt = cnt_r;
-                    s.push_str(&format!("(/\\ {} {})", new_s1, new_s2));
+        let int_ptr = self.external_table.into_internal(ptr);
+        self.print_sdd_internal(int_ptr)
+    }
+
+    pub fn eval_sdd(&self, ptr: ExternalRef, assgn: &HashMap<VarLabel, bool>) -> bool {
+        fn helper(man: &SddManager, sdd: SddPtr, assgn: &HashMap<VarLabel, bool>) -> bool {
+            if sdd.is_false() {
+                false
+            } else if sdd.is_true() {
+                true
+            } else if man.tbl.is_bdd(sdd) {
+                let mut labels: HashSet<VarLabel> = HashSet::new();
+                for lbl in man.tbl.bdd_conv(sdd.vtree()).values() {
+                    labels.insert(lbl.clone());
                 }
-                (s, new_cnt)
+                let mut new_m: HashMap<VarLabel, bool> = HashMap::new();
+                for (key, value) in assgn.iter() {
+                    if labels.contains(key) {
+                        let translated = man.tbl.sdd_to_bdd.get(key).unwrap();
+                        new_m.insert(*translated, *value);
+                    }
+                }
+                let bdd_ptr = sdd.as_bdd_ptr();
+                man.tbl.bdd_man(sdd.vtree()).eval_bdd(bdd_ptr, &new_m)
+            } else {
+                let mut res = false;
+                for (p, s) in man.tbl.sdd_or_panic(sdd) {
+                    let v1 = helper(man, p, assgn);
+                    let v2 = helper(man, s, assgn);
+                    res = res || (v1 && v2)
+                }
+                res
             }
         }
-        let int_ptr = self.external_table.into_internal(ptr);
-        let (r, _) = helper(self, int_ptr, 0);
-        r
+        let i = self.external_table.into_internal(ptr);
+        helper(self, i, assgn)
     }
 }
 
@@ -225,9 +374,9 @@ fn sdd_simple_apply() {
         Box::new(BTree::Leaf(vec![VarLabel::new(2), VarLabel::new(3)])),
     );
     let mut man = SddManager::new(simple_vtree);
-    let v1 = man.var(VarLabel::new(1), true);
+    let v1 = man.var(VarLabel::new(3), true);
     let v2 = man.var(VarLabel::new(1), false);
-    let v3 = man.apply(Op::BddAnd, v1, v2);
+    let v3 = man.apply(Op::BddOr, v1, v2);
     println!("sdd1: {}", man.print_sdd(v1));
     println!("sdd2: {}", man.print_sdd(v2));
     println!("sdd: {}", man.print_sdd(v3));
@@ -246,10 +395,9 @@ fn test_lca() {
     let simple_vtree2 = BTree::Node(
         (),
         Box::new(simple_vtree.clone()),
-        Box::new(simple_vtree.clone())
+        Box::new(simple_vtree.clone()),
     );
     let par_vec = into_parent_ptr_vec(&simple_vtree2);
-    println!("parent vec: {:?}", par_vec);
     assert_eq!(least_common_ancestor(&par_vec, 2, 3), 1);
     assert_eq!(least_common_ancestor(&par_vec, 2, 5), 0);
     assert_eq!(least_common_ancestor(&par_vec, 2, 1), 1);

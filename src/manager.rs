@@ -93,7 +93,7 @@ impl BddManager {
         self.compute_table.get_or_insert(bdd)
     }
 
-    pub fn print_bdd(&self, ptr: BddPtr ) -> String {
+    pub fn print_bdd(&self, ptr: BddPtr) -> String {
         use bdd::PointerType::*;
         fn print_bdd_helper(t: &BddManager, ptr: BddPtr) -> String {
             match ptr.ptr_type() {
@@ -110,6 +110,47 @@ impl BddManager {
         }
         print_bdd_helper(self, ptr)
     }
+
+
+    pub fn negate(&mut self, ptr: BddPtr) -> BddPtr {
+        use bdd::PointerType::*;
+        match ptr.ptr_type() {
+            PtrTrue => BddPtr::false_node(),
+            PtrFalse => BddPtr::true_node(),
+            PtrNode => {
+                let l_p = self.low(ptr);
+                let h_p = self.high(ptr);
+                let neg_l = self.negate(l_p);
+                let neg_h = self.negate(h_p);
+                let new_bdd = Bdd::new_node(neg_l, neg_h, VarLabel::new(ptr.var()));
+                self.get_or_insert(new_bdd)
+            }
+        }
+    }
+
+    pub fn print_bdd_lbl(&self, ptr: BddPtr, map: &HashMap<VarLabel, VarLabel>) -> String {
+        use bdd::PointerType::*;
+        fn print_bdd_helper(
+            t: &BddManager,
+            ptr: BddPtr,
+            map: &HashMap<VarLabel, VarLabel>,
+        ) -> String {
+            match ptr.ptr_type() {
+                PtrTrue => String::from("T"),
+                PtrFalse => String::from("F"),
+                PtrNode => {
+                    let l_p = t.low(ptr);
+                    let h_p = t.high(ptr);
+                    let l_s = print_bdd_helper(t, l_p, map);
+                    let r_s = print_bdd_helper(t, h_p, map);
+                    let lbl = map.get(&VarLabel::new(ptr.var())).unwrap();
+                    format!("({:?}, {}, {})", lbl.value(), l_s, r_s)
+                }
+            }
+        }
+        print_bdd_helper(self, ptr, map)
+    }
+
 
     fn normalize(&self, a: BddPtr, b: BddPtr, op: Op) -> (VarLabel, ApplyOp, ApplyOp) {
         let a_bdd = self.deref(a).into_node();
@@ -190,9 +231,7 @@ impl BddManager {
                         }
                     }
                 }
-                None => {
-                    return self.data_stack.pop().unwrap()
-                }
+                None => return self.data_stack.pop().unwrap(),
             }
         }
     }

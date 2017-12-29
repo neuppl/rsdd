@@ -132,7 +132,7 @@ where
             return InsertResult::InsufficientSpace;
         }
 
-        let mut hasher = FnvHasher::default();
+        let mut hasher = XxHash::default();
         key.hash(&mut hasher);
         let hash_v = hasher.finish();
         let mut pos = (hash_v as usize) % self.cap;
@@ -173,7 +173,7 @@ where
     }
 
     pub fn get(&self, key: K) -> Option<V> {
-        let mut hasher = FnvHasher::default();
+        let mut hasher = XxHash::default();
         key.hash(&mut hasher);
         let hash_v = hasher.finish();
         let mut pos = (hash_v as usize) % self.cap;
@@ -268,7 +268,7 @@ impl BddApplyTable {
 fn apply_cache_simple() {
     let mut tbl = BddApplyTable::new(10);
     for var in 0..10 {
-        for i in 0..10000 {
+        for i in 0..100000 {
             let op = ApplyOp(
                 Op::BddAnd,
                 BddPtr::new(VarLabel::new(var), TableIndex::new(i)),
@@ -279,7 +279,7 @@ fn apply_cache_simple() {
         }
     }
     for var in 0..10 {
-        for i in 0..10000 {
+        for i in 0..100000 {
             let op = ApplyOp(
                 Op::BddAnd,
                 BddPtr::new(VarLabel::new(var), TableIndex::new(i)),

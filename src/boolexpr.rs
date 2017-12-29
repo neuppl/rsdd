@@ -172,13 +172,13 @@ impl BoolExpr {
             &BoolExpr::And(ref l, ref r) => {
                 let r1 = (*l).into_sdd(man);
                 let r2 = (*r).into_sdd(man);
-                println!("and");
+                // println!("and");
                 man.apply(bdd::Op::BddAnd, r1, r2)
             }
             &BoolExpr::Or(ref l, ref r) => {
                 let r1 = (*l).into_sdd(man);
                 let r2 = (*r).into_sdd(man);
-                println!("or");
+                // println!("or");
                 man.apply(bdd::Op::BddOr, r1, r2)
             }
         }

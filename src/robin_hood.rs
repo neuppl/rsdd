@@ -118,7 +118,7 @@ where
             self.grow();
         }
 
-        let mut hasher = FnvHasher::default();
+        let mut hasher = XxHash::default();
         elem.hash(&mut hasher);
         let hash_v = hasher.finish();
         let mut pos = (hash_v as usize) % self.cap;
@@ -163,7 +163,7 @@ where
     /// Finds the index for a particular bdd, none if it is not found
     /// Does not invalidate references.
     pub fn find(&self, elem: T) -> Option<BackingPtr> {
-        let mut hasher = FnvHasher::default();
+        let mut hasher = XxHash::default();
         elem.hash(&mut hasher);
         let hash_v = hasher.finish();
         let mut pos = (hash_v as usize) % self.cap;

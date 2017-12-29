@@ -125,6 +125,15 @@ impl SddTable {
         }
     }
 
+    pub fn bdd_conv(&self, node: usize) -> &HashMap<VarLabel, VarLabel> {
+        match &self.tables[node] {
+            &SubTable::BddSubTable{man: ref man, conv: ref conv} => {
+                conv
+            },
+            _ => panic!("dereferencing SDD into BDD")
+        }
+    }
+
     /// Fetch the BDD manager for a particular SDD node level `node`
     /// Panics if it not a BDD
     pub fn bdd_man_mut(&mut self, node: usize) -> &mut BddManager {

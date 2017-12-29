@@ -90,21 +90,21 @@ pub fn random_sdd() {
     rng.reseed(&[0]);
     for _ in 1..20 {
         println!("compiling");
-        let num_vars = 15;
-        let cnf = boolexpr::rand_cnf(&mut rng, num_vars, 15);
+        let num_vars = 10;
+        let cnf = boolexpr::rand_cnf(&mut rng, num_vars, 5);
         let v : Vec<bdd::VarLabel> =
             (0..num_vars).map(|x| bdd::VarLabel::new(x as u64)).collect();
         let vtree = even_split(&v, 2);
         let mut man = SddManager::new(vtree);
         let r = cnf.into_sdd(&mut man);
-        println!("made")
         // check that they evaluate to the same value for a variety of
         // assignments
-        // println!("evaluating");
-        // for _ in 1..100 {
-        //     let assgn = random_assignment(num_vars);
-        //     assert_eq!(man.eval_sdd(r, &assgn), cnf.eval(&assgn));
-        // }
+        println!("expr: {:?}\nsdd: {}", cnf, man.print_sdd(r));
+        println!("evaluating");
+        for _ in 1..100 {
+            let assgn = random_assignment(num_vars);
+            assert_eq!(man.eval_sdd(r, &assgn), cnf.eval(&assgn));
+        }
     }
 }
 
@@ -114,14 +114,14 @@ pub fn big_sdd() {
     use sdd_manager::*;
     let mut rng = rand::StdRng::new().unwrap();
     rng.reseed(&[0]);
-    let num_vars = 30;
-    let cnf = boolexpr::rand_cnf(&mut rng, num_vars, 30);
+    let num_vars = 50;
+    let cnf = boolexpr::rand_cnf(&mut rng, num_vars, 50);
     let v : Vec<bdd::VarLabel> =
         (0..num_vars).map(|x| bdd::VarLabel::new(x as u64)).collect();
-    let vtree = even_split(&v, 2);
+    let vtree = even_split(&v, 3);
     let mut man = SddManager::new(vtree);
     let r = cnf.into_sdd(&mut man);
-    println!("made")
+    // println!("sdd: {}", man.print_sdd(r));
     // check that they evaluate to the same value for a variety of
     // assignments
     // println!("evaluating");

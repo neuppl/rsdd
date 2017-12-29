@@ -30,6 +30,11 @@ pub struct SddOr {
     pub nodes: Vec<(SddPtr, SddPtr)>,
 }
 
+pub enum SddPtrType {
+    True,
+    False,
+    Node
+}
 
 impl SddPtr {
     pub fn new_node(idx: usize, vtree: u16) -> SddPtr {
@@ -67,8 +72,18 @@ impl SddPtr {
         self.const_val && self.is_const
     }
 
+    pub fn is_false(&self) -> bool {
+        !self.const_val && self.is_const
+    }
+
     pub fn as_bdd_ptr(&self) -> BddPtr {
-        BddPtr::from_raw(self.idx as u64)
+        if self.is_true() {
+            BddPtr::true_node()
+        } else if self.is_false() {
+            BddPtr::false_node()
+        } else {
+            BddPtr::from_raw(self.idx as u64)
+        }
     }
 
     pub fn idx(&self) -> usize {
@@ -77,6 +92,16 @@ impl SddPtr {
 
     pub fn vtree(&self) -> usize {
         self.vtree as usize
+    }
+
+    pub fn ptr_type(&self) -> SddPtrType {
+        if self.is_false() {
+            SddPtrType::False
+        } else if self.is_true() {
+            SddPtrType::True
+        } else {
+            SddPtrType::Node
+        }
     }
 }
 
