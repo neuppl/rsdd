@@ -53,8 +53,8 @@ pub fn rand_bdds() -> () {
 pub fn big_bdd() -> () {
     let mut rng = rand::StdRng::new().unwrap();
     rng.reseed(&[0]);
-    let num_vars = 30;
-    let cnf = boolexpr::rand_cnf(&mut rng, num_vars, 60);
+    let num_vars = 40;
+    let cnf = boolexpr::rand_cnf(&mut rng, num_vars, 80);
     let mut man = manager::BddManager::new_default_order(num_vars);
     let r = cnf.into_bdd(&mut man);
     // check that they evaluate to the same value for a variety of
@@ -63,10 +63,12 @@ pub fn big_bdd() -> () {
         let assgn = random_assignment(num_vars);
         assert_eq!(man.eval_bdd(r, &assgn), cnf.eval(&assgn));
     }
+    println!("stats: {:?}", man.get_apply_cache_stats())
+
 }
 
 
-// #[test]
+#[test]
 pub fn from_file() -> () {
     let num_vars = 228;
     // let file_contents = File::open("/Users/sholtzen/Downloads/sdd-1.1.1/cnf/c8-easier.cnf");
@@ -118,7 +120,7 @@ pub fn big_sdd() {
     let cnf = boolexpr::rand_cnf(&mut rng, num_vars, 50);
     let v : Vec<bdd::VarLabel> =
         (0..num_vars).map(|x| bdd::VarLabel::new(x as u64)).collect();
-    let vtree = even_split(&v, 3);
+    let vtree = even_split(&v, 1);
     let mut man = SddManager::new(vtree);
     let r = cnf.into_sdd(&mut man);
     // println!("sdd: {}", man.print_sdd(r));

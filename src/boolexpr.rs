@@ -3,6 +3,7 @@ use std::collections::{HashMap, HashSet};
 use manager;
 use sdd_manager;
 use ref_table::ExternalRef;
+use dimacs;
 
 #[derive(Debug, Clone)]
 pub enum BoolExpr {
@@ -20,56 +21,21 @@ pub enum BoolExpr {
 /// ...
 /// Where negative indicates a false variable, 0 is line end
 pub fn parse_cnf(input: String) -> BoolExpr {
-    let mut split = input.lines();
-    split.next(); // skip first line
-    let mut expr_vec: Vec<BoolExpr> = Vec::new();
-    let mut cur_itm = split.next();
-    while cur_itm.is_some() {
-        let count = cur_itm.unwrap().split_whitespace().count();
-        let mut vars: Vec<BoolExpr> = cur_itm
-            .unwrap()
-            .split_whitespace()
-            .map(|itm| {
-                let v = itm.parse::<i32>().unwrap();
-                if v < 0 {
-                    BoolExpr::Var(-v as usize, false)
-                } else {
-                    BoolExpr::Var(v as usize, true)
-                }
-            })
-            .collect();
-        let e = match count {
-            0 | 1 => panic!("empty clause"),
-            2 => vars.pop().unwrap(),
-            _ => {
-                let l = vars.pop().unwrap();
-                let r = vars.pop().unwrap();
-                vars.into_iter().fold(
-                    BoolExpr::Or(Box::new(l), Box::new(r)),
-                    |itm, acc| match itm {
-                        BoolExpr::Var(0, _) => acc,
-                        _ => BoolExpr::Or(Box::new(itm), Box::new(acc)),
-                    },
-                )
-            }
-        };
-        expr_vec.push(e);
-        cur_itm = split.next();
-    }
-    match expr_vec.len() {
-        0 => panic!("empty cnf"),
-        1 => expr_vec.pop().unwrap(),
-        _ => {
-            let l = expr_vec.pop().unwrap();
-            let r = expr_vec.pop().unwrap();
-            expr_vec.into_iter().fold(
-                BoolExpr::And(Box::new(l), Box::new(r)),
-                |itm, acc| {
-                    BoolExpr::And(Box::new(itm), Box::new(acc))
-                },
-            )
-        }
-    }
+    // use dimacs::*;
+    // let r = parse_dimacs(&input).unwrap();
+    // let (num_var, clause_vec) = match r {
+    //     Instance::Cnf { num_vars, clauses } => (num_vars, clauses),
+    //     _ => panic!()
+    // };
+    // let mut res : Vec<BoolExpr> = Vec::new();
+    // for itm in clause_vec.iter() {
+    //     let mut v : Vec<BoolExpr> = Vec::new()
+    //     for l in itm.lits().iter() {
+            
+    //     }
+        
+    // }
+    panic!()
 }
 
 use rand;

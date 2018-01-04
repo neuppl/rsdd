@@ -7,8 +7,42 @@ use fnv::FnvHasher;
 
 const LOAD_FACTOR: f64 = 0.7;
 const INITIAL_CAPACITY: usize = 16392;
-const GROWTH_RATE: usize = 16;
+const GROWTH_RATE: usize = 32;
 const MAX_OFFSET: usize = 8;
+
+#[derive(Debug, Hash, Eq, PartialEq, Clone)]
+pub struct ApplyCacheStats {
+    lookup_count: usize,
+    miss_count: usize,
+}
+
+impl ApplyCacheStats {
+    fn new() -> ApplyCacheStats {
+        ApplyCacheStats {
+            miss_count: 0,
+            lookup_count: 0,
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct BddCacheStats {
+    lookup_count: usize,
+    miss_count: usize,
+    avg_probe: f64,
+    num_applications: usize,
+}
+
+impl BddCacheStats {
+    fn new() -> BddCacheStats {
+        BddCacheStats {
+            miss_count: 0,
+            lookup_count: 0,
+            avg_probe: 0.0,
+            num_applications: 0,
+        }
+    }
+}
 
 #[derive(Debug, Hash, Eq, PartialEq, Clone)]
 pub struct ApplyOp(pub Op, pub BddPtr, pub BddPtr);
@@ -50,6 +84,7 @@ where
     tbl: Vec<Element<K, V>>,
     len: usize,
     cap: usize,
+    stat: ApplyCacheStats,
 }
 
 struct SubTableIter<'a, K, V>
@@ -102,7 +137,12 @@ where
             tbl: v,
             len: 0,
             cap: tbl_sz,
+            stat: ApplyCacheStats::new(),
         }
+    }
+
+    pub fn len(&self) -> usize {
+        self.len
     }
 
     pub fn insert(&mut self, key: K, val: V) -> () {
@@ -172,7 +212,8 @@ where
         SubTableIter { tbl: self, pos: 0 }
     }
 
-    pub fn get(&self, key: K) -> Option<V> {
+    pub fn get(&mut self, key: K) -> Option<V> {
+        self.stat.lookup_count += 1;
         let mut hasher = XxHash::default();
         key.hash(&mut hasher);
         let hash_v = hasher.finish();
@@ -183,6 +224,7 @@ where
             }
             pos = (pos + 1) % self.cap;
         }
+        self.stat.miss_count += 1;
         return None;
     }
 
@@ -194,6 +236,7 @@ where
             tbl: new_v,
             len: 0,
             cap: new_sz,
+            stat: ApplyCacheStats::new(),
         };
 
         for i in self.iter() {
@@ -210,15 +253,24 @@ where
         self.tbl = new_tbl.tbl;
         self.cap = new_tbl.cap;
         self.len = new_tbl.len;
+        // don't update the stats; we want to keep those
         return InsertResult::Ok;
     }
 
     fn avg_offset(&self) -> f64 {
         let mut offs: usize = 0;
+        if self.len == 0 {
+            return 0.0;
+        }
+
         for i in self.iter() {
             offs += i.offset as usize;
         }
         offs as f64 / (self.len as f64)
+    }
+
+    pub fn get_stats(&self) -> ApplyCacheStats {
+        self.stat.clone()
     }
 }
 
@@ -254,13 +306,30 @@ impl BddApplyTable {
         }
     }
 
-    pub fn get(&self, op: ApplyOp) -> Option<BddPtr> {
+    pub fn get(&mut self, op: ApplyOp) -> Option<BddPtr> {
         let ApplyOp(op, a, b) = op;
         let tbl = a.var() as usize;
         match op {
             Op::BddAnd => self.and_tables[tbl].get((a, b)),
             Op::BddOr => self.or_tables[tbl].get((a, b)),
         }
+    }
+
+    pub fn get_stats(&self) -> BddCacheStats {
+        let mut st = BddCacheStats::new();
+        let mut offset = 0.0;
+        let mut c = 0.0;
+        for tbl in self.and_tables.iter().chain(self.or_tables.iter()) {
+            let stats = tbl.get_stats();
+            st.lookup_count += stats.lookup_count;
+            st.miss_count += stats.miss_count;
+            offset += tbl.avg_offset();
+            st.num_applications += tbl.len();
+            c += 1.0;
+        }
+        println!("off: {}", offset);
+        st.avg_probe = offset / c;
+        st
     }
 }
 

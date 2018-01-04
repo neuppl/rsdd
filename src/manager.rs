@@ -3,7 +3,7 @@ use var_order::VarOrder;
 use bdd::*;
 use std::collections::{HashMap, HashSet};
 use std::slice;
-use apply_cache::{ApplyOp, BddApplyTable};
+use apply_cache::{ApplyOp, BddApplyTable, BddCacheStats};
 use ref_table::*;
 
 #[derive(Debug)]
@@ -46,7 +46,7 @@ impl BddManager {
         self.compute_table.deref(ptr)
     }
 
-    fn get_application(&self, app: ApplyOp) -> Option<BddPtr> {
+    fn get_application(&mut self, app: ApplyOp) -> Option<BddPtr> {
         match self.apply_table.get(app) {
             Some(r) => Some(r.clone()),
             None => None,
@@ -263,6 +263,10 @@ impl BddManager {
     pub fn eq_bdd(&self, a: BddPtr, b: BddPtr) -> bool {
         // the magic of BDDs!
         a == b
+    }
+
+    pub fn get_apply_cache_stats(&self) -> BddCacheStats {
+        self.apply_table.get_stats()
     }
 }
 
