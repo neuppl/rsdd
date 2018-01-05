@@ -70,6 +70,14 @@ impl BddTable {
             }
         }
     }
+
+    pub fn num_nodes(&self) -> usize {
+        let mut cnt = 0;
+        for tbl in self.subtables.iter() {
+            cnt += tbl.num_nodes();
+        }
+        cnt
+    }
 }
 
 

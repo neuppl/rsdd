@@ -7,8 +7,8 @@ use fnv::FnvHasher;
 
 const LOAD_FACTOR: f64 = 0.7;
 const INITIAL_CAPACITY: usize = 16392;
-const GROWTH_RATE: usize = 32;
-const MAX_OFFSET: usize = 8;
+const GROWTH_RATE: usize = 64;
+const MAX_OFFSET: usize = 5;
 
 #[derive(Debug, Hash, Eq, PartialEq, Clone)]
 pub struct ApplyCacheStats {
@@ -230,6 +230,7 @@ where
 
     /// grow the hashtable to accomodate more elements
     fn grow(&mut self) -> InsertResult {
+        println!("growing");
         let new_sz = self.cap * GROWTH_RATE;
         let new_v = zero_vec(new_sz);
         let mut new_tbl = SubTable {
@@ -276,19 +277,17 @@ where
 
 /// The top-level data structure which caches applications
 pub struct BddApplyTable {
-    or_tables: Vec<SubTable<(BddPtr, BddPtr), BddPtr>>,
-    and_tables: Vec<SubTable<(BddPtr, BddPtr), BddPtr>>,
+    /// a table of Ite triples
+    tables: Vec<SubTable<(BddPtr, BddPtr, BddPtr), BddPtr>>,
 }
 
 impl BddApplyTable {
     pub fn new(num_vars: usize) -> BddApplyTable {
         let mut tbl = BddApplyTable {
-            or_tables: Vec::with_capacity(num_vars),
-            and_tables: Vec::with_capacity(num_vars),
+            tables: Vec::with_capacity(num_vars),
         };
         for _ in 0..num_vars {
-            tbl.or_tables.push(SubTable::new(INITIAL_CAPACITY));
-            tbl.and_tables.push(SubTable::new(INITIAL_CAPACITY));
+            tbl.tables.push(SubTable::new(INITIAL_CAPACITY));
         }
         tbl
     }
@@ -297,29 +296,21 @@ impl BddApplyTable {
     /// normalized by first sorting the sub-BDDs such that BDD A occurs first
     /// in the ordering; this increases cache hit rate and decreases duplicate
     /// storage
-    pub fn insert(&mut self, op: ApplyOp, res: BddPtr) -> () {
-        let ApplyOp(op, a, b) = op;
-        let tbl = a.var() as usize;
-        match op {
-            Op::BddAnd => self.and_tables[tbl].insert((a, b), res),
-            Op::BddOr => self.or_tables[tbl].insert((a, b), res),
-        }
+    pub fn insert(&mut self, f: BddPtr, g: BddPtr, h: BddPtr, res: BddPtr) -> () {
+        let tbl = f.var() as usize;
+        self.tables[tbl].insert((f, g, h), res);
     }
 
-    pub fn get(&mut self, op: ApplyOp) -> Option<BddPtr> {
-        let ApplyOp(op, a, b) = op;
-        let tbl = a.var() as usize;
-        match op {
-            Op::BddAnd => self.and_tables[tbl].get((a, b)),
-            Op::BddOr => self.or_tables[tbl].get((a, b)),
-        }
+    pub fn get(&mut self, f: BddPtr, g: BddPtr, h: BddPtr) -> Option<BddPtr> {
+        let tbl = f.var() as usize;
+        self.tables[tbl].get((f, g, h))
     }
 
     pub fn get_stats(&self) -> BddCacheStats {
         let mut st = BddCacheStats::new();
         let mut offset = 0.0;
         let mut c = 0.0;
-        for tbl in self.and_tables.iter().chain(self.or_tables.iter()) {
+        for tbl in self.tables.iter() {
             let stats = tbl.get_stats();
             st.lookup_count += stats.lookup_count;
             st.miss_count += stats.miss_count;
@@ -327,7 +318,6 @@ impl BddApplyTable {
             st.num_applications += tbl.len();
             c += 1.0;
         }
-        println!("off: {}", offset);
         st.avg_probe = offset / c;
         st
     }
@@ -338,24 +328,21 @@ fn apply_cache_simple() {
     let mut tbl = BddApplyTable::new(10);
     for var in 0..10 {
         for i in 0..100000 {
-            let op = ApplyOp(
-                Op::BddAnd,
-                BddPtr::new(VarLabel::new(var), TableIndex::new(i)),
-                BddPtr::new(VarLabel::new(var + 1), TableIndex::new(i)),
-            );
+            let f = BddPtr::new(VarLabel::new(var), TableIndex::new(i));
+            let g = BddPtr::new(VarLabel::new(var + 1), TableIndex::new(i));
+            let h = BddPtr::true_node();
             let result = BddPtr::new(VarLabel::new(var), TableIndex::new(i));
-            tbl.insert(op, result);
+            tbl.insert(f, g, h, result);
         }
     }
     for var in 0..10 {
         for i in 0..100000 {
-            let op = ApplyOp(
-                Op::BddAnd,
-                BddPtr::new(VarLabel::new(var), TableIndex::new(i)),
-                BddPtr::new(VarLabel::new(var + 1), TableIndex::new(i)),
-            );
+            let f = BddPtr::new(VarLabel::new(var), TableIndex::new(i));
+            let g = BddPtr::new(VarLabel::new(var + 1), TableIndex::new(i));
+            let h = BddPtr::true_node();
             let result = BddPtr::new(VarLabel::new(var), TableIndex::new(i));
-            assert_eq!(tbl.get(op).unwrap(), result);
+            tbl.insert(f, g, h, result);
+            assert_eq!(tbl.get(f, g, h).unwrap(), result);
         }
     }
 }

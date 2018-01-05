@@ -21,21 +21,41 @@ pub enum BoolExpr {
 /// ...
 /// Where negative indicates a false variable, 0 is line end
 pub fn parse_cnf(input: String) -> BoolExpr {
-    // use dimacs::*;
-    // let r = parse_dimacs(&input).unwrap();
-    // let (num_var, clause_vec) = match r {
-    //     Instance::Cnf { num_vars, clauses } => (num_vars, clauses),
-    //     _ => panic!()
-    // };
-    // let mut res : Vec<BoolExpr> = Vec::new();
-    // for itm in clause_vec.iter() {
-    //     let mut v : Vec<BoolExpr> = Vec::new()
-    //     for l in itm.lits().iter() {
-            
-    //     }
-        
-    // }
-    panic!()
+    use dimacs::*;
+    let r = parse_dimacs(&input).unwrap();
+    let (_, cvec) = match r {
+        Instance::Cnf { num_vars, clauses } => (num_vars, clauses),
+        _ => panic!()
+    };
+    let mut clause_vec : Vec<BoolExpr> = Vec::new();
+    for itm in cvec.iter() {
+        let mut lit_vec : Vec<BoolExpr> = Vec::new();
+        for l in itm.lits().iter() {
+            let b = match l.sign() {
+                Sign::Neg => false,
+                Sign::Pos => true
+            };
+            lit_vec.push(BoolExpr::Var(l.var().to_u64() as usize, b));
+        }
+        if lit_vec.len() == 1 {
+            clause_vec.push(lit_vec.pop().unwrap());
+        } else {
+            let mut clause = lit_vec.pop().unwrap();
+            for lit in lit_vec {
+                clause = BoolExpr::Or(Box::new(clause), Box::new(lit));
+            }
+            clause_vec.push(clause);
+        }
+    }
+    if clause_vec.len() == 1 {
+        clause_vec.pop().unwrap()
+    } else {
+        let mut e = clause_vec.pop().unwrap();
+        for clause in clause_vec {
+            e = BoolExpr::And(Box::new(e), Box::new(clause))
+        }
+        e
+    }
 }
 
 use rand;

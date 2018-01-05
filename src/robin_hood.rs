@@ -209,6 +209,10 @@ where
         let total = self.tbl.iter().fold(0, |sum, ref cur| cur.offset() + sum);
         (total as f64) / (self.len as f64)
     }
+
+    pub fn num_nodes(&self) -> usize {
+        self.len
+    }
 }
 
 ////////////////////////////////////////////////////////////////////////////////

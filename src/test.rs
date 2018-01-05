@@ -28,6 +28,24 @@ fn random_assignment(num_vars: usize) -> HashMap<bdd::VarLabel, bool> {
     init
 }
 
+#[test]
+fn test_canonicity() -> () {
+    use boolexpr::BoolExpr::*;
+    let c1 = Or(Box::new(Or(Box::new(Var(1, true)), Box::new(Var(2, false)))),
+                Box::new(Var(2, false)));
+    let c2 = Or(Box::new(Or(Box::new(Var(2, false)), Box::new(Var(2, false)))),
+                Box::new(Var(2, false)));
+    let c3 = Or(Box::new(Or(Box::new(Var(2, false)), Box::new(Var(1, true)))),
+                Box::new(Var(2, false)));
+    let bexpr = And(Box::new(And(Box::new(c1), Box::new(c2))), Box::new(c3));
+    let mut man = manager::BddManager::new_default_order(3);
+    let r1 = bexpr.into_bdd(&mut man);
+    println!("second apply");
+    let r2 = man.apply(bdd::Op::BddAnd, r1, r1);
+    println!("bdd1: {},\nbdd2:{}\ncnf: {:?}", man.print_bdd(r1), man.print_bdd(r2), bexpr);
+    assert!(man.eq_bdd(r1, r2));
+}
+
 /// generate 10 random CNFs and test to see that they compile to the same value
 use rand::SeedableRng;
 #[test]
@@ -39,13 +57,20 @@ pub fn rand_bdds() -> () {
         let cnf = boolexpr::rand_cnf(&mut rng, num_vars, 30);
         let mut man = manager::BddManager::new_default_order(num_vars);
         let r = cnf.into_bdd(&mut man);
+        println!("eval");
         // check that they evaluate to the same value for a variety of
         // assignments
+        // println!("bdd: {},\n cnf: {:?}", man.print_bdd(r), cnf);
         for _ in 1..100 {
             let assgn = random_assignment(num_vars);
-            assert_eq!(man.eval_bdd(r, &assgn), cnf.eval(&assgn));
+            assert_eq!(man.eval_bdd(r, &assgn), cnf.eval(&assgn),
+                       "Not eq:\n CNF: {:?}\nBDD:{}", cnf, man.print_bdd(r));
         }
-        // println!("avg offset: {}", man.apply_table.a)
+        // check for canonicity: conjoin it with itself and make sure that it is
+        // still the same
+        let r2 = man.apply(bdd::Op::BddAnd, r, r);
+        assert!(man.eq_bdd(r2, r), "Not canonical: \nbdd1: {}\nbdd2: {}",
+                man.print_bdd(r), man.print_bdd(r2));
     }
 }
 
@@ -53,8 +78,8 @@ pub fn rand_bdds() -> () {
 pub fn big_bdd() -> () {
     let mut rng = rand::StdRng::new().unwrap();
     rng.reseed(&[0]);
-    let num_vars = 40;
-    let cnf = boolexpr::rand_cnf(&mut rng, num_vars, 80);
+    let num_vars = 50;
+    let cnf = boolexpr::rand_cnf(&mut rng, num_vars, 40);
     let mut man = manager::BddManager::new_default_order(num_vars);
     let r = cnf.into_bdd(&mut man);
     // check that they evaluate to the same value for a variety of
@@ -64,7 +89,6 @@ pub fn big_bdd() -> () {
         assert_eq!(man.eval_bdd(r, &assgn), cnf.eval(&assgn));
     }
     println!("stats: {:?}", man.get_apply_cache_stats())
-
 }
 
 
@@ -76,11 +100,14 @@ pub fn from_file() -> () {
     let mut string = String::new();
     file_contents.unwrap().read_to_string(&mut string).unwrap();
     let cnf = boolexpr::parse_cnf(string);
+    println!("cnf: {:?}", cnf);
     let mut man = manager::BddManager::new_default_order(num_vars);
     let r = cnf.into_bdd(&mut man);
     let assgn = random_assignment(num_vars);
     // println!("BDD: {}\nExpr: {:?}\nAssignment: {:?}", man.print_bdd(), cnf, assgn);
     assert_eq!(man.eval_bdd(r, &assgn), cnf.eval(&assgn));
+    println!("stats: {:?}", man.get_apply_cache_stats());
+    println!("num nodes: {}", man.num_nodes());
 }
 
 

@@ -38,9 +38,7 @@ pub struct TableIndex(u64);
 impl TableIndex {
     #[inline]
     pub fn new(v: u64) -> TableIndex {
-        assert!(
-            v < 1 << INDEX_BITS + 1, "overflow"
-        );
+        assert!(v < 1 << INDEX_BITS + 1, "overflow");
         TableIndex(v)
     }
     #[inline]
@@ -76,7 +74,8 @@ pub enum PointerType {
 BITFIELD!(BddPtr data : u64 [
     var set_var[0..VAR_BITS],                  // the variable index
     special set_special[VAR_BITS..VAR_BITS+1], // a special bit of 1 indicates a special BDD node (like true or false)
-    idx set_idx[(VAR_BITS+1)..64],
+    compl set_compl[VAR_BITS+1..VAR_BITS+2],
+    idx set_idx[(VAR_BITS+2)..64],
 ]);
 
 impl BddPtr {
@@ -100,12 +99,12 @@ impl BddPtr {
 
     #[inline]
     pub fn is_true(&self) -> bool {
-        self.special() == 1 && self.var() == TRUE_VALUE
+        self.special() == 1 && self.var() == TRUE_VALUE && !self.is_compl()
     }
 
     #[inline]
     pub fn is_false(&self) -> bool {
-        self.special() == 1 && self.var() == FALSE_VALUE
+        self.special() == 1 && self.var() == TRUE_VALUE && self.is_compl()
     }
 
     #[inline]
@@ -136,10 +135,39 @@ impl BddPtr {
 
     #[inline]
     pub fn false_node() -> BddPtr {
-        let mut v = BddPtr { data: 0 };
-        v.set_special(1);
-        v.set_var(FALSE_VALUE);
-        v
+        let v = BddPtr::true_node();
+        v.neg()
+    }
+
+    #[inline]
+    pub fn is_compl(&self) -> bool {
+        self.compl() == 1
+    }
+
+    /// gets a non-complemented version of self
+    #[inline]
+    pub fn non_compl(&self) -> BddPtr {
+        if self.is_compl() {
+            self.neg()
+        } else {
+            self.clone()
+        }
+    }
+
+    #[inline]
+    pub fn neg(&self) -> BddPtr {
+        let mut r = self.clone();
+        if self.is_compl() {
+            r.set_compl(0);
+        } else {
+            r.set_compl(1);
+        }
+        r
+    }
+
+    #[inline]
+    pub fn label(&self) -> VarLabel {
+        VarLabel::new(self.var() as u64)
     }
 }
 

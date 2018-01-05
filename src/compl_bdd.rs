@@ -1,83 +1,8 @@
 extern crate fnv;
 use std::collections::HashMap;
 use std::ops::{BitAnd, BitOr};
+use bdd::*;
 
-/// A complemented reference to a Binary decision diagram
-/// If it is not complemented, the first argument is true
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct BddRef(usize);
-pub type BddIndex = usize;
-
-/// Implement a BDD reference by tagging low-order bits
-impl BddRef {
-    pub fn extract_ptr(&self) -> *const Bdd {
-        // blank low-order bit and cast
-        unsafe {
-            let BddRef(contents) = self.clone();
-            let v = contents & (!0x03);
-            v as *const Bdd
-        }
-    }
-
-    fn extract_polarity(&self) -> bool {
-        let BddRef(contents) = self.clone();
-        let v = (contents) & 0x1;
-        if v == 0 {false} else {true}
-    }
-
-    pub unsafe fn deref(&self) -> Bdd {
-        let ptr = self.extract_ptr();
-        assert!(!ptr.is_null());
-        (*ptr).clone()
-    }
-    
-    pub fn is_compl(&self) -> bool {
-        !self.extract_polarity()
-    }
-
-    pub fn polarity(&self) -> bool {
-        self.extract_polarity()
-    }
-
-    pub fn neg(&self) -> BddRef {
-        let BddRef(contents) = self.clone();
-        let cur_neg = (!(contents & 0x1))&0x1; // extract negated bit, negate it, then low-bit mask it again
-        BddRef((contents & !(1) | cur_neg))
-    }
-
-    unsafe fn index(&self) -> BddIndex {
-        let bdd = self.deref();
-        bdd.index
-    }
-
-    pub fn is_null(&self) -> bool {
-        let ptr = self.extract_ptr();
-        ptr.is_null()
-    }
-
-    /// If the first variable in self is 'idx', then return high if compl, low if
-    /// not compl, otherwise return self if the first variable does not match the
-    /// index
-    pub fn fix_top(&self, idx: BddIndex, compl: bool) -> BddRef {
-        let ret = self.clone();
-        let s = unsafe { self.deref() };
-        if s.low.is_null() || s.high.is_null() {
-            return ret;
-        };
-        if s.index == idx {
-            let ret = if compl { s.high } else { s.low };
-            if self.is_compl() {ret.neg()} else {ret}
-        } else {
-            ret
-        }
-    }
-
-    pub fn new(ptr: *const Bdd, compl: bool) -> BddRef {
-        let v = ptr as usize;
-        let mask = if compl {1} else {0};
-        BddRef(v | mask)
-    } 
-}
 
 /// Core BDD representation
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
@@ -94,42 +19,47 @@ pub struct Bdd {
 fn string_of_bdd(b: BddRef) -> String {
     fn string_of_bdd_h(b: BddRef) -> String {
         let bdd = unsafe { b.deref() };
-            let low = bdd.low;
-            let high = bdd.high;
-            if low.is_null() || high.is_null() {
-                return String::from("T");
-            }
-            assert!(!high.is_compl());
-            let low_s = string_of_bdd_h(low.clone());
-            let high_s = string_of_bdd_h(high.clone());
-            let idx = bdd.index;
-            format!(
-                "{:?} ({}) {}({})",
-                idx,
-                high_s,
-                if low.is_compl() { "!" } else { "" },
-                low_s
-            )
+        let low = bdd.low;
+        let high = bdd.high;
+        if low.is_null() || high.is_null() {
+            return String::from("T");
+        }
+        assert!(!high.is_compl());
+        let low_s = string_of_bdd_h(low.clone());
+        let high_s = string_of_bdd_h(high.clone());
+        let idx = bdd.index;
+        format!(
+            "{:?} ({}) {}({})",
+            idx,
+            high_s,
+            if low.is_compl() { "!" } else { "" },
+            low_s
+        )
     }
     let s = string_of_bdd_h(b.clone());
-    format!("{}{}{}", if b.is_compl() {"!("} else {""}, s,
-                      if b.is_compl() {")"} else {""})
+    format!(
+        "{}{}{}",
+        if b.is_compl() { "!(" } else { "" },
+        s,
+        if b.is_compl() { ")" } else { "" }
+    )
 }
 
 fn eval_bdd(b: BddRef, r: &HashMap<BddIndex, bool>) -> bool {
     fn eval_bdd_h(b: BddRef, r: &HashMap<BddIndex, bool>) -> bool {
-        let bdd = unsafe {b.deref() };
-        if bdd.low.is_null() || bdd.high.is_null() { // if it is the true node
+        let bdd = unsafe { b.deref() };
+        if bdd.low.is_null() || bdd.high.is_null() {
+            // if it is the true node
             true
         } else {
             let dir = r.get(&bdd.index).unwrap();
-            let new_r = if *dir {bdd.high} else {bdd.low};
+            let new_r = if *dir { bdd.high } else { bdd.low };
             let new_v = eval_bdd_h(new_r.clone(), r);
-            if new_r.is_compl() {!new_v} else {new_v}
+            if new_r.is_compl() { !new_v } else { new_v }
         }
     }
     let ret = eval_bdd_h(b.clone(), r);
-    if b.is_compl() {!ret} else {ret}
+    if b.is_compl() { !ret } else { ret }
 }
 
 /// tracks the ordering of a BDD
@@ -146,10 +76,14 @@ pub fn new_order(o: Vec<usize>) -> Order {
 impl Order {
     /// true if a is less than b in the current ordering, with ties given to b
     pub fn order_lt(&self, a: BddIndex, b: BddIndex) -> bool {
-        if (a == 0 && b == 0) || (a == 0) {return false};
-        if b == 0 {return true};
-        let a_order = self.order[a-1]; // subtract 1 since BDDs are 1-indexed
-        let b_order = self.order[b-1]; // subtract 1 since BDDs are 1-indexed
+        if (a == 0 && b == 0) || (a == 0) {
+            return false;
+        };
+        if b == 0 {
+            return true;
+        };
+        let a_order = self.order[a - 1]; // subtract 1 since BDDs are 1-indexed
+        let b_order = self.order[b - 1]; // subtract 1 since BDDs are 1-indexed
         a_order < b_order
     }
 
@@ -183,7 +117,7 @@ pub enum PubBddControl {
     /// Ite(f, g, h) where f is the top element, g is second, h is third
     Ite,
     And,
-    Or
+    Or,
 }
 
 pub mod manager {
@@ -225,7 +159,10 @@ pub mod manager {
             true_node: null.clone(),
         };
         for _ in 0..num_vars {
-            a.gen_cache.push(FnvHashMap::with_capacity_and_hasher(10000, Default::default()));
+            a.gen_cache.push(FnvHashMap::with_capacity_and_hasher(
+                10000,
+                Default::default(),
+            ));
         }
         let ptr = a.store.alloc_node(Bdd {
             index: 0,
@@ -242,7 +179,7 @@ pub mod manager {
         }
         pub fn false_node(&self) -> BddRef {
             self.true_node.neg()
-       }
+        }
 
         pub fn mk_var(&mut self, index: BddIndex, compl: bool) -> BddRef {
             let t_node = self.true_node();
@@ -282,9 +219,9 @@ pub mod manager {
         fn mk_node(&mut self, b: Bdd) -> BddRef {
             let st = &mut self.store;
             let saved = b.clone();
-            let r = *self.gen_cache[b.index-1].entry((b.high, b.low)).or_insert_with(
-                || st.alloc_node(saved),
-            );
+            let r = *self.gen_cache[b.index - 1]
+                .entry((b.high, b.low))
+                .or_insert_with(|| st.alloc_node(saved));
             BddRef::new(r, true)
         }
 
@@ -292,14 +229,18 @@ pub mod manager {
         /// must canonicalize by ensuring that the high edge is never complemented
         fn mk_bdd(&mut self, idx: BddIndex, high: BddRef, low: BddRef) -> BddRef {
             fn new_bdd(idx: BddIndex, high: BddRef, low: BddRef) -> Bdd {
-                Bdd {index: idx, high: high, low: low}
+                Bdd {
+                    index: idx,
+                    high: high,
+                    low: low,
+                }
             }
             match (high, low) {
                 (ref high, ref low) if high.is_compl() => {
                     let b = new_bdd(idx, high.neg(), low.neg());
                     let r = self.mk_node(b);
                     r.neg()
-                },
+                }
                 (ref high, ref low) => {
                     let b = new_bdd(idx, high.clone(), low.clone());
                     self.mk_node(b)
@@ -367,14 +308,15 @@ pub mod manager {
             // first, transform Ite's into constants when possible
             let phase1 = match *self {
                 // first check for any base cases, which we do not want to process further
-                Ite(ref f, ref g, ref h) if *f == man.alloc.true_node() || 
-                    (*g == man.alloc.true_node() && *h == man.alloc.false_node()) ||
-                    (*g == man.alloc.false_node() && *h == man.alloc.true_node()) ||
-                    g == h => 
-                    return self.clone(),
+                Ite(ref f, ref g, ref h)
+                    if *f == man.alloc.true_node() ||
+                           (*g == man.alloc.true_node() && *h == man.alloc.false_node()) ||
+                           (*g == man.alloc.false_node() && *h == man.alloc.true_node()) ||
+                           g == h => return self.clone(),
                 // negate this base case
-                Ite(ref f, ref g, ref h) if *f == man.alloc.false_node() => 
-                    return mk_ite(&f.neg(), h, g),
+                Ite(ref f, ref g, ref h) if *f == man.alloc.false_node() => {
+                    return mk_ite(&f.neg(), h, g)
+                }
                 // now transform constants
                 Ite(ref f, ref g, ref h) if g == h => mk_ite(f, &man.alloc.true_node(), h),
                 Ite(ref f, ref g, ref h) if f == h => mk_ite(f, g, &man.alloc.false_node()),
@@ -468,7 +410,7 @@ pub mod manager {
     impl BddData {
         pub fn to_string(&self) -> String {
             match &self {
-                &&BddData::Bdd(ref r) => string_of_bdd(r.clone())
+                &&BddData::Bdd(ref r) => string_of_bdd(r.clone()),
             }
         }
     }
@@ -507,12 +449,11 @@ pub mod manager {
             let high = self.data_stack.pop();
             match (low, high) {
                 (None, _) | (_, None) => panic!("popping on empty stack"),
-                (Some(BddData::Bdd(ref low_r)), Some(BddData::Bdd(ref high_r))) if low_r == high_r => {
-                    self.data_stack.push(BddData::Bdd(low_r.clone()))
-                }
+                (Some(BddData::Bdd(ref low_r)), Some(BddData::Bdd(ref high_r)))
+                    if low_r == high_r => self.data_stack.push(BddData::Bdd(low_r.clone())),
                 (Some(BddData::Bdd(low_r)), Some(BddData::Bdd(high_r))) => {
                     let new_bdd = self.alloc.mk_bdd(idx, high_r, low_r);
-                    let compl = if !polarity {new_bdd.neg()} else {new_bdd};
+                    let compl = if !polarity { new_bdd.neg() } else { new_bdd };
                     self.data_stack.push(BddData::Bdd(compl))
                 }
             }
@@ -524,16 +465,20 @@ pub mod manager {
             // println!("Standardized: {}", standard.to_string());
             // check if it is a base case; is Some(BddRef) if a base-case is encountered
             let v = match standard {
-               // first check for any constants
-               Ite(ref f, ref g, _) if *f == self.alloc.true_node() => Some(g.clone()),
-               Ite(ref f, _, ref h) if *f == self.alloc.false_node() => Some(h.clone()),
-               Ite(ref f, ref g, ref h) if *g == self.alloc.true_node() &&
-                    *h == self.alloc.false_node() => Some(f.clone()),
-               Ite(ref f, ref g, ref h) if *g == self.alloc.false_node() &&
-                    *h == self.alloc.true_node() => Some(f.neg()),
-               Ite(_, ref g, ref h) if g == h => Some(g.clone()),
-               Ite(ref f, _, ref h) if *f == self.alloc.false_node() => Some(h.clone()),
-               // then check for equalities
+                // first check for any constants
+                Ite(ref f, ref g, _) if *f == self.alloc.true_node() => Some(g.clone()),
+                Ite(ref f, _, ref h) if *f == self.alloc.false_node() => Some(h.clone()),
+                Ite(ref f, ref g, ref h)
+                    if *g == self.alloc.true_node() && *h == self.alloc.false_node() => Some(
+                    f.clone(),
+                ),
+                Ite(ref f, ref g, ref h)
+                    if *g == self.alloc.false_node() && *h == self.alloc.true_node() => Some(
+                    f.neg(),
+                ),
+                Ite(_, ref g, ref h) if g == h => Some(g.clone()),
+                Ite(ref f, _, ref h) if *f == self.alloc.false_node() => Some(h.clone()),
+                // then check for equalities
                 Ite(ref f, ref g, ref h)
                     if *g == self.alloc.true_node() && *h == self.alloc.false_node() => Some(
                     f.clone(),
@@ -586,7 +531,7 @@ pub mod manager {
                             self.control_stack.push(BddControl::ApplyIte(
                                 Ite(f_xt, g_xt, h_xt),
                             ));
-                       }
+                        }
                     }
                 }
             }
@@ -615,18 +560,22 @@ pub mod manager {
                     let g = self.data_stack.pop();
                     match (f, g) {
                         (Some(BddData::Bdd(f)), Some(BddData::Bdd(g))) => {
-                            self.control_stack.push(BddControl::ApplyIte(Ite(f, g, self.alloc.false_node())));
+                            self.control_stack.push(BddControl::ApplyIte(
+                                Ite(f, g, self.alloc.false_node()),
+                            ));
                         }
                         _ => panic!("invalid stack state"),
                     };
                     self.process()
-                },
+                }
                 PubBddControl::Or => {
                     let f = self.data_stack.pop();
                     let g = self.data_stack.pop();
                     match (f, g) {
                         (Some(BddData::Bdd(f)), Some(BddData::Bdd(g))) => {
-                            self.control_stack.push(BddControl::ApplyIte(Ite(f, self.alloc.true_node(), g)));
+                            self.control_stack.push(BddControl::ApplyIte(
+                                Ite(f, self.alloc.true_node(), g),
+                            ));
                         }
                         _ => panic!("invalid stack state"),
                     };
@@ -656,10 +605,10 @@ pub mod manager {
         pub fn eq_bdd(&self) -> bool {
             let a = match self.data_stack.last() {
                 Some(&BddData::Bdd(ref res)) => res.clone(),
-                None => panic!("empty stack")
+                None => panic!("empty stack"),
             };
             let b = match &self.data_stack[self.data_stack.len() - 2] {
-                &BddData::Bdd(ref r) => r
+                &BddData::Bdd(ref r) => r,
             };
             a == *b
         }

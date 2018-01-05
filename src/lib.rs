@@ -11,7 +11,6 @@ mod ref_table;
 mod test;
 pub mod sdd_manager;
 mod sdd_table;
-mod compl_bdd;
 pub mod btree;
 extern crate rand;
 extern crate fnv;
