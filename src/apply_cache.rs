@@ -5,10 +5,10 @@ use std::hash::{Hasher, Hash};
 use twox_hash::XxHash;
 use fnv::FnvHasher;
 
-const LOAD_FACTOR: f64 = 0.7;
-const INITIAL_CAPACITY: usize = 16392;
+const LOAD_FACTOR: f64 = 0.96;
+const INITIAL_CAPACITY: usize = 32784;
 const GROWTH_RATE: usize = 64;
-const MAX_OFFSET: usize = 5;
+const MAX_OFFSET: usize = 6;
 
 #[derive(Debug, Hash, Eq, PartialEq, Clone)]
 pub struct ApplyCacheStats {

@@ -71,6 +71,9 @@ pub fn rand_bdds() -> () {
         let r2 = man.apply(bdd::Op::BddAnd, r, r);
         assert!(man.eq_bdd(r2, r), "Not canonical: \nbdd1: {}\nbdd2: {}",
                 man.print_bdd(r), man.print_bdd(r2));
+        let r3 = man.apply(bdd::Op::BddOr, r, r);
+        assert!(man.eq_bdd(r3, r), "Not canonical: \nbdd1: {}\nbdd2: {}",
+                man.print_bdd(r), man.print_bdd(r3));
     }
 }
 
@@ -108,6 +111,8 @@ pub fn from_file() -> () {
     assert_eq!(man.eval_bdd(r, &assgn), cnf.eval(&assgn));
     println!("stats: {:?}", man.get_apply_cache_stats());
     println!("num nodes: {}", man.num_nodes());
+    println!("node count: {}", man.count_nodes(r));
+    // println!("bdd: {}", man.print_bdd(r));
 }
 
 

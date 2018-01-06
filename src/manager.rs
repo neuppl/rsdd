@@ -451,6 +451,27 @@ impl BddManager {
     pub fn num_nodes(&self) -> usize {
         self.compute_table.num_nodes()
     }
+
+    fn count_nodes_h(&self, ptr: BddPtr, set: &mut HashSet<BddPtr>) -> usize {
+        if set.contains(&ptr) || ptr.is_const() {
+            return 0;
+        }
+        set.insert(ptr);
+        match ptr.ptr_type() {
+            PointerType::PtrFalse => 1,
+            PointerType::PtrTrue => 1,
+            PointerType::PtrNode => {
+                let n = self.deref(ptr).into_node();
+                let c_l = self.count_nodes_h(n.low, set);
+                let c_r = self.count_nodes_h(n.high, set);
+                return c_l + c_r + 1
+            }
+        }
+    }
+
+    pub fn count_nodes(&self, ptr: BddPtr) -> usize {
+        self.count_nodes_h(ptr, &mut HashSet::new())
+    }
 }
 
 // check that (a \/ b) /\ a === a

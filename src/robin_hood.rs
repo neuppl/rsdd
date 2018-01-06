@@ -8,7 +8,7 @@ use std::hash::BuildHasherDefault;
 #[macro_use]
 use util::*;
 
-const LOAD_FACTOR: f64 = 0.7;
+const LOAD_FACTOR: f64 = 0.9;
 const GROWTH_RATE: usize = 16;
 
 /// Pointer into the backing store

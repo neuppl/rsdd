@@ -2,8 +2,6 @@ use std::hash::{Hash, Hasher};
 use twox_hash;
 use std::fmt;
 #[macro_use]
-use util::*;
-use std::io::prelude::*;
 use std::mem;
 
 /// number of bits allocated for variable label (limit on total number of
@@ -146,12 +144,10 @@ impl BddPtr {
 
     /// gets a non-complemented version of self
     #[inline]
-    pub fn non_compl(&self) -> BddPtr {
-        if self.is_compl() {
-            self.neg()
-        } else {
-            self.clone()
-        }
+    pub fn regular(&self) -> BddPtr {
+        let mut new = self.clone();
+        new.set_compl(0);
+        new
     }
 
     #[inline]
