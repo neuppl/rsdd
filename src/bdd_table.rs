@@ -2,7 +2,7 @@ use robin_hood::{BackedRobinHoodTable, BackingPtr};
 use bdd::*;
 use var_order::VarOrder;
 
-const DEFAULT_SUBTABLE_SZ: usize = 65536;
+const DEFAULT_SUBTABLE_SZ: usize = 16384;
 
 /// The primary storage unit for binary decision diagram nodes
 /// Each variable is associated with an individual subtable

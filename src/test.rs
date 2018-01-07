@@ -41,7 +41,7 @@ fn test_canonicity() -> () {
     let mut man = manager::BddManager::new_default_order(3);
     let r1 = bexpr.into_bdd(&mut man);
     println!("second apply");
-    let r2 = man.apply(bdd::Op::BddAnd, r1, r1);
+    let r2 = man.and(r1, r1);
     println!("bdd1: {},\nbdd2:{}\ncnf: {:?}", man.print_bdd(r1), man.print_bdd(r2), bexpr);
     assert!(man.eq_bdd(r1, r2));
 }
@@ -68,21 +68,21 @@ pub fn rand_bdds() -> () {
         }
         // check for canonicity: conjoin it with itself and make sure that it is
         // still the same
-        let r2 = man.apply(bdd::Op::BddAnd, r, r);
+        let r2 = man.and(r, r);
         assert!(man.eq_bdd(r2, r), "Not canonical: \nbdd1: {}\nbdd2: {}",
                 man.print_bdd(r), man.print_bdd(r2));
-        let r3 = man.apply(bdd::Op::BddOr, r, r);
+        let r3 = man.or(r, r);
         assert!(man.eq_bdd(r3, r), "Not canonical: \nbdd1: {}\nbdd2: {}",
                 man.print_bdd(r), man.print_bdd(r3));
     }
 }
 
-#[test]
+// #[test]
 pub fn big_bdd() -> () {
     let mut rng = rand::StdRng::new().unwrap();
     rng.reseed(&[0]);
     let num_vars = 50;
-    let cnf = boolexpr::rand_cnf(&mut rng, num_vars, 40);
+    let cnf = boolexpr::rand_cnf(&mut rng, num_vars, 70);
     let mut man = manager::BddManager::new_default_order(num_vars);
     let r = cnf.into_bdd(&mut man);
     // check that they evaluate to the same value for a variety of
@@ -97,9 +97,9 @@ pub fn big_bdd() -> () {
 
 #[test]
 pub fn from_file() -> () {
-    let num_vars = 228;
+    let num_vars = 186;
     // let file_contents = File::open("/Users/sholtzen/Downloads/sdd-1.1.1/cnf/c8-easier.cnf");
-    let file_contents = File::open("/Users/sholtzen/Downloads/sdd-1.1.1/cnf/c8-easier.cnf");
+    let file_contents = File::open("/Users/sholtzen/Downloads/sdd-1.1.1/cnf/count.cnf");
     let mut string = String::new();
     file_contents.unwrap().read_to_string(&mut string).unwrap();
     let cnf = boolexpr::parse_cnf(string);
@@ -116,7 +116,7 @@ pub fn from_file() -> () {
 }
 
 
-#[test]
+// #[test]
 pub fn random_sdd() {
     use sdd::*;
     use sdd_manager::*;
@@ -142,7 +142,7 @@ pub fn random_sdd() {
     }
 }
 
-#[test]
+// #[test]
 pub fn big_sdd() {
     use sdd::*;
     use sdd_manager::*;

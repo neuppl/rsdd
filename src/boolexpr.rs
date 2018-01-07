@@ -59,8 +59,8 @@ pub fn parse_cnf(input: String) -> BoolExpr {
 }
 
 use rand;
-use rand::distributions::{IndependentSample, Range};
-use rand::{SeedableRng, StdRng};
+use rand::distributions::{IndependentSample};
+use rand::{StdRng};
 /// Build a random CNF expression
 pub fn rand_cnf(rng: &mut StdRng, num_vars: usize, num_clauses: usize) -> BoolExpr {
     assert!(num_clauses > 2, "requires at least 2 clauses in CNF");
@@ -139,12 +139,12 @@ impl BoolExpr {
             &BoolExpr::And(ref l, ref r) => {
                 let r1 = (*l).into_bdd(man);
                 let r2 = (*r).into_bdd(man);
-                man.apply(bdd::Op::BddAnd, r1, r2)
+                man.and(r1, r2)
             }
             &BoolExpr::Or(ref l, ref r) => {
                 let r1 = (*l).into_bdd(man);
                 let r2 = (*r).into_bdd(man);
-                man.apply(bdd::Op::BddOr, r1, r2)
+                man.or(r1, r2)
             }
         }
     }

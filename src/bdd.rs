@@ -46,7 +46,7 @@ impl TableIndex {
 }
 
 /// A BDD pointer
-#[derive(Clone, PartialEq, Eq, Hash, Copy)]
+#[derive(Clone, PartialEq, Eq, Hash, Copy, PartialOrd)]
 pub struct BddPtr {
     data: u64,
 }

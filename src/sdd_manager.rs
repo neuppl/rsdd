@@ -189,7 +189,10 @@ impl SddManager {
                     // and return the result
                     let a_bdd = a.as_bdd_ptr();
                     let b_bdd = b.as_bdd_ptr();
-                    let r = man.tbl.bdd_man_mut(a.vtree()).apply(op, a_bdd, b_bdd);
+                    let r = match op {
+                        Op::BddAnd => man.tbl.bdd_man_mut(a.vtree()).and(a_bdd, b_bdd),
+                        Op::BddOr => man.tbl.bdd_man_mut(a.vtree()).or(a_bdd, b_bdd),
+                    };
                     if r.is_false() {
                         SddPtr::new_const(false, a.vtree() as u16)
                     } else if r.is_true() {

@@ -12,6 +12,7 @@ mod test;
 pub mod sdd_manager;
 mod sdd_table;
 pub mod btree;
+mod bdd_cache;
 extern crate rand;
 extern crate fnv;
 extern crate twox_hash;

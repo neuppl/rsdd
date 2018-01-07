@@ -2,105 +2,13 @@ use bdd_table::BddTable;
 use var_order::VarOrder;
 use bdd::*;
 use std::collections::{HashMap, HashSet};
-use std::slice;
-use apply_cache::{BddApplyTable, BddCacheStats};
 use ref_table::*;
-
-
-/// Represent a standard ITE manipulation Ite(f, g, h)
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-struct Ite(BddPtr, BddPtr, BddPtr);
-
-fn mk_ite(f: &BddPtr, g: &BddPtr, h: &BddPtr) -> Ite {
-    // cloning pointers is just a stack copy so this is very cheap
-    Ite(f.clone(), g.clone(), h.clone())
-}
-
-impl Ite {
-    /// standardize an ITE into a consistent representation. See blue book p. 115
-    fn standardize(&self, man: &BddManager) -> Ite {
-        // first, transform Ite's into constants when possible
-        let phase1 = match *self {
-            // first check for any base cases, which we do not want to process further
-            Ite(ref f, ref g, ref h)
-                if f.is_true() || (g.is_true() && h.is_false()) ||
-                (g.is_false() && h.is_true()) || g == h
-                => return self.clone(),
-            Ite(ref f, ref g, ref h) if man.is_var(*f) => {
-                if f.is_compl() { mk_ite(&f.neg(), h, g) } else { self.clone() }
-            },
-            // negate this base case
-            Ite(ref f, ref g, ref h) if f.is_false() => return mk_ite(&f.neg(), h, g),
-            // now transform constants
-            Ite(ref f, ref g, ref h) if g == h => mk_ite(f, &BddPtr::true_node(), h),
-            Ite(ref f, ref g, ref h) if f == h => mk_ite(f, g, &BddPtr::false_node()),
-            Ite(ref f, ref g, ref h) if (h.neg() == *f) => mk_ite(f, g, &BddPtr::true_node()),
-            Ite(ref f, ref g, ref h) if (f.neg() == *g) => mk_ite(f, &BddPtr::false_node(), h),
-            _ => self.clone(),
-        };
-        // then, re-order bdds based on their precedence in the variable order
-        let o = man.get_order();
-        let phase2 = match phase1 {
-            Ite(ref f, ref g, ref h) if g.is_true() => {
-                if o.lt(f.label(), h.label()) {
-                    mk_ite(f, g, h)
-                } else {
-                    mk_ite(h, g, f)
-                }
-            }
-            Ite(ref f, ref g, ref h) if h.is_false() => {
-                if o.lt(f.label(), g.label()) {
-                    mk_ite(f, g, h)
-                } else {
-                    mk_ite(g, f, h)
-                }
-            }
-            Ite(ref f, ref g, ref h) if h.is_true() => {
-                if o.lt(f.label(), g.label()) {
-                    mk_ite(f, g, h)
-                } else {
-                    mk_ite(&g.neg(), &f.neg(), h)
-                }
-            }
-            Ite(ref f, ref g, ref h) if g.is_false() => {
-                if o.lt(f.label(), h.label()) {
-                    mk_ite(f, g, h)
-                } else {
-                    mk_ite(&h.neg(), g, &f.neg())
-                }
-            }
-            Ite(ref f, ref g, ref h) if *g == h.neg() => {
-                if o.lt(f.label(), g.label()) {
-                    mk_ite(f, g, h)
-                } else {
-                    mk_ite(g, f, &f.neg())
-                }
-            }
-            _ => phase1,
-        };
-        match phase2 {
-            Ite(ref f, ref g, ref h) if f.is_compl() => mk_ite(&f.neg(), h, g),
-            _ => phase2,
-        }
-    }
-}
-
-
-#[derive(Debug, Clone)]
-enum ControlElement {
-    Ite(Ite),
-    /// Create a BDD with a chosen polarity and top variable
-    Bind(bool, VarLabel),
-    ApplyCache(Ite),
-}
+use bdd_cache::{BddApplyTable, BddCacheStats};
 
 pub struct BddManager {
     compute_table: BddTable,
     apply_table: BddApplyTable,
-    control_stack: Vec<ControlElement>,
-    data_stack: Vec<BddPtr>,
 }
-
 
 impl BddManager {
     /// Make a BDD manager with a default variable ordering
@@ -114,8 +22,6 @@ impl BddManager {
         BddManager {
             compute_table: BddTable::new(order),
             apply_table: BddApplyTable::new(len),
-            control_stack: Vec::new(),
-            data_stack: Vec::new(),
         }
     }
 
@@ -125,17 +31,6 @@ impl BddManager {
 
     fn deref(&self, ptr: BddPtr) -> Bdd {
         self.compute_table.deref(ptr)
-    }
-
-    fn get_application(&mut self, f: BddPtr, g: BddPtr, h: BddPtr) -> Option<BddPtr> {
-        match self.apply_table.get(f, g, h) {
-            Some(r) => Some(r.clone()),
-            None => None,
-        }
-    }
-
-    fn insert_application(&mut self, f: BddPtr, g: BddPtr, h: BddPtr, result: BddPtr) -> () {
-        self.apply_table.insert(f, g, h, result);
     }
 
     /// Fetch the BDD pointed to by the low-node of `ptr`, panics on constant
@@ -238,178 +133,102 @@ impl BddManager {
         }
     }
 
-    /// Helper for `apply`. If the top of `ptr` is
-    /// 'lbl', then return high if compl, low if not compl, otherwise return
-    /// self if the top variable does not match
-    fn fix_bdd(&self, ptr: BddPtr, lbl: VarLabel, compl: bool) -> BddPtr {
-        match ptr.ptr_type() {
-            PointerType::PtrNode => {
-                let bdd = self.deref(ptr).into_node();
-                if bdd.var == lbl {
-                    let ret = if compl { bdd.high } else { bdd.low };
-                    if ptr.is_compl() { ret.neg() } else { ret }
-                } else {
-                    ptr
-                }
+    pub fn and(&mut self, f: BddPtr, g: BddPtr) -> BddPtr {
+        // base case
+        let reg_f = f.regular();
+        let reg_g = g.regular();
+        if reg_f == reg_g {
+            if f == g {
+                return f;
+            } else {
+                return f.neg();
             }
-            _ => ptr,
         }
-    }
-
-    fn print_control(&self, elem: ControlElement) -> String {
-        match elem {
-            ControlElement::Ite(Ite(f, g, h)) => {
-                        format!("Ite({}, {}, {})",
-                                self.print_bdd(f),
-                                self.print_bdd(g),
-                                self.print_bdd(h))
-            },
-            ControlElement::Bind(b, v) => format!("Bind({:?}, {})", v, b),
-            ControlElement::ApplyCache(Ite(f, g, h)) =>
-                format!("CacheIte({}, {}, {})",
-                        self.print_bdd(f),
-                        self.print_bdd(g),
-                        self.print_bdd(h))
-
+        if reg_f.is_true() {
+            if f.is_true() {
+                return g;
+            } else {
+                return f;
+            }
         }
-    }
+        if reg_g.is_true() {
+            if g.is_true() {
+                return f;
+            } else {
+                return g;
+            }
+        }
 
-    /// pushes the resulting application onto the top of the data stack
-    pub fn apply(&mut self, op: Op, a: BddPtr, b: BddPtr) -> BddPtr {
-        use bdd::Op::*;
-        use bdd::PointerType::*;
-        let ite = match op {
-            BddAnd => mk_ite(&a, &b, &BddPtr::false_node()),
-            BddOr => mk_ite(&a, &BddPtr::true_node(), &b),
+        // now, both of the nodes are not constant
+        // normalize the nodes to increase cache efficiency
+        let (f, g, reg_f, reg_g) = if reg_f < reg_g {
+            (f, g, reg_f, reg_g)
+        } else {
+            (g, f, reg_g, reg_f)
+        };
+        // check the cache
+        match self.apply_table.get(f, g) {
+            Some(v) => { return v; }
+            None => {}
         };
 
-        self.control_stack.push(ControlElement::Ite(ite));
-        loop {
-            let top = self.control_stack.pop();
-            match top {
-                Some(top) => {
-                    // println!("Popped {}", self.print_control(top.clone()));
-                    // for bdd in self.data_stack.iter() {
-                    //     println!("  {}", self.print_bdd(*bdd));
-                    // }
-                    match top {
-                        ControlElement::Bind(pol, vlabel) => {
-                            let low = self.data_stack.pop().unwrap();
-                            let high = self.data_stack.pop().unwrap();
-                            if low == high {
-                                self.data_stack.push(low);
-                                continue;
-                            }
-                            let r = match (high.ptr_type(), low.ptr_type()) {
-                                (PtrTrue, PtrTrue) => BddPtr::true_node(),
-                                (PtrFalse, PtrFalse) => BddPtr::false_node(),
-                                _ => {
-                                    // canonicalize: high node should never be negated
-                                    if high.is_compl() {
-                                        let bdd = Bdd::new_node(low.neg(), high.neg(), vlabel);
-                                        self.get_or_insert(bdd).neg()
-                                    } else {
-                                        let bdd = Bdd::new_node(low, high, vlabel);
-                                        self.get_or_insert(bdd)
-                                    }
-                                }
-                            };
-                            let f = if pol { r } else { r.neg() };
-                            // println!("pushed {}", self.print_bdd(f));
-                            self.data_stack.push(f);
-                        }
-                        ControlElement::ApplyCache(ite) => {
-                            let Ite(f, g, h) = ite;
-                            let itm = self.data_stack.last().unwrap().clone();
-                            self.insert_application(f, g, h, itm)
-                        }
-                        ControlElement::Ite(i) => {
-                            // first standardize it
-                            let standard = i.standardize(self);
-                            // println!("standardized: {}", self.print_ite(standard.clone()));
-                            // check if it is a base case; is Some(BddRef) if a
-                            // base-case is encountered
-                            let v = match standard {
-                                // first check for any constants
-                                Ite(ref f, ref g, _) if f.is_true() => Some(g.clone()),
-                                Ite(ref f, _, ref h) if f.is_false() => Some(h.clone()),
-                                Ite(ref f, ref g, ref h) if g.is_true() && h.is_false() => Some(
-                                    f.clone(),
-                                ),
-                                Ite(ref f, ref g, ref h) if g.is_false() && h.is_true() => Some(
-                                    f.neg(),
-                                ),
-                                Ite(_, ref g, ref h) if g == h => Some(g.clone()),
-                                // because we standardized by sorting on the left-most node, if
-                                // f = x_i (i.e., a single variable) and x_i is located before
-                                // the first variables of g and h in the ordering, then we can
-                                // simplify by producing the BDD (x_i, g, h)
-                                Ite(ref f, ref g, ref h) if self.is_var(*f) => {
-                                    // check that the variable in f occurs first
-                                    // println!("is var");
-                                    let f_lbl = f.label();
-                                    let g_lbl = g.label();
-                                    let h_lbl = h.label();
-                                    if self.get_order().lt(f_lbl, g_lbl) &&
-                                        self.get_order().lt(f_lbl, h_lbl)
-                                    {
-                                        // standardization guarantees that f
-                                        // will never be complemented
-                                        let bdd = Bdd::new_node(h.clone(), g.clone(), f_lbl);
-                                        Some(self.get_or_insert(bdd))
-                                    } else {
-                                        None
-                                    }
-                                }
-                                _ => None,
-                            };
-                            match v {
-                                Some(a) => self.data_stack.push(a),
-                                None => {
-                                    let Ite(f, g, h) = standard;
-                                    match self.apply_table.get(f, g, h) {
-                                        Some(a) => {
-                                            // push an uncomplemented BDD onto the stack
-                                            self.data_stack.push(a.clone())
-                                        }
-                                        None => {
-                                            // the ite is not in the cache and it is not a base case
-                                            self.control_stack.push(ControlElement::ApplyCache(
-                                                standard.clone(),
-                                            ));
-                                            let Ite(f, g, h) = standard;
-                                            let idx = self.get_order().first_essential(f, g, h);
-                                            self.control_stack.push(ControlElement::Bind(
-                                                !f.is_compl(),
-                                                idx,
-                                            ));
-                                            // println!("fixing {:?}", idx);
-                                            let f_xf = self.fix_bdd(f, idx, false);
-                                            let g_xf = self.fix_bdd(g, idx, false);
-                                            let h_xf = self.fix_bdd(h, idx, false);
-                                            self.control_stack.push(ControlElement::Ite(
-                                                Ite(f_xf, g_xf, h_xf),
-                                            ));
-                                            let f_xt = self.fix_bdd(f, idx, true);
-                                            let g_xt = self.fix_bdd(g, idx, true);
-                                            let h_xt = self.fix_bdd(h, idx, true);
-                                            self.control_stack.push(ControlElement::Ite(
-                                                Ite(f_xt, g_xt, h_xt),
-                                            ));
-                                        }
-                                    }
-                                }
-                            }
-
-                        }
-                    }
-                }
-                None => return self.data_stack.pop().unwrap(),
+        // now we know that these are nodes, compute the cofactors
+        let topf = self.get_order().get(f.label());
+        let topg = self.get_order().get(g.label());
+        let index; // will hold the top variable
+        let mut fv;
+        let mut gv;
+        let mut fnv;
+        let mut gnv;
+        if topf <= topg {
+            index = f.label();
+            fv = self.high(reg_f);
+            fnv = self.low(reg_f);
+            if f.is_compl() {
+                fv = fv.neg();
+                fnv = fnv.neg();
             }
+        } else {
+            index = g.label();
+            fv = f;
+            fnv = f;
+        }
+
+        if topg <= topf {
+            gv = self.high(g);
+            gnv = self.low(g);
+            if g.is_compl() {
+                gv = gv.neg();
+                gnv = gnv.neg();
+            }
+        } else {
+            gv = g;
+            gnv = g;
+        }
+
+        // now recurse
+        let new_h = self.and(fv, gv);
+        let new_l = self.and(fnv, gnv);
+
+        // now normalize the result
+        if new_h == new_l {
+            return new_h;
+        } else {
+            let r = if new_h.is_compl() {
+                let bdd = Bdd::new_node(new_l.neg(), new_h.neg(), index);
+                self.get_or_insert(bdd).neg()
+            } else {
+                let bdd = Bdd::new_node(new_l, new_h, index);
+                self.get_or_insert(bdd)
+            };
+            self.apply_table.insert(f, g, r);
+            return r
         }
     }
 
-
+    pub fn or(&mut self, f: BddPtr, g: BddPtr) -> BddPtr {
+        self.and(f.neg(), g.neg()).neg()
+    }
 
     /// evaluates the top element of the data stack on the values found in
     /// `vars`
@@ -480,8 +299,8 @@ fn simple_equality() {
     let mut man = BddManager::new_default_order(3);
     let v1 = man.var(VarLabel::new(0), true);
     let v2 = man.var(VarLabel::new(1), true);
-    let r1 = man.apply(Op::BddOr, v1, v2);
-    let r2 = man.apply(Op::BddAnd, r1, v1);
+    let r1 = man.or(v1, v2);
+    let r2 = man.and(r1, v1);
     assert!(
         man.eq_bdd(v1, r2),
         "Not eq:\n {}\n{}",

@@ -32,3 +32,13 @@ pub fn zero_vec<T>(sz: usize) -> Vec<T> {
     }
     return v
 }
+
+/// custom allocation of a non-initialized vector
+pub fn malloc_vec<T>(sz: usize) -> Vec<T> {
+    let mut v : Vec<T> = Vec::with_capacity(sz);
+    unsafe {
+        let vec_ptr = v.as_mut_ptr();
+        v.set_len(sz);
+    }
+    return v
+}
