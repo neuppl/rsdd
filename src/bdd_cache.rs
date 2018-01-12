@@ -1,12 +1,13 @@
 use apply_cache::*;
 use bdd::*;
 
-const INITIAL_CAPACITY: usize = 16; // given as a power of two
+const INITIAL_CAPACITY: usize = 18; // given as a power of two
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct BddCacheStats {
     pub lookup_count: usize,
     pub miss_count: usize,
+    pub conflict_count: usize,
     pub avg_probe: f64,
     pub num_applications: usize,
 }
@@ -18,6 +19,7 @@ impl BddCacheStats {
             lookup_count: 0,
             avg_probe: 0.0,
             num_applications: 0,
+            conflict_count: 0,
         }
     }
 }
@@ -61,6 +63,7 @@ impl BddApplyTable {
             let stats = tbl.get_stats();
             st.lookup_count += stats.lookup_count;
             st.miss_count += stats.miss_count;
+            st.conflict_count += stats.conflict_count;
             offset += tbl.avg_offset();
             st.num_applications += tbl.len();
             c += 1.0;
@@ -87,9 +90,6 @@ fn apply_cache_simple() {
             let g = BddPtr::new(VarLabel::new(var + 1), TableIndex::new(i));
             let result = BddPtr::new(VarLabel::new(var), TableIndex::new(i));
             tbl.insert(f, g, result);
-            if tbl.get(f,g).is_none() {
-                println!("fuck var: {}, i: {}",var, i);
-            }
             assert_eq!(tbl.get(f, g).unwrap(), result);
         }
     }

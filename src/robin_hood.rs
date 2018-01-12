@@ -1,19 +1,17 @@
+//! A backing store based on robin-hood hashing
+
 use std::ptr;
-use std::hash::Hasher;
+use std::hash::{Hasher, Hash};
 use std::mem;
-use std::hash::Hash;
 use twox_hash::XxHash;
 use fnv::FnvHasher;
 use std::hash::BuildHasherDefault;
+use backing_store::*;
 #[macro_use]
 use util::*;
 
-const LOAD_FACTOR: f64 = 0.9;
-const GROWTH_RATE: usize = 16;
+const LOAD_FACTOR: f64 = 0.6;
 
-/// Pointer into the backing store
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct BackingPtr(pub u32);
 
 /// data structure stored inside of the hash table
 #[derive(Clone, Debug, Copy)]
@@ -53,6 +51,7 @@ where
     cap: usize,
     /// the length of `tbl`
     len: usize,
+    stats: BackingCacheStats,
 }
 
 impl<T> BackedRobinHoodTable<T>
@@ -67,6 +66,7 @@ where
             tbl: v,
             cap: sz,
             len: 0,
+            stats: BackingCacheStats::new()
         };
         return r;
     }
@@ -117,6 +117,7 @@ where
         if (self.len + 1) as f64 > (self.cap as f64 * LOAD_FACTOR) {
             self.grow();
         }
+        self.stats.lookup_count += 1;
 
         let mut hasher = FnvHasher::default();
         elem.hash(&mut hasher);
@@ -132,6 +133,7 @@ where
                 if cur_itm.hash() == searcher.hash() {
                     let this_bdd = self.get_pos(pos as usize);
                     if this_bdd == elem {
+                        self.stats.hit_count += 1;
                         return BackingPtr(cur_itm.idx() as u32);
                     } else {
                     }
@@ -144,7 +146,7 @@ where
                     self.len += 1;
                     // propagate the element we swapped for
                     self.propagate(cur_itm, pos);
-                    return BackingPtr(searcher.idx() as u32)
+                    return BackingPtr(searcher.idx() as u32);
                 }
                 let off = searcher.offset() + 1;
                 searcher.set_offset(off);
@@ -213,6 +215,10 @@ where
     pub fn num_nodes(&self) -> usize {
         self.len
     }
+
+    pub fn get_stats(&self) -> BackingCacheStats {
+        self.stats.clone()
+    }
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -225,16 +231,11 @@ fn mk_ptr(idx: u64) -> BddPtr {
 #[test]
 fn rh_simple() {
     let mut store: BackedRobinHoodTable<ToplessBdd> = BackedRobinHoodTable::new(5000);
-    for i in 0..100000 {
+    for i in 0..1000000 {
         let e = ToplessBdd::new(mk_ptr(i), mk_ptr(i));
         let v = store.get_or_insert(e.clone());
-        match store.find(e) {
-            None => assert!(false, "Could not find {:?}", e),
-            Some(a) => {
-                assert_eq!(v, a);
-                assert_eq!(store.deref(v), store.deref(a));
-            }
-        }
+        let v_2 = store.get_or_insert(e.clone());
+        assert_eq!(store.deref(v), store.deref(v_2));
     }
     println!("average offset: {}", store.average_offset());
 }

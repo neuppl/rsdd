@@ -3,6 +3,7 @@ use manager::BddManager;
 use robin_hood::*;
 use btree::*;
 use std::collections::HashMap;
+use backing_store::*;
 use bdd::VarLabel;
 use std::slice::Iter;
 use var_order;

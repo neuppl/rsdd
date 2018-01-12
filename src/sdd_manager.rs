@@ -181,8 +181,6 @@ impl SddManager {
         ) -> SddPtr {
             // normalize the pointers to increase cache hit rate
             let (a, b) = if a < b { (a, b) } else { (b, a) };
-            // println!("applying({:?}) , {} to {}",
-            //          op, man.print_sdd_internal(a), man.print_sdd_internal(b));
             let r = if a.vtree() == b.vtree() {
                 if man.tbl.is_bdd(a) {
                     // both nodes are BDDs, so simply apply them together
@@ -281,15 +279,18 @@ impl SddManager {
                     helper(man, op, new_1, new_2, parent_ptr)
                 }
             };
+            println!("   applying({:?}) , {} {:?} {}, result: {}",
+                     op, man.print_sdd_internal(a), op, man.print_sdd_internal(b),
+                     man.print_sdd_internal(r));
             r
         }
-        // println!("applying {} to {} with op {:?}", self.print_sdd(a), self.print_sdd(b), op);
+        println!("applying {} to {} with op {:?}", self.print_sdd(a), self.print_sdd(b), op);
         let i_a = self.external_table.into_internal(a);
         let i_b = self.external_table.into_internal(b);
         let pvec = into_parent_ptr_vec(&self.vtree);
         let r = helper(self, op, i_a, i_b, &pvec);
         let r = self.external_table.gen_or_inc(r);
-        // println!("result: {}", self.print_sdd(r));
+        println!("result: {}", self.print_sdd(r));
         r
     }
 

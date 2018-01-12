@@ -1,4 +1,6 @@
-use robin_hood::{BackedRobinHoodTable, BackingPtr};
+use robin_hood::{BackedRobinHoodTable};
+use cuckoo_store::CuckooStore;
+use backing_store::{BackingCacheStats, BackingPtr};
 use bdd::*;
 use var_order::VarOrder;
 
@@ -15,11 +17,10 @@ pub struct BddTable {
 impl BddTable {
     pub fn new(order: VarOrder) -> BddTable {
         let mut v = Vec::with_capacity(order.len());
-        for i in 0..order.len() {
-            v.push(BackedRobinHoodTable::new(
-                DEFAULT_SUBTABLE_SZ,
-            ));
+        for _ in 0..order.len() {
+            v.push(BackedRobinHoodTable::new(DEFAULT_SUBTABLE_SZ));
         }
+
         BddTable {
             subtables: v,
             order: order,
@@ -44,21 +45,21 @@ impl BddTable {
 
     }
 
-    pub fn find(&self, bdd: Bdd) -> Option<BddPtr> {
-        match bdd {
-            Bdd::BddFalse => Some(BddPtr::false_node()),
-            Bdd::BddTrue => Some(BddPtr::true_node()),
-            Bdd::Node(n) => {
-                let var = n.var.value();
-                let elem = ToplessBdd::new(n.low, n.high);
-                match self.subtables[var as usize].find(elem) {
-                    Some(ptr) =>
-                        Some(BddPtr::new(VarLabel::new(var), TableIndex::new(ptr.0 as u64))),
-                    None => None
-                }
-            }
-        }
-    }
+    // pub fn find(&self, bdd: Bdd) -> Option<BddPtr> {
+    //     match bdd {
+    //         Bdd::BddFalse => Some(BddPtr::false_node()),
+    //         Bdd::BddTrue => Some(BddPtr::true_node()),
+    //         Bdd::Node(n) => {
+    //             let var = n.var.value();
+    //             let elem = ToplessBdd::new(n.low, n.high);
+    //             match self.subtables[var as usize].find(elem) {
+    //                 Some(ptr) =>
+    //                     Some(BddPtr::new(VarLabel::new(var), TableIndex::new(ptr.0 as u64))),
+    //                 None => None
+    //             }
+    //         }
+    //     }
+    // }
 
     pub fn deref(&self, ptr: BddPtr) -> Bdd {
         match ptr.ptr_type() {
@@ -78,7 +79,20 @@ impl BddTable {
         }
         cnt
     }
+
+
+    pub fn get_stats(&self) -> BackingCacheStats {
+        let mut st = BackingCacheStats::new();
+        for tbl in self.subtables.iter() {
+            let cur_st = tbl.get_stats();
+            st.hit_count += cur_st.hit_count;
+            st.lookup_count += cur_st.lookup_count;
+            st.num_elements += tbl.num_nodes();
+        }
+        st
+    }
 }
+
 
 
 

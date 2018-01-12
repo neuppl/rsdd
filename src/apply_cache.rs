@@ -5,6 +5,7 @@ use util::*;
 use std::hash::{Hasher, Hash};
 use twox_hash::XxHash;
 use fnv::FnvHasher;
+use fasthash::{sea, SeaHasher};
 
 const LOAD_FACTOR: f64 = 0.96;
 const MAX_OFFSET: usize = 6;
@@ -13,6 +14,7 @@ const MAX_OFFSET: usize = 6;
 pub struct ApplyCacheStats {
     pub lookup_count: usize,
     pub miss_count: usize,
+    pub conflict_count: usize,
 }
 
 impl ApplyCacheStats {
@@ -20,6 +22,7 @@ impl ApplyCacheStats {
         ApplyCacheStats {
             miss_count: 0,
             lookup_count: 0,
+            conflict_count: 0,
         }
     }
 }
@@ -140,47 +143,14 @@ where
 
 
     pub fn insert(&mut self, key: K, val: V) -> () {
-        if (self.len + 1) as f64 > ((1 << self.cap) as f64 * LOAD_FACTOR) {
-            self.grow();
-            return self.insert(key, val);
-        }
-
-        let mut hasher = FnvHasher::default();
+        let mut hasher : SeaHasher = Default::default();
         key.hash(&mut hasher);
         let hash_v = hasher.finish();
-        let mut pos = pow_cap(hash_v as usize, self.cap);
-        let mut searcher = Element::new(key.clone(), val.clone());
-        loop {
-            assert!(pos < (1 << self.cap));
-            if searcher.offset > MAX_OFFSET as u8 {
-                self.grow();
-                return self.insert(searcher.key, searcher.val)
-            }
-            // println!("pos: {}, cap: {}", pos, 1 << self.cap);
-            if self.tbl[pos].occupied {
-                // first, check if they are equal.
-                if self.tbl[pos].key == key {
-                    return ();
-                } else {
-                }
-                // they are not equal, see if we should swap for the closer one
-                if self.tbl[pos].offset < searcher.offset {
-                    // swap the searcher with the current element
-                    let tmp = searcher;
-                    searcher = self.tbl[pos].clone();
-                    self.tbl[pos] = tmp;
-                } else {
-                }
-
-            } else {
-                // found an open spot, insert
-                self.tbl[pos] = searcher;
-                self.len += 1;
-                return ();
-            }
-            searcher.offset += 1;
-            pos = wrap_add(pos, self.cap)
+        let pos = pow_cap(hash_v as usize, self.cap);
+        if self.tbl[pos].occupied {
+            self.stat.conflict_count += 1;
         }
+        self.tbl[pos] = Element::new(key.clone(), val.clone());
     }
 
     fn iter<'a>(&'a self) -> SubTableIter<'a, K, V> {
@@ -188,18 +158,15 @@ where
     }
 
     pub fn get(&mut self, key: K) -> Option<V> {
-        // self.stat.lookup_count += 1;
-        let mut hasher = FnvHasher::default();
+        self.stat.lookup_count += 1;
+        let mut hasher : SeaHasher = Default::default();
         key.hash(&mut hasher);
         let hash_v = hasher.finish();
-        let mut pos = pow_cap(hash_v as usize, self.cap);
-        for _ in 0..MAX_OFFSET+1 {
-            if self.tbl[pos].key == key {
-                return Some(self.tbl[pos].val.clone());
-            }
-            pos = wrap_add(pos, self.cap);
+        let pos = pow_cap(hash_v as usize, self.cap);
+        if self.tbl[pos].key == key {
+            return Some(self.tbl[pos].val.clone());
         }
-        // self.stat.miss_count += 1;
+        self.stat.miss_count += 1;
         return None;
     }
 
@@ -248,10 +215,15 @@ fn test_cache() {
     for i in 0..10000 {
         c.insert(i, i);
     }
-    for i in 0..10000 {
-        if c.get(i).is_none() {
-            panic!("could not find {}", i);
-        }
-        assert_eq!(c.get(i).unwrap(), i)
+    // for i in 0..10000 {
+    //     if c.get(i).is_none() {
+    //         panic!("could not find {}", i);
+    //     }
+    //     assert_eq!(c.get(i).unwrap(), i)
+    // }
+    let mut cnt = 0;
+    for i in c.iter() {
+        cnt += 1;
     }
+    println!("cnt: {}, cap: {}", cnt, c.cap());
 }

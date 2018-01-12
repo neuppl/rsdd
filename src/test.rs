@@ -99,7 +99,7 @@ pub fn big_bdd() -> () {
 pub fn from_file() -> () {
     let num_vars = 186;
     // let file_contents = File::open("/Users/sholtzen/Downloads/sdd-1.1.1/cnf/c8-easier.cnf");
-    let file_contents = File::open("/Users/sholtzen/Downloads/sdd-1.1.1/cnf/count.cnf");
+    let file_contents = File::open("/Users/sholtzen/Downloads/sdd-1.1.1/cnf/c8-easier.cnf");
     let mut string = String::new();
     file_contents.unwrap().read_to_string(&mut string).unwrap();
     let cnf = boolexpr::parse_cnf(string);
@@ -109,23 +109,24 @@ pub fn from_file() -> () {
     let assgn = random_assignment(num_vars);
     // println!("BDD: {}\nExpr: {:?}\nAssignment: {:?}", man.print_bdd(), cnf, assgn);
     assert_eq!(man.eval_bdd(r, &assgn), cnf.eval(&assgn));
-    println!("stats: {:?}", man.get_apply_cache_stats());
-    println!("num nodes: {}", man.num_nodes());
+    println!("apply cache stats: {:?}", man.get_apply_cache_stats());
+    println!("num apply nodes: {}", man.num_nodes());
     println!("node count: {}", man.count_nodes(r));
+    println!("backing store stats: {:?}", man.get_backing_store_stats());
     // println!("bdd: {}", man.print_bdd(r));
 }
 
 
-// #[test]
+#[test]
 pub fn random_sdd() {
     use sdd::*;
     use sdd_manager::*;
     let mut rng = rand::StdRng::new().unwrap();
     rng.reseed(&[0]);
     for _ in 1..20 {
-        println!("compiling");
-        let num_vars = 10;
-        let cnf = boolexpr::rand_cnf(&mut rng, num_vars, 5);
+        println!("compiling\n\n");
+        let num_vars = 3;
+        let cnf = boolexpr::rand_cnf(&mut rng, num_vars, 3);
         let v : Vec<bdd::VarLabel> =
             (0..num_vars).map(|x| bdd::VarLabel::new(x as u64)).collect();
         let vtree = even_split(&v, 2);

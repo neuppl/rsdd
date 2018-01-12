@@ -4,6 +4,7 @@ use bdd::*;
 use std::collections::{HashMap, HashSet};
 use ref_table::*;
 use bdd_cache::{BddApplyTable, BddCacheStats};
+use backing_store::BackingCacheStats;
 
 pub struct BddManager {
     compute_table: BddTable,
@@ -117,7 +118,8 @@ impl BddManager {
                 }
             }
         }
-        print_bdd_helper(self, ptr, map)
+        let s = print_bdd_helper(self, ptr, map);
+        format!("{}{}", if ptr.is_compl() { "!" } else { "" }, s)
     }
 
 
@@ -141,7 +143,7 @@ impl BddManager {
             if f == g {
                 return f;
             } else {
-                return f.neg();
+                return BddPtr::false_node();
             }
         }
         if reg_f.is_true() {
@@ -265,6 +267,10 @@ impl BddManager {
 
     pub fn get_apply_cache_stats(&self) -> BddCacheStats {
         self.apply_table.get_stats()
+    }
+
+    pub fn get_backing_store_stats(&self) -> BackingCacheStats {
+        self.compute_table.get_stats().clone()
     }
 
     pub fn num_nodes(&self) -> usize {

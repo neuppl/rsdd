@@ -12,7 +12,6 @@ const VAR_BITS: usize = 11;
 const INDEX_BITS: usize = 64 - VAR_BITS - 1; // reserve 1 bit for special
 
 const TRUE_VALUE: u64 = 1; // the variable ID corresponding with a true value
-const FALSE_VALUE: u64 = 0; // the variable ID corresponding with a false value
 
 
 /// a label for each distinct variable in the BDD
