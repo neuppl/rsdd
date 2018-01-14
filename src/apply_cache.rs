@@ -55,8 +55,6 @@ where
 {
     key: K,
     val: V,
-    occupied: bool,
-    offset: u8,
 }
 
 impl<K, V> Element<K, V>
@@ -68,8 +66,6 @@ where
         Element {
             key: key,
             val: val,
-            occupied: true,
-            offset: 0,
         }
     }
 }
@@ -80,41 +76,12 @@ where
     K: Hash + Clone + Eq + PartialEq + Debug,
     V: Eq + PartialEq + Clone,
 {
-    tbl: Vec<Element<K, V>>,
+    tbl: Vec<Option<Element<K, V>>>,
     len: usize,
     cap: usize, // a particular power of 2
     stat: ApplyCacheStats,
 }
 
-struct SubTableIter<'a, K, V>
-where
-    K: Hash + Clone + Eq + PartialEq + Debug + 'a,
-    V: Eq + PartialEq + Clone + 'a,
-{
-    tbl: &'a SubTable<K, V>,
-    pos: usize,
-}
-
-impl<'a, K, V> Iterator for SubTableIter<'a, K, V>
-where
-    K: Hash + Clone + Eq + PartialEq + Debug + 'a,
-    V: Eq + PartialEq + Clone + 'a,
-{
-    type Item = &'a Element<K, V>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.pos >= self.tbl.tbl.len() {
-            None
-        } else {
-            self.pos += 1;
-            if self.tbl.tbl[self.pos - 1].occupied {
-                Some(&self.tbl.tbl[self.pos - 1])
-            } else {
-                self.next()
-            }
-        }
-    }
-}
 
 impl<K, V> SubTable<K, V>
 where
@@ -123,7 +90,7 @@ where
 {
     /// create a new bdd cache with capacity `cap`, given as a power of 2
     pub fn new(cap: usize) -> SubTable<K, V> {
-        let v: Vec<Element<K, V>> = zero_vec(1 << cap);
+        let v: Vec<Option<Element<K, V>>> = zero_vec(1 << cap);
         SubTable {
             tbl: v,
             len: 0,
@@ -147,15 +114,12 @@ where
         key.hash(&mut hasher);
         let hash_v = hasher.finish();
         let pos = pow_cap(hash_v as usize, self.cap);
-        if self.tbl[pos].occupied {
+        if self.tbl[pos].is_some() {
             self.stat.conflict_count += 1;
         }
-        self.tbl[pos] = Element::new(key.clone(), val.clone());
+        self.tbl[pos] = Some(Element::new(key.clone(), val.clone()));
     }
 
-    fn iter<'a>(&'a self) -> SubTableIter<'a, K, V> {
-        SubTableIter { tbl: self, pos: 0 }
-    }
 
     pub fn get(&mut self, key: K) -> Option<V> {
         self.stat.lookup_count += 1;
@@ -163,8 +127,13 @@ where
         key.hash(&mut hasher);
         let hash_v = hasher.finish();
         let pos = pow_cap(hash_v as usize, self.cap);
-        if self.tbl[pos].key == key {
-            return Some(self.tbl[pos].val.clone());
+        let v = self.tbl[pos].clone();
+        if v.is_none() {
+            return None;
+        }
+        let v = v.unwrap();
+        if v.key == key {
+            return Some(v.val.clone());
         }
         self.stat.miss_count += 1;
         return None;
@@ -181,8 +150,11 @@ where
             stat: ApplyCacheStats::new(),
         };
 
-        for i in self.iter() {
-            new_tbl.insert(i.key.clone(), i.val.clone());
+        for i in self.tbl.iter() {
+            if i.is_some() {
+                let i = i.clone().unwrap();
+                new_tbl.insert(i.key.clone(), i.val.clone());
+            }
         }
 
         // copy new_tbl over the current table
@@ -192,17 +164,6 @@ where
         // don't update the stats; we want to keep those
     }
 
-    pub fn avg_offset(&self) -> f64 {
-        let mut offs: usize = 0;
-        if self.len == 0 {
-            return 0.0;
-        }
-
-        for i in self.iter() {
-            offs += i.offset as usize;
-        }
-        offs as f64 / (self.len as f64)
-    }
 
     pub fn get_stats(&self) -> ApplyCacheStats {
         self.stat.clone()
@@ -221,9 +182,4 @@ fn test_cache() {
     //     }
     //     assert_eq!(c.get(i).unwrap(), i)
     // }
-    let mut cnt = 0;
-    for i in c.iter() {
-        cnt += 1;
-    }
-    println!("cnt: {}, cap: {}", cnt, c.cap());
 }

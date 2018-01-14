@@ -95,7 +95,7 @@ pub fn big_bdd() -> () {
 }
 
 
-#[test]
+// #[test]
 pub fn bdd_from_file() -> () {
     use cnf::Cnf;
     let num_vars = 228;
@@ -117,7 +117,7 @@ pub fn bdd_from_file() -> () {
     // println!("bdd: {}", man.print_bdd(r));
 }
 
-// #[test]
+#[test]
 pub fn sdd_from_file() -> () {
     use sdd_manager::*;
     use cnf::Cnf;

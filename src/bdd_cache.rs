@@ -1,7 +1,7 @@
 use apply_cache::*;
 use bdd::*;
 
-const INITIAL_CAPACITY: usize = 18; // given as a power of two
+const INITIAL_CAPACITY: usize = 19; // given as a power of two
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct BddCacheStats {
@@ -57,18 +57,13 @@ impl BddApplyTable {
 
     pub fn get_stats(&self) -> BddCacheStats {
         let mut st = BddCacheStats::new();
-        let mut offset = 0.0;
-        let mut c = 0.0;
         for tbl in self.table.iter() {
             let stats = tbl.get_stats();
             st.lookup_count += stats.lookup_count;
             st.miss_count += stats.miss_count;
             st.conflict_count += stats.conflict_count;
-            offset += tbl.avg_offset();
             st.num_applications += tbl.len();
-            c += 1.0;
         }
-        st.avg_probe = offset / c;
         st
     }
 }
