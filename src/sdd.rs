@@ -14,8 +14,10 @@ pub struct SddPtr {
     idx: usize,
     /// the vtree index for this node
     vtree: u16,
+    is_bdd: bool,
     is_const: bool,
-    const_val: bool,
+    /// true if the sdd node is complemented
+    compl: bool,
 }
 
 
@@ -42,16 +44,34 @@ impl SddPtr {
             idx: idx,
             vtree: vtree,
             is_const: false,
-            const_val: false,
+            compl: false,
+            is_bdd: false
         }
     }
 
-    pub fn new_const(v: bool, vtree: u16) -> SddPtr {
+    /// negate an SDD pointer
+    pub fn neg(&self) -> SddPtr {
+        if self.is_bdd {
+            let v = self.as_bdd_ptr();
+            SddPtr::new_bdd(v.neg(), self.vtree)
+        } else {
+            let mut v = self.clone();
+            v.compl = !v.compl;
+            v
+        }
+    }
+
+    pub fn is_compl(&self) -> bool {
+        self.compl
+    }
+
+    pub fn new_const(v: bool) -> SddPtr {
         SddPtr {
             idx: 0,
-            vtree: vtree,
+            vtree: 0,
             is_const: true,
-            const_val: v,
+            compl: !v,
+            is_bdd: false,
         }
     }
 
@@ -60,8 +80,16 @@ impl SddPtr {
             idx: ptr.raw() as usize,
             vtree: vtree,
             is_const: false,
-            const_val: false,
+            compl: false,
+            is_bdd: true,
         }
+    }
+
+    /// produce an uncomplemented version of an SDD
+    pub fn regular(&self) -> SddPtr {
+        let mut v = self.clone();
+        v.compl = false;
+        v
     }
 
     pub fn is_const(&self) -> bool {
@@ -69,14 +97,19 @@ impl SddPtr {
     }
 
     pub fn is_true(&self) -> bool {
-        self.const_val && self.is_const
+        self.is_const && !self.compl
     }
 
     pub fn is_false(&self) -> bool {
-        !self.const_val && self.is_const
+        self.is_const && self.compl
+    }
+
+    pub fn is_bdd(&self) -> bool {
+        self.is_bdd
     }
 
     pub fn as_bdd_ptr(&self) -> BddPtr {
+        assert!(self.is_bdd);
         if self.is_true() {
             BddPtr::true_node()
         } else if self.is_false() {

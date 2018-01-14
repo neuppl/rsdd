@@ -129,6 +129,7 @@ impl BddManager {
     }
 
 
+
     /// true if `a` represents a variable (both high and low are constant)
     #[inline]
     pub fn is_var(&self, ptr: BddPtr) -> bool {
