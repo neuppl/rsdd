@@ -95,12 +95,12 @@ pub fn big_bdd() -> () {
 }
 
 
-// #[test]
+#[test]
 pub fn bdd_from_file() -> () {
     use cnf::Cnf;
     let num_vars = 228;
     // let file_contents = File::open("/Users/sholtzen/Downloads/sdd-1.1.1/cnf/c8-easier.cnf");
-    let file_contents = File::open("/Users/sholtzen/Downloads/sdd-1.1.1/cnf/c8.cnf");
+    let file_contents = File::open("/Users/sholtzen/Downloads/sdd-1.1.1/cnf/c8-easier.cnf");
     let mut string = String::new();
     file_contents.unwrap().read_to_string(&mut string).unwrap();
     let cnf = Cnf::from_file(string);
@@ -123,7 +123,7 @@ pub fn sdd_from_file() -> () {
     use cnf::Cnf;
     let num_vars = 228;
     // let file_contents = File::open("/Users/sholtzen/Downloads/sdd-1.1.1/cnf/c8-easier.cnf");
-    let file_contents = File::open("/Users/sholtzen/Downloads/sdd-1.1.1/cnf/c8.cnf");
+    let file_contents = File::open("/Users/sholtzen/Downloads/sdd-1.1.1/cnf/c8-easier.cnf");
     let mut string = String::new();
     file_contents.unwrap().read_to_string(&mut string).unwrap();
     let cnf = Cnf::from_file(string);
