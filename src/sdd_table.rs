@@ -5,7 +5,7 @@ use btree::*;
 use std::collections::HashMap;
 use backing_store::*;
 use bdd::VarLabel;
-use std::slice::Iter;
+use std::slice::{Iter, from_raw_parts};
 use var_order;
 
 
@@ -20,7 +20,7 @@ enum SubTable {
         conv: HashMap<VarLabel, VarLabel>,
     },
     SddSubTable {
-        tbl: BackedRobinHoodTable<SddOr>
+        tbl: BackedRobinHoodTable<Vec<(SddPtr, SddPtr)>>
     }
 }
 
@@ -81,10 +81,10 @@ impl SddTable {
 
 
     /// get or insert a particular SDD node with vtree-node `vnode`
-    pub fn get_or_insert_sdd(&mut self, sdd: SddOr, vnode: usize) -> SddPtr {
+    pub fn get_or_insert_sdd(&mut self, sdd: &SddOr, vnode: usize) -> SddPtr {
         match &mut self.tables[vnode] {
             &mut SubTable::SddSubTable{tbl: ref mut tbl} => {
-                let ptr = tbl.get_or_insert(sdd);
+                let ptr = tbl.get_or_insert(&sdd.nodes);
                 SddPtr::new_node(ptr.0 as usize, vnode as u16)
             },
             _ => panic!("invalid vnode: inserting SDD into BDD")
@@ -92,28 +92,23 @@ impl SddTable {
     }
 
 
-    /// Fetch the iterator for a particular SDD or-node
-    /// used during application
-    pub fn sdd_iter_or_panic(&self, ptr: SddPtr) -> Iter<(SddPtr, SddPtr)> {
+    /// Fetch the iterator for a particular SDD or-node.
+    ///
+    /// Note: This invokes unsafe behavior to decouple the lifetime of `&self`
+    /// from the slice. This means that modifying any SDD while an iterator
+    /// is in use is *undefined behavior* and will invalidate this slice.
+    pub fn sdd_slice_or_panic<'a, 'b>(&'a self, ptr: SddPtr) -> &'b [(SddPtr, SddPtr)] {
         match &self.tables[ptr.vtree() as usize] {
             &SubTable::SddSubTable{tbl: ref tbl} => {
-                tbl.deref(BackingPtr(ptr.idx() as u32)).nodes.iter()
+                unsafe {
+                    let v = tbl.deref(BackingPtr(ptr.idx() as u32));
+                    let ptr = v.as_ptr();
+                    from_raw_parts(ptr, v.len())
+                }
             },
             _ => panic!("dereferencing SDD into BDD")
         }
     }
-
-    /// Fetch the iterator for a particular SDD or-node
-    /// used during application
-    pub fn sdd_or_panic(&self, ptr: SddPtr) -> Vec<(SddPtr, SddPtr)> {
-        match &self.tables[ptr.vtree() as usize] {
-            &SubTable::SddSubTable{tbl: ref tbl} => {
-                tbl.deref(BackingPtr(ptr.idx() as u32)).nodes.clone()
-            },
-            _ => panic!("dereferencing SDD into BDD")
-        }
-    }
-
 
     /// Fetch the BDD manager for a particular SDD node level `node`
     /// Panics if it not a BDD

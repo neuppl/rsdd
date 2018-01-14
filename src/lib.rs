@@ -15,6 +15,7 @@ pub mod btree;
 mod bdd_cache;
 mod backing_store;
 mod cuckoo_store;
+mod cnf;
 extern crate rand;
 extern crate fnv;
 extern crate twox_hash;

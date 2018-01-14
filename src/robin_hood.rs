@@ -3,14 +3,13 @@
 use std::ptr;
 use std::hash::{Hasher, Hash};
 use std::mem;
-use twox_hash::XxHash;
 use fnv::FnvHasher;
 use std::hash::BuildHasherDefault;
 use backing_store::*;
 #[macro_use]
 use util::*;
 
-const LOAD_FACTOR: f64 = 0.6;
+const LOAD_FACTOR: f64 = 0.5;
 
 
 /// data structure stored inside of the hash table
@@ -31,9 +30,59 @@ impl HashTableElement {
     fn new(idx: BackingPtr, hash: u64) -> HashTableElement {
         let mut init = HashTableElement { data: 0 };
         init.set_occupied(1);
-        init.set_hash((hash >> 32) as u64); // grab some bits of the hash
+        init.set_hash((hash >> 32) as u64); // grab some high-order bits of the hash
         init.set_idx(idx.0 as u64);
         return init;
+    }
+}
+
+
+/// An element of the backing store; used for cache memoization
+#[derive(Clone, Debug, Hash, Eq, PartialEq)]
+pub struct BackingElem<T>
+where
+    T: Hash + PartialEq + Eq + Clone,
+{
+    elem: T,
+    hash_mem: usize,
+}
+
+impl<T> BackingElem<T>
+where
+    T: Hash + PartialEq + Eq + Clone,
+{
+    fn hash(&self) -> usize {
+        return self.hash_mem;
+    }
+
+    fn new(elem: T, hash: usize) -> BackingElem<T> {
+        BackingElem { elem: elem, hash_mem: hash }
+    }
+}
+
+/// Insert an element into `tbl` without inserting into the backing table. This
+/// is used during growing and after an element has been found during
+/// `get_or_insert`
+fn propagate(v: &mut [HashTableElement], cap: usize, itm: HashTableElement, pos: usize) -> () {
+    let mut searcher = itm;
+    let mut pos = pos;
+    loop {
+        if v[pos].occupied() == 1 {
+            let cur_itm = v[pos].clone();
+            // check if this item's position is closer than ours
+            if cur_itm.offset() < searcher.offset() {
+                // swap the searcher and this item
+                v[pos] = searcher;
+                searcher = cur_itm;
+            }
+            let off = searcher.offset() + 1;
+            searcher.set_offset(off);
+            pos = (pos + 1) % cap; // wrap to the beginning of the array
+        } else {
+            // place the element in the current spot, we're done
+            v[pos] = searcher.clone();
+            return ();
+        }
     }
 }
 
@@ -47,7 +96,7 @@ where
     /// hash table which stores indexes in the elem vector
     tbl: Vec<HashTableElement>,
     /// backing store for BDDs
-    elem: Vec<T>,
+    elem: Vec<BackingElem<T>>,
     cap: usize,
     /// the length of `tbl`
     len: usize,
@@ -66,7 +115,7 @@ where
             tbl: v,
             cap: sz,
             len: 0,
-            stats: BackingCacheStats::new()
+            stats: BackingCacheStats::new(),
         };
         return r;
     }
@@ -79,8 +128,8 @@ where
         // self.tbl[pos].occupied() == 1
     }
 
-    fn get_pos(&self, pos: usize) -> T {
-        self.elem[self.tbl[pos].idx() as usize].clone()
+    fn get_pos(&self, pos: usize) -> &T {
+        &self.elem[self.tbl[pos].idx() as usize].elem
     }
 
     /// check the distance the element at index `pos` is from its desired location
@@ -90,40 +139,21 @@ where
 
     /// Begin inserting `itm` from point `pos` in the hash table.
     fn propagate(&mut self, itm: HashTableElement, pos: usize) -> () {
-        let mut searcher = itm;
-        let mut pos = pos;
-        loop {
-            if self.is_occupied(pos) {
-                let cur_itm = self.tbl[pos].clone();
-                // check if this item's position is closer than ours
-                if cur_itm.offset() < searcher.offset() {
-                    // swap the searcher and this item
-                    self.tbl[pos] = searcher;
-                    searcher = cur_itm;
-                }
-                let off = searcher.offset() + 1;
-                searcher.set_offset(off);
-                pos = (pos + 1) % self.cap; // wrap to the beginning of the array
-            } else {
-                // place the element in the current spot, we're done
-                self.tbl[pos] = searcher.clone();
-                return ();
-            }
-        }
+        propagate(&mut self.tbl, self.cap, itm, pos)
     }
 
     /// Get or insert a fresh (low, high) pair
-    pub fn get_or_insert(&mut self, elem: T) -> BackingPtr {
+    pub fn get_or_insert(&mut self, elem: &T) -> BackingPtr {
         if (self.len + 1) as f64 > (self.cap as f64 * LOAD_FACTOR) {
             self.grow();
         }
         self.stats.lookup_count += 1;
-
         let mut hasher = FnvHasher::default();
         elem.hash(&mut hasher);
-        let hash_v = hasher.finish();
-        let mut pos = (hash_v as usize) % self.cap;
-        let mut searcher = HashTableElement::new(BackingPtr(self.elem.len() as u32), hash_v);
+        let hash_v = hasher.finish() as usize;
+        let mut pos = hash_v % self.cap;
+        let mut searcher =
+            HashTableElement::new(BackingPtr(self.elem.len() as u32), hash_v as u64);
         loop {
             if self.is_occupied(pos) {
                 let cur_itm = self.tbl[pos].clone();
@@ -131,8 +161,7 @@ where
                 // possibly be equal
 
                 if cur_itm.hash() == searcher.hash() {
-                    let this_bdd = self.get_pos(pos as usize);
-                    if this_bdd == elem {
+                    if elem.eq(self.get_pos(pos as usize)) {
                         self.stats.hit_count += 1;
                         return BackingPtr(cur_itm.idx() as u32);
                     } else {
@@ -141,7 +170,7 @@ where
                 // check if this item's position is closer than ours
                 if cur_itm.offset() < searcher.offset() {
                     // insert the fresh item here
-                    self.elem.push(elem);
+                    self.elem.push(BackingElem::new(elem.clone(), hash_v));
                     self.tbl[pos] = searcher;
                     self.len += 1;
                     // propagate the element we swapped for
@@ -153,10 +182,11 @@ where
                 pos = (pos + 1) % self.cap; // wrap to the beginning of the array
             } else {
                 // place the element in the current spot, we're done
-                self.elem.push(elem);
+                self.elem.push(BackingElem::new(elem.clone(), hash_v));
                 self.len += 1;
-                self.tbl[pos] = searcher.clone();
-                return BackingPtr(searcher.idx() as u32);
+                let idx = searcher.idx();
+                self.tbl[pos] = searcher;
+                return BackingPtr(idx as u32);
             }
         }
     }
@@ -177,7 +207,7 @@ where
                 // possibly be equal
                 if cur_itm.hash() == searcher.hash() {
                     let this_bdd = self.get_pos(pos as usize);
-                    if this_bdd == elem {
+                    if *this_bdd == elem {
                         return Some(BackingPtr(cur_itm.idx() as u32));
                     }
                 }
@@ -191,20 +221,20 @@ where
     /// Dereferences a BDD pointer that lives in this table
     #[inline(always)]
     pub fn deref(&self, ptr: BackingPtr) -> &T {
-        &self.elem[ptr.0 as usize]
+        &self.elem[ptr.0 as usize].elem
     }
 
     /// Expands the capacity of the hash table
     pub fn grow(&mut self) -> () {
         let new_sz = (self.cap + 1).next_power_of_two();
-        let mut new_tbl = BackedRobinHoodTable::new(new_sz);
-        for itm in self.elem.iter() {
-            new_tbl.get_or_insert(itm.clone());
+        self.cap = new_sz;
+        self.tbl = zero_vec(new_sz);
+        let c = self.cap;
+        for (idx, i) in self.elem.iter().enumerate() {
+            let hash_v = i.hash();
+            let hashelem = HashTableElement::new(BackingPtr(idx as u32), hash_v as u64);
+            propagate(&mut self.tbl, self.cap, hashelem, hash_v % c);
         }
-        self.elem = new_tbl.elem;
-        self.cap = new_tbl.cap;
-        self.len = new_tbl.len;
-        self.tbl = new_tbl.tbl;
     }
 
     pub fn average_offset(&self) -> f64 {
@@ -233,8 +263,8 @@ fn rh_simple() {
     let mut store: BackedRobinHoodTable<ToplessBdd> = BackedRobinHoodTable::new(5000);
     for i in 0..1000000 {
         let e = ToplessBdd::new(mk_ptr(i), mk_ptr(i));
-        let v = store.get_or_insert(e.clone());
-        let v_2 = store.get_or_insert(e.clone());
+        let v = store.get_or_insert(&e);
+        let v_2 = store.get_or_insert(&e);
         assert_eq!(store.deref(v), store.deref(v_2));
     }
     println!("average offset: {}", store.average_offset());

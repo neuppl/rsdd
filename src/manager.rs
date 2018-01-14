@@ -107,14 +107,20 @@ impl BddManager {
         ) -> String {
             match ptr.ptr_type() {
                 PtrTrue => String::from("T"),
-                PtrFalse => String::from("F"),
+                PtrFalse => String::from("T"),
                 PtrNode => {
                     let l_p = t.low(ptr);
                     let h_p = t.high(ptr);
                     let l_s = print_bdd_helper(t, l_p, map);
                     let r_s = print_bdd_helper(t, h_p, map);
-                    let lbl = map.get(&VarLabel::new(ptr.var())).unwrap();
-                    format!("({:?}, {}, {})", lbl.value(), l_s, r_s)
+                    format!(
+                        "({:?}, {}{}, {}{})",
+                        map.get(&ptr.label()).unwrap().value(),
+                        if l_p.is_compl() { "!" } else { "" },
+                        l_s,
+                        if h_p.is_compl() { "!" } else { "" },
+                        r_s
+                    )
                 }
             }
         }

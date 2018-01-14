@@ -96,23 +96,50 @@ pub fn big_bdd() -> () {
 
 
 #[test]
-pub fn from_file() -> () {
-    let num_vars = 186;
+pub fn bdd_from_file() -> () {
+    use cnf::Cnf;
+    let num_vars = 228;
     // let file_contents = File::open("/Users/sholtzen/Downloads/sdd-1.1.1/cnf/c8-easier.cnf");
-    let file_contents = File::open("/Users/sholtzen/Downloads/sdd-1.1.1/cnf/c8-easier.cnf");
+    let file_contents = File::open("/Users/sholtzen/Downloads/sdd-1.1.1/cnf/c8.cnf");
     let mut string = String::new();
     file_contents.unwrap().read_to_string(&mut string).unwrap();
-    let cnf = boolexpr::parse_cnf(string);
+    let cnf = Cnf::from_file(string);
     println!("cnf: {:?}", cnf);
     let mut man = manager::BddManager::new_default_order(num_vars);
     let r = cnf.into_bdd(&mut man);
     let assgn = random_assignment(num_vars);
     // println!("BDD: {}\nExpr: {:?}\nAssignment: {:?}", man.print_bdd(), cnf, assgn);
-    assert_eq!(man.eval_bdd(r, &assgn), cnf.eval(&assgn));
+    // assert_eq!(man.eval_bdd(r, &assgn), cnf.eval(&assgn));
     println!("apply cache stats: {:?}", man.get_apply_cache_stats());
     println!("num apply nodes: {}", man.num_nodes());
     println!("node count: {}", man.count_nodes(r));
     println!("backing store stats: {:?}", man.get_backing_store_stats());
+    // println!("bdd: {}", man.print_bdd(r));
+}
+
+// #[test]
+pub fn sdd_from_file() -> () {
+    use sdd_manager::*;
+    use cnf::Cnf;
+    let num_vars = 228;
+    // let file_contents = File::open("/Users/sholtzen/Downloads/sdd-1.1.1/cnf/c8-easier.cnf");
+    let file_contents = File::open("/Users/sholtzen/Downloads/sdd-1.1.1/cnf/c8.cnf");
+    let mut string = String::new();
+    file_contents.unwrap().read_to_string(&mut string).unwrap();
+    let cnf = Cnf::from_file(string);
+    // println!("cnf: {:?}", cnf);
+    let v : Vec<bdd::VarLabel> =
+        (0..num_vars).map(|x| bdd::VarLabel::new(x as u64)).collect();
+    let vtree = even_split(&v, 2);
+    let mut man = SddManager::new(vtree);
+    let r = cnf.into_sdd(&mut man);
+    let assgn = random_assignment(num_vars);
+    // println!("BDD: {}\nExpr: {:?}\nAssignment: {:?}", man.print_bdd(), cnf, assgn);
+    // assert_eq!(man.eval_bdd(r, &assgn), cnf.eval(&assgn));
+    // println!("apply cache stats: {:?}", man.get_apply_cache_stats());
+    // println!("num apply nodes: {}", man.num_nodes());
+    // println!("node count: {}", man.count_nodes(r));
+    // println!("backing store stats: {:?}", man.get_backing_store_stats());
     // println!("bdd: {}", man.print_bdd(r));
 }
 
@@ -125,21 +152,27 @@ pub fn random_sdd() {
     rng.reseed(&[0]);
     for _ in 1..20 {
         println!("compiling\n\n");
-        let num_vars = 3;
-        let cnf = boolexpr::rand_cnf(&mut rng, num_vars, 3);
+        let num_vars = 10;
+        let cnf = boolexpr::rand_cnf(&mut rng, num_vars, 20);
         let v : Vec<bdd::VarLabel> =
             (0..num_vars).map(|x| bdd::VarLabel::new(x as u64)).collect();
-        let vtree = even_split(&v, 2);
+        let vtree = even_split(&v, 1);
         let mut man = SddManager::new(vtree);
         let r = cnf.into_sdd(&mut man);
         // check that they evaluate to the same value for a variety of
         // assignments
-        println!("expr: {:?}\nsdd: {}", cnf, man.print_sdd(r));
-        println!("evaluating");
-        for _ in 1..100 {
+        // println!("expr: {:?}\nsdd: {}", cnf, man.print_sdd(r));
+        for _ in 1..30 {
             let assgn = random_assignment(num_vars);
-            assert_eq!(man.eval_sdd(r, &assgn), cnf.eval(&assgn));
+            assert_eq!(man.eval_sdd(r, &assgn), cnf.eval(&assgn),
+                       "Not equal: {:?}\n{}", cnf, man.print_sdd(r)
+            );
         }
+        // check canonicity
+        let new_r = man.apply(bdd::Op::BddAnd, r, r);
+        assert!(man.sdd_eq(r, new_r));
+        let new_r = man.apply(bdd::Op::BddOr, r, r);
+        assert!(man.sdd_eq(r, new_r));
     }
 }
 

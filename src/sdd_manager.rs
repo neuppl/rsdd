@@ -149,6 +149,7 @@ impl SddManager {
         self.external_table.gen_or_inc(r)
     }
 
+
     fn negate(&mut self, a: SddPtr) -> SddPtr {
         match a.ptr_type() {
             SddPtrType::False => SddPtr::new_const(true, a.vtree() as u16),
@@ -160,137 +161,189 @@ impl SddManager {
                     SddPtr::new_bdd(neg_bdd, a.vtree() as u16)
                 } else {
                     let mut v = Vec::new();
-                    for (p, s) in self.tbl.sdd_or_panic(a) {
-                        v.push((p, self.negate(s)))
+                    let slice = self.tbl.sdd_slice_or_panic(a);
+                    for &(ref p, ref s) in slice.iter() {
+                        v.push((*p, self.negate(*s)))
                     }
                     quickersort::sort(&mut v[..]);
                     v.dedup();
-                    self.tbl.get_or_insert_sdd(SddOr { nodes: v }, a.vtree())
+                    self.tbl.get_or_insert_sdd(&SddOr { nodes: v }, a.vtree())
                 }
             }
         }
     }
 
-    pub fn apply(&mut self, op: Op, a: ExternalRef, b: ExternalRef) -> ExternalRef {
-        fn helper(
-            man: &mut SddManager,
-            op: Op,
-            a: SddPtr,
-            b: SddPtr,
-            parent_ptr: &Vec<(Option<usize>, usize)>,
-        ) -> SddPtr {
-            // normalize the pointers to increase cache hit rate
-            let (a, b) = if a < b { (a, b) } else { (b, a) };
-            let r = if a.vtree() == b.vtree() {
-                if man.tbl.is_bdd(a) {
-                    // both nodes are BDDs, so simply apply them together
-                    // and return the result
-                    let a_bdd = a.as_bdd_ptr();
-                    let b_bdd = b.as_bdd_ptr();
-                    let r = match op {
-                        Op::BddAnd => man.tbl.bdd_man_mut(a.vtree()).and(a_bdd, b_bdd),
-                        Op::BddOr => man.tbl.bdd_man_mut(a.vtree()).or(a_bdd, b_bdd),
-                    };
-                    if r.is_false() {
-                        SddPtr::new_const(false, a.vtree() as u16)
-                    } else if r.is_true() {
-                        SddPtr::new_const(true, a.vtree() as u16)
-                    } else {
-                        SddPtr::new_bdd(r, a.vtree() as u16)
-                    }
+    /// Compresses the list of (prime, sub) terms
+    #[inline(never)]
+    fn compress(
+        &mut self,
+        mut r: Vec<(SddPtr, SddPtr)>,
+        parent_ptr: &Vec<(Option<usize>, usize)>,
+    ) -> Vec<(SddPtr, SddPtr)> {
+        if r.len() <= 2 {
+            return r;
+        }
+        // to compress, we must disjoin all primes which share a sub
+        // first, sort by `sub`
+        quickersort::sort_by(&mut r[..], &|a, b| a.1.cmp(&b.1));
+        r.dedup();
+        let mut n = Vec::with_capacity(20);
+        let (mut p, mut s) = r[0];
+        for i in 1..r.len() {
+            let (cur_p, cur_s) = r[i];
+            if s == cur_s {
+                // disjoin the prime
+                p = self.apply_internal(Op::BddOr, p, cur_p, parent_ptr);
+            } else {
+                // found a unique sub, start a new chain
+                n.push((p, s));
+                p = cur_p;
+                s = cur_s;
+            }
+        }
+        n.push((p, s));
+        n
+    }
+
+    fn apply_internal(
+        &mut self,
+        op: Op,
+        a: SddPtr,
+        b: SddPtr,
+        parent_ptr: &Vec<(Option<usize>, usize)>,
+    ) -> SddPtr {
+        // first, check for a base case
+        match (op, a, b) {
+            (Op::BddAnd, a, b) if a.is_true() => return b,
+            (Op::BddAnd, a, b) if b.is_true() => return a,
+            (Op::BddAnd, a, b) if a.is_false() =>
+                return SddPtr::new_const(false, b.vtree() as u16),
+            (Op::BddAnd, a, b) if b.is_false() =>
+                return SddPtr::new_const(false, a.vtree() as u16),
+            (Op::BddOr, a, b) if a.is_false() => return b,
+            (Op::BddOr, a, b) if b.is_false() => return a,
+            (Op::BddOr, a, b) if b.is_true() =>
+                return SddPtr::new_const(true, a.vtree() as u16),
+            (Op::BddOr, a, b) if a.is_true() =>
+                return SddPtr::new_const(true, b.vtree() as u16),
+            (_, a, b) if self.eq(a, b) => return a,
+            _ => (),
+        };
+        // normalize the pointers to increase cache hit rate
+        let (a, b) = if a < b { (a, b) } else { (b, a) };
+        let r = if a.vtree() == b.vtree() {
+            if self.tbl.is_bdd(a) {
+                // both nodes are BDDs, so simply apply them together
+                // and return the result
+                let a_bdd = a.as_bdd_ptr();
+                let b_bdd = b.as_bdd_ptr();
+                let r = match op {
+                    Op::BddAnd => self.tbl.bdd_man_mut(a.vtree()).and(a_bdd, b_bdd),
+                    Op::BddOr => self.tbl.bdd_man_mut(a.vtree()).or(a_bdd, b_bdd),
+                };
+                if r.is_false() {
+                    SddPtr::new_const(false, a.vtree() as u16)
+                } else if r.is_true() {
+                    SddPtr::new_const(true, a.vtree() as u16)
                 } else {
-                    // check if either node is a constant
-                    let v = eval_op(op, a, b);
-                    if v.is_some() {
-                        return v.unwrap();
-                    }
-                    // now, we know that both `a` and `b` are SDD nodes. First, check if
-                    // we have this application cached
-                    let c = man.app_cache[a.vtree()].get((op, a, b));
-                    if c.is_some() {
-                        return c.unwrap();
-                    }
-                    let a_sdd = man.tbl.sdd_or_panic(a);
-                    let mut r: Vec<(SddPtr, SddPtr)> = Vec::with_capacity(30);
-                    for (p1, s1) in a_sdd.into_iter() {
-                        for (p2, s2) in man.tbl.sdd_or_panic(b) {
-                            let p = helper(man, Op::BddAnd, p1, p2, parent_ptr);
-                            if p.is_false() {
-                                continue;
-                            }
-                            let s = helper(man, op, s1, s2, parent_ptr);
-                            if s.is_false() {
-                                continue;
-                            }
-                            // check if one of the nodes is true; if it is, we can
-                            // return a `true` SddPtr here
-                            if p.is_true() && s.is_true() {
-                                let new_v = SddPtr::new_const(true, a.vtree() as u16);
-                                man.app_cache[a.vtree()].insert((op, a, b), new_v.clone());
-                                return new_v;
-                            }
-                            r.push((p, s));
-                        }
-                    }
-                    if r.len() == 0 {
-                        let new_v = SddPtr::new_const(false, a.vtree() as u16);
-                        man.app_cache[a.vtree()].insert((op, a, b), new_v.clone());
-                        return new_v;
-                    }
-                    quickersort::sort(&mut r[..]);
-                    r.dedup();
-                    let new_v = man.tbl.get_or_insert_sdd(SddOr { nodes: r }, a.vtree());
-                    man.app_cache[a.vtree()].insert((op, a, b), new_v.clone());
-                    new_v
+                    SddPtr::new_bdd(r, a.vtree() as u16)
                 }
             } else {
-                // normalize and re-invoke the helper
-                let av = a.vtree();
-                let bv = b.vtree();
-                let lca = least_common_ancestor(parent_ptr, av, bv);
-                if lca == av {
-                    let v = if is_prime(&man.vtree, av, bv) {
-                        vec![(SddPtr::new_const(true, av as u16), b)]
-                    } else {
-                        vec![(b, SddPtr::new_const(true, av as u16))]
-                    };
-                    let new = man.tbl.get_or_insert_sdd(SddOr { nodes: v }, av);
-                    helper(man, op, a, new, parent_ptr)
-                } else if lca == bv {
-                    let v = if is_prime(&man.vtree, bv, av) {
-                        vec![(SddPtr::new_const(true, bv as u16), a)]
-                    } else {
-                        vec![(a, SddPtr::new_const(true, bv as u16))]
-                    };
-                    let new = man.tbl.get_or_insert_sdd(SddOr { nodes: v }, bv);
-                    helper(man, op, new, b, parent_ptr)
-                } else {
-                    let (fst, snd) = if is_prime(&man.vtree, av, bv) {
-                        (a, b)
-                    } else {
-                        (b, a)
-                    };
-                    let v1 = vec![(fst, SddPtr::new_const(true, lca as u16)),
-                                  (man.negate(fst), SddPtr::new_const(false, lca as u16))
-                    ];
-                    let v2 = vec![(SddPtr::new_const(true, lca as u16), snd)];
-                    let new_1 = man.tbl.get_or_insert_sdd(SddOr { nodes: v1 }, lca);
-                    let new_2 = man.tbl.get_or_insert_sdd(SddOr { nodes: v2 }, lca);
-                    helper(man, op, new_1, new_2, parent_ptr)
+                // check if either node is a constant
+                let v = eval_op(op, a, b);
+                if v.is_some() {
+                    return v.unwrap();
                 }
-            };
-            println!("   applying({:?}) , {} {:?} {}, result: {}",
-                     op, man.print_sdd_internal(a), op, man.print_sdd_internal(b),
-                     man.print_sdd_internal(r));
-            r
-        }
-        println!("applying {} to {} with op {:?}", self.print_sdd(a), self.print_sdd(b), op);
+                // now, we know that both `a` and `b` are SDD nodes. First, check if
+                // we have this application cached
+                let c = self.app_cache[a.vtree()].get((op, a, b));
+                if c.is_some() {
+                    return c.unwrap();
+                }
+                let mut r: Vec<(SddPtr, SddPtr)> = Vec::with_capacity(30);
+                let sl_outer = self.tbl.sdd_slice_or_panic(a);
+                for &(ref p1, ref s1) in sl_outer.iter() {
+                    let sl_inner = self.tbl.sdd_slice_or_panic(b);
+                    for &(ref p2, ref s2) in sl_inner.iter() {
+                        let p = self.apply_internal(Op::BddAnd, *p1, *p2, parent_ptr);
+                        if p.is_false() {
+                            continue;
+                        }
+                        let s = self.apply_internal(op, *s1, *s2, parent_ptr);
+                        // check if one of the nodes is true; if it is, we can
+                        // return a `true` SddPtr here
+                        if p.is_true() && s.is_true() {
+                            let new_v = SddPtr::new_const(true, a.vtree() as u16);
+                            self.app_cache[a.vtree()].insert((op, a, b), new_v.clone());
+                            return new_v;
+                        }
+                        r.push((p, s));
+                    }
+                }
+                if r.len() == 0 {
+                    let new_v = SddPtr::new_const(false, a.vtree() as u16);
+                    self.app_cache[a.vtree()].insert((op, a, b), new_v.clone());
+                    return new_v;
+                }
+
+                // canonicalize
+                r = self.compress(r, parent_ptr);
+                let new_v = self.tbl.get_or_insert_sdd(&SddOr { nodes: r }, a.vtree());
+                self.app_cache[a.vtree()].insert((op, a, b), new_v.clone());
+                new_v
+            }
+        } else {
+            // normalize and re-invoke the helper
+            let av = a.vtree();
+            let bv = b.vtree();
+            let lca = least_common_ancestor(parent_ptr, av, bv);
+            if lca == av {
+                let v = if is_prime(&self.vtree, av, bv) {
+                    vec![(SddPtr::new_const(true, av as u16), b)]
+                } else {
+                    vec![(b, SddPtr::new_const(true, av as u16))]
+                };
+                let new = self.tbl.get_or_insert_sdd(&SddOr { nodes: v }, av);
+                self.apply_internal(op, a, new, parent_ptr)
+            } else if lca == bv {
+                let v = if is_prime(&self.vtree, bv, av) {
+                    vec![(SddPtr::new_const(true, bv as u16), a)]
+                } else {
+                    vec![(a, SddPtr::new_const(true, bv as u16))]
+                };
+                let new = self.tbl.get_or_insert_sdd(&SddOr { nodes: v }, bv);
+                self.apply_internal(op, new, b, parent_ptr)
+            } else {
+                let (fst, snd) = if is_prime(&self.vtree, av, bv) {
+                    (a, b)
+                } else {
+                    (b, a)
+                };
+                let v1 = vec![
+                    (fst, SddPtr::new_const(true, lca as u16)),
+                    (self.negate(fst), SddPtr::new_const(false, lca as u16)),
+                ];
+                let v2 = vec![(SddPtr::new_const(true, lca as u16), snd)];
+                let new_1 = self.tbl.get_or_insert_sdd(&SddOr { nodes: v1 }, lca);
+                let new_2 = self.tbl.get_or_insert_sdd(&SddOr { nodes: v2 }, lca);
+                self.apply_internal(op, new_1, new_2, parent_ptr)
+            }
+        };
+        // println!("   applying({:?}) , {} {:?} {}, result: {}",
+        //          op, self.print_sdd_internal(a), op, self.print_sdd_internal(b),
+        //          self.print_sdd_internal(r));
+        r
+    }
+
+
+    pub fn apply(&mut self, op: Op, a: ExternalRef, b: ExternalRef) -> ExternalRef {
+        // println!("applying {} to {} with op {:?}", self.print_sdd(a), self.print_sdd(b), op);
         let i_a = self.external_table.into_internal(a);
         let i_b = self.external_table.into_internal(b);
         let pvec = into_parent_ptr_vec(&self.vtree);
-        let r = helper(self, op, i_a, i_b, &pvec);
+        let r = self.apply_internal(op, i_a, i_b, &pvec);
         let r = self.external_table.gen_or_inc(r);
-        println!("result: {}", self.print_sdd(r));
+        // println!("result: {}", self.print_sdd(r));
         r
     }
 
@@ -307,7 +360,8 @@ impl SddManager {
             } else if ptr.is_false() {
                 return String::from("F");
             }
-            for &(ref prime, ref sub) in self.tbl.sdd_iter_or_panic(ptr) {
+            let sl = self.tbl.sdd_slice_or_panic(ptr);
+            for &(ref prime, ref sub) in sl.iter() {
                 let new_s1 = self.print_sdd_internal(prime.clone());
                 let new_s2 = self.print_sdd_internal(sub.clone());
                 s.push_str(&format!("(/\\ {} {})", new_s1, new_s2));
@@ -343,9 +397,10 @@ impl SddManager {
                 man.tbl.bdd_man(sdd.vtree()).eval_bdd(bdd_ptr, &new_m)
             } else {
                 let mut res = false;
-                for (p, s) in man.tbl.sdd_or_panic(sdd) {
-                    let v1 = helper(man, p, assgn);
-                    let v2 = helper(man, s, assgn);
+                let sl = man.tbl.sdd_slice_or_panic(sdd);
+                for &(ref p, ref s) in sl.iter() {
+                    let v1 = helper(man, *p, assgn);
+                    let v2 = helper(man, *s, assgn);
                     res = res || (v1 && v2)
                 }
                 res
@@ -354,6 +409,32 @@ impl SddManager {
         let i = self.external_table.into_internal(ptr);
         helper(self, i, assgn)
     }
+
+
+    fn eq(&self, a: SddPtr, b: SddPtr) -> bool {
+        a == b
+    }
+
+    pub fn sdd_eq(&self, a: ExternalRef, b: ExternalRef) -> bool {
+        let a_int = self.external_table.into_internal(a);
+        let b_int = self.external_table.into_internal(b);
+        self.eq(a_int, b_int)
+    }
+
+    // pub fn is_satisfiable(&self, sdd: SddPtr) -> bool {
+    //     if sdd.is_false() {
+    //         return false;
+    //     } else if sdd.is_true() || self.tbl.is_bdd(sdd) {
+    //         return true;
+    //     } else {
+    //         for (p, s) in self.tbl.sdd_or_panic(sdd) {
+    //             if self.is_satisfiable(p) && self.is_satisfiable(s) {
+    //                 return true;
+    //             }
+    //         }
+    //         return false;
+    //     }
+    // }
 }
 
 

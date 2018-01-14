@@ -143,7 +143,7 @@ where
 
 
     pub fn insert(&mut self, key: K, val: V) -> () {
-        let mut hasher : SeaHasher = Default::default();
+        let mut hasher : FnvHasher = Default::default();
         key.hash(&mut hasher);
         let hash_v = hasher.finish();
         let pos = pow_cap(hash_v as usize, self.cap);
@@ -159,7 +159,7 @@ where
 
     pub fn get(&mut self, key: K) -> Option<V> {
         self.stat.lookup_count += 1;
-        let mut hasher : SeaHasher = Default::default();
+        let mut hasher : FnvHasher = Default::default();
         key.hash(&mut hasher);
         let hash_v = hasher.finish();
         let pos = pow_cap(hash_v as usize, self.cap);

@@ -38,28 +38,11 @@ impl BddTable {
             Bdd::Node(n) => {
                 let var = n.var.value();
                 let elem = ToplessBdd::new(n.low, n.high);
-                let ptr = self.subtables[var as usize].get_or_insert(elem);
+                let ptr = self.subtables[var as usize].get_or_insert(&elem);
                 BddPtr::new(VarLabel::new(var), TableIndex::new(ptr.0 as u64))
             }
         }
-
     }
-
-    // pub fn find(&self, bdd: Bdd) -> Option<BddPtr> {
-    //     match bdd {
-    //         Bdd::BddFalse => Some(BddPtr::false_node()),
-    //         Bdd::BddTrue => Some(BddPtr::true_node()),
-    //         Bdd::Node(n) => {
-    //             let var = n.var.value();
-    //             let elem = ToplessBdd::new(n.low, n.high);
-    //             match self.subtables[var as usize].find(elem) {
-    //                 Some(ptr) =>
-    //                     Some(BddPtr::new(VarLabel::new(var), TableIndex::new(ptr.0 as u64))),
-    //                 None => None
-    //             }
-    //         }
-    //     }
-    // }
 
     pub fn deref(&self, ptr: BddPtr) -> Bdd {
         match ptr.ptr_type() {
