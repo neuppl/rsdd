@@ -175,112 +175,118 @@ impl SddManager {
 
         // normalize the pointers to increase cache hit rate
         let (a, b) = if a < b { (a, b) } else { (b, a) };
-        let r = if a.vtree() == b.vtree() {
-            if a.is_bdd() {
-                // both nodes are BDDs, so simply apply them together
-                // and return the result
-                let a_bdd = a.as_bdd_ptr();
-                let b_bdd = b.as_bdd_ptr();
-                let r = self.tbl.bdd_man_mut(a.vtree()).and(a_bdd, b_bdd);
-                if r.is_false() {
-                    SddPtr::new_const(false)
-                } else if r.is_true() {
-                    SddPtr::new_const(true)
-                } else {
-                    SddPtr::new_bdd(r, a.vtree() as u16)
-                }
+        // check if both are BDDs; if they are, just invoke their apply
+        // functions
+        if a.is_bdd() && b.is_bdd() && a.vtree() == b.vtree() {
+            // both nodes are BDDs, so simply apply them together
+            // and return the result
+            let a_bdd = a.as_bdd_ptr();
+            let b_bdd = b.as_bdd_ptr();
+            let r = self.tbl.bdd_man_mut(a.vtree()).and(a_bdd, b_bdd);
+            return if r.is_false() {
+                SddPtr::new_const(false)
+            } else if r.is_true() {
+                SddPtr::new_const(true)
             } else {
-                // now, we know that both `a` and `b` are non-const SDD nodes.
-                // First, check if we have this application cached
-                let c = self.app_cache[a.vtree()].get((a, b));
-                if c.is_some() {
-                    return c.unwrap();
+                SddPtr::new_bdd(r, a.vtree() as u16)
+            };
+        }
+
+        // normalize so `a` is always prime if possible
+        let (a, b) = if a.vtree() == b.vtree() ||
+            is_prime(&self.vtree, a.vtree(), b.vtree()) {
+            (a, b)
+        } else {
+            (b, a)
+        };
+
+        //  check if we have this application cached
+        let c = self.app_cache[a.vtree()].get((a, b));
+        if c.is_some() {
+            return c.unwrap();
+        }
+
+        // normalize and re-invoke the helper
+        let av = a.vtree();
+        let bv = b.vtree();
+        let lca = least_common_ancestor(&self.parent_ptr, av, bv);
+        // now we determine the current iterator for primes and subs
+        // 4 cases:
+        //   1. `a` and `b` have the same vtree
+        //   2. The lca is the prime `a`
+        //   3. The lca is the sub `b`
+        //   4. The lca is a shared parent equal to neither
+        // these pointers are necessary to ensure that the vectors live
+        // long enough
+        let outer_v : Vec<(SddPtr, SddPtr)>;
+        let inner_v : Vec<(SddPtr, SddPtr)>;
+        let (outer, inner) = if av == bv {
+            let outer = self.tbl.sdd_slice_or_panic(a);
+            let inner = self.tbl.sdd_slice_or_panic(b);
+            (outer, inner)
+        } else if lca == av {
+            let outer = self.tbl.sdd_slice_or_panic(a);
+            inner_v = vec![(SddPtr::new_const(true), b)];
+            (outer, inner_v.as_slice())
+        } else if lca == bv {
+            outer_v = vec![(a, SddPtr::new_const(true))];
+            let inner = self.tbl.sdd_slice_or_panic(b);
+            (outer_v.as_slice(), inner)
+        } else {
+            outer_v = vec![
+                (a, SddPtr::new_const(true)),
+                (a.neg(), SddPtr::new_const(false)),
+            ];
+            inner_v = vec![(SddPtr::new_const(true), b)];
+            (outer_v.as_slice(), inner_v.as_slice())
+        };
+
+
+        // iterate over each prime/sum pair and do the relevant application
+        let mut r: Vec<(SddPtr, SddPtr)> = Vec::with_capacity(30);
+        for &(ref p1, ref s1) in outer.iter() {
+            let s1 = if a.is_compl() { s1.neg() } else { *s1 };
+            for &(ref p2, ref s2) in inner.iter() {
+                let s2 = if b.is_compl() { s2.neg() } else { *s2 };
+                let p = self.and_rec(*p1, *p2);
+                if p.is_false() {
+                    continue;
                 }
 
-                // iterate over each prime/sum pair and do the relevant application
-                let mut r: Vec<(SddPtr, SddPtr)> = Vec::with_capacity(30);
-                let sl_outer = self.tbl.sdd_slice_or_panic(a);
-                for &(ref p1, ref s1) in sl_outer.iter() {
-                    let s1 = if a.is_compl() { s1.neg() } else { *s1 };
-                    let sl_inner = self.tbl.sdd_slice_or_panic(b);
-                    for &(ref p2, ref s2) in sl_inner.iter() {
-                        let s2 = if b.is_compl() { s2.neg() } else { *s2 };
-                        let p = self.and_rec(*p1, *p2);
-                        if p.is_false() {
-                            continue;
-                        }
-
-                        let s = self.and_rec(s1, s2);
-                        // check if one of the nodes is true; if it is, we can
-                        // return a `true` SddPtr here
-                        if p.is_true() && s.is_true() {
-                            let new_v = SddPtr::new_const(true);
-                            self.app_cache[a.vtree()].insert((a, b), new_v.clone());
-                            return new_v;
-                        }
-                        r.push((p, s));
-                    }
-                }
-                if r.len() == 0 {
-                    let new_v = SddPtr::new_const(false);
+                let s = self.and_rec(s1, s2);
+                // check if one of the nodes is true; if it is, we can
+                // return a `true` SddPtr here
+                if p.is_true() && s.is_true() {
+                    let new_v = SddPtr::new_const(true);
                     self.app_cache[a.vtree()].insert((a, b), new_v.clone());
                     return new_v;
                 }
+                r.push((p, s));
+            }
+        }
+        if r.len() == 0 {
+            let new_v = SddPtr::new_const(false);
+            self.app_cache[a.vtree()].insert((a, b), new_v.clone());
+            return new_v;
+        }
 
-                // canonicalize
-                r = self.compress(r);
-                // guarantee first sub in the first node is not complemented
-                // (regular form)
-                let new_v = if r[0].1.is_compl() {
-                    let compl_r = r.iter().map(|&(ref p, ref s)| (*p, s.neg())).collect();
-                    self.tbl
-                        .get_or_insert_sdd(&SddOr { nodes: compl_r }, a.vtree())
-                        .neg()
-                } else {
-                    self.tbl.get_or_insert_sdd(&SddOr { nodes: r }, a.vtree())
-                };
-                self.app_cache[a.vtree()].insert((a, b), new_v.clone());
-                new_v
-            }
+        // canonicalize
+        r = self.compress(r);
+        // guarantee first sub in the first node is not complemented
+        // (regular form)
+        let new_v = if r[0].1.is_compl() {
+            let compl_r = r.iter().map(|&(ref p, ref s)| (*p, s.neg())).collect();
+            self.tbl
+                .get_or_insert_sdd(&SddOr { nodes: compl_r }, lca)
+                .neg()
         } else {
-            // first, normalize so `a` is always prime if possible
-            let (a, b) = if is_prime(&self.vtree, a.vtree(), b.vtree()) {
-                (a, b)
-            } else {
-                (b, a)
-            };
-            // normalize and re-invoke the helper
-            let av = a.vtree();
-            let bv = b.vtree();
-            let lca = least_common_ancestor(&self.parent_ptr, av, bv);
-            // 3 cases:
-            //   1. The lca is the prime `a`
-            //   2. The lca is the sub `b`
-            //   3. The lca is a shared parent equal to neither
-            // TODO: remove the unnecessary allocations
-            if lca == av {
-                let v = vec![(SddPtr::new_const(true), b)];
-                let new = self.tbl.get_or_insert_sdd(&SddOr { nodes: v }, av);
-                self.and_rec(a, new)
-            } else if lca == bv {
-                let v = vec![(a, SddPtr::new_const(true))];
-                let new = self.tbl.get_or_insert_sdd(&SddOr { nodes: v }, bv);
-                self.and_rec(new, b)
-            } else {
-                let v1 = vec![
-                    (a, SddPtr::new_const(true)),
-                    (a.neg(), SddPtr::new_const(false)),
-                ];
-                let v2 = vec![(SddPtr::new_const(true), b)];
-                let new_1 = self.tbl.get_or_insert_sdd(&SddOr { nodes: v1 }, lca);
-                let new_2 = self.tbl.get_or_insert_sdd(&SddOr { nodes: v2 }, lca);
-                self.and_rec(new_1, new_2)
-            }
+            self.tbl.get_or_insert_sdd(&SddOr { nodes: r }, lca)
         };
+        self.app_cache[a.vtree()].insert((a, b), new_v.clone());
+        new_v
         // println!("applying  {}\n  {}\n  result: {}",
         //          self.print_sdd_internal(a), self.print_sdd_internal(b),
         //          self.print_sdd_internal(r));
-        r
     }
 
 
