@@ -3,18 +3,15 @@ use bdd::*;
 use std::fmt::Debug;
 use util::*;
 use std::hash::{Hasher, Hash};
-use twox_hash::XxHash;
 use fnv::FnvHasher;
-use fasthash::{sea, SeaHasher};
 
-const LOAD_FACTOR: f64 = 0.96;
-const MAX_OFFSET: usize = 6;
-
-#[derive(Debug, Hash, Eq, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct ApplyCacheStats {
     pub lookup_count: usize,
     pub miss_count: usize,
     pub conflict_count: usize,
+    /// percentage of slots being utilized
+    pub utilization: f64
 }
 
 impl ApplyCacheStats {
@@ -23,6 +20,7 @@ impl ApplyCacheStats {
             miss_count: 0,
             lookup_count: 0,
             conflict_count: 0,
+            utilization: 0.0
         }
     }
 }
@@ -166,9 +164,19 @@ where
 
 
     pub fn get_stats(&self) -> ApplyCacheStats {
-        self.stat.clone()
+        // compute utilization
+        let mut c = 0;
+        for i in self.tbl.iter() {
+            if i.is_some() {
+                c += 1;
+            }
+        }
+        let mut r = self.stat.clone();
+        r.utilization = (c as f64) / (self.tbl.len() as f64);
+        r
     }
 }
+
 
 #[test]
 fn test_cache() {

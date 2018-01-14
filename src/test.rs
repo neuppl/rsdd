@@ -95,7 +95,7 @@ pub fn big_bdd() -> () {
 }
 
 
-#[test]
+// #[test]
 pub fn bdd_from_file() -> () {
     use cnf::Cnf;
     let num_vars = 228;
@@ -127,10 +127,10 @@ pub fn sdd_from_file() -> () {
     let mut string = String::new();
     file_contents.unwrap().read_to_string(&mut string).unwrap();
     let cnf = Cnf::from_file(string);
-    // println!("cnf: {:?}", cnf);
+    println!("cnf: {:?}", cnf);
     let v : Vec<bdd::VarLabel> =
         (0..num_vars).map(|x| bdd::VarLabel::new(x as u64)).collect();
-    let vtree = even_split(&v, 2);
+    let vtree = even_split(&v, 3);
     let mut man = SddManager::new(vtree);
     let r = cnf.into_sdd(&mut man);
     let assgn = random_assignment(num_vars);

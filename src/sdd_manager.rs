@@ -232,9 +232,10 @@ impl SddManager {
                 // guarantee first sub in the first node is not complemented
                 // (regular form)
                 let new_v = if r[0].1.is_compl() {
-                    let compl_r = r.iter().map(
-                        |&(ref p, ref s)| (*p, s.neg())).collect();
-                    self.tbl.get_or_insert_sdd(&SddOr { nodes: compl_r }, a.vtree()).neg()
+                    let compl_r = r.iter().map(|&(ref p, ref s)| (*p, s.neg())).collect();
+                    self.tbl
+                        .get_or_insert_sdd(&SddOr { nodes: compl_r }, a.vtree())
+                        .neg()
                 } else {
                     self.tbl.get_or_insert_sdd(&SddOr { nodes: r }, a.vtree())
                 };
@@ -302,8 +303,7 @@ impl SddManager {
             let s = self.tbl.bdd_man(ptr.vtree()).print_bdd_lbl(bdd_ptr, m);
             s
         } else {
-            let mut s = String::from(format!("{}\\/",
-                                     if ptr.is_compl() { "!" } else { "" }));
+            let mut s = String::from(format!("{}\\/", if ptr.is_compl() { "!" } else { "" }));
             if ptr.is_true() {
                 return String::from("T");
             } else if ptr.is_false() {

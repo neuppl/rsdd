@@ -2,8 +2,8 @@ use bdd_table::BddTable;
 use var_order::VarOrder;
 use bdd::*;
 use std::collections::{HashMap, HashSet};
-use ref_table::*;
-use bdd_cache::{BddApplyTable, BddCacheStats};
+use bdd_cache::{BddApplyTable};
+use apply_cache;
 use backing_store::BackingCacheStats;
 
 pub struct BddManager {
@@ -177,7 +177,9 @@ impl BddManager {
         };
         // check the cache
         match self.apply_table.get(f, g) {
-            Some(v) => { return v; }
+            Some(v) => {
+                return v;
+            }
             None => {}
         };
 
@@ -231,7 +233,7 @@ impl BddManager {
                 self.get_or_insert(bdd)
             };
             self.apply_table.insert(f, g, r);
-            return r
+            return r;
         }
     }
 
@@ -272,7 +274,7 @@ impl BddManager {
         a == b
     }
 
-    pub fn get_apply_cache_stats(&self) -> BddCacheStats {
+    pub fn get_apply_cache_stats(&self) -> Vec<apply_cache::ApplyCacheStats> {
         self.apply_table.get_stats()
     }
 
@@ -296,7 +298,7 @@ impl BddManager {
                 let n = self.deref(ptr).into_node();
                 let c_l = self.count_nodes_h(n.low, set);
                 let c_r = self.count_nodes_h(n.high, set);
-                return c_l + c_r + 1
+                return c_l + c_r + 1;
             }
         }
     }

@@ -1,28 +1,7 @@
 use apply_cache::*;
 use bdd::*;
 
-const INITIAL_CAPACITY: usize = 19; // given as a power of two
-
-#[derive(Debug, PartialEq, Clone)]
-pub struct BddCacheStats {
-    pub lookup_count: usize,
-    pub miss_count: usize,
-    pub conflict_count: usize,
-    pub avg_probe: f64,
-    pub num_applications: usize,
-}
-
-impl BddCacheStats {
-    pub fn new() -> BddCacheStats {
-        BddCacheStats {
-            miss_count: 0,
-            lookup_count: 0,
-            avg_probe: 0.0,
-            num_applications: 0,
-            conflict_count: 0,
-        }
-    }
-}
+const INITIAL_CAPACITY: usize = 17; // given as a power of two
 
 /// The top-level data structure which caches applications
 pub struct BddApplyTable {
@@ -55,16 +34,12 @@ impl BddApplyTable {
         self.table[tbl].get((f, g))
     }
 
-    pub fn get_stats(&self) -> BddCacheStats {
-        let mut st = BddCacheStats::new();
+    pub fn get_stats(&self) -> Vec<ApplyCacheStats> {
+        let mut r = Vec::new();
         for tbl in self.table.iter() {
-            let stats = tbl.get_stats();
-            st.lookup_count += stats.lookup_count;
-            st.miss_count += stats.miss_count;
-            st.conflict_count += stats.conflict_count;
-            st.num_applications += tbl.len();
+            r.push(tbl.get_stats());
         }
-        st
+        r
     }
 }
 
