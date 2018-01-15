@@ -1,12 +1,14 @@
 use bdd;
 use manager;
 use boolexpr;
+use sdd_manager::*;
 use var_order;
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::prelude::*;
+use cnf::Cnf;
 
-
+/// A convenient wrapper for generating maps
 macro_rules! map(
     { $($key:expr => $value:expr),+ } => {
         {
@@ -19,6 +21,37 @@ macro_rules! map(
     };
 );
 
+/// A list of canonical forms in DIMACS form
+static C1_A: &'static str = "
+p cnf 5 3
+1 2 0
+-1 2 0
+";
+
+static C1_B: &'static str = "
+p cnf 2 1
+2 0
+";
+
+static C2_A: &'static str = "
+p cnf 5 3
+1 2 3 4 5 0
+1 2 0
+-1 2 0
+";
+
+static C2_B: &'static str = "
+p cnf 2 1
+2 0
+";
+
+fn get_canonical_forms() -> Vec<(Cnf, Cnf)> {
+    vec!(
+        (Cnf::from_file(String::from(C1_A)), Cnf::from_file(String::from(C1_B))),
+        (Cnf::from_file(String::from(C2_A)), Cnf::from_file(String::from(C2_B))),
+    )
+}
+
 use rand;
 fn random_assignment(num_vars: usize) -> HashMap<bdd::VarLabel, bool> {
     let mut init = HashMap::new();
@@ -29,21 +62,32 @@ fn random_assignment(num_vars: usize) -> HashMap<bdd::VarLabel, bool> {
 }
 
 #[test]
-fn test_canonicity() -> () {
-    use boolexpr::BoolExpr::*;
-    let c1 = Or(Box::new(Or(Box::new(Var(1, true)), Box::new(Var(2, false)))),
-                Box::new(Var(2, false)));
-    let c2 = Or(Box::new(Or(Box::new(Var(2, false)), Box::new(Var(2, false)))),
-                Box::new(Var(2, false)));
-    let c3 = Or(Box::new(Or(Box::new(Var(2, false)), Box::new(Var(1, true)))),
-                Box::new(Var(2, false)));
-    let bexpr = And(Box::new(And(Box::new(c1), Box::new(c2))), Box::new(c3));
-    let mut man = manager::BddManager::new_default_order(3);
-    let r1 = bexpr.into_bdd(&mut man);
-    println!("second apply");
-    let r2 = man.and(r1, r1);
-    println!("bdd1: {},\nbdd2:{}\ncnf: {:?}", man.print_bdd(r1), man.print_bdd(r2), bexpr);
-    assert!(man.eq_bdd(r1, r2));
+fn test_bdd_canonicity() -> () {
+    for (cnf1, cnf2) in get_canonical_forms().into_iter() {
+        let mut man = manager::BddManager::new_default_order(cnf1.num_vars());
+        let r1 = cnf1.into_bdd(&mut man);
+        let r2 = cnf2.into_bdd(&mut man);
+        assert!(man.eq_bdd(r1, r2), "Not eq\nCNF 1: {:?}\nCNF 2: {:?}\nBDD 1:{}\n BDD 2: {}",
+                cnf1, cnf2,
+                man.print_bdd(r1), man.print_bdd(r2)
+        );
+    }
+}
+
+#[test]
+fn test_sdd_canonicity() -> () {
+    for (cnf1, cnf2) in get_canonical_forms().into_iter() {
+        let v : Vec<bdd::VarLabel> =
+            (0..cnf1.num_vars()).map(|x| bdd::VarLabel::new(x as u64)).collect();
+        let vtree = even_split(&v, 2);
+        let mut man = SddManager::new(vtree);
+        let r1 = cnf1.into_sdd(&mut man);
+        let r2 = cnf2.into_sdd(&mut man);
+        assert!(man.sdd_eq(r1, r2), "Not eq\nCNF 1: {:?}\nCNF 2: {:?}\nSDD 1:{}\n SDD 2: {}",
+                cnf1, cnf2,
+                man.print_sdd(r1), man.print_sdd(r2)
+        );
+    }
 }
 
 /// generate 10 random CNFs and test to see that they compile to the same value
@@ -98,16 +142,13 @@ pub fn big_bdd() -> () {
 // #[test]
 pub fn bdd_from_file() -> () {
     use cnf::Cnf;
-    let num_vars = 228;
     // let file_contents = File::open("/Users/sholtzen/Downloads/sdd-1.1.1/cnf/c8-easier.cnf");
-    let file_contents = File::open("/Users/sholtzen/Downloads/sdd-1.1.1/cnf/c8-easier.cnf");
+    let file_contents = File::open("/Users/sholtzen/Downloads/sdd-1.1.1/cnf/c432.isc.cnf");
     let mut string = String::new();
     file_contents.unwrap().read_to_string(&mut string).unwrap();
     let cnf = Cnf::from_file(string);
-    println!("cnf: {:?}", cnf);
-    let mut man = manager::BddManager::new_default_order(num_vars);
+    let mut man = manager::BddManager::new(cnf.force_order());
     let r = cnf.into_bdd(&mut man);
-    let assgn = random_assignment(num_vars);
     // println!("BDD: {}\nExpr: {:?}\nAssignment: {:?}", man.print_bdd(), cnf, assgn);
     // assert_eq!(man.eval_bdd(r, &assgn), cnf.eval(&assgn));
     println!("apply cache stats: {:?}", man.get_apply_cache_stats());
@@ -119,18 +160,18 @@ pub fn bdd_from_file() -> () {
 
 #[test]
 pub fn sdd_from_file() -> () {
-    use sdd_manager::*;
     use cnf::Cnf;
     let num_vars = 228;
     // let file_contents = File::open("/Users/sholtzen/Downloads/sdd-1.1.1/cnf/c8-easier.cnf");
-    let file_contents = File::open("/Users/sholtzen/Downloads/sdd-1.1.1/cnf/c8-easier.cnf");
+    let file_contents = File::open("/Users/sholtzen/Downloads/sdd-1.1.1/cnf/c8.cnf");
     let mut string = String::new();
     file_contents.unwrap().read_to_string(&mut string).unwrap();
     let cnf = Cnf::from_file(string);
     println!("cnf: {:?}", cnf);
-    let v : Vec<bdd::VarLabel> =
-        (0..num_vars).map(|x| bdd::VarLabel::new(x as u64)).collect();
-    let vtree = even_split(&v, 3);
+    let v : Vec<usize> = cnf.force_order().get_vec();
+    let var_vec : Vec<bdd::VarLabel> =
+        v.into_iter().map(|v| bdd::VarLabel::new(v as u64)).collect();
+    let vtree = even_split(&var_vec, 3);
     let mut man = SddManager::new(vtree);
     let r = cnf.into_sdd(&mut man);
     let assgn = random_assignment(num_vars);
@@ -147,7 +188,6 @@ pub fn sdd_from_file() -> () {
 #[test]
 pub fn random_sdd() {
     use sdd::*;
-    use sdd_manager::*;
     let mut rng = rand::StdRng::new().unwrap();
     rng.reseed(&[0]);
     for _ in 1..20 {
@@ -179,7 +219,6 @@ pub fn random_sdd() {
 // #[test]
 pub fn big_sdd() {
     use sdd::*;
-    use sdd_manager::*;
     let mut rng = rand::StdRng::new().unwrap();
     rng.reseed(&[0]);
     let num_vars = 50;

@@ -70,4 +70,8 @@ impl VarOrder {
         let f2 = self.first(f1, c);
         f2.label()
     }
+
+    pub fn get_vec(&self) -> Vec<usize> {
+        self.vars.clone()
+    }
 }

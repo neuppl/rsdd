@@ -119,6 +119,7 @@ where
     }
 
 
+    #[inline(never)]
     pub fn get(&mut self, key: K) -> Option<V> {
         self.stat.lookup_count += 1;
         let mut hasher : FnvHasher = Default::default();

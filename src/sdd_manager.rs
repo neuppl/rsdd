@@ -7,6 +7,7 @@ use ref_table::*;
 use apply_cache::*;
 use quickersort;
 use btree::*;
+use pretty;
 
 /// generate an even vtree by splitting a variable ordering in half `num_splits`
 /// times
@@ -129,14 +130,19 @@ impl SddManager {
     }
 
     /// Compresses the list of (prime, sub) terms
+    // TODO: Optimize for 2-variable case
     #[inline(never)]
     fn compress(&mut self, mut r: Vec<(SddPtr, SddPtr)>) -> Vec<(SddPtr, SddPtr)> {
-        // TODO: is this really canonical? check it thoroughly... I don't think it is
-        quickersort::sort_by(&mut r[..], &|a, b| a.1.cmp(&b.1));
+        // this sort guarantees several things:
+        // (1) if there is a constant sub (i.e., false), it will be at the *end*
+        //     of the returned vector (because we reverse the order by pushing)
+        // (2) two equal subs will be adjacent in the ordering, which allows for a
+        //     single pass for doing compression
+        quickersort::sort_by(&mut r[..], &|a, b| a.1.idx().cmp(&b.1.idx()));
         r.dedup();
-        if r.len() <= 2 {
-            return r;
-        }
+        // if r.len() <= 2 {
+        //     return r;
+        // }
         // to compress, we must disjoin all primes which share a sub
         // first, sort by `sub`
         let mut n = Vec::with_capacity(20);
@@ -154,6 +160,10 @@ impl SddManager {
             }
         }
         n.push((p, s));
+        // now all the subs are unique, sort by primes now to guarantee
+        // canonicity
+        // TODO: combine these into a single initial sort
+        quickersort::sort_by(&mut r[..], &|a, b| a.0.idx().cmp(&b.0.idx()));
         n
     }
 
@@ -161,7 +171,11 @@ impl SddManager {
         self.and_rec(a.neg(), b.neg()).neg()
     }
 
+
     fn and_rec(&mut self, a: SddPtr, b: SddPtr) -> SddPtr {
+        // println!("applying\n {}\n {}\n",
+        //          self.print_sdd_internal(a), self.print_sdd_internal(b));
+
         // first, check for a base case
         match (a, b) {
             (a, b) if a.is_true() => return b,
@@ -193,23 +207,24 @@ impl SddManager {
         }
 
         // normalize so `a` is always prime if possible
-        let (a, b) = if a.vtree() == b.vtree() ||
-            is_prime(&self.vtree, a.vtree(), b.vtree()) {
+        let (a, b) = if a.vtree() == b.vtree() || is_prime(&self.vtree, a.vtree(), b.vtree()) {
             (a, b)
         } else {
             (b, a)
         };
 
+
+        let av = a.vtree();
+        let bv = b.vtree();
+        let lca = least_common_ancestor(&self.parent_ptr, av, bv);
+
         //  check if we have this application cached
-        let c = self.app_cache[a.vtree()].get((a, b));
+        let c = self.app_cache[lca].get((a, b));
         if c.is_some() {
             return c.unwrap();
         }
 
-        // normalize and re-invoke the helper
-        let av = a.vtree();
-        let bv = b.vtree();
-        let lca = least_common_ancestor(&self.parent_ptr, av, bv);
+
         // now we determine the current iterator for primes and subs
         // 4 cases:
         //   1. `a` and `b` have the same vtree
@@ -218,8 +233,8 @@ impl SddManager {
         //   4. The lca is a shared parent equal to neither
         // these pointers are necessary to ensure that the vectors live
         // long enough
-        let outer_v : Vec<(SddPtr, SddPtr)>;
-        let inner_v : Vec<(SddPtr, SddPtr)>;
+        let outer_v: Vec<(SddPtr, SddPtr)>;
+        let inner_v: Vec<(SddPtr, SddPtr)>;
         let (outer, inner) = if av == bv {
             let outer = self.tbl.sdd_slice_or_panic(a);
             let inner = self.tbl.sdd_slice_or_panic(b);
@@ -243,6 +258,11 @@ impl SddManager {
 
 
         // iterate over each prime/sum pair and do the relevant application
+        // TODO: Optimize this by avoiding unnecessary conjunctions of primes
+        //       specifically, from the SDD library:
+        // if p1i = p2j, then p1k x p2j = false for all k<>i
+        // if p1i = !p2j, then p1k x p2j = p1k for all k<>i
+        // if p1i*p2j=p2j, then pik x p2j = false for all k<>i
         let mut r: Vec<(SddPtr, SddPtr)> = Vec::with_capacity(30);
         for &(ref p1, ref s1) in outer.iter() {
             let s1 = if a.is_compl() { s1.neg() } else { *s1 };
@@ -258,7 +278,7 @@ impl SddManager {
                 // return a `true` SddPtr here
                 if p.is_true() && s.is_true() {
                     let new_v = SddPtr::new_const(true);
-                    self.app_cache[a.vtree()].insert((a, b), new_v.clone());
+                    self.app_cache[lca].insert((a, b), new_v.clone());
                     return new_v;
                 }
                 r.push((p, s));
@@ -266,12 +286,30 @@ impl SddManager {
         }
         if r.len() == 0 {
             let new_v = SddPtr::new_const(false);
-            self.app_cache[a.vtree()].insert((a, b), new_v.clone());
+            self.app_cache[lca].insert((a, b), new_v.clone());
             return new_v;
         }
 
         // canonicalize
         r = self.compress(r);
+        // trim
+        if r.len() == 1 {
+            if r[0].0.is_true() {
+                // the prime is true, so we can return the sub
+                let new_v = r[0].1;
+                self.app_cache[lca].insert((a, b), new_v.clone());
+                return new_v;
+            }
+        }
+        if r.len() == 2 {
+            if r[0].0 == r[1].0.neg() && r[0].1.is_const() && r[1].1.is_const() {
+                // replace with the prime
+                let new_v = r[0].0;
+                self.app_cache[lca].insert((a, b), new_v.clone());
+                return new_v;
+            }
+        }
+
         // guarantee first sub in the first node is not complemented
         // (regular form)
         let new_v = if r[0].1.is_compl() {
@@ -282,11 +320,27 @@ impl SddManager {
         } else {
             self.tbl.get_or_insert_sdd(&SddOr { nodes: r }, lca)
         };
-        self.app_cache[a.vtree()].insert((a, b), new_v.clone());
+        self.app_cache[lca].insert((a, b), new_v.clone());
+        println!("applying\n {}\n {}\n result: {}\n",
+                 self.print_sdd_internal(a), self.print_sdd_internal(b),
+                 self.print_sdd_internal(new_v));
+
         new_v
-        // println!("applying  {}\n  {}\n  result: {}",
-        //          self.print_sdd_internal(a), self.print_sdd_internal(b),
-        //          self.print_sdd_internal(r));
+    }
+
+    pub fn and(&mut self, a: ExternalRef, b: ExternalRef) -> ExternalRef {
+        let i_a = self.external_table.into_internal(a);
+        let i_b = self.external_table.into_internal(b);
+        let r = self.and_rec(i_a, i_b);
+        self.external_table.gen_or_inc(r)
+    }
+
+
+    pub fn or(&mut self, a: ExternalRef, b: ExternalRef) -> ExternalRef {
+        let i_a = self.external_table.into_internal(a);
+        let i_b = self.external_table.into_internal(b);
+        let r = self.or_internal(i_a, i_b);
+        self.external_table.gen_or_inc(r)
     }
 
 
@@ -303,26 +357,40 @@ impl SddManager {
     }
 
     fn print_sdd_internal(&self, ptr: SddPtr) -> String {
-        if ptr.is_bdd() {
-            let bdd_ptr = ptr.as_bdd_ptr();
-            let m = self.tbl.bdd_conv(ptr.vtree());
-            let s = self.tbl.bdd_man(ptr.vtree()).print_bdd_lbl(bdd_ptr, m);
-            s
-        } else {
-            let mut s = String::from(format!("{}\\/", if ptr.is_compl() { "!" } else { "" }));
-            if ptr.is_true() {
-                return String::from("T");
-            } else if ptr.is_false() {
-                return String::from("F");
+        use pretty::*;
+        fn helper(man: &SddManager, ptr: SddPtr) -> Doc<BoxDoc> {
+            if ptr.is_bdd() {
+                let bdd_ptr = ptr.as_bdd_ptr();
+                let m = man.tbl.bdd_conv(ptr.vtree());
+                let s = man.tbl.bdd_man(ptr.vtree()).print_bdd_lbl(bdd_ptr, m);
+                Doc::from(s)
+            } else {
+                if ptr.is_true() {
+                    return Doc::from("T");
+                } else if ptr.is_false() {
+                    return Doc::from("F");
+                }
+
+                let mut doc: Doc<BoxDoc> = Doc::from("");
+                let sl = man.tbl.sdd_slice_or_panic(ptr);
+                for &(ref prime, ref sub) in sl.iter() {
+                    let new_s1 = helper(man, prime.clone());
+                    let new_s2 = helper(man, sub.clone());
+                    doc = doc
+                        .append(Doc::newline())
+                        .append((Doc::from("/\\")
+                                .append(Doc::newline())
+                                .append((new_s1.append(Doc::newline()).append(new_s2))))
+                                .nest(2));
+                }
+                let d = Doc::from(String::from(format!("{}\\/", if ptr.is_compl() { "!" } else { "" })));
+                d.append(doc.nest(2))
             }
-            let sl = self.tbl.sdd_slice_or_panic(ptr);
-            for &(ref prime, ref sub) in sl.iter() {
-                let new_s1 = self.print_sdd_internal(prime.clone());
-                let new_s2 = self.print_sdd_internal(sub.clone());
-                s.push_str(&format!("(/\\ {} {})", new_s1, new_s2));
-            }
-            s
         }
+        let d = helper(self, ptr);
+        let mut w = Vec::new();
+        d.render(10, &mut w).unwrap();
+        String::from_utf8(w).unwrap()
     }
 
     pub fn print_sdd(&self, ptr: ExternalRef) -> String {
