@@ -46,12 +46,12 @@ fn into_parent_ptr_vec(vtree: &VTree) -> Vec<(Option<usize>, usize)> {
         parent: Option<usize>,
     ) -> Vec<(Option<usize>, usize)> {
         match cur {
-            &BTree::Leaf(ref v) => vec![(parent, level)],
+            &BTree::Leaf(_) => vec![(parent, level)],
             &BTree::Node(ref v, ref l, ref r) => {
                 let mut l = helper(l, level + 1, Some(*v));
                 let mut r = helper(r, level + 1, Some(*v));
-                let mut v = vec![(parent, level)];
-                v.append(&mut l);
+                let mut v = l;
+                v.append(&mut vec![(parent, level)]);
                 v.append(&mut r);
                 v
             }
@@ -224,7 +224,6 @@ impl SddManager {
             return c.unwrap();
         }
 
-
         // now we determine the current iterator for primes and subs
         // 4 cases:
         //   1. `a` and `b` have the same vtree
@@ -284,6 +283,7 @@ impl SddManager {
                 r.push((p, s));
             }
         }
+
         if r.len() == 0 {
             let new_v = SddPtr::new_const(false);
             self.app_cache[lca].insert((a, b), new_v.clone());
@@ -301,6 +301,7 @@ impl SddManager {
                 return new_v;
             }
         }
+
         if r.len() == 2 {
             if r[0].0 == r[1].0.neg() && r[0].1.is_const() && r[1].1.is_const() {
                 // replace with the prime
@@ -321,7 +322,7 @@ impl SddManager {
             self.tbl.get_or_insert_sdd(&SddOr { nodes: r }, lca)
         };
         self.app_cache[lca].insert((a, b), new_v.clone());
-        println!("applying\n {}\n {}\n result: {}\n",
+        println!("applying\n{}\n{}\n result:\n{}\n",
                  self.print_sdd_internal(a), self.print_sdd_internal(b),
                  self.print_sdd_internal(new_v));
 
@@ -483,17 +484,17 @@ fn test_lca() {
         Box::new(BTree::Leaf(vec![VarLabel::new(0), VarLabel::new(1)])),
         Box::new(BTree::Leaf(vec![VarLabel::new(2), VarLabel::new(3)])),
     );
-    //    0
-    // 1      4
-    //2 3   5  6
+    //    3
+    // 1     5
+    //0 2   4 6
     let simple_vtree2 = BTree::Node(
         (),
         Box::new(simple_vtree.clone()),
         Box::new(simple_vtree.clone()),
     );
     let par_vec = into_parent_ptr_vec(&simple_vtree2);
-    assert_eq!(least_common_ancestor(&par_vec, 2, 3), 1);
-    assert_eq!(least_common_ancestor(&par_vec, 2, 5), 0);
+    assert_eq!(least_common_ancestor(&par_vec, 2, 3), 3);
+    assert_eq!(least_common_ancestor(&par_vec, 2, 5), 3);
     assert_eq!(least_common_ancestor(&par_vec, 2, 1), 1);
-    assert_eq!(least_common_ancestor(&par_vec, 4, 2), 0);
+    assert_eq!(least_common_ancestor(&par_vec, 4, 6), 5);
 }

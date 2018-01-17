@@ -106,7 +106,7 @@ impl SddTable {
                     from_raw_parts(ptr, v.len())
                 }
             },
-            _ => panic!("dereferencing SDD into BDD")
+            _ => panic!("dereferencing BDD into SDD")
         }
     }
 

@@ -27,16 +27,26 @@ where
 
     fn next(&mut self) -> Option<Self::Item> {
         use self::BTree::*;
-        let top_unwrap = match self.stack.pop() {
+        match self.stack.pop() {
             None => return None,
-            Some(v) => v,
-        };
-        match top_unwrap {
-            &Leaf(_) => Some(&top_unwrap),
-            &Node(ref v, ref l, ref r) => {
-                self.stack.push(r);
-                self.stack.push(l);
-                Some(&top_unwrap)
+            Some(v) => match v {
+                &Leaf(_) => Some(v),
+                &Node(_, _, ref r) => {
+                    let mut cur : &'a BTree<N, L> = r;
+                    loop {
+                        match cur {
+                            &BTree::Leaf(_) => {
+                                self.stack.push(cur);
+                                break;
+                            },
+                            &BTree::Node(_, ref l, ref r) => {
+                                self.stack.push(cur);
+                                cur = l;
+                            }
+                        }
+                    }
+                    Some(v)
+                }
             }
         }
     }
@@ -48,7 +58,20 @@ where
     L: PartialEq + Eq + Clone,
 {
     pub fn in_order_iter<'a>(&'a self) -> InOrderIter<'a, N, L> {
-        InOrderIter { stack: vec![self] }
+        let mut v = Vec::new();
+        let mut cur = self;
+        loop {
+            match cur {
+                &BTree::Leaf(_) => {
+                    v.push(cur);
+                    return InOrderIter { stack: v };
+                },
+                &BTree::Node(_, ref l, ref r) => {
+                    v.push(cur);
+                    cur = l;
+                }
+            }
+        }
     }
 
     pub fn contains_leaf<F>(&self, f: &F) -> bool
@@ -88,9 +111,9 @@ where
             match t {
                 &Leaf(_) => (cnt + 1, Box::new(Leaf(cnt))),
                 &Node(_, ref l, ref r) => {
-                    let (l_cnt, l_t) = helper(l, cnt + 1);
-                    let (r_cnt, r_t) = helper(r, l_cnt);
-                    (r_cnt, Box::new(Node(cnt, l_t, r_t)))
+                    let (l_cnt, l_t) = helper(l, cnt);
+                    let (r_cnt, r_t) = helper(r, l_cnt + 1);
+                    (r_cnt, Box::new(Node(l_cnt, l_t, r_t)))
                 }
             }
         }
@@ -105,5 +128,42 @@ where
             v.push(i)
         }
         v
+    }
+}
+
+#[test]
+fn test_traversal() {
+    use self::BTree::*;
+    let vtree : BTree<i32, i32> =
+        Node(4,
+             Box::new(Node(2, Box::new(Leaf(1)), Box::new(Leaf(3)))),
+             Box::new(Node(6, Box::new(Leaf(5)), Box::new(Leaf(7))),
+             ));
+
+    for (idx, v) in vtree.in_order_iter().enumerate() {
+        let value = match v {
+            &Node(ref v, _, _) => v.clone(),
+            &Leaf(ref v) => v.clone()
+        };
+        assert_eq!((idx + 1) as i32, value);
+    }
+}
+
+#[test]
+fn test_in_order_tree() {
+    use self::BTree::*;
+    let vtree : BTree<i32, i32> =
+        Node(4,
+             Box::new(Node(2, Box::new(Leaf(1)), Box::new(Leaf(3)))),
+             Box::new(Node(6, Box::new(Leaf(5)), Box::new(Leaf(7))),
+             ));
+
+    let in_order = vtree.into_order_tree();
+    for (idx, v) in in_order.in_order_iter().enumerate() {
+        let value = match v {
+            &Node(ref v, _, _) => v.clone(),
+            &Leaf(ref v) => v.clone()
+        };
+        assert_eq!(idx, value);
     }
 }
