@@ -69,6 +69,7 @@ impl Cnf {
                 let var = manager.var(vlabel, val);
                 sdd = manager.apply(Op::BddOr, sdd, var);
             }
+            println!("clause {:?}:\n{}", lit_vec, manager.print_sdd(sdd));
             cvec.push(sdd);
         }
         // now cvec has a list of all the clauses; collapse it down

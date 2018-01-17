@@ -240,18 +240,34 @@ impl SddManager {
             (outer, inner)
         } else if lca == av {
             let outer = self.tbl.sdd_slice_or_panic(a);
-            inner_v = vec![(SddPtr::new_const(true), b)];
+            inner_v = vec![(SddPtr::new_const(true), b.regular())];
             (outer, inner_v.as_slice())
         } else if lca == bv {
-            outer_v = vec![(a, SddPtr::new_const(true))];
+            // the sub must always be true
+            let v = if a.is_compl() {
+                SddPtr::new_const(false)
+            } else {
+                SddPtr::new_const(true)
+            };
+            outer_v = vec![
+                (a, v),
+                (a.neg(), v.neg()),
+            ];
             let inner = self.tbl.sdd_slice_or_panic(b);
             (outer_v.as_slice(), inner)
         } else {
+            // avoid double-negations by checking to see if `a` is already
+            // negated
+            let v = if a.is_compl() {
+                SddPtr::new_const(false)
+            } else {
+                SddPtr::new_const(true)
+            };
             outer_v = vec![
-                (a, SddPtr::new_const(true)),
-                (a.neg(), SddPtr::new_const(false)),
+                (a, v),
+                (a.neg(), v.neg()),
             ];
-            inner_v = vec![(SddPtr::new_const(true), b)];
+            inner_v = vec![(SddPtr::new_const(true), b.regular())];
             (outer_v.as_slice(), inner_v.as_slice())
         };
 
@@ -294,18 +310,29 @@ impl SddManager {
         r = self.compress(r);
         // trim
         if r.len() == 1 {
-            if r[0].0.is_true() {
+            let (p, s) = r[0];
+            if p.is_true() {
                 // the prime is true, so we can return the sub
-                let new_v = r[0].1;
+                let new_v = s;
                 self.app_cache[lca].insert((a, b), new_v.clone());
                 return new_v;
-            }
+            } else if s.is_true() {
+                // the sub is true, so return the prime
+                let new_v = p;
+                self.app_cache[lca].insert((a, b), new_v.clone());
+                return new_v;
+            } // else if s.is_false() {
+            //     // the sub is false, so return false
+            //     let new_v = SddPtr::new_const(false);
+            //     self.app_cache[lca].insert((a, b), new_v.clone());
+            //     return new_v;
+            // }
         }
 
         if r.len() == 2 {
             if r[0].0 == r[1].0.neg() && r[0].1.is_const() && r[1].1.is_const() {
-                // replace with the prime
-                let new_v = r[0].0;
+                // replace with the non-negated prime
+                let new_v = r[0].0.regular();
                 self.app_cache[lca].insert((a, b), new_v.clone());
                 return new_v;
             }
@@ -495,6 +522,7 @@ fn test_lca() {
     let par_vec = into_parent_ptr_vec(&simple_vtree2);
     assert_eq!(least_common_ancestor(&par_vec, 2, 3), 3);
     assert_eq!(least_common_ancestor(&par_vec, 2, 5), 3);
+    assert_eq!(least_common_ancestor(&par_vec, 1, 4), 3);
     assert_eq!(least_common_ancestor(&par_vec, 2, 1), 1);
     assert_eq!(least_common_ancestor(&par_vec, 4, 6), 5);
 }

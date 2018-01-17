@@ -35,7 +35,7 @@ p cnf 2 1
 
 static C2_A: &'static str = "
 p cnf 5 3
-1 2 3 4 5 0
+1 2 3 0
 1 2 0
 -1 2 0
 ";
@@ -45,10 +45,38 @@ p cnf 2 1
 2 0
 ";
 
+
+static C3_A: &'static str = "
+p cnf 5 3
+1 2 3 4 5 0
+1 2 0
+-1 2 0
+";
+
+static C3_B: &'static str = "
+p cnf 2 1
+2 0
+";
+
+static C4_A: &'static str = "
+p cnf 5 3
+-1 2 0
+1
+";
+
+static C4_B: &'static str = "
+p cnf 2 1
+1 0
+2 0
+";
+
+
 fn get_canonical_forms() -> Vec<(Cnf, Cnf)> {
     vec!(
         (Cnf::from_file(String::from(C1_A)), Cnf::from_file(String::from(C1_B))),
         (Cnf::from_file(String::from(C2_A)), Cnf::from_file(String::from(C2_B))),
+        (Cnf::from_file(String::from(C3_A)), Cnf::from_file(String::from(C3_B))),
+        (Cnf::from_file(String::from(C4_A)), Cnf::from_file(String::from(C4_B))),
     )
 }
 
