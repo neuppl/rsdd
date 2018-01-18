@@ -21,7 +21,7 @@ quickersort = "3.0"
 dimacs = "0.2.0"
 fasthash = "0.2"
 pretty = "0.3.3"
-
+num = "0.1.41"
 
 
 [profile.release]

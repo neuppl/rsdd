@@ -2,9 +2,10 @@ use bdd_table::BddTable;
 use var_order::VarOrder;
 use bdd::*;
 use std::collections::{HashMap, HashSet};
-use bdd_cache::{BddApplyTable};
+use bdd_cache::BddApplyTable;
 use apply_cache;
 use backing_store::BackingCacheStats;
+use num::traits::Num;
 
 pub struct BddManager {
     compute_table: BddTable,
@@ -61,6 +62,14 @@ impl BddManager {
 
     pub fn false_ptr(&self) -> BddPtr {
         BddPtr::false_node()
+    }
+
+    pub fn is_true(&self, ptr: BddPtr) -> bool {
+        ptr.is_true()
+    }
+
+    pub fn is_false(&self, ptr: BddPtr) -> bool {
+        ptr.is_false()
     }
 
     fn get_or_insert(&mut self, bdd: Bdd) -> BddPtr {
@@ -170,7 +179,7 @@ impl BddManager {
 
         // now, both of the nodes are not constant
         // normalize the nodes to increase cache efficiency
-        let (f, g, reg_f, reg_g) = if reg_f < reg_g {
+        let (f, g, reg_f, _) = if reg_f < reg_g {
             (f, g, reg_f, reg_g)
         } else {
             (g, f, reg_g, reg_f)
@@ -306,6 +315,9 @@ impl BddManager {
     pub fn count_nodes(&self, ptr: BddPtr) -> usize {
         self.count_nodes_h(ptr, &mut HashSet::new())
     }
+
+    // pub fn 
+
 }
 
 // check that (a \/ b) /\ a === a
@@ -322,5 +334,4 @@ fn simple_equality() {
         man.print_bdd(v1),
         man.print_bdd(r2)
     );
-    println!("Not eq:\n {}\n{}", man.print_bdd(r1), man.print_bdd(r2));
 }

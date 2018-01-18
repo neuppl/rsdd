@@ -1,6 +1,5 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap};
 use std::hash::Hash;
-
 
 #[derive(Debug, Eq, PartialEq, Hash, Clone, Copy)]
 pub struct ExternalRef(usize);

@@ -5,7 +5,7 @@ use btree::*;
 use std::collections::HashMap;
 use backing_store::*;
 use bdd::VarLabel;
-use std::slice::{Iter, from_raw_parts};
+use std::slice::{from_raw_parts};
 use var_order;
 
 
@@ -40,7 +40,7 @@ impl SddTable {
             sdd_to_bdd: HashMap::new(),
         };
 
-        for (index, v) in vtree.in_order_iter().enumerate() {
+        for v in vtree.in_order_iter() {
             match v {
                 &BTree::Leaf(ref o) => {
                     let man = BddManager::new(var_order::VarOrder::new(o.clone()));
@@ -83,7 +83,7 @@ impl SddTable {
     /// get or insert a particular SDD node with vtree-node `vnode`
     pub fn get_or_insert_sdd(&mut self, sdd: &SddOr, vnode: usize) -> SddPtr {
         match &mut self.tables[vnode] {
-            &mut SubTable::SddSubTable{tbl: ref mut tbl} => {
+            &mut SubTable::SddSubTable{ref mut tbl} => {
                 let ptr = tbl.get_or_insert(&sdd.nodes);
                 SddPtr::new_node(ptr.0 as usize, vnode as u16)
             },
@@ -99,7 +99,7 @@ impl SddTable {
     /// is in use is *undefined behavior* and will invalidate this slice.
     pub fn sdd_slice_or_panic<'a, 'b>(&'a self, ptr: SddPtr) -> &'b [(SddPtr, SddPtr)] {
         match &self.tables[ptr.vtree() as usize] {
-            &SubTable::SddSubTable{tbl: ref tbl} => {
+            &SubTable::SddSubTable{ref tbl} => {
                 unsafe {
                     let v = tbl.deref(BackingPtr(ptr.idx() as u32));
                     let ptr = v.as_ptr();
@@ -114,7 +114,7 @@ impl SddTable {
     /// Panics if it not a BDD
     pub fn bdd_man(&self, node: usize) -> &BddManager {
         match &self.tables[node] {
-            &SubTable::BddSubTable{man: ref man, conv: ref conv} => {
+            &SubTable::BddSubTable{ref man, ref conv} => {
                 man
             },
             _ => panic!("dereferencing SDD into BDD")

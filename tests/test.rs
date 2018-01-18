@@ -1,12 +1,13 @@
+extern crate ddrs;
+use ddrs::*;
 use bdd;
 use manager;
 use boolexpr;
 use sdd_manager::*;
 use var_order;
 use std::collections::HashMap;
-use std::fs::File;
-use std::io::prelude::*;
 use cnf::Cnf;
+extern crate rand;
 
 /// A convenient wrapper for generating maps
 macro_rules! map(
@@ -174,6 +175,28 @@ p cnf 2 1
 2 4 8 0
 ";
 
+static C13_A: &'static str = "
+p cnf 8 3
+1 2 3 4 5 6 7 8 0
+1 2 3 4 5 6 7 0
+";
+
+static C13_B: &'static str = "
+p cnf 2 1
+1 2 3 4 5 6 7 0
+";
+
+static C14_A: &'static str = "
+p cnf 8 3
+1 2 3 4 5 6 7 8 0
+2 3 4 5 6 7 8 0
+";
+
+static C14_B: &'static str = "
+p cnf 2 1
+2 3 4 5 6 7 8 0
+";
+
 fn get_canonical_forms() -> Vec<(Cnf, Cnf)> {
     vec!(
         (Cnf::from_file(String::from(C1_A)), Cnf::from_file(String::from(C1_B))),
@@ -188,10 +211,11 @@ fn get_canonical_forms() -> Vec<(Cnf, Cnf)> {
         (Cnf::from_file(String::from(C10_A)), Cnf::from_file(String::from(C10_B))),
         (Cnf::from_file(String::from(C11_A)), Cnf::from_file(String::from(C11_B))),
         (Cnf::from_file(String::from(C12_A)), Cnf::from_file(String::from(C12_B))),
+        (Cnf::from_file(String::from(C13_A)), Cnf::from_file(String::from(C13_B))),
+        (Cnf::from_file(String::from(C14_A)), Cnf::from_file(String::from(C14_B))),
     )
 }
 
-use rand;
 fn random_assignment(num_vars: usize) -> HashMap<bdd::VarLabel, bool> {
     let mut init = HashMap::new();
     for i in 0..num_vars {
@@ -240,7 +264,6 @@ pub fn rand_bdds() -> () {
         let cnf = boolexpr::rand_cnf(&mut rng, num_vars, 30);
         let mut man = manager::BddManager::new_default_order(num_vars);
         let r = cnf.into_bdd(&mut man);
-        println!("eval");
         // check that they evaluate to the same value for a variety of
         // assignments
         // println!("bdd: {},\n cnf: {:?}", man.print_bdd(r), cnf);
@@ -261,76 +284,43 @@ pub fn rand_bdds() -> () {
 }
 
 // #[test]
-pub fn big_bdd() -> () {
-    let mut rng = rand::StdRng::new().unwrap();
-    rng.reseed(&[0]);
-    let num_vars = 50;
-    let cnf = boolexpr::rand_cnf(&mut rng, num_vars, 70);
-    let mut man = manager::BddManager::new_default_order(num_vars);
-    let r = cnf.into_bdd(&mut man);
-    // check that they evaluate to the same value for a variety of
-    // assignments
-    for _ in 1..100 {
-        let assgn = random_assignment(num_vars);
-        assert_eq!(man.eval_bdd(r, &assgn), cnf.eval(&assgn));
-    }
-    println!("stats: {:?}", man.get_apply_cache_stats())
-}
-
-
-// #[test]
-pub fn bdd_from_file() -> () {
+pub fn unsat_sdd() -> () {
     use cnf::Cnf;
     // let file_contents = File::open("/Users/sholtzen/Downloads/sdd-1.1.1/cnf/c8-easier.cnf");
-    let file_contents = File::open("/Users/sholtzen/Downloads/sdd-1.1.1/cnf/c8.cnf");
-    let mut string = String::new();
-    file_contents.unwrap().read_to_string(&mut string).unwrap();
-    let cnf = Cnf::from_file(string);
-    let mut man = manager::BddManager::new(cnf.force_order());
-    let r = cnf.into_bdd(&mut man);
-    // println!("BDD: {}\nExpr: {:?}\nAssignment: {:?}", man.print_bdd(), cnf, assgn);
-    // assert_eq!(man.eval_bdd(r, &assgn), cnf.eval(&assgn));
-    println!("apply cache stats: {:?}", man.get_apply_cache_stats());
-    println!("num apply nodes: {}", man.num_nodes());
-    println!("node count: {}", man.count_nodes(r));
-    println!("backing store stats: {:?}", man.get_backing_store_stats());
-    // println!("bdd: {}", man.print_bdd(r));
-}
-
-#[test]
-pub fn sdd_from_file() -> () {
-    use cnf::Cnf;
-    let num_vars = 228;
-    // let file_contents = File::open("/Users/sholtzen/Downloads/sdd-1.1.1/cnf/c8-easier.cnf");
-    let file_contents = File::open("/Users/sholtzen/Downloads/sdd-1.1.1/cnf/c8-easier.cnf");
-    let mut string = String::new();
-    file_contents.unwrap().read_to_string(&mut string).unwrap();
-    let cnf = Cnf::from_file(string);
-    println!("cnf: {:?}", cnf);
+    let file_contents = include_str!("../cnf/unsat-1.cnf");
+    let cnf = Cnf::from_file(String::from(file_contents));
     let v : Vec<usize> = cnf.force_order().get_vec();
     let var_vec : Vec<bdd::VarLabel> =
         v.into_iter().map(|v| bdd::VarLabel::new(v as u64)).collect();
-    let vtree = even_split(&var_vec, 5);
+    let vtree = even_split(&var_vec, 2);
     let mut man = SddManager::new(vtree);
     let r = cnf.into_sdd(&mut man);
-    let assgn = random_assignment(num_vars);
-    // println!("BDD: {}\nExpr: {:?}\nAssignment: {:?}", man.print_bdd(), cnf, assgn);
-    // assert_eq!(man.eval_bdd(r, &assgn), cnf.eval(&assgn));
-    // println!("apply cache stats: {:?}", man.get_apply_cache_stats());
-    // println!("num apply nodes: {}", man.num_nodes());
-    // println!("node count: {}", man.count_nodes(r));
-    // println!("backing store stats: {:?}", man.get_backing_store_stats());
-    // println!("bdd: {}", man.print_bdd(r));
+    assert!(man.is_false(r), "Expected unsat");
 }
 
+// #[test]
+pub fn unsat_bdd() -> () {
+    use cnf::Cnf;
+    // let file_contents = File::open("/Users/sholtzen/Downloads/sdd-1.1.1/cnf/c8-easier.cnf");
+    let file_contents = include_str!("../cnf/unsat-1.cnf");
+    let cnf = Cnf::from_file(String::from(file_contents));
+    let v : Vec<bdd::VarLabel> = cnf.force_order()
+        .get_vec()
+        .into_iter()
+        .map(|x| bdd::VarLabel::new(x as u64))
+        .collect();
+    let mut man =
+        manager::BddManager::new(var_order::VarOrder::new(v));
+    let r = cnf.into_bdd(&mut man);
+    assert!(man.is_false(r), "Expected unsat");
+}
 
+/// Randomized tests
 #[test]
 pub fn random_sdd() {
-    use sdd::*;
     let mut rng = rand::StdRng::new().unwrap();
     rng.reseed(&[0]);
     for _ in 1..20 {
-        println!("compiling\n\n");
         let num_vars = 10;
         let cnf = boolexpr::rand_cnf(&mut rng, num_vars, 20);
         let v : Vec<bdd::VarLabel> =
@@ -353,26 +343,4 @@ pub fn random_sdd() {
         let new_r = man.apply(bdd::Op::BddOr, r, r);
         assert!(man.sdd_eq(r, new_r));
     }
-}
-
-// #[test]
-pub fn big_sdd() {
-    use sdd::*;
-    let mut rng = rand::StdRng::new().unwrap();
-    rng.reseed(&[0]);
-    let num_vars = 50;
-    let cnf = boolexpr::rand_cnf(&mut rng, num_vars, 50);
-    let v : Vec<bdd::VarLabel> =
-        (0..num_vars).map(|x| bdd::VarLabel::new(x as u64)).collect();
-    let vtree = even_split(&v, 1);
-    let mut man = SddManager::new(vtree);
-    let r = cnf.into_sdd(&mut man);
-    // println!("sdd: {}", man.print_sdd(r));
-    // check that they evaluate to the same value for a variety of
-    // assignments
-    // println!("evaluating");
-    // for _ in 1..100 {
-    //     let assgn = random_assignment(num_vars);
-    //     assert_eq!(man.eval_sdd(r, &assgn), cnf.eval(&assgn));
-    // }
 }

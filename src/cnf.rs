@@ -3,10 +3,8 @@ use sdd_manager::SddManager;
 use manager::BddManager;
 use std::cmp::{min, max};
 use rand::{Rng, thread_rng};
-use std::collections::HashSet;
 use var_order::VarOrder;
 use ref_table::ExternalRef;
-use sdd::SddPtr;
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct Cnf {
@@ -164,12 +162,9 @@ impl Cnf {
     pub fn force_order(&self) -> VarOrder {
         // map from position -> label (i.e., first element is the first in the
         // order)
-        println!("num vars: {}", self.num_vars);
         let mut lbl_to_pos: Vec<usize> = (0..(self.num_vars)).collect();
         let mut rng = thread_rng();
         rng.shuffle(&mut lbl_to_pos);
-        println!("span before order: {}", self.average_span(&lbl_to_pos));
-        println!("initial order: {:?}", lbl_to_pos);
         // perform 20 iterations of force-update
         for _ in 0..10 {
             let mut cog: Vec<f64> = Vec::with_capacity(self.clauses.len());
@@ -211,8 +206,6 @@ impl Cnf {
             }
             // println!("new order: {:?}", lbl_to_pos);
         }
-        println!("span after order: {}", self.average_span(&lbl_to_pos));
-        println!("final order: {:?}", lbl_to_pos);
         let final_order: Vec<VarLabel> = lbl_to_pos
             .into_iter()
             .map(|v| VarLabel::new(v as u64))
@@ -221,21 +214,3 @@ impl Cnf {
     }
 }
 
-#[test]
-fn test_force_order() {
-    use std::fs::File;
-    use std::io::prelude::*;
-    // let cnf = Cnf {
-    //     clauses: vec![
-    //         vec![(VarLabel::new(0), true), (VarLabel::new(1), true)],
-    //         vec![(VarLabel::new(1), true), (VarLabel::new(2), true)],
-    //         vec![(VarLabel::new(2), true), (VarLabel::new(3), true)],
-    //     ],
-    //     num_vars: 4,
-    // };
-    let file_contents = File::open("/Users/sholtzen/Downloads/sdd-1.1.1/cnf/c8.cnf");
-    let mut string = String::new();
-    file_contents.unwrap().read_to_string(&mut string).unwrap();
-    let cnf = Cnf::from_file(string);
-    let new_order = cnf.force_order();
-}

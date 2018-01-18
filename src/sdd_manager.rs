@@ -340,12 +340,12 @@ impl SddManager {
             self.tbl.get_or_insert_sdd(&SddOr { nodes: r }, lca)
         };
         self.app_cache[lca].insert((a, b), new_v.clone());
-        println!(
-            "applying\n{}\n{}\n result:\n{}\n",
-            self.print_sdd_internal(a),
-            self.print_sdd_internal(b),
-            self.print_sdd_internal(new_v)
-        );
+        // println!(
+        //     "applying\n{}\n{}\n result:\n{}\n",
+        //     self.print_sdd_internal(a),
+        //     self.print_sdd_internal(b),
+        //     self.print_sdd_internal(new_v)
+        // );
 
         new_v
     }
@@ -463,6 +463,16 @@ impl SddManager {
         a == b
     }
 
+    pub fn is_true(&self, a: ExternalRef) -> bool {
+        let a_int = self.external_table.into_internal(a);
+        a_int.is_true()
+    }
+
+    pub fn is_false(&self, a: ExternalRef) -> bool {
+        let a_int = self.external_table.into_internal(a);
+        a_int.is_false()
+    }
+
     pub fn sdd_eq(&self, a: ExternalRef, b: ExternalRef) -> bool {
         let a_int = self.external_table.into_internal(a);
         let b_int = self.external_table.into_internal(b);
@@ -470,35 +480,6 @@ impl SddManager {
     }
 }
 
-
-#[test]
-fn make_sdd() {
-    let simple_vtree = BTree::Node(
-        (),
-        Box::new(BTree::Leaf(vec![VarLabel::new(0), VarLabel::new(1)])),
-        Box::new(BTree::Leaf(vec![VarLabel::new(2), VarLabel::new(3)])),
-    );
-    let mut man = SddManager::new(simple_vtree);
-    let v = man.var(VarLabel::new(2), true);
-    println!("sdd: {}", man.print_sdd(v));
-}
-
-
-#[test]
-fn sdd_simple_apply() {
-    let simple_vtree = BTree::Node(
-        (),
-        Box::new(BTree::Leaf(vec![VarLabel::new(0), VarLabel::new(1)])),
-        Box::new(BTree::Leaf(vec![VarLabel::new(2), VarLabel::new(3)])),
-    );
-    let mut man = SddManager::new(simple_vtree);
-    let v1 = man.var(VarLabel::new(3), true);
-    let v2 = man.var(VarLabel::new(1), false);
-    let v3 = man.apply(Op::BddOr, v1, v2);
-    println!("sdd1: {}", man.print_sdd(v1));
-    println!("sdd2: {}", man.print_sdd(v2));
-    println!("sdd: {}", man.print_sdd(v3));
-}
 
 #[test]
 fn test_lca() {
