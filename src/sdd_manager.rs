@@ -138,13 +138,9 @@ impl SddManager {
         //     of the returned vector (because we reverse the order by pushing)
         // (2) two equal subs will be adjacent in the ordering, which allows for a
         //     single pass for doing compression
-        quickersort::sort_by(&mut r[..], &|a, b| a.1.idx().cmp(&b.1.idx()));
+        quickersort::sort_by(&mut r[..], &|a, b| a.1.cmp(&b.1));
         r.dedup();
-        // if r.len() <= 2 {
-        //     return r;
-        // }
         // to compress, we must disjoin all primes which share a sub
-        // first, sort by `sub`
         let mut n = Vec::with_capacity(20);
         let (mut p, mut s) = r[0];
         for i in 1..r.len() {
@@ -163,7 +159,7 @@ impl SddManager {
         // now all the subs are unique, sort by primes now to guarantee
         // canonicity
         // TODO: combine these into a single initial sort
-        quickersort::sort_by(&mut r[..], &|a, b| a.0.idx().cmp(&b.0.idx()));
+        quickersort::sort_by(&mut n[..], &|a, b| a.0.cmp(&b.0));
         n
     }
 
@@ -249,10 +245,7 @@ impl SddManager {
             } else {
                 SddPtr::new_const(true)
             };
-            outer_v = vec![
-                (a, v),
-                (a.neg(), v.neg()),
-            ];
+            outer_v = vec![(a, v), (a.neg(), v.neg())];
             let inner = self.tbl.sdd_slice_or_panic(b);
             (outer_v.as_slice(), inner)
         } else {
@@ -263,10 +256,7 @@ impl SddManager {
             } else {
                 SddPtr::new_const(true)
             };
-            outer_v = vec![
-                (a, v),
-                (a.neg(), v.neg()),
-            ];
+            outer_v = vec![(a, v), (a.neg(), v.neg())];
             inner_v = vec![(SddPtr::new_const(true), b.regular())];
             (outer_v.as_slice(), inner_v.as_slice())
         };
@@ -321,12 +311,7 @@ impl SddManager {
                 let new_v = p;
                 self.app_cache[lca].insert((a, b), new_v.clone());
                 return new_v;
-            } // else if s.is_false() {
-            //     // the sub is false, so return false
-            //     let new_v = SddPtr::new_const(false);
-            //     self.app_cache[lca].insert((a, b), new_v.clone());
-            //     return new_v;
-            // }
+            }
         }
 
         if r.len() == 2 {
@@ -349,9 +334,12 @@ impl SddManager {
             self.tbl.get_or_insert_sdd(&SddOr { nodes: r }, lca)
         };
         self.app_cache[lca].insert((a, b), new_v.clone());
-        println!("applying\n{}\n{}\n result:\n{}\n",
-                 self.print_sdd_internal(a), self.print_sdd_internal(b),
-                 self.print_sdd_internal(new_v));
+        println!(
+            "applying\n{}\n{}\n result:\n{}\n",
+            self.print_sdd_internal(a),
+            self.print_sdd_internal(b),
+            self.print_sdd_internal(new_v)
+        );
 
         new_v
     }
@@ -404,14 +392,16 @@ impl SddManager {
                 for &(ref prime, ref sub) in sl.iter() {
                     let new_s1 = helper(man, prime.clone());
                     let new_s2 = helper(man, sub.clone());
-                    doc = doc
-                        .append(Doc::newline())
-                        .append((Doc::from("/\\")
-                                .append(Doc::newline())
-                                .append((new_s1.append(Doc::newline()).append(new_s2))))
-                                .nest(2));
+                    doc =
+                        doc.append(Doc::newline()).append(
+                            (Doc::from("/\\").append(Doc::newline()).append(
+                                (new_s1.append(Doc::newline()).append(new_s2)),
+                            )).nest(2),
+                        );
                 }
-                let d = Doc::from(String::from(format!("{}\\/", if ptr.is_compl() { "!" } else { "" })));
+                let d = Doc::from(String::from(
+                    format!("{}\\/", if ptr.is_compl() { "!" } else { "" }),
+                ));
                 d.append(doc.nest(2))
             }
         }

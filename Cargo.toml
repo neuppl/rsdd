@@ -19,6 +19,9 @@ twox-hash = "1.1.0"
 clap = "2.28"
 quickersort = "3.0"
 dimacs = "0.2.0"
+fasthash = "0.2"
+pretty = "0.3.3"
+
 
 
 [profile.release]
