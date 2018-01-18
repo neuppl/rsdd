@@ -21,7 +21,8 @@ macro_rules! map(
     };
 );
 
-/// A list of canonical forms in DIMACS form
+/// A list of canonical forms in DIMACS form. The goal of these tests is to ensure that caching
+/// and application are working as intended
 static C1_A: &'static str = "
 p cnf 5 3
 1 2 0
@@ -129,6 +130,50 @@ p cnf 2 1
 1 5 0
 ";
 
+static C9_A: &'static str = "
+p cnf 8 3
+1 2 3 4 5 6 7 8 0
+2 6 0
+";
+
+static C9_B: &'static str = "
+p cnf 2 1
+2 6 0
+";
+
+static C10_A: &'static str = "
+p cnf 8 3
+1 2 3 4 5 6 7 8 0
+2 7 0
+";
+
+static C10_B: &'static str = "
+p cnf 2 1
+2 7 0
+";
+
+static C11_A: &'static str = "
+p cnf 8 3
+1 2 3 4 5 6 7 8 0
+1 3 5 0
+";
+
+static C11_B: &'static str = "
+p cnf 2 1
+1 3 5 0
+";
+
+static C12_A: &'static str = "
+p cnf 8 3
+1 2 3 4 5 6 7 8 0
+2 4 8 0
+";
+
+static C12_B: &'static str = "
+p cnf 2 1
+2 4 8 0
+";
+
 fn get_canonical_forms() -> Vec<(Cnf, Cnf)> {
     vec!(
         (Cnf::from_file(String::from(C1_A)), Cnf::from_file(String::from(C1_B))),
@@ -139,6 +184,10 @@ fn get_canonical_forms() -> Vec<(Cnf, Cnf)> {
         (Cnf::from_file(String::from(C6_A)), Cnf::from_file(String::from(C6_B))),
         (Cnf::from_file(String::from(C7_A)), Cnf::from_file(String::from(C7_B))),
         (Cnf::from_file(String::from(C8_A)), Cnf::from_file(String::from(C8_B))),
+        (Cnf::from_file(String::from(C9_A)), Cnf::from_file(String::from(C9_B))),
+        (Cnf::from_file(String::from(C10_A)), Cnf::from_file(String::from(C10_B))),
+        (Cnf::from_file(String::from(C11_A)), Cnf::from_file(String::from(C11_B))),
+        (Cnf::from_file(String::from(C12_A)), Cnf::from_file(String::from(C12_B))),
     )
 }
 
@@ -169,7 +218,7 @@ fn test_sdd_canonicity() -> () {
     for (cnf1, cnf2) in get_canonical_forms().into_iter() {
         let v : Vec<bdd::VarLabel> =
             (0..cnf1.num_vars()).map(|x| bdd::VarLabel::new(x as u64)).collect();
-        let vtree = even_split(&v, 2);
+        let vtree = even_split(&v, 3);
         let mut man = SddManager::new(vtree);
         let r1 = cnf1.into_sdd(&mut man);
         let r2 = cnf2.into_sdd(&mut man);

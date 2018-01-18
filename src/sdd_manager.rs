@@ -315,9 +315,15 @@ impl SddManager {
         }
 
         if r.len() == 2 {
-            if r[0].0 == r[1].0.neg() && r[0].1.is_const() && r[1].1.is_const() {
-                // replace with the non-negated prime
-                let new_v = r[0].0.regular();
+            // check for terms of the form [(a, T), (!a, F)] => a
+            let (p1, s1) = r[0];
+            let (p2, s2) = r[1];
+            if s1.is_true() && s2.is_false() {
+                let new_v = p1;
+                self.app_cache[lca].insert((a, b), new_v.clone());
+                return new_v;
+            } else if s1.is_false() && s2.is_true() {
+                let new_v = p2;
                 self.app_cache[lca].insert((a, b), new_v.clone());
                 return new_v;
             }
