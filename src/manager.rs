@@ -1,4 +1,5 @@
 use bdd_table::BddTable;
+use std::fmt::Debug;
 use var_order::VarOrder;
 use bdd::*;
 use std::collections::{HashMap, HashSet};
@@ -316,8 +317,94 @@ impl BddManager {
         self.count_nodes_h(ptr, &mut HashSet::new())
     }
 
-    // pub fn 
-
+    /// a helper function for WMC which tracks the current variable level for
+    /// on-the-fly smoothing. Returns a pair: the first element is the sum of
+    /// the node, and the second element is the expected parent of that node; in
+    /// the case of the node being the top variable, then the expected parent
+    /// will be the variable itself
+    fn wmc_helper<T: Num + Clone + Debug>(
+        &self,
+        ptr: BddPtr,
+        lbl_to_v: &[(T, T)],
+        zero: &T,
+        one: &T,
+    ) -> (T, VarLabel) {
+        use bdd::PointerType;
+        match ptr.ptr_type() {
+            PointerType::PtrTrue => (
+                one.clone(),
+                self.get_order().last_var(),
+            ),
+            PointerType::PtrFalse => (
+                zero.clone(),
+                self.get_order().last_var()
+            ),
+            PointerType::PtrNode => {
+                let order = self.get_order();
+                let bdd = self.deref(ptr).into_node();
+                let (low, high) = if ptr.is_compl() {
+                    (bdd.low.neg(), bdd.high.neg() )
+                } else {
+                    (bdd.low, bdd.high)
+                };
+                let (mut low_v, mut low_lvl) = self.wmc_helper(low, lbl_to_v, zero, one);
+                let (mut high_v, mut high_lvl) = self.wmc_helper(high, lbl_to_v, zero, one);
+                println!(
+                    "var: {:?}, low_lvl: {:?}, high_lvl: {:?} low_v: {:?}, high_v: {:?}",
+                    ptr.label(),
+                    low_lvl,
+                    high_lvl,
+                    low_v,
+                    high_v
+                );
+                // smooth low
+                while order.lt(ptr.label(), low_lvl) {
+                    println!("smoothing low");
+                    let (low_factor, high_factor) = lbl_to_v[low_lvl.value() as usize].clone();
+                    low_v = (low_v.clone() * low_factor) + (low_v * high_factor);
+                    low_lvl = order.above(low_lvl);
+                }
+                // smooth high
+                while order.lt(ptr.label(), high_lvl) {
+                    println!("smoothing high");
+                    let (low_factor, high_factor) = lbl_to_v[high_lvl.value() as usize].clone();
+                    high_v = (high_v.clone() * low_factor) + (high_v * high_factor);
+                    high_lvl = order.above(high_lvl);
+                }
+                // compute new
+                let (low_factor, high_factor) = lbl_to_v[bdd.var.value() as usize].clone();
+                let res = (low_v * low_factor.clone()) + (high_v * high_factor.clone());
+                println!("factors: l: {:?}, h: {:?}, res: {:?}", low_factor.clone(), high_factor,
+                         res.clone()
+                );
+                if order.get(ptr.label()) == 0 {
+                    (res, ptr.label())
+                } else {
+                    (res, order.above(ptr.label()))
+                }
+            }
+        }
+    }
+    /// Weighted-model count. `v` is a vector of pairs of numeric values, with
+    /// the first value being the low value and the second being the high value.
+    /// The vector is an associative array, keyed by the variable label.
+    pub fn wmc<T: Num + Clone + Debug>(
+        &self,
+        ptr: BddPtr,
+        lbl_to_v: &[(T, T)],
+        zero: &T,
+        one: &T,
+    ) -> T {
+        // call wmc_helper and smooth the result
+        let (mut v, mut lvl) = self.wmc_helper(ptr, lbl_to_v, zero, one);
+        let order = self.get_order();
+        while order.lt(lvl, ptr.label()) {
+            lvl = order.above(lvl);
+            let (low_factor, high_factor) = lbl_to_v[lvl.value() as usize].clone();
+            v = (v.clone() * low_factor) + (v * high_factor);
+        }
+        v
+    }
 }
 
 // check that (a \/ b) /\ a === a
@@ -334,4 +421,26 @@ fn simple_equality() {
         man.print_bdd(v1),
         man.print_bdd(r2)
     );
+}
+
+#[test]
+fn test_wmc() {
+    let mut man = BddManager::new_default_order(2);
+    let v1 = man.var(VarLabel::new(0), true);
+    let v2 = man.var(VarLabel::new(1), true);
+    let r1 = man.or(v1, v2);
+    let weights : Vec<(usize, usize)> = vec![(2, 3), (5, 7)];
+    let wmc = man.wmc(r1, &weights, &0, &1);
+    assert_eq!(wmc, 50);
+}
+
+#[test]
+fn test_wmc_smooth() {
+    let mut man = BddManager::new_default_order(3);
+    let v1 = man.var(VarLabel::new(0), true);
+    let v2 = man.var(VarLabel::new(2), true);
+    let r1 = man.or(v1, v2);
+    let weights : Vec<(usize, usize)> = vec![(2, 3), (5, 7), (11, 13)];
+    let wmc = man.wmc(r1, &weights, &0, &1);
+    assert_eq!(wmc, 1176);
 }

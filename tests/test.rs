@@ -284,10 +284,10 @@ pub fn rand_bdds() -> () {
 }
 
 // #[test]
-pub fn unsat_sdd() -> () {
+pub fn big_sdd() -> () {
     use cnf::Cnf;
     // let file_contents = File::open("/Users/sholtzen/Downloads/sdd-1.1.1/cnf/c8-easier.cnf");
-    let file_contents = include_str!("../cnf/unsat-1.cnf");
+    let file_contents = include_str!("../cnf/c8.cnf");
     let cnf = Cnf::from_file(String::from(file_contents));
     let v : Vec<usize> = cnf.force_order().get_vec();
     let var_vec : Vec<bdd::VarLabel> =
@@ -295,14 +295,14 @@ pub fn unsat_sdd() -> () {
     let vtree = even_split(&var_vec, 2);
     let mut man = SddManager::new(vtree);
     let r = cnf.into_sdd(&mut man);
-    assert!(man.is_false(r), "Expected unsat");
+    // assert!(man.is_false(r), "Expected unsat");
 }
 
 // #[test]
-pub fn unsat_bdd() -> () {
+pub fn big_bdd() -> () {
     use cnf::Cnf;
     // let file_contents = File::open("/Users/sholtzen/Downloads/sdd-1.1.1/cnf/c8-easier.cnf");
-    let file_contents = include_str!("../cnf/unsat-1.cnf");
+    let file_contents = include_str!("../cnf/c8.cnf");
     let cnf = Cnf::from_file(String::from(file_contents));
     let v : Vec<bdd::VarLabel> = cnf.force_order()
         .get_vec()
@@ -312,7 +312,7 @@ pub fn unsat_bdd() -> () {
     let mut man =
         manager::BddManager::new(var_order::VarOrder::new(v));
     let r = cnf.into_bdd(&mut man);
-    assert!(man.is_false(r), "Expected unsat");
+    // assert!(man.is_false(r), "Expected unsat");
 }
 
 /// Randomized tests

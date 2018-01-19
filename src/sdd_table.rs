@@ -43,7 +43,7 @@ impl SddTable {
         for v in vtree.in_order_iter() {
             match v {
                 &BTree::Leaf(ref o) => {
-                    let man = BddManager::new(var_order::VarOrder::new(o.clone()));
+                    let mut new_order = Vec::new();
                     let mut m : HashMap<VarLabel, VarLabel> = HashMap::new();
                     for (var_idx, v) in o.iter().enumerate() {
                         t.sdd_to_bdd.insert(
@@ -51,7 +51,9 @@ impl SddTable {
                             VarLabel::new(var_idx as u64),
                         );
                         m.insert(VarLabel::new(var_idx as u64), v.clone());
+                        new_order.push(VarLabel::new(var_idx as u64));
                     }
+                    let man = BddManager::new(var_order::VarOrder::new(new_order));
                     t.tables.push(SubTable::BddSubTable { man: man, conv: m })
                 },
                 &BTree::Node(_, _, _) => {
