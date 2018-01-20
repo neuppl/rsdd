@@ -64,6 +64,6 @@ currently on the roadmap (and implicitly not implemented).
 | :-------------     | :-------------           | :-----   | :--------- | :---- |
 | :white_check_mark: | Conjunction              |          |            |       |
 | :white_check_mark: | Disjunction              |          |            |       |
-| :negation:         | Negation                 |          |            |       |
+| :white_check_mark: | Negation                 |          |            |       |
 | :x:                | Exists (single variable) | 4        | 1          |       |
 | :x:                | Condition                | 4        | 1          |       |
