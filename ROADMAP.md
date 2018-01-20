@@ -72,11 +72,12 @@ currently on the roadmap (and implicitly not implemented).
 
 ## API
 
-| Status         | Feature        | Priority | Difficulty | Notes |
-| :------------- | :------------- |   :----- | :--------- | :---- |
-| :x:            | Python API     |        2 |          4 |       |
-| :x:            | Java API       |        1 |          4 |       |
-| :x:            | OCaml API      |        1 |          4 |       |
+| Status         | Feature        | Priority | Difficulty | Notes                         |
+| :------------- | :------------- |   :----- | :--------- | :----                         |
+| :x:            | C API          |        3 |          2 | Essentially, make a `.h` file |
+| :x:            | Python API     |        2 |          4 |                               |
+| :x:            | Java API       |        1 |          4 |                               |
+| :x:            | OCaml API      |        1 |          4 |                               |
 
 ## Miscellaneous
 
