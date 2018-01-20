@@ -31,12 +31,12 @@ currently on the roadmap (and implicitly not implemented).
 ## SDD Operations
 
 | Status             | Feature                  | Priority | Difficulty | Notes |
-| :-------------     | :-------------           | :-----   | :--------- | :---- |
+| :-------------     | :-------------           |   :----- | :--------- | :---- |
 | :white_check_mark: | Conjunction              |          |            |       |
 | :white_check_mark: | Disjunction              |          |            |       |
-| :negation:         | Negation                 |          |            |       |
-| :x:                | Exists (single variable) | 4        | 1          |       |
-| :x:                | Condition                | 4        | 1          |       |
+| :x:                | Negation                 |          |            |       |
+| :x:                | Exists (single variable) |        4 |          1 |       |
+| :x:                | Condition                |        4 |          1 |       |
 
 ## BDD Queries
 
@@ -77,3 +77,11 @@ currently on the roadmap (and implicitly not implemented).
 | :x:            | Python API     |        2 |          4 |       |
 | :x:            | Java API       |        1 |          4 |       |
 | :x:            | OCaml API      |        1 |          4 |       |
+
+## Miscellaneous
+
+
+| Status         | Feature                | Priority | Difficulty | Notes         |
+| :------------- | :-------------         |   :----- | :--------- | :------------ |
+| :x:            | Benchmarks             |        3 |          2 |               |
+| :x:            | Continuous integration |        2 |          2 |               |
