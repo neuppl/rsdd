@@ -17,13 +17,15 @@ currently on the roadmap (and implicitly not implemented).
 
 ## SDD Representation
 
-| Status             | Feature              | Priority | Difficulty | Notes         |
-| :-------------     | :-------------       |   :----- | :--------- | :------------ |
-| :white_check_mark: | Complemented edges   |          |            |               |
-| :white_check_mark: | Trimming             |          |            |               |
-| :white_check_mark: | Canonicity           |          |            |               |
-| :x:                | Garbage collection   |        5 |          3 | May break API |
-| :x:                | Dynamic minimization |        1 |          5 |               |
+| Status             | Feature                   | Priority | Difficulty | Notes            |
+| :-------------     | :-------------            |   :----- | :--------- | :------------    |
+| :white_check_mark: | Complemented edges        |          |            |                  |
+| :white_check_mark: | Trimming                  |          |            |                  |
+| :white_check_mark: | Canonicity                |          |            |                  |
+| :x:                | Garbage collection        |        5 |          3 | May break API    |
+| :x:                | Dynamic minimization      |        1 |            |                  |
+| :x:                | Parallel application      |        2 |          5 | Research project |
+| :x:                | Probabilistic compression |        2 |          5 | Research project |
 
 
 ## SDD Operations
@@ -67,3 +69,11 @@ currently on the roadmap (and implicitly not implemented).
 | :white_check_mark: | Negation                 |          |            |       |
 | :x:                | Exists (single variable) | 4        | 1          |       |
 | :x:                | Condition                | 4        | 1          |       |
+
+## API
+
+| Status         | Feature        | Priority | Difficulty | Notes |
+| :------------- | :------------- |   :----- | :--------- | :---- |
+| :x:            | Python API     |        2 |          4 |       |
+| :x:            | Java API       |        1 |          4 |       |
+| :x:            | OCaml API      |        1 |          4 |       |
