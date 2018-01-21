@@ -156,6 +156,12 @@ pub struct BddNode {
     pub var: VarLabel,
 }
 
+impl BddNode {
+    pub fn new(low: BddPtr, high: BddPtr, var: VarLabel) -> BddNode {
+        BddNode { low: low, high: high, var: var }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Bdd {
     Node(BddNode),

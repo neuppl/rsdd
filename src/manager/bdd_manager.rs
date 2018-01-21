@@ -18,12 +18,16 @@ pub struct BddWmc<T: Num + Clone + Debug> {
     pub one: T,
     /// an associative array which maps variable labels to `(low, high)`
     /// valuations
-    pub var_to_val: Vec<(T, T)>
+    pub var_to_val: Vec<(T, T)>,
 }
 
 impl<T: Num + Clone + Debug> BddWmc<T> {
     fn new(zero: T, one: T, var_to_val: Vec<(T, T)>) -> BddWmc<T> {
-        BddWmc { zero: zero, one: one, var_to_val: var_to_val}
+        BddWmc {
+            zero: zero,
+            one: one,
+            var_to_val: var_to_val,
+        }
     }
 }
 
@@ -71,7 +75,7 @@ impl BddManager {
 
     /// Push a variable onto the stack
     pub fn var(&mut self, lbl: VarLabel, is_true: bool) -> BddPtr {
-        let bdd = Bdd::new_node(BddPtr::false_node(), BddPtr::true_node(), lbl);
+        let bdd = BddNode::new(BddPtr::false_node(), BddPtr::true_node(), lbl);
         let r = self.get_or_insert(bdd);
         if is_true { r } else { r.neg() }
     }
@@ -92,8 +96,15 @@ impl BddManager {
         ptr.is_false()
     }
 
-    fn get_or_insert(&mut self, bdd: Bdd) -> BddPtr {
-        self.compute_table.get_or_insert(bdd)
+    /// normalizes and fetches a node from the store
+    fn get_or_insert(&mut self, bdd: BddNode) -> BddPtr {
+        if bdd.high.is_compl() {
+            let bdd = Bdd::new_node(bdd.low.neg(), bdd.high.neg(), bdd.var);
+            self.compute_table.get_or_insert(bdd).neg()
+        } else {
+            let bdd = Bdd::new_node(bdd.low, bdd.high, bdd.var);
+            self.compute_table.get_or_insert(bdd)
+        }
     }
 
     pub fn print_bdd(&self, ptr: BddPtr) -> String {
@@ -170,6 +181,7 @@ impl BddManager {
             _ => false,
         }
     }
+
 
     pub fn and(&mut self, f: BddPtr, g: BddPtr) -> BddPtr {
         // base case
@@ -254,20 +266,51 @@ impl BddManager {
         if new_h == new_l {
             return new_h;
         } else {
-            let r = if new_h.is_compl() {
-                let bdd = Bdd::new_node(new_l.neg(), new_h.neg(), index);
-                self.get_or_insert(bdd).neg()
-            } else {
-                let bdd = Bdd::new_node(new_l, new_h, index);
-                self.get_or_insert(bdd)
-            };
+            let n = BddNode{low: new_l, high: new_h, var: index};
+            let r = self.get_or_insert(n);
             self.apply_table.insert(f, g, r);
             return r;
         }
     }
 
+    /// Compute the Boolean function `f || g`
     pub fn or(&mut self, f: BddPtr, g: BddPtr) -> BddPtr {
         self.and(f.neg(), g.neg()).neg()
+    }
+
+    /// Compute the Boolean function `f | var = value`
+    pub fn condition(&mut self, f: BddPtr, var: VarLabel, value: bool) -> BddPtr {
+        if f.is_const() {
+            f
+        } else {
+            let node = self.deref(f).into_node();
+            if f.label() == var {
+                // condition and return
+                let value = if f.is_compl() { !value } else { value };
+                if value {
+                    node.high
+                } else {
+                    node.low
+                }
+            } else {
+                // condition its children
+                let cond_l = self.condition(node.low, var, value);
+                let cond_h = self.condition(node.high, var, value);
+                if cond_l != node.low || cond_h != node.high {
+                    // cache and return the new BDD
+                    let new_bdd = BddNode{low: cond_l, high: cond_h, var: f.label()};
+                    let r = self.get_or_insert(new_bdd);
+                    if f.is_compl() {
+                        r.neg()
+                    } else {
+                        r
+                    }
+                } else {
+                    // just return this pointer; nothing changed
+                    f
+                }
+            }
+        }
     }
 
     /// evaluates the top element of the data stack on the values found in
@@ -343,23 +386,17 @@ impl BddManager {
     fn wmc_helper<T: Num + Clone + Debug>(
         &self,
         ptr: BddPtr,
-        wmc: &BddWmc<T>
+        wmc: &BddWmc<T>,
     ) -> (T, Option<VarLabel>) {
         use repr::bdd::PointerType;
         match ptr.ptr_type() {
-            PointerType::PtrTrue => (
-                wmc.one.clone(),
-                Some(self.get_order().last_var()),
-            ),
-            PointerType::PtrFalse => (
-                wmc.zero.clone(),
-                Some(self.get_order().last_var())
-            ),
+            PointerType::PtrTrue => (wmc.one.clone(), Some(self.get_order().last_var())),
+            PointerType::PtrFalse => (wmc.zero.clone(), Some(self.get_order().last_var())),
             PointerType::PtrNode => {
                 let order = self.get_order();
                 let bdd = self.deref(ptr).into_node();
                 let (low, high) = if ptr.is_compl() {
-                    (bdd.low.neg(), bdd.high.neg() )
+                    (bdd.low.neg(), bdd.high.neg())
                 } else {
                     (bdd.low, bdd.high)
                 };
@@ -369,21 +406,20 @@ impl BddManager {
                 let mut high_lvl = high_lvl_op.unwrap();
                 // smooth low
                 while order.lt(ptr.label(), low_lvl) {
-                    let (low_factor, high_factor) =
-                        wmc.var_to_val[low_lvl.value() as usize].clone();
+                    let (low_factor, high_factor) = wmc.var_to_val[low_lvl.value() as usize]
+                        .clone();
                     low_v = (low_v.clone() * low_factor) + (low_v * high_factor);
                     low_lvl = order.above(low_lvl).unwrap();
                 }
                 // smooth high
                 while order.lt(ptr.label(), high_lvl) {
-                    let (low_factor, high_factor) =
-                        wmc.var_to_val[high_lvl.value() as usize].clone();
+                    let (low_factor, high_factor) = wmc.var_to_val[high_lvl.value() as usize]
+                        .clone();
                     high_v = (high_v.clone() * low_factor) + (high_v * high_factor);
                     high_lvl = order.above(high_lvl).unwrap();
                 }
                 // compute new
-                let (low_factor, high_factor) =
-                    wmc.var_to_val[bdd.var.value() as usize].clone();
+                let (low_factor, high_factor) = wmc.var_to_val[bdd.var.value() as usize].clone();
                 let res = (low_v * low_factor.clone()) + (high_v * high_factor.clone());
                 if order.get(ptr.label()) == 0 {
                     (res, None)
@@ -396,11 +432,7 @@ impl BddManager {
     /// Weighted-model count. `v` is a vector of pairs of numeric values, with
     /// the first value being the low value and the second being the high value.
     /// The vector is an associative array, keyed by the variable label.
-    pub fn wmc<T: Num + Clone + Debug>(
-        &self,
-        ptr: BddPtr,
-        params: &BddWmc<T>
-    ) -> T {
+    pub fn wmc<T: Num + Clone + Debug>(&self, ptr: BddPtr, params: &BddWmc<T>) -> T {
         // call wmc_helper and smooth the result
         let (mut v, lvl_op) = self.wmc_helper(ptr, params);
         if lvl_op.is_none() {
@@ -411,8 +443,8 @@ impl BddManager {
             let mut lvl = lvl_op;
             let order = self.get_order();
             while lvl.is_some() {
-                let (low_factor, high_factor) =
-                    params.var_to_val[lvl.unwrap().value() as usize].clone();
+                let (low_factor, high_factor) = params.var_to_val[lvl.unwrap().value() as usize]
+                    .clone();
                 v = (v.clone() * low_factor) + (v * high_factor);
                 lvl = order.above(lvl.unwrap());
             }
@@ -455,9 +487,7 @@ impl BddManager {
 
     pub fn from_boolexpr(&mut self, expr: &BoolExpr) -> BddPtr {
         match expr {
-            &BoolExpr::Var(lbl, polarity) => {
-                self.var(VarLabel::new(lbl as u64), polarity)
-            }
+            &BoolExpr::Var(lbl, polarity) => self.var(VarLabel::new(lbl as u64), polarity),
             &BoolExpr::And(ref l, ref r) => {
                 let r1 = self.from_boolexpr(l);
                 let r2 = self.from_boolexpr(r);
@@ -494,7 +524,7 @@ fn test_wmc() {
     let v1 = man.var(VarLabel::new(0), true);
     let v2 = man.var(VarLabel::new(1), true);
     let r1 = man.or(v1, v2);
-    let weights : Vec<(usize, usize)> = vec![(2, 3), (5, 7)];
+    let weights: Vec<(usize, usize)> = vec![(2, 3), (5, 7)];
     let params = BddWmc::new(0, 1, weights);
     let wmc = man.wmc(r1, &params);
     assert_eq!(wmc, 50);
@@ -506,7 +536,7 @@ fn test_wmc_smooth() {
     let v1 = man.var(VarLabel::new(0), true);
     let v2 = man.var(VarLabel::new(2), true);
     let r1 = man.or(v1, v2);
-    let weights : Vec<(usize, usize)> = vec![(2, 3), (5, 7), (11, 13)];
+    let weights: Vec<(usize, usize)> = vec![(2, 3), (5, 7), (11, 13)];
     let params = BddWmc::new(0, 1, weights);
     let wmc = man.wmc(r1, &params);
     assert_eq!(wmc, 1176);
@@ -515,10 +545,32 @@ fn test_wmc_smooth() {
 #[test]
 fn test_wmc_smooth2() {
     let man = BddManager::new_default_order(3);
-    let weights : Vec<(usize, usize)> = vec![(2, 3), (5, 7), (11, 13)];
+    let weights: Vec<(usize, usize)> = vec![(2, 3), (5, 7), (11, 13)];
     let r1 = BddPtr::true_node();
     let params = BddWmc::new(0, 1, weights);
     let wmc = man.wmc(r1, &params);
     assert_eq!(wmc, 1440);
 }
 
+#[test]
+fn test_condition() {
+    let mut man = BddManager::new_default_order(3);
+    let v1 = man.var(VarLabel::new(0), true);
+    let v2 = man.var(VarLabel::new(1), true);
+    let r1 = man.or(v1, v2);
+    let r3 = man.condition(r1, VarLabel::new(1), false);
+    assert!(man.eq_bdd(r3, v1));
+}
+
+#[test]
+fn test_condition_compl() {
+    let mut man = BddManager::new_default_order(3);
+    let v1 = man.var(VarLabel::new(0), false);
+    let v2 = man.var(VarLabel::new(1), false);
+    let r1 = man.and(v1, v2);
+    let r3 = man.condition(r1, VarLabel::new(1), false);
+    assert!(man.eq_bdd(r3, v1), "Not eq:\nOne: {}\nTwo: {}",
+            man.print_bdd(r3),
+            man.print_bdd(v1)
+    );
+}

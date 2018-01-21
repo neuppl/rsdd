@@ -4,11 +4,26 @@ use repr::var_label::VarLabel;
 use std::collections::{HashMap, HashSet};
 use manager::ref_table::*;
 use manager::cache::lru::*;
+use manager::bdd_manager::BddWmc;
 use repr::cnf::Cnf;
 use quickersort;
 use util::btree::*;
 use repr::boolexpr::BoolExpr;
 use num::traits::Num;
+
+/*
+/// SDD weighted model counting parameters
+pub struct SddWmc<T: std::fmt::Debug + Clone + Num> {
+    /// a vector of parameters for the child BDD weighted model counts
+    bdd_wmc: Vec<BddWmc<T>>
+}
+
+impl<T: std::fmt::Debug + Clone + Num> SddWmc<T> {
+    fn new(vtree: &VTree, var_to_v: Vec<T>,  zero: T, one: T) -> SddWmc {
+        // convert var_to_v into a mapping from SDD -> Value to BDD -> Value
+    }
+}
+ */
 
 /// generate an even vtree by splitting a variable ordering in half `num_splits`
 /// times
