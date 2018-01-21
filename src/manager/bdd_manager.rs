@@ -324,24 +324,23 @@ impl BddManager {
     /// a helper function for WMC which tracks the current variable level for
     /// on-the-fly smoothing. Returns a pair: the first element is the sum of
     /// the node, and the second element is the expected parent of that node; in
-    /// the case of the node being the top variable, then the expected parent
-    /// will be the variable itself
+    /// the case of the node being the top variable, then `None` is returned
     fn wmc_helper<T: Num + Clone + Debug>(
         &self,
         ptr: BddPtr,
         lbl_to_v: &[(T, T)],
         zero: &T,
         one: &T,
-    ) -> (T, VarLabel) {
+    ) -> (T, Option<VarLabel>) {
         use repr::bdd::PointerType;
         match ptr.ptr_type() {
             PointerType::PtrTrue => (
                 one.clone(),
-                self.get_order().last_var(),
+                Some(self.get_order().last_var()),
             ),
             PointerType::PtrFalse => (
                 zero.clone(),
-                self.get_order().last_var()
+                Some(self.get_order().last_var())
             ),
             PointerType::PtrNode => {
                 let order = self.get_order();
@@ -351,27 +350,29 @@ impl BddManager {
                 } else {
                     (bdd.low, bdd.high)
                 };
-                let (mut low_v, mut low_lvl) = self.wmc_helper(low, lbl_to_v, zero, one);
-                let (mut high_v, mut high_lvl) = self.wmc_helper(high, lbl_to_v, zero, one);
+                let (mut low_v, low_lvl_op) = self.wmc_helper(low, lbl_to_v, zero, one);
+                let (mut high_v, high_lvl_op) = self.wmc_helper(high, lbl_to_v, zero, one);
+                let mut low_lvl = low_lvl_op.unwrap();
+                let mut high_lvl = high_lvl_op.unwrap();
                 // smooth low
                 while order.lt(ptr.label(), low_lvl) {
                     let (low_factor, high_factor) = lbl_to_v[low_lvl.value() as usize].clone();
                     low_v = (low_v.clone() * low_factor) + (low_v * high_factor);
-                    low_lvl = order.above(low_lvl);
+                    low_lvl = order.above(low_lvl).unwrap();
                 }
                 // smooth high
                 while order.lt(ptr.label(), high_lvl) {
                     let (low_factor, high_factor) = lbl_to_v[high_lvl.value() as usize].clone();
                     high_v = (high_v.clone() * low_factor) + (high_v * high_factor);
-                    high_lvl = order.above(high_lvl);
+                    high_lvl = order.above(high_lvl).unwrap();
                 }
                 // compute new
                 let (low_factor, high_factor) = lbl_to_v[bdd.var.value() as usize].clone();
                 let res = (low_v * low_factor.clone()) + (high_v * high_factor.clone());
                 if order.get(ptr.label()) == 0 {
-                    (res, ptr.label())
+                    (res, None)
                 } else {
-                    (res, order.above(ptr.label()))
+                    (res, Some(order.above(ptr.label()).unwrap()))
                 }
             }
         }
@@ -387,14 +388,21 @@ impl BddManager {
         one: &T,
     ) -> T {
         // call wmc_helper and smooth the result
-        let (mut v, mut lvl) = self.wmc_helper(ptr, lbl_to_v, zero, one);
-        let order = self.get_order();
-        while order.lt(lvl, ptr.label()) {
-            lvl = order.above(lvl);
-            let (low_factor, high_factor) = lbl_to_v[lvl.value() as usize].clone();
-            v = (v.clone() * low_factor) + (v * high_factor);
+        let (mut v, lvl_op) = self.wmc_helper(ptr, lbl_to_v, zero, one);
+        if lvl_op.is_none() {
+            // no smoothing required
+            v
+        } else {
+            // need to smooth
+            let mut lvl = lvl_op;
+            let order = self.get_order();
+            while lvl.is_some() {
+                let (low_factor, high_factor) = lbl_to_v[lvl.unwrap().value() as usize].clone();
+                v = (v.clone() * low_factor) + (v * high_factor);
+                lvl = order.above(lvl.unwrap());
+            }
+            v
         }
-        v
     }
 
     pub fn from_cnf(&mut self, cnf: &Cnf) -> BddPtr {
@@ -485,5 +493,14 @@ fn test_wmc_smooth() {
     let weights : Vec<(usize, usize)> = vec![(2, 3), (5, 7), (11, 13)];
     let wmc = man.wmc(r1, &weights, &0, &1);
     assert_eq!(wmc, 1176);
+}
+
+#[test]
+fn test_wmc_smooth2() {
+    let mut man = BddManager::new_default_order(3);
+    let weights : Vec<(usize, usize)> = vec![(2, 3), (5, 7), (11, 13)];
+    let r1 = BddPtr::true_node();
+    let wmc = man.wmc(r1, &weights, &0, &1);
+    assert_eq!(wmc, 1440);
 }
 

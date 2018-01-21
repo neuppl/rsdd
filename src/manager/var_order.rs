@@ -42,10 +42,20 @@ impl VarOrder {
         self.var_to_pos[var.value() as usize]
     }
 
+    pub fn var_at_pos(&self, pos: usize) -> VarLabel {
+        VarLabel::new(self.pos_to_var[pos].clone() as u64)
+    }
+
     /// true if `a` is before `b` in this ordering
     pub fn lt(&self, a: VarLabel, b: VarLabel) -> bool {
         self.var_to_pos[a.value() as usize] < self.var_to_pos[b.value() as usize]
     }
+
+    /// true if `a` is before or equal to `b` in the ordering
+    pub fn lte(&self, a: VarLabel, b: VarLabel) -> bool {
+        self.var_to_pos[a.value() as usize] <= self.var_to_pos[b.value() as usize]
+    }
+
 
     /// returns whichever BddPtr occurs first in a given ordering
     pub fn first(&self, a: BddPtr, b: BddPtr) -> BddPtr {
@@ -70,10 +80,14 @@ impl VarOrder {
         self.var_to_pos.iter()
     }
 
-    /// Get the variable that appears above `a` in the current order
-    pub fn above(&self, a: VarLabel) -> VarLabel {
+    /// Get the variable that appears above `a` in the current order; `None` if `a` is first in the order
+    pub fn above(&self, a: VarLabel) -> Option<VarLabel> {
         let this_level = self.var_to_pos[a.value() as usize];
-        VarLabel::new(self.pos_to_var[this_level - 1] as u64)
+        if this_level == 0 {
+            None
+        } else {
+            Some(VarLabel::new(self.pos_to_var[this_level - 1] as u64))
+        }
     }
 
     /// get the first essential variable (i.e., the variable that comes first in
@@ -100,5 +114,5 @@ fn var_order_basics() {
     let lbl2 = VarLabel::new(5);
     assert_eq!(order.lt(lbl1, lbl2), true);
     assert_eq!(order.lt(lbl2, lbl1), false);
-    assert_eq!(order.above(lbl2), lbl1);
+    assert_eq!(order.above(lbl2).unwrap(), lbl1);
 }
