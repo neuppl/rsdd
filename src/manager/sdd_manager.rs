@@ -8,6 +8,7 @@ use repr::cnf::Cnf;
 use quickersort;
 use util::btree::*;
 use repr::boolexpr::BoolExpr;
+use num::traits::Num;
 
 /// generate an even vtree by splitting a variable ordering in half `num_splits`
 /// times
@@ -409,6 +410,8 @@ impl SddManager {
         self.print_sdd_internal(int_ptr)
     }
 
+    /// Evaluate an SDD on a set of input Boolean variable values
+    /// TODO: This is *highly* inefficient, fix it
     pub fn eval_sdd(&self, ptr: ExternalRef, assgn: &HashMap<VarLabel, bool>) -> bool {
         fn helper(man: &SddManager, sdd: SddPtr, assgn: &HashMap<VarLabel, bool>) -> bool {
             if sdd.is_false() {
@@ -444,6 +447,16 @@ impl SddManager {
         let i = self.external_table.into_internal(ptr);
         helper(self, i, assgn)
     }
+
+    // fn wmc_helper<T: Num + Clone + Debug>(
+    //     &'a self,
+    //     ptr: SddPtr,
+    //     vtree_to_v: 
+    //     zero: &T,
+    //     one: &T
+    // ) -> (T, Option<&'a VTree>) {
+    //     if ptr.
+    // }
 
 
     fn eq(&self, a: SddPtr, b: SddPtr) -> bool {
@@ -501,9 +514,7 @@ impl SddManager {
 
     pub fn from_boolexpr(&mut self, expr: &BoolExpr) -> ExternalRef {
         match expr {
-            &BoolExpr::Var(lbl, polarity) => {
-                self.var(VarLabel::new(lbl as u64), polarity)
-            }
+            &BoolExpr::Var(lbl, polarity) => self.var(VarLabel::new(lbl as u64), polarity),
             &BoolExpr::And(ref l, ref r) => {
                 let r1 = self.from_boolexpr(l);
                 let r2 = self.from_boolexpr(r);
