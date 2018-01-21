@@ -1,8 +1,8 @@
-use robin_hood::{BackedRobinHoodTable};
-use cuckoo_store::CuckooStore;
+use backing_store::robin_hood::*;
 use backing_store::{BackingCacheStats, BackingPtr};
-use bdd::*;
-use var_order::VarOrder;
+use repr::bdd::*;
+use repr::var_label::VarLabel;
+use manager::var_order::VarOrder;
 
 const DEFAULT_SUBTABLE_SZ: usize = 16384;
 

@@ -1,12 +1,12 @@
-use sdd::*;
-use manager::BddManager;
-use robin_hood::*;
-use btree::*;
+use repr::sdd::*;
+use manager::bdd_manager::BddManager;
+use backing_store::robin_hood::*;
+use util::btree::*;
 use std::collections::HashMap;
 use backing_store::*;
-use bdd::VarLabel;
+use repr::var_label::VarLabel;
 use std::slice::{from_raw_parts};
-use var_order;
+use manager::var_order::VarOrder;
 
 
 const DEFAULT_RH_SZ: usize = 32768;
@@ -53,7 +53,7 @@ impl SddTable {
                         m.insert(VarLabel::new(var_idx as u64), v.clone());
                         new_order.push(VarLabel::new(var_idx as u64));
                     }
-                    let man = BddManager::new(var_order::VarOrder::new(new_order));
+                    let man = BddManager::new(VarOrder::new(new_order));
                     t.tables.push(SubTable::BddSubTable { man: man, conv: m })
                 },
                 &BTree::Node(_, _, _) => {
@@ -125,7 +125,7 @@ impl SddTable {
 
     pub fn bdd_conv(&self, node: usize) -> &HashMap<VarLabel, VarLabel> {
         match &self.tables[node] {
-            &SubTable::BddSubTable{man: ref man, conv: ref conv} => {
+            &SubTable::BddSubTable{ref man, ref conv} => {
                 conv
             },
             _ => panic!("dereferencing SDD into BDD")
@@ -136,7 +136,7 @@ impl SddTable {
     /// Panics if it not a BDD
     pub fn bdd_man_mut(&mut self, node: usize) -> &mut BddManager {
         match &mut self.tables[node] {
-            &mut SubTable::BddSubTable{man: ref mut man, conv: ref conv} => {
+            &mut SubTable::BddSubTable{ref mut man, ref conv} => {
                 man
             },
             _ => panic!("dereferencing SDD into BDD")

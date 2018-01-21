@@ -1,5 +1,11 @@
+//! Useful utilities and generic data structures used throughout the library
+
+pub mod btree;
+
 use std::ptr;
 
+/// A generic bit-field which makes it easier to get and set
+/// bit-level fields
 #[macro_export]
 macro_rules! BITFIELD {
     ($base:ident $field:ident: $fieldtype:ty [

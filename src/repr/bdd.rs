@@ -1,33 +1,15 @@
 use std::hash::{Hash, Hasher};
-use twox_hash;
 use std::fmt;
-#[macro_use]
 use std::mem;
+use repr::var_label::*;
 
-/// number of bits allocated for variable label (limit on total number of
-/// variables)
-const VAR_BITS: usize = 11;
+
 /// number of bits allocated for a table index (limit on total BDDs of each
 /// variable)
 const INDEX_BITS: usize = 64 - VAR_BITS - 1; // reserve 1 bit for special
 
 const TRUE_VALUE: u64 = 1; // the variable ID corresponding with a true value
 
-
-/// a label for each distinct variable in the BDD
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Copy)]
-pub struct VarLabel(u64);
-impl VarLabel {
-    #[inline]
-    pub fn new(v: u64) -> VarLabel {
-        assert!(v < 1 << VAR_BITS - 1, "Variable identifier overflow");
-        VarLabel(v)
-    }
-    #[inline]
-    pub fn value(&self) -> u64 {
-        self.0
-    }
-}
 
 /// Index into BDD table
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -220,10 +202,4 @@ impl ToplessBdd {
             high: high,
         }
     }
-}
-
-#[derive(Debug, Hash, Eq, PartialEq, Clone, Copy)]
-pub enum Op {
-    BddOr,
-    BddAnd,
 }

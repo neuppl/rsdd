@@ -1,12 +1,14 @@
-use apply_cache::*;
-use bdd::*;
+//! Apply cache for BDD operations
+use manager::cache::lru::*;
+use repr::bdd::*;
+use repr::var_label::VarLabel;
 
 const INITIAL_CAPACITY: usize = 17; // given as a power of two
 
 /// The top-level data structure which caches applications
 pub struct BddApplyTable {
     /// a table of Ite triples
-    table: Vec<SubTable<(BddPtr, BddPtr), BddPtr>>,
+    table: Vec<Lru<(BddPtr, BddPtr), BddPtr>>,
 }
 
 impl BddApplyTable {
@@ -15,7 +17,7 @@ impl BddApplyTable {
             table: Vec::with_capacity(num_vars),
         };
         for _ in 0..num_vars {
-            tbl.table.push(SubTable::new(INITIAL_CAPACITY));
+            tbl.table.push(Lru::new(INITIAL_CAPACITY));
         }
         tbl
     }

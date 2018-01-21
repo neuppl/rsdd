@@ -1,13 +1,13 @@
-use sdd::*;
-use bdd::{VarLabel, Op};
-use sdd_table::*;
-use std::rc::Rc;
+use repr::sdd::*;
+use backing_store::sdd_table::*;
+use repr::var_label::VarLabel;
 use std::collections::{HashMap, HashSet};
-use ref_table::*;
-use apply_cache::*;
+use manager::ref_table::*;
+use manager::cache::lru::*;
+use repr::cnf::Cnf;
 use quickersort;
-use btree::*;
-use pretty;
+use util::btree::*;
+use repr::boolexpr::BoolExpr;
 
 /// generate an even vtree by splitting a variable ordering in half `num_splits`
 /// times
@@ -31,7 +31,7 @@ pub struct SddManager {
     /// computation
     parent_ptr: Vec<(Option<usize>, usize)>,
     external_table: ExternalRefTable<SddPtr>,
-    app_cache: Vec<SubTable<(SddPtr, SddPtr), SddPtr>>,
+    app_cache: Vec<Lru<(SddPtr, SddPtr), SddPtr>>,
 }
 
 /// produces a vector of pointers to vtrees such that (i) the order is given by
@@ -102,7 +102,7 @@ impl SddManager {
     pub fn new(vtree: VTree) -> SddManager {
         let mut app_cache = Vec::new();
         for _ in vtree.in_order_iter() {
-            app_cache.push(SubTable::new(17));
+            app_cache.push(Lru::new(17));
         }
         SddManager {
             tbl: SddTable::new(&vtree),
@@ -365,19 +365,6 @@ impl SddManager {
         self.external_table.gen_or_inc(r)
     }
 
-
-    pub fn apply(&mut self, op: Op, a: ExternalRef, b: ExternalRef) -> ExternalRef {
-        // println!("applying {} to {} with op {:?}", self.print_sdd(a), self.print_sdd(b), op);
-        let i_a = self.external_table.into_internal(a);
-        let i_b = self.external_table.into_internal(b);
-        let r = match op {
-            Op::BddAnd => self.and_rec(i_a, i_b),
-            Op::BddOr => self.or_internal(i_a, i_b),
-        };
-        let r = self.external_table.gen_or_inc(r);
-        r
-    }
-
     fn print_sdd_internal(&self, ptr: SddPtr) -> String {
         use pretty::*;
         fn helper(man: &SddManager, ptr: SddPtr) -> Doc<BoxDoc> {
@@ -477,6 +464,57 @@ impl SddManager {
         let a_int = self.external_table.into_internal(a);
         let b_int = self.external_table.into_internal(b);
         self.eq(a_int, b_int)
+    }
+
+    pub fn from_cnf(&mut self, cnf: &Cnf) -> ExternalRef {
+        let mut cvec: Vec<ExternalRef> = Vec::with_capacity(cnf.clauses().len());
+        for lit_vec in cnf.clauses().iter() {
+            assert!(lit_vec.len() > 0, "empty cnf");
+            let (vlabel, val) = lit_vec[0];
+            let mut sdd = self.var(vlabel, val);
+            for i in 1..lit_vec.len() {;
+                let (vlabel, val) = lit_vec[i];
+                let var = self.var(vlabel, val);
+                sdd = self.or(sdd, var);
+            }
+            cvec.push(sdd);
+        }
+        // now cvec has a list of all the clauses; collapse it down
+        fn helper(vec: &[ExternalRef], man: &mut SddManager) -> Option<ExternalRef> {
+            if vec.len() == 0 {
+                None
+            } else if vec.len() == 1 {
+                return Some(vec[0]);
+            } else {
+                let (l, r) = vec.split_at(vec.len() / 2);
+                let sub_l = helper(l, man);
+                let sub_r = helper(r, man);
+                match (sub_l, sub_r) {
+                    (None, None) => None,
+                    (Some(v), None) | (None, Some(v)) => Some(v),
+                    (Some(l), Some(r)) => Some(man.and(l, r)),
+                }
+            }
+        }
+        helper(&cvec, self).unwrap()
+    }
+
+    pub fn from_boolexpr(&mut self, expr: &BoolExpr) -> ExternalRef {
+        match expr {
+            &BoolExpr::Var(lbl, polarity) => {
+                self.var(VarLabel::new(lbl as u64), polarity)
+            }
+            &BoolExpr::And(ref l, ref r) => {
+                let r1 = self.from_boolexpr(l);
+                let r2 = self.from_boolexpr(r);
+                self.and(r1, r2)
+            }
+            &BoolExpr::Or(ref l, ref r) => {
+                let r1 = self.from_boolexpr(l);
+                let r2 = self.from_boolexpr(r);
+                self.or(r1, r2)
+            }
+        }
     }
 }
 

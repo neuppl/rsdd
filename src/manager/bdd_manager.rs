@@ -1,11 +1,15 @@
-use bdd_table::BddTable;
+//! Primary interface for manipulating and constructing BDDs
+
+use manager::cache::bdd_app::*;
 use std::fmt::Debug;
-use var_order::VarOrder;
-use bdd::*;
+use manager::var_order::VarOrder;
+use repr::var_label::VarLabel;
+use repr::bdd::*;
+use repr::cnf::Cnf;
+use repr::boolexpr::BoolExpr;
 use std::collections::{HashMap, HashSet};
-use bdd_cache::BddApplyTable;
-use apply_cache;
 use backing_store::BackingCacheStats;
+use backing_store::bdd_table::BddTable;
 use num::traits::Num;
 
 pub struct BddManager {
@@ -78,7 +82,7 @@ impl BddManager {
     }
 
     pub fn print_bdd(&self, ptr: BddPtr) -> String {
-        use bdd::PointerType::*;
+        use repr::bdd::PointerType::*;
         fn print_bdd_helper(t: &BddManager, ptr: BddPtr) -> String {
             match ptr.ptr_type() {
                 PtrTrue => String::from("T"),
@@ -109,7 +113,7 @@ impl BddManager {
     }
 
     pub fn print_bdd_lbl(&self, ptr: BddPtr, map: &HashMap<VarLabel, VarLabel>) -> String {
-        use bdd::PointerType::*;
+        use repr::bdd::PointerType::*;
         fn print_bdd_helper(
             t: &BddManager,
             ptr: BddPtr,
@@ -284,9 +288,9 @@ impl BddManager {
         a == b
     }
 
-    pub fn get_apply_cache_stats(&self) -> Vec<apply_cache::ApplyCacheStats> {
-        self.apply_table.get_stats()
-    }
+    // pub fn get_apply_cache_stats(&self) -> Vec<ApplyCacheStats> {
+    //     self.apply_table.get_stats()
+    // }
 
     pub fn get_backing_store_stats(&self) -> BackingCacheStats {
         self.compute_table.get_stats().clone()
@@ -329,7 +333,7 @@ impl BddManager {
         zero: &T,
         one: &T,
     ) -> (T, VarLabel) {
-        use bdd::PointerType;
+        use repr::bdd::PointerType;
         match ptr.ptr_type() {
             PointerType::PtrTrue => (
                 one.clone(),
@@ -349,24 +353,14 @@ impl BddManager {
                 };
                 let (mut low_v, mut low_lvl) = self.wmc_helper(low, lbl_to_v, zero, one);
                 let (mut high_v, mut high_lvl) = self.wmc_helper(high, lbl_to_v, zero, one);
-                println!(
-                    "var: {:?}, low_lvl: {:?}, high_lvl: {:?} low_v: {:?}, high_v: {:?}",
-                    ptr.label(),
-                    low_lvl,
-                    high_lvl,
-                    low_v,
-                    high_v
-                );
                 // smooth low
                 while order.lt(ptr.label(), low_lvl) {
-                    println!("smoothing low");
                     let (low_factor, high_factor) = lbl_to_v[low_lvl.value() as usize].clone();
                     low_v = (low_v.clone() * low_factor) + (low_v * high_factor);
                     low_lvl = order.above(low_lvl);
                 }
                 // smooth high
                 while order.lt(ptr.label(), high_lvl) {
-                    println!("smoothing high");
                     let (low_factor, high_factor) = lbl_to_v[high_lvl.value() as usize].clone();
                     high_v = (high_v.clone() * low_factor) + (high_v * high_factor);
                     high_lvl = order.above(high_lvl);
@@ -374,9 +368,6 @@ impl BddManager {
                 // compute new
                 let (low_factor, high_factor) = lbl_to_v[bdd.var.value() as usize].clone();
                 let res = (low_v * low_factor.clone()) + (high_v * high_factor.clone());
-                println!("factors: l: {:?}, h: {:?}, res: {:?}", low_factor.clone(), high_factor,
-                         res.clone()
-                );
                 if order.get(ptr.label()) == 0 {
                     (res, ptr.label())
                 } else {
@@ -404,6 +395,57 @@ impl BddManager {
             v = (v.clone() * low_factor) + (v * high_factor);
         }
         v
+    }
+
+    pub fn from_cnf(&mut self, cnf: &Cnf) -> BddPtr {
+        let mut cvec: Vec<BddPtr> = Vec::with_capacity(cnf.clauses().len());
+        for lit_vec in cnf.clauses().iter() {
+            assert!(lit_vec.len() > 0, "empty cnf");
+            let (vlabel, val) = lit_vec[0];
+            let mut bdd = self.var(vlabel, val);
+            for i in 1..lit_vec.len() {;
+                let (vlabel, val) = lit_vec[i];
+                let var = self.var(vlabel, val);
+                bdd = self.or(bdd, var);
+            }
+            cvec.push(bdd);
+        }
+        // now cvec has a list of all the clauses; collapse it down
+        fn helper(vec: &[BddPtr], man: &mut BddManager) -> Option<BddPtr> {
+            if vec.len() == 0 {
+                None
+            } else if vec.len() == 1 {
+                return Some(vec[0]);
+            } else {
+                let (l, r) = vec.split_at(vec.len() / 2);
+                let sub_l = helper(l, man);
+                let sub_r = helper(r, man);
+                match (sub_l, sub_r) {
+                    (None, None) => None,
+                    (Some(v), None) | (None, Some(v)) => Some(v),
+                    (Some(l), Some(r)) => Some(man.and(l, r)),
+                }
+            }
+        }
+        helper(&cvec, self).unwrap()
+    }
+
+    pub fn from_boolexpr(&mut self, expr: &BoolExpr) -> BddPtr {
+        match expr {
+            &BoolExpr::Var(lbl, polarity) => {
+                self.var(VarLabel::new(lbl as u64), polarity)
+            }
+            &BoolExpr::And(ref l, ref r) => {
+                let r1 = self.from_boolexpr(l);
+                let r2 = self.from_boolexpr(r);
+                self.and(r1, r2)
+            }
+            &BoolExpr::Or(ref l, ref r) => {
+                let r1 = self.from_boolexpr(l);
+                let r2 = self.from_boolexpr(r);
+                self.or(r1, r2)
+            }
+        }
     }
 }
 
@@ -444,3 +486,4 @@ fn test_wmc_smooth() {
     let wmc = man.wmc(r1, &weights, &0, &1);
     assert_eq!(wmc, 1176);
 }
+

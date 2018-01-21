@@ -1,5 +1,5 @@
-//! Stores BDD applications in an LRU cache.
-use bdd::*;
+//! A generic lossy LRU cache
+
 use std::fmt::Debug;
 use util::*;
 use std::hash::{Hasher, Hash};
@@ -41,9 +41,6 @@ fn pow_cap(v: usize, p: usize) -> usize {
     v & mask(p)
 }
 
-#[derive(Debug, Hash, Eq, PartialEq, Clone)]
-pub struct ApplyOp(pub Op, pub BddPtr, pub BddPtr);
-
 /// Data structure stored in the subtables
 #[derive(Debug, Hash, Clone)]
 struct Element<K, V>
@@ -69,7 +66,7 @@ where
 }
 
 /// Each variable has an associated sub-table
-pub struct SubTable<K, V>
+pub struct Lru<K, V>
 where
     K: Hash + Clone + Eq + PartialEq + Debug,
     V: Eq + PartialEq + Clone,
@@ -81,15 +78,15 @@ where
 }
 
 
-impl<K, V> SubTable<K, V>
+impl<K, V> Lru<K, V>
 where
     K: Hash + Clone + Eq + PartialEq + Debug,
     V: Eq + PartialEq + Clone,
 {
     /// create a new bdd cache with capacity `cap`, given as a power of 2
-    pub fn new(cap: usize) -> SubTable<K, V> {
+    pub fn new(cap: usize) -> Lru<K, V> {
         let v: Vec<Option<Element<K, V>>> = zero_vec(1 << cap);
-        SubTable {
+        Lru {
             tbl: v,
             len: 0,
             cap: cap,
@@ -142,7 +139,7 @@ where
     fn grow(&mut self) -> () {
         let new_sz = self.cap + 1;
         let new_v = zero_vec(1 << new_sz);
-        let mut new_tbl = SubTable {
+        let mut new_tbl = Lru {
             tbl: new_v,
             len: 0,
             cap: new_sz,
@@ -181,7 +178,7 @@ where
 
 #[test]
 fn test_cache() {
-    let mut c : SubTable<u64, u64> = SubTable::new(14);
+    let mut c : Lru<u64, u64> = Lru::new(14);
     for i in 0..10000 {
         c.insert(i, i);
     }

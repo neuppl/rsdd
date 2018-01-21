@@ -4,13 +4,12 @@ use backing_store::*;
 use util::zero_vec;
 use std::hash::{Hasher, Hash};
 use fnv::FnvHasher;
-use twox_hash::XxHash;
 use std::fmt::Debug;
 
 /// the size of each sub-cuckoo-table, as a power of two
-const tbl_sz: usize = 19;
+const TBL_SZ: usize = 19;
 /// number of sub-tables
-const num_tbl: usize = 2;
+const NUM_TBL: usize = 2;
 
 #[inline]
 fn mask(p: usize) -> usize {
@@ -77,7 +76,7 @@ where
     T: Hash + PartialEq + Eq + Clone + Debug,
 {
     /// hash table which stores indexes in the elem vector
-    tbl: [Vec<Option<BackingPtr>>; num_tbl],
+    tbl: [Vec<Option<BackingPtr>>; NUM_TBL],
     /// backing store for BDDs
     store: Vec<Elem<T>>,
     stats: BackingCacheStats,
@@ -90,12 +89,12 @@ where
     pub fn new() -> CuckooStore<T> {
         CuckooStore {
             tbl: [
-                zero_vec(1 << tbl_sz),
-                // zero_vec(1 << tbl_sz),
-                // zero_vec(1 << tbl_sz),
-                zero_vec(1 << tbl_sz),
+                zero_vec(1 << TBL_SZ),
+                // zero_vec(1 << TBL_SZ),
+                // zero_vec(1 << TBL_SZ),
+                zero_vec(1 << TBL_SZ),
             ],
-            store: Vec::with_capacity(1 << (tbl_sz + 3)),
+            store: Vec::with_capacity(1 << (TBL_SZ + 3)),
             stats: BackingCacheStats::new(),
         }
     }
@@ -121,16 +120,16 @@ where
         let mut hash_v = hasher.finish() as usize;
         // cur_idx tracks the current index in each sub-table to begin
         // searching from
-        let mut cur_idx: [BackingPtr; num_tbl] = [BackingPtr(0),
+        let mut cur_idx: [BackingPtr; NUM_TBL] = [BackingPtr(0),
                                                   // BackingPtr(0),
                                                   // BackingPtr(0),
                                                   BackingPtr(0),
         ];
         // index into the hash table for updates
-        let mut hash_idx : [usize; num_tbl] = [0, 0];
-        for idx in 0..num_tbl {
+        let mut hash_idx : [usize; NUM_TBL] = [0, 0];
+        for idx in 0..NUM_TBL {
             hash_v = rehash(hash_v);
-            let loc = pow_cap(hash_v, tbl_sz);
+            let loc = pow_cap(hash_v, TBL_SZ);
             hash_idx[idx] = loc;
             let v1 = self.tbl[idx][loc].clone();
             if v1.is_none() {
@@ -151,7 +150,7 @@ where
         loop {
             // advance each pointer in the order of the tables, and insert at
             // the first location possible
-            for i in 0..num_tbl {
+            for i in 0..NUM_TBL {
                 // advance the pointer
                 if self.store[cur_idx[i].0 as usize].next.is_none() {
                     let cur_v = self.tbl[i][hash_idx[i]].unwrap();
@@ -174,7 +173,7 @@ where
     /// the percentage of occupied buckets in each subtable
     fn fill_ratio(&self) -> f64 {
         let mut cnt = 0;
-        let mut total = (1 << tbl_sz) * num_tbl;
+        let total = (1 << TBL_SZ) * NUM_TBL;
         for tbl in self.tbl.iter() {
             for v in tbl.iter() {
                 if v.is_some() {
@@ -235,7 +234,8 @@ where
 
 #[test]
 fn cuckoo_simple() {
-    use bdd::{BddPtr, VarLabel, TableIndex, ToplessBdd};
+    use repr::bdd::{BddPtr, TableIndex, ToplessBdd};
+    use repr::var_label::VarLabel;
     fn mk_ptr(idx: u64) -> BddPtr {
         BddPtr::new(VarLabel::new(0), TableIndex::new(idx))
     }

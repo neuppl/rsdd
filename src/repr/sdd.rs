@@ -1,13 +1,10 @@
-//! implements a trimmed SDD as a collection of BDDs
+//! A trimmed and compressed SDD with complemented edges as a
+//! collection of BDDs.
 
-use std::collections::{HashSet, HashMap};
-use std::rc::Rc;
-use btree::*;
-use bdd::*;
+use util::btree::*;
+use repr::var_label::VarLabel;
+use repr::bdd::*;
 use std::mem;
-use var_order::VarOrder;
-#[macro_use]
-use util::*;
 
 /// holds metadata for an SDD pointer
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Ord, PartialOrd, Copy)]
@@ -43,13 +40,7 @@ pub struct SddPtr {
     pack: PackedInternalData
 }
 
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Ord, PartialOrd)]
-struct ExternalSdd {
-    idx: usize,
-}
-
-
+/// An SddOr node is a vector of (prime, sub) pairs.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Ord, PartialOrd)]
 pub struct SddOr {
     pub nodes: Vec<(SddPtr, SddPtr)>,

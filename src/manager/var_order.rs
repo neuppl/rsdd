@@ -1,4 +1,5 @@
-use bdd::*;
+use repr::bdd::*;
+use repr::var_label::VarLabel;
 use std::slice::Iter;
 use util;
 

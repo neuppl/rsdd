@@ -6,7 +6,6 @@ use std::mem;
 use fnv::FnvHasher;
 use std::hash::BuildHasherDefault;
 use backing_store::*;
-#[macro_use]
 use util::*;
 
 const LOAD_FACTOR: f64 = 0.5;
@@ -253,7 +252,8 @@ where
 
 ////////////////////////////////////////////////////////////////////////////////
 // tests
-use bdd::{BddPtr, VarLabel, TableIndex, ToplessBdd};
+use repr::bdd::{BddPtr, TableIndex, ToplessBdd};
+use repr::var_label::VarLabel;
 fn mk_ptr(idx: u64) -> BddPtr {
     BddPtr::new(VarLabel::new(0), TableIndex::new(idx))
 }

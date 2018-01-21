@@ -1,4 +1,8 @@
-//! Base types for backing-store
+//! Backing stores are unique tables which support a `get_or_insert` operation.
+mod robin_hood;
+mod cuckoo_store;
+pub mod bdd_table;
+pub mod sdd_table;
 
 /// Pointer into the backing store
 #[derive(Clone, Debug, PartialEq, Eq, Copy)]

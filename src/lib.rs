@@ -1,21 +1,8 @@
 #[macro_use] mod util;
-pub mod bdd;
-mod bdd_table;
-mod robin_hood;
-pub mod var_order;
 pub mod manager;
-pub mod boolexpr;
-mod apply_cache;
-pub mod sdd;
-mod ref_table;
-pub mod sdd_manager;
-mod sdd_table;
-pub mod btree;
-mod bdd_cache;
+pub mod repr;
 mod backing_store;
-mod cuckoo_store;
-pub mod cnf;
-mod vec_allocator;
+
 extern crate rand;
 extern crate fnv;
 extern crate twox_hash;
