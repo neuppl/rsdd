@@ -45,7 +45,7 @@ currently on the roadmap (and implicitly not implemented).
 | :white_check_mark: | Eval                 |          |          1 |       |
 | :x:                | SAT Enumerate        |        3 |          1 |       |
 | :x:                | Implication          |        2 |          1 |       |
-| :x:                | Weighted Model Count |        4 |          3 |       |
+| :white_check_mark: | Weighted Model Count |        4 |          3 |       |
 | :white_check_mark: | Equality             |          |            |       |
 | :white_check_mark: | Consistency          |          |            |       |
 
@@ -63,12 +63,12 @@ currently on the roadmap (and implicitly not implemented).
 ## BDD Operations
 
 | Status             | Feature                  | Priority | Difficulty | Notes |
-| :-------------     | :-------------           | :-----   | :--------- | :---- |
+| :-------------     | :-------------           |   :----- | :--------- | :---- |
 | :white_check_mark: | Conjunction              |          |            |       |
 | :white_check_mark: | Disjunction              |          |            |       |
 | :white_check_mark: | Negation                 |          |            |       |
-| :x:                | Exists (single variable) | 4        | 1          |       |
-| :x:                | Condition                | 4        | 1          |       |
+| :x:                | Exists (single variable) |        4 |          1 |       |
+| :white_check_mark: | Condition                |        4 |          1 |       |
 
 ## API
 
