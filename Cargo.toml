@@ -1,5 +1,5 @@
 [package]
-name = "parddrs"
+name = "ddrs"
 version = "0.1.0"
 authors = ["Steven Holtzen <sholtzen@gmail.com>"]
 
@@ -7,10 +7,14 @@ authors = ["Steven Holtzen <sholtzen@gmail.com>"]
 name = "ddrs"
 path = "src/lib.rs"
 
-
 [[bin]]
 name = "ddrs-bin"
 path = "src/main.rs"
+
+[[bench]]
+name = "rand_cnf"
+harness = false
+
 
 [dependencies]
 fnv = "1.0.3"
@@ -22,8 +26,7 @@ dimacs = "0.2.0"
 fasthash = "0.2"
 pretty = "0.3.3"
 num = "0.1.41"
-
+bencher = "0.1.5"
 
 [profile.release]
 debug = true
-

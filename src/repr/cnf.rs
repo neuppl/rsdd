@@ -2,6 +2,10 @@ use repr::var_label::VarLabel;
 use std::cmp::{min, max};
 use rand::{Rng, thread_rng};
 use manager::var_order::VarOrder;
+use rand;
+use rand::distributions::IndependentSample;
+use rand::StdRng;
+
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct Cnf {
@@ -38,6 +42,33 @@ impl Cnf {
             num_vars: m + 1,
         }
     }
+
+    pub fn rand_cnf(rng: &mut StdRng, num_vars: usize, num_clauses: usize) -> Cnf {
+        assert!(num_clauses > 2, "requires at least 2 clauses in CNF");
+        let vars: Vec<(VarLabel, bool)> = (1..num_vars)
+            .map(|x| (VarLabel::new(x as u64), rand::random()))
+            .collect();
+        let range = rand::distributions::Range::new(0, vars.len());
+        let clause_size = 3;
+        // we generate a random cnf
+        let mut clause_vec: Vec<Vec<(VarLabel, bool)>> = Vec::new();
+        for _ in 0..num_clauses {
+            let num_vars = clause_size;
+            if num_vars > 1 {
+                let mut var_vec: Vec<(VarLabel, bool)> = Vec::new();
+                for _ in 0..clause_size {
+                    let var = vars.get(range.ind_sample(rng)).unwrap().clone();
+                    var_vec.push(var);
+                }
+                clause_vec.push(var_vec);
+            } else {
+                let var = vars.get(range.ind_sample(rng)).unwrap().clone();
+                clause_vec.push(vec!(var));
+            }
+        }
+        Cnf { clauses: clause_vec, num_vars: num_vars }
+    }
+
 
     pub fn num_vars(&self) -> usize {
         self.num_vars

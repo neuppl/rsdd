@@ -266,7 +266,11 @@ impl BddManager {
         if new_h == new_l {
             return new_h;
         } else {
-            let n = BddNode{low: new_l, high: new_h, var: index};
+            let n = BddNode {
+                low: new_l,
+                high: new_h,
+                var: index,
+            };
             let r = self.get_or_insert(n);
             self.apply_table.insert(f, g, r);
             return r;
@@ -287,24 +291,20 @@ impl BddManager {
             if f.label() == var {
                 // condition and return
                 let value = if f.is_compl() { !value } else { value };
-                if value {
-                    node.high
-                } else {
-                    node.low
-                }
+                if value { node.high } else { node.low }
             } else {
                 // condition its children
                 let cond_l = self.condition(node.low, var, value);
                 let cond_h = self.condition(node.high, var, value);
                 if cond_l != node.low || cond_h != node.high {
                     // cache and return the new BDD
-                    let new_bdd = BddNode{low: cond_l, high: cond_h, var: f.label()};
+                    let new_bdd = BddNode {
+                        low: cond_l,
+                        high: cond_h,
+                        var: f.label(),
+                    };
                     let r = self.get_or_insert(new_bdd);
-                    if f.is_compl() {
-                        r.neg()
-                    } else {
-                        r
-                    }
+                    if f.is_compl() { r.neg() } else { r }
                 } else {
                     // just return this pointer; nothing changed
                     f
@@ -345,10 +345,6 @@ impl BddManager {
         // the magic of BDDs!
         a == b
     }
-
-    // pub fn get_apply_cache_stats(&self) -> Vec<ApplyCacheStats> {
-    //     self.apply_table.get_stats()
-    // }
 
     pub fn get_backing_store_stats(&self) -> BackingCacheStats {
         self.compute_table.get_stats().clone()
@@ -569,8 +565,10 @@ fn test_condition_compl() {
     let v2 = man.var(VarLabel::new(1), false);
     let r1 = man.and(v1, v2);
     let r3 = man.condition(r1, VarLabel::new(1), false);
-    assert!(man.eq_bdd(r3, v1), "Not eq:\nOne: {}\nTwo: {}",
-            man.print_bdd(r3),
-            man.print_bdd(v1)
+    assert!(
+        man.eq_bdd(r3, v1),
+        "Not eq:\nOne: {}\nTwo: {}",
+        man.print_bdd(r3),
+        man.print_bdd(v1)
     );
 }

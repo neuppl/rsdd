@@ -2,7 +2,6 @@ use repr::sdd::*;
 use backing_store::sdd_table::*;
 use repr::var_label::VarLabel;
 use std::collections::{HashMap, HashSet};
-use manager::ref_table::*;
 use manager::cache::lru::*;
 use manager::bdd_manager::BddWmc;
 use repr::cnf::Cnf;
@@ -46,7 +45,6 @@ pub struct SddManager {
     /// a helper structure which matches the vtree and is used for efficient LCA
     /// computation
     parent_ptr: Vec<(Option<usize>, usize)>,
-    external_table: ExternalRefTable<SddPtr>,
     app_cache: Vec<Lru<(SddPtr, SddPtr), SddPtr>>,
 }
 
@@ -124,20 +122,18 @@ impl SddManager {
             tbl: SddTable::new(&vtree),
             parent_ptr: into_parent_ptr_vec(&vtree),
             vtree: vtree,
-            external_table: ExternalRefTable::new(),
             app_cache: app_cache,
         }
     }
 
-    pub fn var(&mut self, lbl: VarLabel, is_true: bool) -> ExternalRef {
+    pub fn var(&mut self, lbl: VarLabel, is_true: bool) -> SddPtr {
         let idx = match self.vtree.find_leaf_idx(&|ref l| l.contains(&lbl)) {
             None => panic!("var {:?} not found", lbl),
             Some(a) => a,
         };
         // convert the var label into the correct BDD var label
         let vlbl = self.tbl.sdd_to_bdd.get(&lbl).unwrap().clone();
-        let r = SddPtr::new_bdd(self.tbl.bdd_man_mut(idx).var(vlbl, is_true), idx as u16);
-        self.external_table.gen_or_inc(r)
+        SddPtr::new_bdd(self.tbl.bdd_man_mut(idx).var(vlbl, is_true), idx as u16)
     }
 
 
@@ -145,38 +141,101 @@ impl SddManager {
         a.neg()
     }
 
-    /// Compresses the list of (prime, sub) terms
-    // TODO: Optimize for 2-variable case
-    #[inline(never)]
-    fn compress(&mut self, mut r: Vec<(SddPtr, SddPtr)>) -> Vec<(SddPtr, SddPtr)> {
+    /// Compresses, trims, and canonicalizes the list of (prime, sub) terms and
+    /// generates a canonicalized term
+    #[inline(never)] // for now, do not inline for profiling purposes
+    fn compress(&mut self, mut node: Vec<(SddPtr, SddPtr)>, lca: usize) -> SddPtr {
+        if node.len() == 0 {
+            return SddPtr::new_const(false);
+        } else if node.len() == 1 {
+            let (p, s) = node[0];
+            if p.is_true() {
+                // the prime is true, so we can return the sub
+                return s;
+            } else if s.is_true() {
+                // the sub is true, so return the prime
+                return p;
+            }
+        } else if node.len() == 2 {
+            // check for terms of the form [(a, T), (!a, F)] => a
+            let (p1, s1) = node[0];
+            let (p2, s2) = node[1];
+            if s1.is_true() && s2.is_false() {
+                return p1;
+            } else if s1.is_false() && s2.is_true() {
+                return p2;
+            }
+        }
+
         // this sort guarantees several things:
         // (1) if there is a constant sub (i.e., false), it will be at the *end*
         //     of the returned vector (because we reverse the order by pushing)
         // (2) two equal subs will be adjacent in the ordering, which allows for a
         //     single pass for doing compression
-        quickersort::sort_by(&mut r[..], &|a, b| a.1.cmp(&b.1));
-        r.dedup();
+        quickersort::sort_by(&mut node[..], &|a, b| a.1.cmp(&b.1));
+        node.dedup();
+        // first, check if all the subs are equal; if they are, then return true
+        let s0 = node[0].1;
+        if node.iter().all(|&(ref _p, ref s)| *s == s0) {
+            // println!("wowee");
+            // this compresses to [(p, T)]
+            return s0;
+        }
+
         // to compress, we must disjoin all primes which share a sub
-        let mut n = Vec::with_capacity(20);
-        let (mut p, mut s) = r[0];
-        for i in 1..r.len() {
-            let (cur_p, cur_s) = r[i];
+        let mut r = Vec::with_capacity(20);
+        let (mut p, mut s) = node[0];
+        let mut compress_cnt = 0;
+        for i in 1..node.len() {
+            let (cur_p, cur_s) = node[i];
             if s == cur_s {
                 // disjoin the prime
                 p = self.or_internal(p, cur_p);
             } else {
+                compress_cnt += 1;
                 // found a unique sub, start a new chain
-                n.push((p, s));
+                r.push((p, s));
                 p = cur_p;
+
                 s = cur_s;
             }
         }
-        n.push((p, s));
+        r.push((p, s));
         // now all the subs are unique, sort by primes now to guarantee
         // canonicity
         // TODO: combine these into a single initial sort
-        quickersort::sort_by(&mut n[..], &|a, b| a.0.cmp(&b.0));
-        n
+        quickersort::sort_by(&mut r[..], &|a, b| a.0.cmp(&b.0));
+
+        if r.len() == 1 {
+            let (p, s) = r[0];
+            if p.is_true() {
+                // the prime is true, so we can return the sub
+                return s;
+            } else if s.is_true() {
+                // the sub is true, so return the prime
+                return p;
+            }
+        }
+        if r.len() == 2 {
+            // check for terms of the form [(a, T), (!a, F)] => a
+            let (p1, s1) = r[0];
+            let (p2, s2) = r[1];
+            if s1.is_true() && s2.is_false() {
+                return p1;
+            } else if s1.is_false() && s2.is_true() {
+                return p2;
+            }
+        }
+        if r[0].1.is_compl() {
+            // guarantee first sub in the first node is not complemented
+            // (regular form)
+            let compl_r = r.iter().map(|&(ref p, ref s)| (*p, s.neg())).collect();
+            self.tbl
+                .get_or_insert_sdd(&SddOr { nodes: compl_r }, lca)
+                .neg()
+        } else {
+            self.tbl.get_or_insert_sdd(&SddOr { nodes: r }, lca)
+        }
     }
 
     pub fn or_internal(&mut self, a: SddPtr, b: SddPtr) -> SddPtr {
@@ -194,8 +253,8 @@ impl SddManager {
             (a, b) if b.is_true() => return a,
             (a, _) if a.is_false() => return SddPtr::new_const(false),
             (_, b) if b.is_false() => return SddPtr::new_const(false),
-            (a, b) if self.eq(a, b) => return a,
-            (a, b) if self.eq(a, b.neg()) => return SddPtr::new_const(false),
+            (a, b) if self.sdd_eq(a, b) => return a,
+            (a, b) if self.sdd_eq(a, b.neg()) => return SddPtr::new_const(false),
             _ => (),
         };
 
@@ -224,7 +283,6 @@ impl SddManager {
         } else {
             (b, a)
         };
-
 
         let av = a.vtree();
         let bv = b.vtree();
@@ -302,83 +360,30 @@ impl SddManager {
                     self.app_cache[lca].insert((a, b), new_v.clone());
                     return new_v;
                 }
+
                 r.push((p, s));
             }
         }
 
-        if r.len() == 0 {
-            let new_v = SddPtr::new_const(false);
-            self.app_cache[lca].insert((a, b), new_v.clone());
-            return new_v;
-        }
-
         // canonicalize
-        r = self.compress(r);
-        // trim
-        if r.len() == 1 {
-            let (p, s) = r[0];
-            if p.is_true() {
-                // the prime is true, so we can return the sub
-                let new_v = s;
-                self.app_cache[lca].insert((a, b), new_v.clone());
-                return new_v;
-            } else if s.is_true() {
-                // the sub is true, so return the prime
-                let new_v = p;
-                self.app_cache[lca].insert((a, b), new_v.clone());
-                return new_v;
-            }
-        }
-
-        if r.len() == 2 {
-            // check for terms of the form [(a, T), (!a, F)] => a
-            let (p1, s1) = r[0];
-            let (p2, s2) = r[1];
-            if s1.is_true() && s2.is_false() {
-                let new_v = p1;
-                self.app_cache[lca].insert((a, b), new_v.clone());
-                return new_v;
-            } else if s1.is_false() && s2.is_true() {
-                let new_v = p2;
-                self.app_cache[lca].insert((a, b), new_v.clone());
-                return new_v;
-            }
-        }
-
-        // guarantee first sub in the first node is not complemented
-        // (regular form)
-        let new_v = if r[0].1.is_compl() {
-            let compl_r = r.iter().map(|&(ref p, ref s)| (*p, s.neg())).collect();
-            self.tbl
-                .get_or_insert_sdd(&SddOr { nodes: compl_r }, lca)
-                .neg()
-        } else {
-            self.tbl.get_or_insert_sdd(&SddOr { nodes: r }, lca)
-        };
-        self.app_cache[lca].insert((a, b), new_v.clone());
+        let ptr = self.compress(r, lca);
+        self.app_cache[lca].insert((a, b), ptr);
         // println!(
         //     "applying\n{}\n{}\n result:\n{}\n",
         //     self.print_sdd_internal(a),
         //     self.print_sdd_internal(b),
-        //     self.print_sdd_internal(new_v)
+        //     self.print_sdd_internal(ptr)
         // );
-
-        new_v
+        ptr
     }
 
-    pub fn and(&mut self, a: ExternalRef, b: ExternalRef) -> ExternalRef {
-        let i_a = self.external_table.into_internal(a);
-        let i_b = self.external_table.into_internal(b);
-        let r = self.and_rec(i_a, i_b);
-        self.external_table.gen_or_inc(r)
+    pub fn and(&mut self, a: SddPtr, b: SddPtr) -> SddPtr {
+        self.and_rec(a, b)
     }
 
 
-    pub fn or(&mut self, a: ExternalRef, b: ExternalRef) -> ExternalRef {
-        let i_a = self.external_table.into_internal(a);
-        let i_b = self.external_table.into_internal(b);
-        let r = self.or_internal(i_a, i_b);
-        self.external_table.gen_or_inc(r)
+    pub fn or(&mut self, a: SddPtr, b: SddPtr) -> SddPtr {
+        self.or_internal(a, b)
     }
 
     fn print_sdd_internal(&self, ptr: SddPtr) -> String {
@@ -420,14 +425,13 @@ impl SddManager {
         String::from_utf8(w).unwrap()
     }
 
-    pub fn print_sdd(&self, ptr: ExternalRef) -> String {
-        let int_ptr = self.external_table.into_internal(ptr);
-        self.print_sdd_internal(int_ptr)
+    pub fn print_sdd(&self, ptr: SddPtr) -> String {
+        self.print_sdd_internal(ptr)
     }
 
     /// Evaluate an SDD on a set of input Boolean variable values
     /// TODO: This is *highly* inefficient, fix it
-    pub fn eval_sdd(&self, ptr: ExternalRef, assgn: &HashMap<VarLabel, bool>) -> bool {
+    pub fn eval_sdd(&self, ptr: SddPtr, assgn: &HashMap<VarLabel, bool>) -> bool {
         fn helper(man: &SddManager, sdd: SddPtr, assgn: &HashMap<VarLabel, bool>) -> bool {
             if sdd.is_false() {
                 false
@@ -459,14 +463,13 @@ impl SddManager {
                 if sdd.is_compl() { !res } else { res }
             }
         }
-        let i = self.external_table.into_internal(ptr);
-        helper(self, i, assgn)
+        helper(self, ptr, assgn)
     }
 
     // fn wmc_helper<T: Num + Clone + Debug>(
     //     &'a self,
     //     ptr: SddPtr,
-    //     vtree_to_v: 
+    //     vtree_to_v:
     //     zero: &T,
     //     one: &T
     // ) -> (T, Option<&'a VTree>) {
@@ -474,28 +477,20 @@ impl SddManager {
     // }
 
 
-    fn eq(&self, a: SddPtr, b: SddPtr) -> bool {
+    pub fn sdd_eq(&self, a: SddPtr, b: SddPtr) -> bool {
         a == b
     }
 
-    pub fn is_true(&self, a: ExternalRef) -> bool {
-        let a_int = self.external_table.into_internal(a);
-        a_int.is_true()
+    pub fn is_true(&self, a: SddPtr) -> bool {
+        a.is_true()
     }
 
-    pub fn is_false(&self, a: ExternalRef) -> bool {
-        let a_int = self.external_table.into_internal(a);
-        a_int.is_false()
+    pub fn is_false(&self, a: SddPtr) -> bool {
+        a.is_false()
     }
 
-    pub fn sdd_eq(&self, a: ExternalRef, b: ExternalRef) -> bool {
-        let a_int = self.external_table.into_internal(a);
-        let b_int = self.external_table.into_internal(b);
-        self.eq(a_int, b_int)
-    }
-
-    pub fn from_cnf(&mut self, cnf: &Cnf) -> ExternalRef {
-        let mut cvec: Vec<ExternalRef> = Vec::with_capacity(cnf.clauses().len());
+    pub fn from_cnf(&mut self, cnf: &Cnf) -> SddPtr {
+        let mut cvec: Vec<SddPtr> = Vec::with_capacity(cnf.clauses().len());
         for lit_vec in cnf.clauses().iter() {
             assert!(lit_vec.len() > 0, "empty cnf");
             let (vlabel, val) = lit_vec[0];
@@ -508,7 +503,7 @@ impl SddManager {
             cvec.push(sdd);
         }
         // now cvec has a list of all the clauses; collapse it down
-        fn helper(vec: &[ExternalRef], man: &mut SddManager) -> Option<ExternalRef> {
+        fn helper(vec: &[SddPtr], man: &mut SddManager) -> Option<SddPtr> {
             if vec.len() == 0 {
                 None
             } else if vec.len() == 1 {
@@ -527,7 +522,7 @@ impl SddManager {
         helper(&cvec, self).unwrap()
     }
 
-    pub fn from_boolexpr(&mut self, expr: &BoolExpr) -> ExternalRef {
+    pub fn from_boolexpr(&mut self, expr: &BoolExpr) -> SddPtr {
         match expr {
             &BoolExpr::Var(lbl, polarity) => self.var(VarLabel::new(lbl as u64), polarity),
             &BoolExpr::And(ref l, ref r) => {

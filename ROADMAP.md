@@ -63,12 +63,12 @@ currently on the roadmap (and implicitly not implemented).
 ## BDD Operations
 
 | Status             | Feature                  | Priority | Difficulty | Notes |
-| :-------------     | :-------------           |   :----- | :--------- | :---- |
+| :-------------     | :-------------           | :-----   | :--------- | :---- |
 | :white_check_mark: | Conjunction              |          |            |       |
 | :white_check_mark: | Disjunction              |          |            |       |
 | :white_check_mark: | Negation                 |          |            |       |
-| :x:                | Exists (single variable) |        4 |          1 |       |
-| :white_check_mark: | Condition                |        4 |          1 |       |
+| :x:                | Exists (single variable) | 4        | 1          |       |
+| :white_check_mark: | Condition                |          |            |       |
 
 ## API
 
