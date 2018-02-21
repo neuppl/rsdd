@@ -51,6 +51,14 @@ impl BddManager {
         }
     }
 
+    /// Generate a new variable which was not in the original order. Places the
+    /// new variable at the end of the current order. Returns the label of the
+    /// new variable
+    pub fn new_var(&mut self) -> VarLabel {
+        self.apply_table.new_last();
+        self.compute_table.new_last()
+    }
+
     pub fn get_order(&self) -> &VarOrder {
         self.compute_table.order()
     }
@@ -73,7 +81,7 @@ impl BddManager {
         b.high
     }
 
-    /// Push a variable onto the stack
+    /// Push an already-existing variable onto the stack
     pub fn var(&mut self, lbl: VarLabel, is_true: bool) -> BddPtr {
         let bdd = BddNode::new(BddPtr::false_node(), BddPtr::true_node(), lbl);
         let r = self.get_or_insert(bdd);
@@ -563,6 +571,23 @@ fn test_condition_compl() {
     let mut man = BddManager::new_default_order(3);
     let v1 = man.var(VarLabel::new(0), false);
     let v2 = man.var(VarLabel::new(1), false);
+    let r1 = man.and(v1, v2);
+    let r3 = man.condition(r1, VarLabel::new(1), false);
+    assert!(
+        man.eq_bdd(r3, v1),
+        "Not eq:\nOne: {}\nTwo: {}",
+        man.print_bdd(r3),
+        man.print_bdd(v1)
+    );
+}
+
+#[test]
+fn test_new_var() {
+    let mut man = BddManager::new_default_order(0);
+    let vlbl1 = man.new_var();
+    let vlbl2 = man.new_var();
+    let v1 = man.var(vlbl1, false);
+    let v2 = man.var(vlbl2, false);
     let r1 = man.and(v1, v2);
     let r3 = man.condition(r1, VarLabel::new(1), false);
     assert!(

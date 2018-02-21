@@ -105,6 +105,14 @@ impl VarOrder {
     pub fn last_var(&self) -> VarLabel {
         VarLabel::new(*self.pos_to_var.last().unwrap() as u64)
     }
+
+    /// Generate a new variable at the end of the order
+    pub fn new_last(&mut self) -> VarLabel {
+        let pos = self.pos_to_var.len();
+        self.var_to_pos.push(pos);
+        self.pos_to_var.push(pos);
+        VarLabel::new(pos as u64)
+    }
 }
 
 #[test]

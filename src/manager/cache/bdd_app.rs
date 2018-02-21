@@ -7,7 +7,7 @@ const INITIAL_CAPACITY: usize = 17; // given as a power of two
 
 /// The top-level data structure which caches applications
 pub struct BddApplyTable {
-    /// a table of Ite triples
+    /// a vector of applications, indexed by the top label of the first pointer.
     table: Vec<Lru<(BddPtr, BddPtr), BddPtr>>,
 }
 
@@ -42,6 +42,11 @@ impl BddApplyTable {
             r.push(tbl.get_stats());
         }
         r
+    }
+
+    /// Push a new application table to the back of the list
+    pub fn new_last(&mut self) -> () {
+        self.table.push(Lru::new(INITIAL_CAPACITY));
     }
 }
 

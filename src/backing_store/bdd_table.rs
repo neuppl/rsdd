@@ -31,6 +31,15 @@ impl BddTable {
         &self.order
     }
 
+    /// Generate a new variable which was not in the original order. Places the
+    /// new variable at the end of the current order. Returns the label of the
+    /// new variable
+    pub fn new_last(&mut self) -> VarLabel {
+        let newlbl = self.order.new_last();
+        self.subtables.push(BackedRobinHoodTable::new(DEFAULT_SUBTABLE_SZ));
+        newlbl
+    }
+
     pub fn get_or_insert(&mut self, bdd: Bdd) -> BddPtr {
         match bdd {
             Bdd::BddFalse => BddPtr::false_node(),

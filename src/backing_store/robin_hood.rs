@@ -44,6 +44,7 @@ where
 {
     elem: T,
     hash_mem: usize,
+    mark: bool
 }
 
 impl<T> BackingElem<T>
@@ -55,7 +56,7 @@ where
     }
 
     fn new(elem: T, hash: usize) -> BackingElem<T> {
-        BackingElem { elem: elem, hash_mem: hash }
+        BackingElem { elem: elem, hash_mem: hash, mark: false }
     }
 }
 
@@ -139,6 +140,14 @@ where
     /// Begin inserting `itm` from point `pos` in the hash table.
     fn propagate(&mut self, itm: HashTableElement, pos: usize) -> () {
         propagate(&mut self.tbl, self.cap, itm, pos)
+    }
+
+    /// Collects all nodes except those required to preserve `preserve`. Each
+    /// element if `preserve` is updated to a corresponding new location.
+    /// This invalidates *all* existing pointers into this table; only the
+    /// pointers in `preserve` will be valid.
+    pub fn collect(&mut self, preserve: &mut [BackingPtr]) -> () {
+        
     }
 
     /// Get or insert a fresh (low, high) pair
