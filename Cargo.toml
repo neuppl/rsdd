@@ -11,10 +11,9 @@ path = "src/lib.rs"
 name = "ddrs-bin"
 path = "src/main.rs"
 
-[[bench]]
-name = "rand_cnf"
-harness = false
-
+[[bin]]
+name = "ddrs-bench"
+path = "src/bench/bench.rs"
 
 [dependencies]
 fnv = "1.0.3"
@@ -26,7 +25,8 @@ dimacs = "0.2.0"
 fasthash = "0.2"
 pretty = "0.3.3"
 num = "0.1.41"
-bencher = "0.1.5"
+maplit = "1.0.1"
+
 
 [profile.release]
 debug = true

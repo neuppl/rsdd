@@ -11,3 +11,4 @@ extern crate fasthash;
 extern crate dimacs;
 extern crate pretty;
 extern crate num;
+#[macro_use] extern crate maplit;

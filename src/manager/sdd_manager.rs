@@ -177,26 +177,21 @@ impl SddManager {
         // first, check if all the subs are equal; if they are, then return true
         let s0 = node[0].1;
         if node.iter().all(|&(ref _p, ref s)| *s == s0) {
-            // println!("wowee");
-            // this compresses to [(p, T)]
             return s0;
         }
 
         // to compress, we must disjoin all primes which share a sub
         let mut r = Vec::with_capacity(20);
         let (mut p, mut s) = node[0];
-        let mut compress_cnt = 0;
         for i in 1..node.len() {
             let (cur_p, cur_s) = node[i];
             if s == cur_s {
                 // disjoin the prime
                 p = self.or_internal(p, cur_p);
             } else {
-                compress_cnt += 1;
                 // found a unique sub, start a new chain
                 r.push((p, s));
                 p = cur_p;
-
                 s = cur_s;
             }
         }
@@ -205,6 +200,7 @@ impl SddManager {
         // canonicity
         // TODO: combine these into a single initial sort
         quickersort::sort_by(&mut r[..], &|a, b| a.0.cmp(&b.0));
+        r.dedup();
 
         if r.len() == 1 {
             let (p, s) = r[0];
@@ -278,7 +274,8 @@ impl SddManager {
         }
 
         // normalize so `a` is always prime if possible
-        let (a, b) = if a.vtree() == b.vtree() || is_prime(&self.vtree, a.vtree(), b.vtree()) {
+        let (a, b) = if a.vtree() == b.vtree() ||
+            is_prime(&self.vtree, a.vtree(), b.vtree()) {
             (a, b)
         } else {
             (b, a)
@@ -288,7 +285,7 @@ impl SddManager {
         let bv = b.vtree();
         let lca = least_common_ancestor(&self.parent_ptr, av, bv);
 
-        //  check if we have this application cached
+        // check if we have this application cached
         let c = self.app_cache[lca].get((a, b));
         if c.is_some() {
             return c.unwrap();
@@ -368,19 +365,12 @@ impl SddManager {
         // canonicalize
         let ptr = self.compress(r, lca);
         self.app_cache[lca].insert((a, b), ptr);
-        // println!(
-        //     "applying\n{}\n{}\n result:\n{}\n",
-        //     self.print_sdd_internal(a),
-        //     self.print_sdd_internal(b),
-        //     self.print_sdd_internal(ptr)
-        // );
         ptr
     }
 
     pub fn and(&mut self, a: SddPtr, b: SddPtr) -> SddPtr {
         self.and_rec(a, b)
     }
-
 
     pub fn or(&mut self, a: SddPtr, b: SddPtr) -> SddPtr {
         self.or_internal(a, b)

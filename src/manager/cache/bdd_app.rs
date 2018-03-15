@@ -61,6 +61,7 @@ fn apply_cache_simple() {
             tbl.insert(f, g, result);
         }
     }
+
     for var in 0..10 {
         for i in 0..100000 {
             let f = BddPtr::new(VarLabel::new(var), TableIndex::new(i));
