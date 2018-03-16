@@ -51,8 +51,6 @@ impl<T: Num + Clone + Debug + Copy> BddWmc<T> {
     }
 }
 
-
-
 pub struct BddManager {
     compute_table: BddTable,
     apply_table: BddApplyTable,
@@ -312,66 +310,77 @@ impl BddManager {
         self.and(f.neg(), g.neg()).neg()
     }
 
-    /// Compute the Boolean function `f | var = value`
-    pub fn condition(&mut self, f: BddPtr, var: VarLabel, value: bool) -> BddPtr {
-        if f.is_const() {
-            f
-        } else {
-            let node = self.deref(f).into_node();
-            if f.label() == var {
-                // condition and return
-                let value = if f.is_compl() { !value } else { value };
-                if value { node.high } else { node.low }
-            } else {
-                // condition its children
-                let cond_l = self.condition(node.low, var, value);
-                let cond_h = self.condition(node.high, var, value);
-                if cond_l != node.low || cond_h != node.high {
-                    // cache and return the new BDD
-                    let new_bdd = BddNode {
-                        low: cond_l,
-                        high: cond_h,
-                        var: f.label(),
-                    };
-                    let r = self.get_or_insert(new_bdd);
-                    if f.is_compl() { r.neg() } else { r }
-                } else {
-                    // just return this pointer; nothing changed
-                    f
-                }
-            }
-        }
-    }
 
-    /// Existentially quantifies out the variable `lbl` from `f`
-    pub fn exists(&mut self, f: BddPtr, lbl: VarLabel) -> BddPtr {
-        // stop if `f` is after `lbl` in the order
-        if self.get_order().lt(lbl, f.label()) || f.is_const() {
-            f
-        } else if f.label() == lbl {
-            let n = self.deref(f).into_node();
-            self.or(n.low, n.high)
+    /// An abstract transformation on a BDD which applies a transformation `f`
+    /// to all nodes for a particular variable
+    fn map_var(&mut self,
+               bdd: BddPtr,
+               lbl: VarLabel,
+               f:&Fn(&mut BddManager, BddPtr) -> BddPtr) -> BddPtr {
+        if self.get_order().lt(lbl, bdd.label()) || bdd.is_const() {
+            // we passed the variable in the order, we will never find it
+            bdd
+        } else if bdd.label() == lbl {
+            f(self, bdd)
         } else {
             // recurse on the children
-            let n = self.deref(f).into_node();
-            let l = self.exists(n.low, lbl);
-            let h = self.exists(n.high, lbl);
+            let n = self.deref(bdd).into_node();
+            let l = self.map_var(n.low, lbl, f);
+            let h = self.map_var(n.high, lbl, f);
             if l != n.low || h != n.high {
-                // cache and return new BDD
                 // cache and return the new BDD
                 let new_bdd = BddNode {
                     low: l,
                     high: h,
-                    var: f.label(),
+                    var: bdd.label(),
                 };
                 let r = self.get_or_insert(new_bdd);
-                if f.is_compl() { r.neg() } else { r }
+                if bdd.is_compl() { r.neg() } else { r }
             } else {
                 // nothing changed
-                f
+                bdd
             }
         }
     }
+
+    /// Compute the Boolean function `f | var = value`
+    pub fn condition(&mut self, bdd: BddPtr, lbl: VarLabel, value: bool) -> BddPtr {
+        let f = |man: &mut BddManager, bdd: BddPtr| {
+            let node = man.deref(bdd).into_node();
+            let value = if bdd.is_compl() { !value } else { value };
+            if value { node.high } else { node.low }
+        };
+        self.map_var(bdd, lbl, &f)
+    }
+
+    /// Existentially quantifies out the variable `lbl` from `f`
+    pub fn exists(&mut self, bdd: BddPtr, lbl: VarLabel) -> BddPtr {
+        let f = |man: &mut BddManager, bdd: BddPtr| {
+            let n = man.deref(bdd).into_node();
+            let v = man.or(n.low, n.high);
+            if bdd.is_compl() { v.neg() } else { v }
+        };
+        self.map_var(bdd, lbl, &f)
+    }
+
+    /// Relabels all instances of `old_lbl` with `new_lbl`
+    pub fn relabel(&mut self, bdd: BddPtr,
+                   old_lbl: VarLabel, new_lbl: VarLabel) -> BddPtr {
+        let f = |man: &mut BddManager, bdd: BddPtr| {
+            // make a new bdd, which is the same as the old one, except
+            // whose label is the new label
+            let n = man.deref(bdd).into_node();
+            let new_bdd = BddNode {
+                low: n.low,
+                high: n.high,
+                var: new_lbl,
+            };
+            let r = man.get_or_insert(new_bdd);
+            if bdd.is_compl() { r.neg() } else { r }
+        };
+        self.map_var(bdd, old_lbl, &f)
+    }
+
 
     /// evaluates the top element of the data stack on the values found in
     /// `vars`
@@ -657,6 +666,24 @@ fn test_exist() {
         "Got:\nOne: {}\nExpected: {}",
         man.print_bdd(res),
         man.print_bdd(r_expected)
+    );
+}
+
+#[test]
+fn test_relabel() {
+    let mut man = BddManager::new_default_order(3);
+    // 1 /\ 2 /\ 3
+    let v0 = man.var(VarLabel::new(0), true);
+    let v1 = man.var(VarLabel::new(1), true);
+    let v2 = man.var(VarLabel::new(2), true);
+    let v0_and_v1 = man.and(v0, v1);
+    let v0_and_v2 = man.and(v0, v2);
+    let res = man.relabel(v0_and_v1, VarLabel::new(1), VarLabel::new(2));
+    assert!(
+        man.eq_bdd(res, v0_and_v2),
+        "Got:\nOne: {}\nExpected: {}",
+        man.print_bdd(res),
+        man.print_bdd(v0_and_v2)
     );
 }
 
