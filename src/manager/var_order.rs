@@ -9,7 +9,7 @@ pub struct VarOrder {
     /// index i
     var_to_pos: Vec<usize>,
     /// The inverse of `var_to_pos`, each index `i` corresponds to a label
-    pos_to_var: Vec<usize>
+    pos_to_var: Vec<usize>,
 }
 
 impl VarOrder {
@@ -21,7 +21,10 @@ impl VarOrder {
             v[order[i].value() as usize] = i;
             pos_to_var.push(order[i].value() as usize);
         }
-        VarOrder { var_to_pos: v, pos_to_var: pos_to_var}
+        VarOrder {
+            var_to_pos: v,
+            pos_to_var: pos_to_var,
+        }
     }
 
     /// Generate a linear variable ordering
@@ -80,7 +83,8 @@ impl VarOrder {
         self.var_to_pos.iter()
     }
 
-    /// Get the variable that appears above `a` in the current order; `None` if `a` is first in the order
+    /// Get the variable that appears above `a` in the current order; `None` if
+    /// `a` is first in the order
     pub fn above(&self, a: VarLabel) -> Option<VarLabel> {
         let this_level = self.var_to_pos[a.value() as usize];
         if this_level == 0 {

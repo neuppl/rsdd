@@ -343,6 +343,36 @@ impl BddManager {
         }
     }
 
+    /// Existentially quantifies out the variable `lbl` from `f`
+    pub fn exists(&mut self, f: BddPtr, lbl: VarLabel) -> BddPtr {
+        // stop if `f` is after `lbl` in the order
+        if self.get_order().lt(lbl, f.label()) || f.is_const() {
+            f
+        } else if f.label() == lbl {
+            let n = self.deref(f).into_node();
+            self.or(n.low, n.high)
+        } else {
+            // recurse on the children
+            let n = self.deref(f).into_node();
+            let l = self.exists(n.low, lbl);
+            let h = self.exists(n.high, lbl);
+            if l != n.low || h != n.high {
+                // cache and return new BDD
+                // cache and return the new BDD
+                let new_bdd = BddNode {
+                    low: l,
+                    high: h,
+                    var: f.label(),
+                };
+                let r = self.get_or_insert(new_bdd);
+                if f.is_compl() { r.neg() } else { r }
+            } else {
+                // nothing changed
+                f
+            }
+        }
+    }
+
     /// evaluates the top element of the data stack on the values found in
     /// `vars`
     pub fn eval_bdd(&self, bdd: BddPtr, assgn: &HashMap<VarLabel, bool>) -> bool {
@@ -453,9 +483,8 @@ impl BddManager {
             }
         }
     }
-    /// Weighted-model count. `v` is a vector of pairs of numeric values, with
-    /// the first value being the low value and the second being the high value.
-    /// The vector is an associative array, keyed by the variable label.
+
+    /// Weighted-model count.
     pub fn wmc<T: Num + Clone + Debug + Copy>(&self, ptr: BddPtr, params: &BddWmc<T>) -> T {
         // call wmc_helper and smooth the result
         let (mut v, lvl_op) = self.wmc_helper(ptr, params);
@@ -609,6 +638,25 @@ fn test_condition_compl() {
         "Not eq:\nOne: {}\nTwo: {}",
         man.print_bdd(r3),
         man.print_bdd(v1)
+    );
+}
+
+#[test]
+fn test_exist() {
+    let mut man = BddManager::new_default_order(3);
+    // 1 /\ 2 /\ 3
+    let v1 = man.var(VarLabel::new(0), true);
+    let v2 = man.var(VarLabel::new(1), true);
+    let v3 = man.var(VarLabel::new(2), true);
+    let a1 = man.and(v1, v2);
+    let r1 = man.and(a1, v3);
+    let r_expected = man.and(v1, v3);
+    let res = man.exists(r1, VarLabel::new(1));
+    assert!(
+        man.eq_bdd(r_expected, res),
+        "Got:\nOne: {}\nExpected: {}",
+        man.print_bdd(res),
+        man.print_bdd(r_expected)
     );
 }
 
