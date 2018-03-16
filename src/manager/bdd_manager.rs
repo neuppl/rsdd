@@ -310,6 +310,15 @@ impl BddManager {
         self.and(f.neg(), g.neg()).neg()
     }
 
+    /// Compute the Boolean function `f iff g`
+    pub fn iff(&mut self, f: BddPtr, g: BddPtr) -> BddPtr {
+        // TODO: for now, compute this as (f => g) /\ (g => f); this can be
+        // improved later
+        let f_imp_g = self.or(f.neg(), g);
+        let g_imp_f = self.or(g.neg(), f);
+        self.and(f_imp_g, g_imp_f)
+    }
+
 
     /// An abstract transformation on a BDD which applies a transformation `f`
     /// to all nodes for a particular variable
