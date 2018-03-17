@@ -17,6 +17,7 @@ use maplit::*;
 
 /// Weighted model counting parameters for a BDD. It primarily is a storage for
 /// the weight on each variable.
+#[derive(Debug, Clone)]
 pub struct BddWmc<T: Num + Clone + Debug + Copy> {
     pub zero: T,
     pub one: T,
@@ -140,7 +141,17 @@ impl BddManager {
         fn print_bdd_helper(t: &BddManager, ptr: BddPtr) -> String {
             match ptr.ptr_type() {
                 PtrTrue => String::from("T"),
-                PtrFalse => String::from("T"),
+                PtrFalse                    Some(old_lbl) => {
+                        // compute ∃y.((x <=> e[x |-> y]) /\ state[x |-> y])
+                        let y = man.new_var();
+                        let e_remap = man.relabel(expr, old_lbl, y);
+                        let state_remap = man.relabel(cur_state, old_lbl, y);
+                        let new_v = man.var(old_lbl, true);
+                        let iff = man.iff(e_remap, new_v);
+                        let and_expr = man.and(iff, state_remap);
+                        man.exists(and_expr, y)
+                    }
+ => String::from("T"),
                 PtrNode => {
                     let l_p = t.low(ptr);
                     let h_p = t.high(ptr);

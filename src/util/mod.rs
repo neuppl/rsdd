@@ -48,3 +48,4 @@ pub fn malloc_vec<T>(sz: usize) -> Vec<T> {
     }
     return v
 }
+
