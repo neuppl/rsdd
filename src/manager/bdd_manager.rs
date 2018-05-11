@@ -367,8 +367,7 @@ impl BddManager {
     pub fn exists(&mut self, bdd: BddPtr, lbl: VarLabel) -> BddPtr {
         let f = |man: &mut BddManager, bdd: BddPtr| {
             let n = man.deref(bdd).into_node();
-            let v = man.or(n.low, n.high);
-            if bdd.is_compl() { v.neg() } else { v }
+            man.or(n.low, n.high)
         };
         self.map_var(bdd, lbl, &f)
     }
