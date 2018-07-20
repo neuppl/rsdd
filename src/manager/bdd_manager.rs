@@ -46,7 +46,7 @@ impl<T: Num + Clone + Debug + Copy> BddWmc<T> {
         }
     }
 
-    /// Sets the weight of variable `lbl`
+    /// Sets the weiglet v = ht of variable `lbl`
     pub fn set_weight(&mut self, lbl: VarLabel, low: T, high: T) -> () {
         self.var_to_val.insert(lbl, (low, high));
     }
@@ -365,11 +365,10 @@ impl BddManager {
 
     /// Existentially quantifies out the variable `lbl` from `f`
     pub fn exists(&mut self, bdd: BddPtr, lbl: VarLabel) -> BddPtr {
-        let f = |man: &mut BddManager, bdd: BddPtr| {
-            let n = man.deref(bdd).into_node();
-            man.or(n.low, n.high)
-        };
-        self.map_var(bdd, lbl, &f)
+        // TODO this can be optimized by specializing it
+        let v1 = self.condition(bdd, lbl, true);
+        let v2 = self.condition(bdd, lbl, false);
+        self.or(v1, v2)
     }
 
     /// Relabels all instances of `old_lbl` with `new_lbl`
@@ -673,6 +672,26 @@ fn test_exist() {
     assert!(
         man.eq_bdd(r_expected, res),
         "Got:\nOne: {}\nExpected: {}",
+        man.print_bdd(res),
+        man.print_bdd(r_expected)
+    );
+}
+
+#[test]
+fn test_exist_compl() {
+    let mut man = BddManager::new_default_order(3);
+    // 1 /\ 2 /\ 3
+    let v1 = man.var(VarLabel::new(0), false);
+    let v2 = man.var(VarLabel::new(1), false);
+    let v3 = man.var(VarLabel::new(2), false);
+    let a1 = man.and(v1, v2);
+    let r1 = man.and(a1, v3);
+    let r_expected = man.and(v1, v3);
+    let res = man.exists(r1, VarLabel::new(1));
+    // let res = r1;
+    assert!(
+        man.eq_bdd(r_expected, res),
+        "Got:\n: {}\nExpected: {}",
         man.print_bdd(res),
         man.print_bdd(r_expected)
     );
