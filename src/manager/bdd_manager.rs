@@ -29,7 +29,7 @@ pub struct BddWmc<T: Num + Clone + Debug + Copy> {
 impl<T: Num + Clone + Debug + Copy> BddWmc<T> {
     /// Generates a new `BddWmc` with a default `var_to_val`; it is private because we
     /// do not want to expose the structure of the associative array
-    fn new_with_default(zero: T, one: T, var_to_val: Vec<(T, T)>) -> BddWmc<T> {
+    pub fn new_with_default(zero: T, one: T, var_to_val: Vec<(T, T)>) -> BddWmc<T> {
         BddWmc {
             zero: zero,
             one: one,
