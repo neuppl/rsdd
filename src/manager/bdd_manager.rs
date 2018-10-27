@@ -470,10 +470,15 @@ impl BddManager {
     /// on-the-fly smoothing. Returns a pair: the first element is the sum of
     /// the node, and the second element is the expected parent of that node; in
     /// the case of the node being the top variable, then `None` is returned
+    ///
+    /// if `smooth` is true, then the BDD is smoothed in real time as the WMC is
+    /// performed. This can actually be skipped for certain classes of WMC
+    /// problems, and is a huge savings if it can be.
     fn wmc_helper<T: Num + Clone + Debug + Copy>(
         &self,
         ptr: BddPtr,
         wmc: &BddWmc<T>,
+        smooth: bool
     ) -> (T, Option<VarLabel>) {
         use repr::bdd::PointerType;
         match ptr.ptr_type() {
@@ -487,8 +492,8 @@ impl BddManager {
                 } else {
                     (bdd.low, bdd.high)
                 };
-                let (mut low_v, low_lvl_op) = self.wmc_helper(low, wmc);
-                let (mut high_v, high_lvl_op) = self.wmc_helper(high, wmc);
+                let (mut low_v, low_lvl_op) = self.wmc_helper(low, wmc, smooth);
+                let (mut high_v, high_lvl_op) = self.wmc_helper(high, wmc, smooth);
                 let mut low_lvl = low_lvl_op.unwrap();
                 let mut high_lvl = high_lvl_op.unwrap();
                 // smooth low
@@ -516,23 +521,30 @@ impl BddManager {
     }
 
     /// Weighted-model count.
-    pub fn wmc<T: Num + Clone + Debug + Copy>(&self, ptr: BddPtr, params: &BddWmc<T>) -> T {
+    /// if `smooth` is true, then the BDD is smoothed in real time as the WMC is
+    /// performed. This can actually be skipped for certain classes of WMC
+    /// problems, and is a huge savings if it can be. By default, it should be
+    /// `true`.
+    pub fn wmc<T: Num + Clone + Debug + Copy>(&self, ptr: BddPtr, params: &BddWmc<T>, smooth: bool) -> T {
         // call wmc_helper and smooth the result
-        let (mut v, lvl_op) = self.wmc_helper(ptr, params);
+        let (mut v, lvl_op) = self.wmc_helper(ptr, params, smooth);
         if lvl_op.is_none() {
             // no smoothing required
             v
         } else {
-            // need to smooth
-            let mut lvl = lvl_op;
-            let order = self.get_order();
-            while lvl.is_some() {
-                let (low_factor, high_factor) =
-                    params.var_to_val[lvl.unwrap().value() as usize];
-                v = (v.clone() * low_factor) + (v * high_factor);
-                lvl = order.above(lvl.unwrap());
+            if smooth {
+                let mut lvl = lvl_op;
+                let order = self.get_order();
+                while lvl.is_some() {
+                    let (low_factor, high_factor) =
+                        params.var_to_val[lvl.unwrap().value() as usize];
+                    v = (v.clone() * low_factor) + (v * high_factor);
+                    lvl = order.above(lvl.unwrap());
+                }
+                v
+            } else {
+                v
             }
-            v
         }
     }
 
@@ -611,7 +623,7 @@ fn test_wmc() {
     let r1 = man.or(v1, v2);
     let weights = vec![(2,3), (5,7)];
     let params = BddWmc::new_with_default(0, 1, weights);
-    let wmc = man.wmc(r1, &params);
+    let wmc = man.wmc(r1, &params, true);
     assert_eq!(wmc, 50);
 }
 
@@ -623,7 +635,7 @@ fn test_wmc_smooth() {
     let r1 = man.or(v1, v2);
     let weights = vec![(2,3), (5,7), (11,13)];
     let params = BddWmc::new_with_default(0, 1, weights);
-    let wmc = man.wmc(r1, &params);
+    let wmc = man.wmc(r1, &params, true);
     assert_eq!(wmc, 1176);
 }
 
@@ -633,7 +645,7 @@ fn test_wmc_smooth2() {
     let r1 = BddPtr::true_node();
     let weights = vec![(2, 3),(5, 7),(11, 13)];
     let params = BddWmc::new_with_default(0, 1, weights);
-    let wmc = man.wmc(r1, &params);
+    let wmc = man.wmc(r1, &params, true);
     assert_eq!(wmc, 1440);
 }
 
