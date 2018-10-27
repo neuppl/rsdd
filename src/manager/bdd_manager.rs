@@ -496,17 +496,19 @@ impl BddManager {
                 let (mut high_v, high_lvl_op) = self.wmc_helper(high, wmc, smooth);
                 let mut low_lvl = low_lvl_op.unwrap();
                 let mut high_lvl = high_lvl_op.unwrap();
-                // smooth low
-                while order.lt(ptr.label(), low_lvl) {
-                    let (low_factor, high_factor) = wmc.var_to_val[low_lvl.value() as usize];
-                    low_v = (low_v.clone() * low_factor) + (low_v * high_factor);
-                    low_lvl = order.above(low_lvl).unwrap();
-                }
-                // smooth high
-                while order.lt(ptr.label(), high_lvl) {
-                    let (low_factor, high_factor) = wmc.var_to_val[high_lvl.value() as usize];
-                    high_v = (high_v.clone() * low_factor) + (high_v * high_factor);
-                    high_lvl = order.above(high_lvl).unwrap();
+                if smooth {
+                    // smooth low
+                    while order.lt(ptr.label(), low_lvl) {
+                        let (low_factor, high_factor) = wmc.var_to_val[low_lvl.value() as usize];
+                        low_v = (low_v.clone() * low_factor) + (low_v * high_factor);
+                        low_lvl = order.above(low_lvl).unwrap();
+                    }
+                    // smooth high
+                    while order.lt(ptr.label(), high_lvl) {
+                        let (low_factor, high_factor) = wmc.var_to_val[high_lvl.value() as usize];
+                        high_v = (high_v.clone() * low_factor) + (high_v * high_factor);
+                        high_lvl = order.above(high_lvl).unwrap();
+                    }
                 }
                 // compute new
                 let (low_factor, high_factor) = wmc.var_to_val[bdd.var.value() as usize];
