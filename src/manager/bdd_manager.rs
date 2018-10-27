@@ -21,15 +21,15 @@ use maplit::*;
 pub struct BddWmc<T: Num + Clone + Debug + Copy> {
     pub zero: T,
     pub one: T,
-    /// a hashmap which maps variable labels to `(low, high)`
+    /// a vector which maps variable labels to `(low, high)`
     /// valuations.
-    var_to_val: HashMap<VarLabel, (T, T)>,
+    var_to_val: Vec<(T, T)>,
 }
 
 impl<T: Num + Clone + Debug + Copy> BddWmc<T> {
     /// Generates a new `BddWmc` with a default `var_to_val`; it is private because we
     /// do not want to expose the structure of the associative array
-    fn new_with_default(zero: T, one: T, var_to_val: HashMap<VarLabel, (T, T)>) -> BddWmc<T> {
+    fn new_with_default(zero: T, one: T, var_to_val: Vec<(T, T)>) -> BddWmc<T> {
         BddWmc {
             zero: zero,
             one: one,
@@ -42,13 +42,8 @@ impl<T: Num + Clone + Debug + Copy> BddWmc<T> {
         BddWmc {
             zero: zero,
             one: one,
-            var_to_val: HashMap::new(),
+            var_to_val: Vec::new(),
         }
-    }
-
-    /// Sets the weiglet v = ht of variable `lbl`
-    pub fn set_weight(&mut self, lbl: VarLabel, low: T, high: T) -> () {
-        self.var_to_val.insert(lbl, (low, high));
     }
 }
 
@@ -311,6 +306,25 @@ impl BddManager {
         self.and(f.neg(), g.neg()).neg()
     }
 
+    /// disjoins a list of BDDs
+    pub fn or_lst(&mut self, f : &[BddPtr]) -> BddPtr {
+        let mut cur_bdd = self.false_ptr();
+        for &itm in f {
+            cur_bdd = self.or(cur_bdd, itm);
+        }
+        cur_bdd
+    }
+
+    /// disjoins a list of BDDs
+    pub fn and_lst(&mut self, f : &[BddPtr]) -> BddPtr {
+        let mut cur_bdd = self.true_ptr();
+        for &itm in f {
+            cur_bdd = self.and(cur_bdd, itm);
+        }
+        cur_bdd
+    }
+
+
     /// Compute the Boolean function `f iff g`
     pub fn iff(&mut self, f: BddPtr, g: BddPtr) -> BddPtr {
         // TODO: for now, compute this as (f => g) /\ (g => f); this can be
@@ -365,7 +379,7 @@ impl BddManager {
 
     /// Existentially quantifies out the variable `lbl` from `f`
     pub fn exists(&mut self, bdd: BddPtr, lbl: VarLabel) -> BddPtr {
-        // TODO this can be optimized by specializing it
+        // TODO this can be optimized by specializing it 
         let v1 = self.condition(bdd, lbl, true);
         let v2 = self.condition(bdd, lbl, false);
         self.or(v1, v2)
@@ -479,18 +493,18 @@ impl BddManager {
                 let mut high_lvl = high_lvl_op.unwrap();
                 // smooth low
                 while order.lt(ptr.label(), low_lvl) {
-                    let (low_factor, high_factor) = *wmc.var_to_val.get(&low_lvl).unwrap();
+                    let (low_factor, high_factor) = wmc.var_to_val[low_lvl.value() as usize];
                     low_v = (low_v.clone() * low_factor) + (low_v * high_factor);
                     low_lvl = order.above(low_lvl).unwrap();
                 }
                 // smooth high
                 while order.lt(ptr.label(), high_lvl) {
-                    let (low_factor, high_factor) = *wmc.var_to_val.get(&high_lvl).unwrap();
+                    let (low_factor, high_factor) = wmc.var_to_val[high_lvl.value() as usize];
                     high_v = (high_v.clone() * low_factor) + (high_v * high_factor);
                     high_lvl = order.above(high_lvl).unwrap();
                 }
                 // compute new
-                let (low_factor, high_factor) = *wmc.var_to_val.get(&bdd.var).unwrap();
+                let (low_factor, high_factor) = wmc.var_to_val[bdd.var.value() as usize];
                 let res = (low_v * low_factor.clone()) + (high_v * high_factor.clone());
                 if order.get(ptr.label()) == 0 {
                     (res, None)
@@ -514,7 +528,7 @@ impl BddManager {
             let order = self.get_order();
             while lvl.is_some() {
                 let (low_factor, high_factor) =
-                    params.var_to_val.get(&lvl.unwrap()).unwrap().clone();
+                    params.var_to_val[lvl.unwrap().value() as usize];
                 v = (v.clone() * low_factor) + (v * high_factor);
                 lvl = order.above(lvl.unwrap());
             }
@@ -526,10 +540,10 @@ impl BddManager {
         let mut cvec: Vec<BddPtr> = Vec::with_capacity(cnf.clauses().len());
         for lit_vec in cnf.clauses().iter() {
             assert!(lit_vec.len() > 0, "empty cnf");
-            let (vlabel, val) = lit_vec[0];
+            let (vlabel, val) = (lit_vec[0].get_label(), lit_vec[0].get_polarity());
             let mut bdd = self.var(vlabel, val);
             for i in 1..lit_vec.len() {;
-                let (vlabel, val) = lit_vec[i];
+                let (vlabel, val) = (lit_vec[i].get_label(), lit_vec[i].get_polarity());
                 let var = self.var(vlabel, val);
                 bdd = self.or(bdd, var);
             }
@@ -570,6 +584,7 @@ impl BddManager {
             }
         }
     }
+
 }
 
 // check that (a \/ b) /\ a === a
@@ -594,9 +609,7 @@ fn test_wmc() {
     let v1 = man.var(VarLabel::new(0), true);
     let v2 = man.var(VarLabel::new(1), true);
     let r1 = man.or(v1, v2);
-    let weights =
-        hashmap![VarLabel::new(0) => (2, 3),
-                 VarLabel::new(1) => (5, 7)];
+    let weights = vec![(2,3), (5,7)];
     let params = BddWmc::new_with_default(0, 1, weights);
     let wmc = man.wmc(r1, &params);
     assert_eq!(wmc, 50);
@@ -608,11 +621,7 @@ fn test_wmc_smooth() {
     let v1 = man.var(VarLabel::new(0), true);
     let v2 = man.var(VarLabel::new(2), true);
     let r1 = man.or(v1, v2);
-    let weights =
-        hashmap![VarLabel::new(0) => (2, 3),
-                 VarLabel::new(1) => (5, 7),
-                 VarLabel::new(2) => (11, 13),
-        ];
+    let weights = vec![(2,3), (5,7), (11,13)];
     let params = BddWmc::new_with_default(0, 1, weights);
     let wmc = man.wmc(r1, &params);
     assert_eq!(wmc, 1176);
@@ -621,13 +630,8 @@ fn test_wmc_smooth() {
 #[test]
 fn test_wmc_smooth2() {
     let man = BddManager::new_default_order(3);
-    let weights: Vec<(usize, usize)> = vec![(2, 3), (5, 7), (11, 13)];
     let r1 = BddPtr::true_node();
-    let weights =
-        hashmap![VarLabel::new(0) => (2, 3),
-                 VarLabel::new(1) => (5, 7),
-                 VarLabel::new(2) => (11, 13),
-        ];
+    let weights = vec![(2, 3),(5, 7),(11, 13)];
     let params = BddWmc::new_with_default(0, 1, weights);
     let wmc = man.wmc(r1, &params);
     assert_eq!(wmc, 1440);
@@ -657,6 +661,9 @@ fn test_condition_compl() {
         man.print_bdd(v1)
     );
 }
+
+
+
 
 #[test]
 fn test_exist() {

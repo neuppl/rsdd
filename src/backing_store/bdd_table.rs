@@ -58,7 +58,8 @@ impl BddTable {
             PointerType::PtrFalse => Bdd::BddFalse,
             PointerType::PtrTrue => Bdd::BddTrue,
             PointerType::PtrNode => {
-                let topless = self.subtables[ptr.var() as usize].deref(BackingPtr(ptr.idx() as u32));
+                let topless = self.subtables[ptr.var() as usize].
+                    deref(BackingPtr(ptr.idx() as u32));
                 Bdd::new_node(topless.low, topless.high, VarLabel::new(ptr.var()))
             }
         }

@@ -3,12 +3,10 @@ use backing_store::sdd_table::*;
 use repr::var_label::VarLabel;
 use std::collections::{HashMap, HashSet};
 use manager::cache::lru::*;
-use manager::bdd_manager::BddWmc;
 use repr::cnf::Cnf;
 use quickersort;
 use util::btree::*;
 use repr::boolexpr::BoolExpr;
-use num::traits::Num;
 
 /*
 /// SDD weighted model counting parameters
@@ -108,7 +106,7 @@ fn least_common_ancestor(
 
 
 /// true if `idx_a` is prime to `idx_b`
-fn is_prime(vtree: &VTree, idx_a: usize, idx_b: usize) -> bool {
+fn is_prime(_: &VTree, idx_a: usize, idx_b: usize) -> bool {
     idx_a < idx_b
 }
 
@@ -399,7 +397,7 @@ impl SddManager {
                     doc =
                         doc.append(Doc::newline()).append(
                             (Doc::from("/\\").append(Doc::newline()).append(
-                                (new_s1.append(Doc::newline()).append(new_s2)),
+                                new_s1.append(Doc::newline()).append(new_s2),
                             )).nest(2),
                         );
                 }
@@ -456,16 +454,6 @@ impl SddManager {
         helper(self, ptr, assgn)
     }
 
-    // fn wmc_helper<T: Num + Clone + Debug>(
-    //     &'a self,
-    //     ptr: SddPtr,
-    //     vtree_to_v:
-    //     zero: &T,
-    //     one: &T
-    // ) -> (T, Option<&'a VTree>) {
-    //     if ptr.
-    // }
-
 
     pub fn sdd_eq(&self, a: SddPtr, b: SddPtr) -> bool {
         a == b
@@ -483,10 +471,10 @@ impl SddManager {
         let mut cvec: Vec<SddPtr> = Vec::with_capacity(cnf.clauses().len());
         for lit_vec in cnf.clauses().iter() {
             assert!(lit_vec.len() > 0, "empty cnf");
-            let (vlabel, val) = lit_vec[0];
+            let (vlabel, val) = (lit_vec[0].get_label(), lit_vec[0].get_polarity());
             let mut sdd = self.var(vlabel, val);
             for i in 1..lit_vec.len() {;
-                let (vlabel, val) = lit_vec[i];
+                let (vlabel, val) = (lit_vec[i].get_label(), lit_vec[i].get_polarity());
                 let var = self.var(vlabel, val);
                 sdd = self.or(sdd, var);
             }

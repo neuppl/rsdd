@@ -8,7 +8,9 @@ use std::hash::BuildHasherDefault;
 use backing_store::*;
 use util::*;
 
-const LOAD_FACTOR: f64 = 0.5;
+/// The load factor of the table, i.e. how full the table will be when it
+/// automatically resizes
+const LOAD_FACTOR: f64 = 0.7;
 
 
 /// data structure stored inside of the hash table
@@ -43,8 +45,8 @@ where
     T: Hash + PartialEq + Eq + Clone,
 {
     elem: T,
-    hash_mem: usize,
-    mark: bool
+    hash_mem: usize, // store the hash value so that it is not recomputed
+    mark: bool       // a mark used during garbage collection
 }
 
 impl<T> BackingElem<T>
@@ -140,14 +142,6 @@ where
     /// Begin inserting `itm` from point `pos` in the hash table.
     fn propagate(&mut self, itm: HashTableElement, pos: usize) -> () {
         propagate(&mut self.tbl, self.cap, itm, pos)
-    }
-
-    /// Collects all nodes except those required to preserve `preserve`. Each
-    /// element if `preserve` is updated to a corresponding new location.
-    /// This invalidates *all* existing pointers into this table; only the
-    /// pointers in `preserve` will be valid.
-    pub fn collect(&mut self, preserve: &mut [BackingPtr]) -> () {
-        
     }
 
     /// Get or insert a fresh (low, high) pair

@@ -2,6 +2,7 @@ use std::hash::{Hash, Hasher};
 use std::fmt;
 use std::mem;
 use repr::var_label::*;
+use backing_store::{BackingPtr};
 
 
 /// number of bits allocated for a table index (limit on total BDDs of each

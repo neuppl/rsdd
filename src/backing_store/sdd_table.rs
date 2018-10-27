@@ -11,6 +11,7 @@ use manager::var_order::VarOrder;
 
 const DEFAULT_RH_SZ: usize = 32768;
 
+
 /// The SDD table consists of two types of node allocators: BDD
 /// allocators, and SDD allocators
 enum SubTable {

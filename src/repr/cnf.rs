@@ -1,4 +1,4 @@
-use repr::var_label::VarLabel;
+use repr::var_label::{VarLabel, Literal};
 use std::cmp::{min, max};
 use rand::{Rng, thread_rng};
 use manager::var_order::VarOrder;
@@ -9,7 +9,7 @@ use rand::StdRng;
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct Cnf {
-    clauses: Vec<Vec<(VarLabel, bool)>>,
+    clauses: Vec<Vec<Literal>>,
     num_vars: usize,
 }
 
@@ -21,10 +21,10 @@ impl Cnf {
             Instance::Cnf { num_vars, clauses } => (num_vars, clauses),
             _ => panic!(),
         };
-        let mut clause_vec: Vec<Vec<(VarLabel, bool)>> = Vec::new();
+        let mut clause_vec: Vec<Vec<Literal>> = Vec::new();
         let mut m = 0;
         for itm in cvec.iter() {
-            let mut lit_vec: Vec<(VarLabel, bool)> = Vec::new();
+            let mut lit_vec: Vec<Literal> = Vec::new();
             for l in itm.lits().iter() {
                 let b = match l.sign() {
                     Sign::Neg => false,
@@ -33,7 +33,7 @@ impl Cnf {
                 // subtract 1, we are 0-indexed
                 let lbl = VarLabel::new(l.var().to_u64() - 1);
                 m = max(l.var().to_u64() as usize, m);
-                lit_vec.push((lbl, b));
+                lit_vec.push(Literal::new(lbl, b));
             }
             clause_vec.push(lit_vec);
         }
@@ -45,17 +45,17 @@ impl Cnf {
 
     pub fn rand_cnf(rng: &mut StdRng, num_vars: usize, num_clauses: usize) -> Cnf {
         assert!(num_clauses > 2, "requires at least 2 clauses in CNF");
-        let vars: Vec<(VarLabel, bool)> = (1..num_vars)
-            .map(|x| (VarLabel::new(x as u64), rand::random()))
+        let vars: Vec<Literal> = (1..num_vars)
+            .map(|x| Literal::new(VarLabel::new(x as u64), rand::random()))
             .collect();
         let range = rand::distributions::Range::new(0, vars.len());
         let clause_size = 3;
         // we generate a random cnf
-        let mut clause_vec: Vec<Vec<(VarLabel, bool)>> = Vec::new();
+        let mut clause_vec: Vec<Vec<Literal>> = Vec::new();
         for _ in 0..num_clauses {
             let num_vars = clause_size;
             if num_vars > 1 {
-                let mut var_vec: Vec<(VarLabel, bool)> = Vec::new();
+                let mut var_vec: Vec<Literal> = Vec::new();
                 for _ in 0..clause_size {
                     let var = vars.get(range.ind_sample(rng)).unwrap().clone();
                     var_vec.push(var);
@@ -74,15 +74,15 @@ impl Cnf {
         self.num_vars
     }
 
-    pub fn clauses(&self) -> &[Vec<(VarLabel, bool)>] {
+    pub fn clauses(&self) -> &[Vec<Literal>] {
         self.clauses.as_slice()
     }
 
-    pub fn new(clauses: Vec<Vec<(VarLabel, bool)>>) -> Cnf {
+    pub fn new(clauses: Vec<Vec<Literal>>) -> Cnf {
         let mut m = 0;
         for clause in clauses.iter() {
             for lit in clause.iter() {
-                m = max(lit.0.value(), m);
+                m = max(lit.get_label().value(), m);
             }
         }
         Cnf { clauses: clauses, num_vars: (m + 1) as usize}
@@ -100,7 +100,7 @@ impl Cnf {
             // find the two variables in the clause which are farthest
             // from each other in the order
             for lit in clause.iter() {
-                let this_pos = lbl_to_pos[lit.0.value() as usize];
+                let this_pos = lbl_to_pos[lit.get_label().value() as usize];
                 min_pos = min(this_pos, min_pos);
                 max_pos = max(this_pos, max_pos);
             }
@@ -110,10 +110,10 @@ impl Cnf {
     }
 
     /// computes the center of gravity of a particular clause for a given order
-    fn center_of_gravity(&self, clause: &[(VarLabel, bool)], lbl_to_pos: &[usize]) -> f64 {
+    fn center_of_gravity(&self, clause: &[Literal], lbl_to_pos: &[usize]) -> f64 {
         let sum = clause.iter().fold(
             0,
-            |acc, &(ref lbl, _)| lbl_to_pos[lbl.value() as usize] + acc,
+            |acc, &lbl| lbl_to_pos[lbl.get_label().value() as usize] + acc,
         );
         let r = (sum as f64) / (clause.len() as f64);
         // println!("   clause: {:?}, lbl: {:?}, cog: {}",
@@ -144,9 +144,10 @@ impl Cnf {
                 update.push((0.0, 0));
             }
             for (idx, clause) in self.clauses.iter().enumerate() {
-                for &(ref lit, _) in clause.iter() {
-                    let (cur_total, num_edges) = update[lit.value() as usize];
-                    update[lit.value() as usize] = (cur_total + cog[idx], num_edges + 1);
+                for &lit in clause.iter() {
+                    let (cur_total, num_edges) = update[lit.get_label().value() as usize];
+                    update[lit.get_label().value() as usize] =
+                        (cur_total + cog[idx], num_edges + 1);
                 }
             }
             let avg_cog: Vec<f64> = update
