@@ -340,7 +340,11 @@ impl BddManager {
     fn map_var(&mut self,
                bdd: BddPtr,
                lbl: VarLabel,
+               seen: &mut HashSet<BddPtr>,
                f:&Fn(&mut BddManager, BddPtr) -> BddPtr) -> BddPtr {
+        if seen.contains(&bdd) {
+            return bdd;
+        }
         if self.get_order().lt(lbl, bdd.label()) || bdd.is_const() {
             // we passed the variable in the order, we will never find it
             bdd
@@ -349,9 +353,9 @@ impl BddManager {
         } else {
             // recurse on the children
             let n = self.deref(bdd).into_node();
-            let l = self.map_var(n.low, lbl, f);
-            let h = self.map_var(n.high, lbl, f);
-            if l != n.low || h != n.high {
+            let l = self.map_var(n.low, lbl, seen, f);
+            let h = self.map_var(n.high, lbl, seen, f);
+            let res = if l != n.low || h != n.high {
                 // cache and return the new BDD
                 let new_bdd = BddNode {
                     low: l,
@@ -363,7 +367,9 @@ impl BddManager {
             } else {
                 // nothing changed
                 bdd
-            }
+            };
+            seen.insert(res);
+            res
         }
     }
 
@@ -374,7 +380,7 @@ impl BddManager {
             let value = if bdd.is_compl() { !value } else { value };
             if value { node.high } else { node.low }
         };
-        self.map_var(bdd, lbl, &f)
+        self.map_var(bdd, lbl, &mut HashSet::new(), &f)
     }
 
     /// Existentially quantifies out the variable `lbl` from `f`
@@ -400,7 +406,7 @@ impl BddManager {
             let r = man.get_or_insert(new_bdd);
             if bdd.is_compl() { r.neg() } else { r }
         };
-        self.map_var(bdd, old_lbl, &f)
+        self.map_var(bdd, old_lbl, &mut HashSet::new(), &f)
     }
 
 
