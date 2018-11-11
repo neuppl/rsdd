@@ -45,6 +45,11 @@ impl<T: Num + Clone + Debug + Copy> BddWmc<T> {
             var_to_val: HashMap::new(),
         }
     }
+
+    /// Sets the weight of a literal
+    pub fn set_weight(&mut self, idx: VarLabel, low: T, high: T) -> () {
+        self.var_to_val.insert(idx, (low, high));
+    }
 }
 
 pub struct BddManager {
