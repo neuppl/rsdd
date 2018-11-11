@@ -23,13 +23,13 @@ pub struct BddWmc<T: Num + Clone + Debug + Copy> {
     pub one: T,
     /// a vector which maps variable labels to `(low, high)`
     /// valuations.
-    var_to_val: Vec<(T, T)>,
+    var_to_val: HashMap<VarLabel, (T, T)>,
 }
 
 impl<T: Num + Clone + Debug + Copy> BddWmc<T> {
     /// Generates a new `BddWmc` with a default `var_to_val`; it is private because we
     /// do not want to expose the structure of the associative array
-    pub fn new_with_default(zero: T, one: T, var_to_val: Vec<(T, T)>) -> BddWmc<T> {
+    pub fn new_with_default(zero: T, one: T, var_to_val: HashMap<VarLabel, (T, T)>) -> BddWmc<T> {
         BddWmc {
             zero: zero,
             one: one,
@@ -42,7 +42,7 @@ impl<T: Num + Clone + Debug + Copy> BddWmc<T> {
         BddWmc {
             zero: zero,
             one: one,
-            var_to_val: Vec::new(),
+            var_to_val: HashMap::new(),
         }
     }
 }
@@ -504,18 +504,18 @@ impl BddManager {
                 let mut high_lvl = high_lvl_op.unwrap();
                 // smooth low
                 while order.lt(ptr.label(), low_lvl) {
-                    let (low_factor, high_factor) = wmc.var_to_val[low_lvl.value() as usize];
-                    low_v = (low_v.clone() * low_factor) + (low_v * high_factor);
+                    let (low_factor, high_factor) = wmc.var_to_val.get(&VarLabel::new(low_lvl.value())).unwrap();
+                    low_v = (low_v.clone() * (*low_factor)) + (low_v * (*high_factor));
                     low_lvl = order.above(low_lvl).unwrap();
                 }
                 // smooth high
                 while order.lt(ptr.label(), high_lvl) {
-                    let (low_factor, high_factor) = wmc.var_to_val[high_lvl.value() as usize];
-                    high_v = (high_v.clone() * low_factor) + (high_v * high_factor);
+                    let (low_factor, high_factor) = wmc.var_to_val.get(&VarLabel::new(high_lvl.value())).unwrap();
+                    high_v = (high_v.clone() * (*low_factor)) + (high_v * (*high_factor));
                     high_lvl = order.above(high_lvl).unwrap();
                 }
                 // compute new
-                let (low_factor, high_factor) = wmc.var_to_val[bdd.var.value() as usize];
+                let (low_factor, high_factor) = wmc.var_to_val.get(&VarLabel::new(bdd.var.value())).unwrap();
                 let res = (low_v * low_factor.clone()) + (high_v * high_factor.clone());
                 if order.get(ptr.label()) == 0 {
                     (res, None)
@@ -541,8 +541,8 @@ impl BddManager {
             let order = self.get_order();
             while lvl.is_some() {
                 let (low_factor, high_factor) =
-                    params.var_to_val[lvl.unwrap().value() as usize];
-                v = (v.clone() * low_factor) + (v * high_factor);
+                    params.var_to_val.get(&VarLabel::new(lvl.unwrap().value())).unwrap();
+                v = (v.clone() * (*low_factor)) + (v * (*high_factor));
                 lvl = order.above(lvl.unwrap());
             }
             v
@@ -622,7 +622,8 @@ fn test_wmc() {
     let v1 = man.var(VarLabel::new(0), true);
     let v2 = man.var(VarLabel::new(1), true);
     let r1 = man.or(v1, v2);
-    let weights = vec![(2,3), (5,7)];
+    let weights = hashmap!{VarLabel::new(0) => (2,3),
+                           VarLabel::new(1) => (5,7)};
     let params = BddWmc::new_with_default(0, 1, weights);
     let wmc = man.wmc(r1, &params);
     assert_eq!(wmc, 50);
@@ -634,7 +635,10 @@ fn test_wmc_smooth() {
     let v1 = man.var(VarLabel::new(0), true);
     let v2 = man.var(VarLabel::new(2), true);
     let r1 = man.or(v1, v2);
-    let weights = vec![(2,3), (5,7), (11,13)];
+    let weights = hashmap!{
+        VarLabel::new(0) => (2,3),
+        VarLabel::new(1) => (5,7),
+        VarLabel::new(2) => (11,13)};
     let params = BddWmc::new_with_default(0, 1, weights);
     let wmc = man.wmc(r1, &params);
     assert_eq!(wmc, 1176);
@@ -644,7 +648,10 @@ fn test_wmc_smooth() {
 fn test_wmc_smooth2() {
     let man = BddManager::new_default_order(3);
     let r1 = BddPtr::true_node();
-    let weights = vec![(2, 3),(5, 7),(11, 13)];
+    let weights = hashmap!{
+        VarLabel::new(0) => (2,3),
+        VarLabel::new(1) => (5,7),
+        VarLabel::new(2) => (11,13)};
     let params = BddWmc::new_with_default(0, 1, weights);
     let wmc = man.wmc(r1, &params);
     assert_eq!(wmc, 1440);
