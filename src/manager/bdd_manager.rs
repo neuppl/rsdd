@@ -347,7 +347,6 @@ impl BddManager {
                lbl: VarLabel,
                seen: &mut HashSet<BddPtr>,
                f:&Fn(&mut BddManager, BddPtr) -> BddPtr) -> BddPtr {
-        panic!("not impl");
         if seen.contains(&bdd) {
             return bdd;
         }
