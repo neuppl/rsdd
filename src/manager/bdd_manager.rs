@@ -382,9 +382,9 @@ impl BddManager {
     fn cond_helper(&mut self, bdd: BddPtr, lbl: VarLabel,
                    value: bool,
                    seen: &mut HashSet<BddPtr>) -> BddPtr {
-        println!("value: {}, bdd: {}", value, self.print_bdd(bdd));
+        // println!("value: {}, bdd: {}", value, self.print_bdd(bdd));
         if self.get_order().lt(lbl, bdd.label()) || bdd.is_const() {
-            println!("doh");
+            // println!("doh");
             // we passed the variable in the order, we will never find it
             bdd
         } else if bdd.label() == lbl {
@@ -429,11 +429,11 @@ impl BddManager {
     /// Existentially quantifies out the variable `lbl` from `f`
     pub fn exists(&mut self, bdd: BddPtr, lbl: VarLabel) -> BddPtr {
         // TODO this can be optimized by specializing it
-        println!("input : {}", self.print_bdd(bdd));
+        // println!("input : {}", self.print_bdd(bdd));
         let v1 = self.condition(bdd, lbl, true);
-        println!("cond1: {}", self.print_bdd(v1));
+        // println!("cond1: {}", self.print_bdd(v1));
         let v2 = self.condition(bdd, lbl, false);
-        println!("cond2: {}", self.print_bdd(v2));
+        // println!("cond2: {}", self.print_bdd(v2));
         self.or(v1, v2)
     }
 
