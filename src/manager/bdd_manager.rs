@@ -347,6 +347,7 @@ impl BddManager {
                lbl: VarLabel,
                seen: &mut HashSet<BddPtr>,
                f:&Fn(&mut BddManager, BddPtr) -> BddPtr) -> BddPtr {
+        panic!("not impl");
         if seen.contains(&bdd) {
             return bdd;
         }
@@ -378,21 +379,61 @@ impl BddManager {
         }
     }
 
+    fn cond_helper(&mut self, bdd: BddPtr, lbl: VarLabel,
+                   value: bool,
+                   seen: &mut HashSet<BddPtr>) -> BddPtr {
+        println!("value: {}, bdd: {}", value, self.print_bdd(bdd));
+        if self.get_order().lt(lbl, bdd.label()) || bdd.is_const() {
+            println!("doh");
+            // we passed the variable in the order, we will never find it
+            bdd
+        } else if bdd.label() == lbl {
+            let node = self.deref(bdd).into_node();
+            let r = if value {node.high} else {node.low};
+            if bdd.is_compl() { r.neg() } else { r }
+        } else {
+            // recurse on the children
+            let n = self.deref(bdd).into_node();
+            let l = self.cond_helper(n.low, lbl, value, seen);
+            let h = self.cond_helper(n.high, lbl, value, seen);
+            if l == h {
+                if bdd.is_compl() {
+                    return l.neg();
+                } else {
+                    return l;
+                };
+            };
+            let res = if l != n.low || h != n.high {
+                // cache and return the new BDD
+                let new_bdd = BddNode {
+                    low: l,
+                    high: h,
+                    var: bdd.label(),
+                };
+                let r = self.get_or_insert(new_bdd);
+                if bdd.is_compl() { r.neg() } else { r }
+            } else {
+                // nothing changed
+                bdd
+            };
+            seen.insert(res);
+            res
+        }
+    }
+
     /// Compute the Boolean function `f | var = value`
     pub fn condition(&mut self, bdd: BddPtr, lbl: VarLabel, value: bool) -> BddPtr {
-        let f = |man: &mut BddManager, bdd: BddPtr| {
-            let node = man.deref(bdd).into_node();
-            let value = if bdd.is_compl() { !value } else { value };
-            if value { node.high } else { node.low }
-        };
-        self.map_var(bdd, lbl, &mut HashSet::new(), &f)
+        self.cond_helper(bdd, lbl, value, &mut HashSet::new())
     }
 
     /// Existentially quantifies out the variable `lbl` from `f`
     pub fn exists(&mut self, bdd: BddPtr, lbl: VarLabel) -> BddPtr {
-        // TODO this can be optimized by specializing it 
+        // TODO this can be optimized by specializing it
+        println!("input : {}", self.print_bdd(bdd));
         let v1 = self.condition(bdd, lbl, true);
+        println!("cond1: {}", self.print_bdd(v1));
         let v2 = self.condition(bdd, lbl, false);
+        println!("cond2: {}", self.print_bdd(v2));
         self.or(v1, v2)
     }
 
@@ -763,3 +804,45 @@ fn test_new_var() {
         man.print_bdd(v1)
     );
 }
+
+#[test]
+fn circuit1() {
+    let mut man = BddManager::new_default_order(3);
+    let x = man.var(VarLabel::new(0), false);
+    let y = man.var(VarLabel::new(1), true);
+    let delta = man.and(x, y);
+    let yp = man.var(VarLabel::new(2), true);
+    let inner = man.iff(yp, y);
+    let conj = man.and(inner, delta);
+    let res = man.exists(conj, VarLabel::new(1));
+
+    let expected = man.and(x, yp);
+    assert!(
+        man.eq_bdd(res, expected),
+        "Not eq:\nGot: {}\nExpected: {}",
+        man.print_bdd(res),
+        man.print_bdd(expected)
+    );
+}
+
+#[test]
+fn simple_cond() {
+    let mut man = BddManager::new_default_order(3);
+    let x = man.var(VarLabel::new(0), true);
+    let y = man.var(VarLabel::new(1), false);
+    let z = man.var(VarLabel::new(2), false);
+    let r1 = man.and(x, y);
+    let r2 = man.and(r1, z);
+
+    let res = man.condition(r2, VarLabel::new(1), true);
+    let expected = BddPtr::false_node();
+    assert!(
+        man.eq_bdd(res, expected),
+        "\nOriginal BDD: {}\nNot eq:\nGot: {}\nExpected: {}",
+        man.print_bdd(r2),
+        man.print_bdd(res),
+        man.print_bdd(expected)
+    );
+
+}
+
