@@ -14,6 +14,8 @@ use num::traits::Num;
 #[macro_use]
 use maplit::*;
 
+use crate::backing_store::bdd_table::TraverseTable;
+
 
 /// Weighted model counting parameters for a BDD. It primarily is a storage for
 /// the weight on each variable.
@@ -492,15 +494,16 @@ impl BddManager {
         self.compute_table.get_stats().clone()
     }
 
-    pub fn num_nodes(&self) -> usize {
+    /// The total number of nodes allocated by the manager
+    pub fn total_nodes(&self) -> usize {
         self.compute_table.num_nodes()
     }
 
-    fn count_nodes_h(&self, ptr: BddPtr, set: &mut HashSet<BddPtr>) -> usize {
-        if set.contains(&ptr) || ptr.is_const() {
+    fn count_nodes_h(&self, ptr: BddPtr, set: &mut TraverseTable<()>) -> usize {
+        if !set.get(&ptr).is_none() || ptr.is_const() {
             return 0;
         }
-        set.insert(ptr);
+        set.set(&ptr, ());
         match ptr.ptr_type() {
             PointerType::PtrFalse => 1,
             PointerType::PtrTrue => 1,
@@ -513,8 +516,9 @@ impl BddManager {
         }
     }
 
+    /// Count the number of nodes in a BDD
     pub fn count_nodes(&self, ptr: BddPtr) -> usize {
-        self.count_nodes_h(ptr, &mut HashSet::new())
+        self.count_nodes_h(ptr, &mut TraverseTable::new(&self.compute_table))
     }
 
     /// a helper function for WMC which tracks the current variable level for
@@ -525,17 +529,18 @@ impl BddManager {
         &self,
         ptr: BddPtr,
         wmc: &BddWmc<T>,
-        compute_table: &mut HashMap<BddPtr, (T, Option<VarLabel>)>
+        compute_table: &mut TraverseTable<(T, Option<VarLabel>)>
     ) -> (T, Option<VarLabel>) {
         use repr::bdd::PointerType;
-        match compute_table.get(&ptr) {
-            Some(a) => return *a,
-            None => ()
-        };
         match ptr.ptr_type() {
             PointerType::PtrTrue => (wmc.one.clone(), Some(self.get_order().last_var())),
             PointerType::PtrFalse => (wmc.zero.clone(), Some(self.get_order().last_var())),
             PointerType::PtrNode => {
+                match compute_table.get(&ptr) {
+                    Some(a) => return *a,
+                    None => ()
+                };
+
                 let order = self.get_order();
                 let bdd = self.deref(ptr).into_node();
                 let (low, high) = if ptr.is_compl() {
@@ -566,7 +571,7 @@ impl BddManager {
                     (res, None)
                 } else {
                     let r = (res, Some(order.above(ptr.label()).unwrap()));
-                    compute_table.insert(ptr, r);
+                    compute_table.set(&ptr, r);
                     r
                 }
             }
@@ -576,7 +581,8 @@ impl BddManager {
     /// Weighted-model count.
     pub fn wmc<T: Num + Clone + Debug + Copy>(&self, ptr: BddPtr, params: &BddWmc<T>) -> T {
         // call wmc_helper and smooth the result
-        let (mut v, lvl_op) = self.wmc_helper(ptr, params, &mut HashMap::new());
+        let mut tbl = TraverseTable::new(&self.compute_table);
+        let (mut v, lvl_op) = self.wmc_helper(ptr, params, &mut tbl);
         if lvl_op.is_none() {
             // no smoothing required
             v

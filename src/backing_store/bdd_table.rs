@@ -102,3 +102,28 @@ fn test_insertion() {
         assert_eq!(bdd, tbl.deref(r))
     }
 }
+
+
+
+/// A caching data-structure for storing and looking up values associated with
+/// BDD nodes
+pub struct TraverseTable<T> {
+    subtables: Vec<Vec<Option<T>>>
+}
+
+impl<T> TraverseTable<T> where T : Clone {
+    pub fn new(tbl: &BddTable) -> TraverseTable<T> {
+        let v = tbl.subtables.iter().map(|x| vec![None; x.num_nodes()]).collect();
+        TraverseTable {
+            subtables: v
+        }
+    }
+
+    pub fn set(&mut self, ptr: &BddPtr, data: T) -> () {
+        self.subtables[ptr.var() as usize][ptr.idx() as usize] = Some(data)
+    }
+
+    pub fn get(&self, ptr: &BddPtr) -> &Option<T> {
+        &self.subtables[ptr.var() as usize][ptr.idx() as usize]
+    }
+}
