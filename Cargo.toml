@@ -1,18 +1,18 @@
 [package]
-name = "ddrs"
+name = "rsdd"
 version = "0.1.0"
 authors = ["Steven Holtzen <sholtzen@gmail.com>"]
 
 [lib]
-name = "ddrs"
+name = "rsdd"
 path = "src/lib.rs"
+crate-type = ["staticlib", "rlib"]
+
+[build]
+rustflags = ["-C", "link-args=-Wl,-undefined,dynamic_lookup"]
 
 [[bin]]
-name = "ddrs-bin"
-path = "src/main.rs"
-
-[[bin]]
-name = "ddrs-bench"
+name = "rsdd-bench"
 path = "src/bench/bench.rs"
 
 [dependencies]
@@ -22,11 +22,10 @@ twox-hash = "1.1.0"
 clap = "2.28"
 quickersort = "3.0"
 dimacs = "0.2.0"
-fasthash = "0.2"
 pretty = "0.3.3"
 num = "0.1.41"
 maplit = "1.0.1"
-
+libc = "0.2"
 
 [profile.release]
 debug = true

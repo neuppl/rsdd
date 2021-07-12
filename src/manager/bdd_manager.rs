@@ -11,6 +11,7 @@ use std::collections::{HashMap, HashSet};
 use backing_store::BackingCacheStats;
 use backing_store::bdd_table::BddTable;
 use num::traits::Num;
+
 #[macro_use]
 use maplit::*;
 
@@ -199,10 +200,15 @@ impl BddManager {
         format!("{}{}", if ptr.is_compl() { "!" } else { "" }, s)
     }
 
-
+    /// Compose `g` into `f` by substituting for `lbl`
+    pub fn compose(&mut self, f: BddPtr, lbl: VarLabel, g: BddPtr) -> BddPtr {
+        let var = self.var(lbl, true);
+        let iff = self.iff(var, g);
+        let a = self.and(iff, f);
+        self.exists(a, lbl)
+    }
 
     /// true if `a` represents a variable (both high and low are constant)
-    #[inline]
     pub fn is_var(&self, ptr: BddPtr) -> bool {
         match ptr.ptr_type() {
             PointerType::PtrNode => {
@@ -430,31 +436,11 @@ impl BddManager {
     /// Existentially quantifies out the variable `lbl` from `f`
     pub fn exists(&mut self, bdd: BddPtr, lbl: VarLabel) -> BddPtr {
         // TODO this can be optimized by specializing it
-        // println!("input : {}", self.print_bdd(bdd));
         let v1 = self.condition(bdd, lbl, true);
-        // println!("cond1: {}", self.print_bdd(v1));
         let v2 = self.condition(bdd, lbl, false);
-        // println!("cond2: {}", self.print_bdd(v2));
         self.or(v1, v2)
     }
 
-    /// Relabels all instances of `old_lbl` with `new_lbl`
-    pub fn relabel(&mut self, bdd: BddPtr,
-                   old_lbl: VarLabel, new_lbl: VarLabel) -> BddPtr {
-        let f = |man: &mut BddManager, bdd: BddPtr| {
-            // make a new bdd, which is the same as the old one, except
-            // whose label is the new label
-            let n = man.deref(bdd).into_node();
-            let new_bdd = BddNode {
-                low: n.low,
-                high: n.high,
-                var: new_lbl,
-            };
-            let r = man.get_or_insert(new_bdd);
-            if bdd.is_compl() { r.neg() } else { r }
-        };
-        self.map_var(bdd, old_lbl, &mut HashSet::new(), &f)
-    }
 
 
     /// evaluates the top element of the data stack on the values found in
@@ -776,7 +762,7 @@ fn test_exist_compl() {
 }
 
 #[test]
-fn test_relabel() {
+fn test_compose() {
     let mut man = BddManager::new_default_order(3);
     // 1 /\ 2 /\ 3
     let v0 = man.var(VarLabel::new(0), true);
@@ -784,10 +770,10 @@ fn test_relabel() {
     let v2 = man.var(VarLabel::new(2), true);
     let v0_and_v1 = man.and(v0, v1);
     let v0_and_v2 = man.and(v0, v2);
-    let res = man.relabel(v0_and_v1, VarLabel::new(1), VarLabel::new(2));
+    let res = man.compose(v0_and_v1, VarLabel::new(1), v2);
     assert!(
         man.eq_bdd(res, v0_and_v2),
-        "Got:\nOne: {}\nExpected: {}",
+        "\nGot: {}\nExpected: {}",
         man.print_bdd(res),
         man.print_bdd(v0_and_v2)
     );

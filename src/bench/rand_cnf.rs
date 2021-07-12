@@ -1,6 +1,6 @@
-use ddrs::manager::bdd_manager::BddManager;
-use ddrs::manager::sdd_manager::SddManager;
-use ddrs::repr::cnf::Cnf;
+use rsdd::manager::bdd_manager::BddManager;
+use rsdd::manager::sdd_manager::SddManager;
+use rsdd::repr::cnf::Cnf;
 use rand::SeedableRng;
 
 // fn rand_small_bdds_no_heuristic() -> () {
