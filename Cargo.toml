@@ -6,10 +6,10 @@ authors = ["Steven Holtzen <sholtzen@gmail.com>"]
 [lib]
 name = "rsdd"
 path = "src/lib.rs"
-crate-type = ["staticlib", "rlib"]
+crate-type = ["staticlib", "rlib", "dylib"]
 
 [build]
-rustflags = ["-C", "link-args=-Wl,-undefined,dynamic_lookup"]
+rustflags = ["-C", "link-args=-Wl,-undefined,dynamic_lookup,-export-dynamic"]
 
 [[bin]]
 name = "rsdd-bench"
