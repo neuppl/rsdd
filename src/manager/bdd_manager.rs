@@ -105,7 +105,6 @@ impl BddManager {
         b.high
     }
 
-    /// Push an already-existing variable onto the stack
     pub fn var(&mut self, lbl: VarLabel, is_true: bool) -> BddPtr {
         let bdd = BddNode::new(BddPtr::false_node(), BddPtr::true_node(), lbl);
         let r = self.get_or_insert(bdd);

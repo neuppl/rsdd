@@ -72,27 +72,22 @@ impl BddPtr {
         BddPtr { data: raw }
     }
     /// fetch the raw underlying data of the pointer
-    #[inline]
     pub fn raw(&self) -> u64 {
         self.data
     }
 
-    #[inline]
     pub fn is_true(&self) -> bool {
         self.special() == 1 && self.var() == TRUE_VALUE && !self.is_compl()
     }
 
-    #[inline]
     pub fn is_false(&self) -> bool {
         self.special() == 1 && self.var() == TRUE_VALUE && self.is_compl()
     }
 
-    #[inline]
     pub fn is_const(&self) -> bool {
         self.special() == 1
     }
 
-    #[inline]
     pub fn ptr_type(&self) -> PointerType {
         if self.is_const() {
             if self.is_true() {
@@ -105,7 +100,6 @@ impl BddPtr {
         }
     }
 
-    #[inline]
     pub fn true_node() -> BddPtr {
         let mut v = BddPtr { data: 0 };
         v.set_special(1);
@@ -113,26 +107,22 @@ impl BddPtr {
         v
     }
 
-    #[inline]
     pub fn false_node() -> BddPtr {
         let v = BddPtr::true_node();
         v.neg()
     }
 
-    #[inline]
     pub fn is_compl(&self) -> bool {
         self.compl() == 1
     }
 
     /// gets a non-complemented version of self
-    #[inline]
     pub fn regular(&self) -> BddPtr {
         let mut new = self.clone();
         new.set_compl(0);
         new
     }
 
-    #[inline]
     pub fn neg(&self) -> BddPtr {
         let mut r = self.clone();
         if self.is_compl() {
@@ -143,7 +133,6 @@ impl BddPtr {
         r
     }
 
-    #[inline]
     pub fn label(&self) -> VarLabel {
         VarLabel::new(self.var() as u64)
     }
