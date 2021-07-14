@@ -1,5 +1,5 @@
-extern crate ddrs;
-use ddrs::*;
+extern crate rsdd;
+use rsdd::*;
 use manager::bdd_manager::BddManager;
 use repr::boolexpr::BoolExpr;
 use manager::sdd_manager::{SddManager, even_split};

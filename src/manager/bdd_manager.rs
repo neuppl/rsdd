@@ -127,6 +127,11 @@ impl BddManager {
         ptr.is_false()
     }
 
+    pub fn topvar(&self, ptr: BddPtr) -> VarLabel {
+        let bdd = self.deref(ptr).into_node();
+        bdd.var
+    }
+
     /// normalizes and fetches a node from the store
     fn get_or_insert(&mut self, bdd: BddNode) -> BddPtr {
         if bdd.high.is_compl() {
@@ -650,6 +655,24 @@ fn simple_equality() {
         man.print_bdd(v1),
         man.print_bdd(r2)
     );
+}
+
+#[test]
+fn test_newvar() {
+    let mut man = BddManager::new_default_order(0);
+    let l1 = man.new_var();
+    let l2 = man.new_var();
+    let v1 = man.var(l1, true);
+    let v2 = man.var(l2, true);
+    let r1 = man.or(v1, v2);
+    let r2 = man.and(r1, v1);
+    assert!(
+        man.eq_bdd(v1, r2),
+        "Not eq:\n {}\n{}",
+        man.print_bdd(v1),
+        man.print_bdd(r2)
+    );
+
 }
 
 #[test]

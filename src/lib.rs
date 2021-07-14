@@ -16,6 +16,7 @@ extern crate libc;
 use manager::*;
 use manager::bdd_manager::BddManager;
 use repr::bdd::BddPtr;
+use repr::var_label::VarLabel;
 
 #[no_mangle]
 pub extern "C" fn rsdd_mk_bdd_manager_default_order(numvars: usize) -> *mut libc::c_void {
@@ -24,17 +25,16 @@ pub extern "C" fn rsdd_mk_bdd_manager_default_order(numvars: usize) -> *mut libc
 }
 
 #[no_mangle]
-pub extern "C" fn rsdd_new_var(mgr: *mut BddManager) -> *mut libc::c_void {
+pub extern "C" fn rsdd_new_var(mgr: *mut BddManager, is_true: bool) -> u64 {
     let mgr = unsafe { &mut *mgr };
-    let r = Box::new(bdd_manager::BddManager::new_var(mgr));
-    Box::into_raw(r) as *mut libc::c_void
+    let lbl = mgr.new_var();
+    mgr.var(lbl, is_true).raw()
 }
 
 #[no_mangle]
-pub extern "C" fn rsdd_var(mgr: *mut BddManager) -> *mut libc::c_void {
+pub extern "C" fn rsdd_var(mgr: *mut BddManager, lbl: u64, is_true: bool) -> u64 {
     let mgr = unsafe { &mut *mgr };
-    let r = Box::new(BddManager::new_var(mgr));
-    Box::into_raw(r) as *mut libc::c_void
+    mgr.var(VarLabel::new(lbl), is_true).raw()
 }
 
 #[no_mangle]
@@ -98,7 +98,26 @@ pub extern "C" fn rsdd_is_true(mgr: *mut BddManager, ptr: u64) -> bool {
 }
 
 #[no_mangle]
+pub extern "C" fn rsdd_is_var(mgr: *mut BddManager, ptr: u64) -> bool {
+    let mgr = unsafe { &mut *mgr };
+    mgr.is_var(BddPtr::from_raw(ptr))
+}
+
+#[no_mangle]
+pub extern "C" fn rsdd_topvar(mgr: *mut BddManager, ptr: u64) -> u64 {
+    let mgr = unsafe { &mut *mgr };
+    mgr.topvar(BddPtr::from_raw(ptr)).value()
+}
+
+
+#[no_mangle]
 pub extern "C" fn rsdd_negate(mgr: *mut BddManager, ptr: u64) -> u64 {
     let mgr = unsafe { &mut *mgr };
     mgr.negate(BddPtr::from_raw(ptr)).raw()
+}
+
+#[no_mangle]
+pub extern "C" fn rsdd_eq_bdd(mgr: *mut BddManager, a: u64, b: u64) -> bool {
+    let mgr = unsafe { &mut *mgr };
+    mgr.eq_bdd(BddPtr::from_raw(a), BddPtr::from_raw(b))
 }
