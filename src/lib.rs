@@ -56,6 +56,18 @@ pub extern "C" fn rsdd_iff(mgr: *mut BddManager, a: u64, b: u64) -> u64 {
 }
 
 #[no_mangle]
+pub extern "C" fn rsdd_xor(mgr: *mut BddManager, a: u64, b: u64) -> u64 {
+    let mgr = unsafe { &mut *mgr };
+    mgr.xor(BddPtr::from_raw(a), BddPtr::from_raw(b)).raw()
+}
+
+#[no_mangle]
+pub extern "C" fn rsdd_ite(mgr: *mut BddManager, a: u64, b: u64, c: u64) -> u64 {
+    let mgr = unsafe { &mut *mgr };
+    mgr.ite(BddPtr::from_raw(a), BddPtr::from_raw(b), BddPtr::from_raw(c)).raw()
+}
+
+#[no_mangle]
 pub extern "C" fn rsdd_true(mgr: *mut BddManager) -> u64 {
     let mgr = unsafe { &mut *mgr };
     mgr.true_ptr().raw()
@@ -72,6 +84,13 @@ pub extern "C" fn rsdd_condition(mgr: *mut BddManager, bdd: u64, lbl: u64, value
     let mgr = unsafe { &mut *mgr };
     mgr.condition(BddPtr::from_raw(bdd), repr::var_label::VarLabel::new(lbl), value).raw()
 }
+
+#[no_mangle]
+pub extern "C" fn rsdd_compose(mgr: *mut BddManager, a: u64, label: u64, b: u64) -> u64 {
+    let mgr = unsafe { &mut *mgr };
+    mgr.compose(BddPtr::from_raw(a), repr::var_label::VarLabel::new(label), 
+                BddPtr::from_raw(b)).raw()
+} 
 
 #[no_mangle]
 pub extern "C" fn rsdd_size(mgr: *mut BddManager, bdd: u64) -> usize {
@@ -121,3 +140,4 @@ pub extern "C" fn rsdd_eq_bdd(mgr: *mut BddManager, a: u64, b: u64) -> bool {
     let mgr = unsafe { &mut *mgr };
     mgr.eq_bdd(BddPtr::from_raw(a), BddPtr::from_raw(b))
 }
+

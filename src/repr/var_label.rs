@@ -3,7 +3,7 @@ use std::mem;
 
 /// number of bits allocated for variable label (limit on total number of
 /// variables)
-pub const VAR_BITS: usize = 11;
+pub const VAR_BITS: usize = 18;
 
 /// a label for each distinct variable in the BDD
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Copy)]

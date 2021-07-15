@@ -223,6 +223,14 @@ impl BddManager {
         }
     }
 
+    /// if f then g else h
+    pub fn ite(&mut self, f: BddPtr, g: BddPtr, h: BddPtr) -> BddPtr {
+        // TODO: Optimize this
+        let fg = self.and(f, g);
+        let fh = self.and(f.neg(), h);
+        self.or(fg, fh)
+    }
+
 
     pub fn and(&mut self, f: BddPtr, g: BddPtr) -> BddPtr {
         // base case
@@ -351,6 +359,13 @@ impl BddManager {
         self.and(f_imp_g, g_imp_f)
     }
 
+    pub fn xor(&mut self, f: BddPtr, g: BddPtr) -> BddPtr {
+        // TODO: again, use a naive implementation for now as (f /\ !g) \/ (!f /\ g)
+        let c1 = self.and(f, g.neg());
+        let c2 = self.and(f.neg(), g);
+        self.or(c1, c2)
+    }
+
 
     /// An abstract transformation on a BDD which applies a transformation `f`
     /// to all nodes for a particular variable
@@ -444,8 +459,6 @@ impl BddManager {
         let v2 = self.condition(bdd, lbl, false);
         self.or(v1, v2)
     }
-
-
 
     /// evaluates the top element of the data stack on the values found in
     /// `vars`
