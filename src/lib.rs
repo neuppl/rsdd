@@ -18,6 +18,9 @@ use manager::bdd_manager::BddManager;
 use repr::bdd::BddPtr;
 use repr::var_label::VarLabel;
 
+// Define the public C API for rsdd
+// Note: this API hides complemented edges and other BDD internals
+
 #[no_mangle]
 pub extern "C" fn rsdd_mk_bdd_manager_default_order(numvars: usize) -> *mut libc::c_void {
     let r = Box::new(bdd_manager::BddManager::new_default_order(numvars));
@@ -119,7 +122,8 @@ pub extern "C" fn rsdd_is_true(mgr: *mut BddManager, ptr: u64) -> bool {
 #[no_mangle]
 pub extern "C" fn rsdd_is_var(mgr: *mut BddManager, ptr: u64) -> bool {
     let mgr = unsafe { &mut *mgr };
-    mgr.is_var(BddPtr::from_raw(ptr))
+    let ptr = BddPtr::from_raw(ptr);
+    !ptr.is_const()
 }
 
 #[no_mangle]
@@ -141,3 +145,26 @@ pub extern "C" fn rsdd_eq_bdd(mgr: *mut BddManager, a: u64, b: u64) -> bool {
     mgr.eq_bdd(BddPtr::from_raw(a), BddPtr::from_raw(b))
 }
 
+#[no_mangle]
+pub extern "C" fn rsdd_low(mgr: *mut BddManager, a: u64) -> u64 {
+    let mgr = unsafe { &mut *mgr };
+    let bddptr = BddPtr::from_raw(a);
+    let low = mgr.low(bddptr);
+    if bddptr.is_compl() {
+        low.neg().raw()
+    } else {
+        low.raw()
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn rsdd_high(mgr: *mut BddManager, a: u64) -> u64 {
+    let mgr = unsafe { &mut *mgr };
+    let bddptr = BddPtr::from_raw(a);
+    let high = mgr.high(bddptr);
+    if bddptr.is_compl() {
+        high.neg().raw()
+    } else {
+        high.raw()
+    }
+}

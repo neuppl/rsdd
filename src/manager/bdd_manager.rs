@@ -93,14 +93,16 @@ impl BddManager {
 
     /// Fetch the BDD pointed to by the low-node of `ptr`, panics on constant
     // BDDs
-    fn low(&self, ptr: BddPtr) -> BddPtr {
+    pub fn low(&self, ptr: BddPtr) -> BddPtr {
+        assert!(!ptr.is_const());
         let b = self.deref(ptr).into_node();
         b.low
     }
 
     /// Fetch the BDD pointed to by the high-node of `ptr`, panics on constant
     /// BDDs
-    fn high(&self, ptr: BddPtr) -> BddPtr {
+    pub fn high(&self, ptr: BddPtr) -> BddPtr {
+        assert!(!ptr.is_const());
         let b = self.deref(ptr).into_node();
         b.high
     }
@@ -148,25 +150,17 @@ impl BddManager {
         fn print_bdd_helper(t: &BddManager, ptr: BddPtr) -> String {
             match ptr.ptr_type() {
                 PtrTrue => String::from("T"),
-                PtrFalse => String::from("T"),
+                PtrFalse => String::from("F"),
                 PtrNode => {
-                    let l_p = t.low(ptr);
-                    let h_p = t.high(ptr);
+                    let l_p = if ptr.is_compl() { t.low(ptr).neg() } else { t.low(ptr) };
+                    let h_p = if ptr.is_compl() { t.high(ptr).neg() } else { t.high(ptr) };
                     let l_s = print_bdd_helper(t, l_p);
-                    let r_s = print_bdd_helper(t, h_p);
-                    format!(
-                        "({}, {}{}, {}{})",
-                        ptr.var(),
-                        if l_p.is_compl() { "!" } else { "" },
-                        l_s,
-                        if h_p.is_compl() { "!" } else { "" },
-                        r_s
-                    )
+                    let h_s = print_bdd_helper(t, h_p);
+                    format!("({}, {}, {})", ptr.var(), h_s, l_s)
                 }
             }
         }
-        let s = print_bdd_helper(self, ptr);
-        format!("{}{}", if ptr.is_compl() { "!" } else { "" }, s)
+        print_bdd_helper(self, ptr)
     }
 
 
@@ -223,12 +217,89 @@ impl BddManager {
         }
     }
 
+    // condition a BDD *only* if the top variable is `v`; used in `ite`
+    fn condition_essential(&self, f: BddPtr, lbl: VarLabel, v: bool) -> BddPtr {
+        if f.is_const() || f.var() != lbl.value() { return f };
+        let r = if v { 
+            self.high(f) 
+        } else { 
+            self.low(f) 
+        };
+        if f.is_compl() {r.neg()} else {r} 
+    }
+
+    fn ite_helper(&mut self, f: BddPtr, g: BddPtr, h: BddPtr) -> BddPtr {
+        // standardize
+        // println!("ite: if {} then {} else {}", self.print_bdd(f), self.print_bdd(g), self.print_bdd(h));
+        // See pgs. 115-117 of "Algorithms and Data Structures in VLSI Design"
+        // first, introduce constants if possible
+        // let (f, g, h) = match (f, g, h) {
+        //     (f, g, h) if g == h => (f, BddPtr::true_node(), g),
+        //     (f, g, h) if f == h => (f, g, BddPtr::false_node()),
+        //     (f, g, h) if f == h.neg() => (f, g, BddPtr::true_node()),
+        //     (f, g, h) if f == g.neg() => (f, BddPtr::false_node(), g),
+        //     _ => (f, g, h)
+        // };
+
+        // attempt a base case
+        match (f, g, h) {
+            (f, g, h) if g.is_false() && h.is_false() => return BddPtr::false_node(),
+            (f, g, h) if g.is_true() && h.is_true() => return BddPtr::true_node(),
+            (f, g, h) if g.is_true() && h.is_false() => return f,
+            (f, g, h) if g.is_false() && h.is_true() => return f.neg(),
+            (f, g, h) if f.is_true() => return g,
+            (f, g, h) if f.is_false() => return h,
+            (f, g, h) if g == h => return g,
+            _ => ()
+        };
+
+        // attempt to place the variable that comes first in the order as f
+        let (f, g, h) = match (f, g, h) {
+            (f, g, h) if g.is_true() && self.get_order().lt(h.label(), f.label()) => { (h, g, f) },
+            (f, g, h) if h.is_false() && self.get_order().lt(g.label(), f.label()) => { (g, f, h) },
+            (f, g, h) if h.is_true() && self.get_order().lt(g.label(), f.label()) => { (g.neg(), f.neg(), h) },
+            (f, g, h) if g.is_false() && self.get_order().lt(h.label(), f.label()) => { (h.neg(), g, f.neg()) },
+            (f, g, h) if g == h && self.get_order().lt(g.label(), f.label()) => { (g, f, f.neg()) },
+            _ => (f, g, h)
+        };
+
+        // ok now it is normalized, see if this is in the apply table
+        match self.apply_table.get(f, g, h) {
+            Some(v) => return v,
+            None => ()
+        };
+
+
+        // ok the work! 
+        // find the first essential variable for f, g, or h
+        let lbl = self.get_order().first_essential(f, g, h);
+        let fx = self.condition_essential(f, lbl, true);
+        let gx = self.condition_essential(g, lbl, true);
+        let hx = self.condition_essential(h, lbl, true);
+        let fxn = self.condition_essential(f, lbl, false);
+        let gxn = self.condition_essential(g, lbl, false);
+        let hxn = self.condition_essential(h, lbl, false);
+        let T = self.ite(fx, gx, hx);
+        let F = self.ite(fxn, gxn, hxn);
+
+        // println!("tbdd: {}, fbdd: {}", self.print_bdd(T), self.print_bdd(F));
+        if T == F { return T };
+
+        // now we have a new BDD
+        let node = BddNode { 
+            low: F,
+            high: T,
+            var: lbl
+        };
+        let r = self.get_or_insert(node);
+        self.apply_table.insert(f, g, h, r);
+        r
+    }
+
     /// if f then g else h
     pub fn ite(&mut self, f: BddPtr, g: BddPtr, h: BddPtr) -> BddPtr {
-        // TODO: Optimize this
-        let fg = self.and(f, g);
-        let fh = self.and(f.neg(), h);
-        self.or(fg, fh)
+        let r = self.ite_helper(f, g, h);
+        r
     }
 
 
@@ -266,7 +337,7 @@ impl BddManager {
             (g, f, reg_g, reg_f)
         };
         // check the cache
-        match self.apply_table.get(f, g) {
+        match self.apply_table.get(f, g, BddPtr::false_node()) {
             Some(v) => {
                 return v;
             }
@@ -321,7 +392,7 @@ impl BddManager {
                 var: index,
             };
             let r = self.get_or_insert(n);
-            self.apply_table.insert(f, g, r);
+            self.apply_table.insert(f, g, BddPtr::false_node(), r);
             return r;
         }
     }
@@ -349,21 +420,13 @@ impl BddManager {
         cur_bdd
     }
 
-
     /// Compute the Boolean function `f iff g`
     pub fn iff(&mut self, f: BddPtr, g: BddPtr) -> BddPtr {
-        // TODO: for now, compute this as (f => g) /\ (g => f); this can be
-        // improved later
-        let f_imp_g = self.or(f.neg(), g);
-        let g_imp_f = self.or(g.neg(), f);
-        self.and(f_imp_g, g_imp_f)
+        self.ite(f, g, g.neg())
     }
 
     pub fn xor(&mut self, f: BddPtr, g: BddPtr) -> BddPtr {
-        // TODO: again, use a naive implementation for now as (f /\ !g) \/ (!f /\ g)
-        let c1 = self.and(f, g.neg());
-        let c2 = self.and(f.neg(), g);
-        self.or(c1, c2)
+        self.ite(f, g.neg(), g)
     }
 
 
@@ -408,9 +471,7 @@ impl BddManager {
     fn cond_helper(&mut self, bdd: BddPtr, lbl: VarLabel,
                    value: bool,
                    seen: &mut HashSet<BddPtr>) -> BddPtr {
-        // println!("value: {}, bdd: {}", value, self.print_bdd(bdd));
         if self.get_order().lt(lbl, bdd.label()) || bdd.is_const() {
-            // println!("doh");
             // we passed the variable in the order, we will never find it
             bdd
         } else if bdd.label() == lbl {
@@ -497,16 +558,11 @@ impl BddManager {
         self.compute_table.get_stats().clone()
     }
 
-    /// The total number of nodes allocated by the manager
-    pub fn total_nodes(&self) -> usize {
-        self.compute_table.num_nodes()
-    }
-
-    fn count_nodes_h(&self, ptr: BddPtr, set: &mut TraverseTable<()>) -> usize {
-        if !set.get(&ptr).is_none() || ptr.is_const() {
+    fn count_nodes_h(&self, ptr: BddPtr, set: &mut HashSet<BddPtr>) -> usize {
+        if set.contains(&ptr) {
             return 0;
         }
-        set.set(&ptr, ());
+        set.insert(ptr);
         match ptr.ptr_type() {
             PointerType::PtrFalse => 1,
             PointerType::PtrTrue => 1,
@@ -519,10 +575,38 @@ impl BddManager {
         }
     }
 
-    /// Count the number of nodes in a BDD
     pub fn count_nodes(&self, ptr: BddPtr) -> usize {
-        self.count_nodes_h(ptr, &mut TraverseTable::new(&self.compute_table))
+        self.count_nodes_h(ptr, &mut HashSet::new())
     }
+
+
+
+    /// The total number of nodes allocated by the manager
+    pub fn total_nodes(&self) -> usize {
+        self.compute_table.num_nodes()
+    }
+
+    // fn count_nodes_h(&self, ptr: BddPtr, set: &mut TraverseTable<()>) -> usize {
+    //     if !set.get(&ptr).is_none() || ptr.is_const() {
+    //         return 0;
+    //     }
+    //     set.set(&ptr, ());
+    //     match ptr.ptr_type() {
+    //         PointerType::PtrFalse => 1,
+    //         PointerType::PtrTrue => 1,
+    //         PointerType::PtrNode => {
+    //             let n = self.deref(ptr).into_node();
+    //             let c_l = self.count_nodes_h(n.low, set);
+    //             let c_r = self.count_nodes_h(n.high, set);
+    //             return c_l + c_r + 1;
+    //         }
+    //     }
+    // }
+
+    // /// Count the number of nodes in a BDD
+    // pub fn count_nodes(&self, ptr: BddPtr) -> usize {
+    //     self.count_nodes_h(ptr, &mut TraverseTable::new(&self.compute_table))
+    // }
 
     /// a helper function for WMC which tracks the current variable level for
     /// on-the-fly smoothing. Returns a pair: the first element is the sum of
@@ -662,6 +746,21 @@ fn simple_equality() {
     let v2 = man.var(VarLabel::new(1), true);
     let r1 = man.or(v1, v2);
     let r2 = man.and(r1, v1);
+    assert!(
+        man.eq_bdd(v1, r2),
+        "Not eq:\n {}\n{}",
+        man.print_bdd(v1),
+        man.print_bdd(r2)
+    );
+}
+
+#[test]
+fn simple_ite1() {
+    let mut man = BddManager::new_default_order(3);
+    let v1 = man.var(VarLabel::new(0), true);
+    let v2 = man.var(VarLabel::new(1), true);
+    let r1 = man.or(v1, v2);
+    let r2 = man.ite(r1, v1, BddPtr::false_node());
     assert!(
         man.eq_bdd(v1, r2),
         "Not eq:\n {}\n{}",
@@ -859,6 +958,7 @@ fn simple_cond() {
     let z = man.var(VarLabel::new(2), false);
     let r1 = man.and(x, y);
     let r2 = man.and(r1, z);
+    // now r2 is x /\ !y /\ !z
 
     let res = man.condition(r2, VarLabel::new(1), true);
     let expected = BddPtr::false_node();

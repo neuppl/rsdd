@@ -18,7 +18,7 @@ pub struct TableIndex(u64);
 impl TableIndex {
     #[inline]
     pub fn new(v: u64) -> TableIndex {
-        assert!(v < 1 << INDEX_BITS + 1, "overflow");
+        assert!(v < 1 << INDEX_BITS, "index overflow");
         TableIndex(v)
     }
     #[inline]
@@ -71,6 +71,7 @@ impl BddPtr {
     pub fn from_raw(raw: u64) -> BddPtr {
         BddPtr { data: raw }
     }
+
     /// fetch the raw underlying data of the pointer
     pub fn raw(&self) -> u64 {
         self.data

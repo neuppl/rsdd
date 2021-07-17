@@ -4,7 +4,7 @@ use repr::bdd::*;
 use repr::var_label::VarLabel;
 use manager::var_order::VarOrder;
 
-const DEFAULT_SUBTABLE_SZ: usize = 16384;
+const DEFAULT_SUBTABLE_SZ: usize = 1 << 13;
 
 /// The primary storage unit for binary decision diagram nodes
 /// Each variable is associated with an individual subtable
@@ -58,8 +58,11 @@ impl BddTable {
             PointerType::PtrFalse => Bdd::BddFalse,
             PointerType::PtrTrue => Bdd::BddTrue,
             PointerType::PtrNode => {
-                let topless = self.subtables[ptr.var() as usize].
-                    deref(BackingPtr(ptr.idx() as u32));
+                let tbl = &self.subtables[ptr.var() as usize];
+                if ptr.idx() as usize > tbl.capacity() {
+                    panic!("index out of bounds, {:?}", ptr);
+                }
+                let topless = tbl.deref(BackingPtr(ptr.idx() as u32));
                 Bdd::new_node(topless.low, topless.high, VarLabel::new(ptr.var()))
             }
         }

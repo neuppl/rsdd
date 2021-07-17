@@ -3,12 +3,45 @@ use manager::cache::lru::*;
 use repr::bdd::*;
 use repr::var_label::VarLabel;
 
-const INITIAL_CAPACITY: usize = 17; // given as a power of two
+const INITIAL_CAPACITY: usize = 14; // given as a power of two
+
+/// An Ite structure, assumed to be in standard form.
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+pub struct Ite {
+    pub f: BddPtr,
+    pub g: BddPtr,
+    pub h: BddPtr,
+}
+
+impl Ite {
+    /// Returns a new Ite and a Bool indicating whether to complement the Ite
+    pub fn new(f: BddPtr, g: BddPtr, h: BddPtr) -> (Ite, bool) {
+        // standardize the ite
+        // See pgs. 115-117 of "Algorithms and Data Structures in VLSI Design"
+        // first, introduce constants if possible
+        let (f, g, h) = match (f, g, h) {
+            (f, g, h) if g == h => (f, BddPtr::true_node(), g),
+            (f, g, h) if f == h => (f, g, BddPtr::false_node()),
+            (f, g, h) if f == h.neg() => (f, g, BddPtr::true_node()),
+            (f, g, h) if f == g.neg() => (f, BddPtr::false_node(), g),
+            _ => (f, g, h)
+        };
+
+        // now, standardize for negation: ensure f and g are non-negated
+        let (f, g, h, compl) = match(f, g, h) {
+            (f, g, h) if f.is_compl() && !g.is_compl() => (f, h, g, false),
+            (f, g, h) if !f.is_compl() && g.is_compl() => (f, g.neg(), h.neg(), true),
+            (f, g, h) if f.is_compl() && g.is_compl() => (f.neg(), h.neg(), g.neg(), true),
+            _ => (f, g, h, false)
+        };
+        (Ite {f, g, h}, compl)
+    }
+}
 
 /// The top-level data structure which caches applications
 pub struct BddApplyTable {
     /// a vector of applications, indexed by the top label of the first pointer.
-    table: Vec<Lru<(BddPtr, BddPtr), BddPtr>>,
+    table: Vec<Lru<Ite, BddPtr>>,
 }
 
 impl BddApplyTable {
@@ -22,18 +55,18 @@ impl BddApplyTable {
         tbl
     }
 
-    /// Insert an operation into the apply table. Note that operations are
-    /// normalized by first sorting the sub-BDDs such that BDD A occurs first
-    /// in the ordering; this increases cache hit rate and decreases duplicate
-    /// storage
-    pub fn insert(&mut self, f: BddPtr, g: BddPtr, res: BddPtr) -> () {
+    /// Insert an ite (f, g, h) into the apply table
+    pub fn insert(&mut self, f: BddPtr, g: BddPtr, h: BddPtr, res: BddPtr) -> () {
+        let (ite, compl) = Ite::new(f, g, h);
         let tbl = f.var() as usize;
-        self.table[tbl].insert((f, g), res);
+        self.table[tbl].insert(ite, if compl {res.neg()} else {res});
     }
 
-    pub fn get(&mut self, f: BddPtr, g: BddPtr) -> Option<BddPtr> {
+    pub fn get(&mut self, f: BddPtr, g: BddPtr, h: BddPtr) -> Option<BddPtr> {
         let tbl = f.var() as usize;
-        self.table[tbl].get((f, g))
+        let (ite, compl) = Ite::new(f, g, h);
+        let r = self.table[tbl].get(ite);
+        if compl { r.map(|v| v.neg()) } else { r }
     }
 
     pub fn get_stats(&self) -> Vec<ApplyCacheStats> {
@@ -57,8 +90,9 @@ fn apply_cache_simple() {
         for i in 0..100000 {
             let f = BddPtr::new(VarLabel::new(var), TableIndex::new(i));
             let g = BddPtr::new(VarLabel::new(var + 1), TableIndex::new(i));
+            let h = BddPtr::new(VarLabel::new(var + 2), TableIndex::new(i));
             let result = BddPtr::new(VarLabel::new(var), TableIndex::new(i));
-            tbl.insert(f, g, result);
+            tbl.insert(f, g, h, result);
         }
     }
 
@@ -66,9 +100,10 @@ fn apply_cache_simple() {
         for i in 0..100000 {
             let f = BddPtr::new(VarLabel::new(var), TableIndex::new(i));
             let g = BddPtr::new(VarLabel::new(var + 1), TableIndex::new(i));
+            let h = BddPtr::new(VarLabel::new(var + 2), TableIndex::new(i));
             let result = BddPtr::new(VarLabel::new(var), TableIndex::new(i));
-            tbl.insert(f, g, result);
-            assert_eq!(tbl.get(f, g).unwrap(), result);
+            tbl.insert(f, g, h, result);
+            assert_eq!(tbl.get(f, g, h).unwrap(), result);
         }
     }
 }

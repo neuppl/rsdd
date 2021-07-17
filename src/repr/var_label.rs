@@ -12,7 +12,7 @@ pub struct VarLabel(u64);
 impl VarLabel {
     #[inline]
     pub fn new(v: u64) -> VarLabel {
-        assert!(v < 1 << VAR_BITS - 1, "Variable identifier overflow");
+        assert!(v < 1 << VAR_BITS, "Variable identifier overflow");
         VarLabel(v)
     }
     #[inline]

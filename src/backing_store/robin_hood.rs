@@ -221,7 +221,6 @@ where
     }
 
     /// Dereferences a BDD pointer that lives in this table
-    #[inline(always)]
     pub fn deref(&self, ptr: BackingPtr) -> &T {
         &self.elem[ptr.0 as usize].elem
     }
@@ -237,6 +236,10 @@ where
             let hashelem = HashTableElement::new(BackingPtr(idx as u32), hash_v as u64);
             propagate(&mut self.tbl, self.cap, hashelem, hash_v % c);
         }
+    }
+
+    pub fn capacity(&self) -> usize {
+        self.elem.len()
     }
 
     pub fn average_offset(&self) -> f64 {
