@@ -26,8 +26,6 @@ pretty = "0.3.3"
 num = "0.1.41"
 maplit = "1.0.1"
 libc = "0.2"
-hashbrown = "0.11"
-
 
 [profile.release]
 debug = true

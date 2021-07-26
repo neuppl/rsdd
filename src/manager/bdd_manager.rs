@@ -9,13 +9,15 @@ use repr::cnf::Cnf;
 use repr::boolexpr::BoolExpr;
 use std::collections::{HashMap, HashSet};
 use backing_store::BackingCacheStats;
-use backing_store::bdd_table::BddTable;
+use manager::cache::lru::ApplyCacheStats;
+use backing_store::bdd_table_robinhood::BddTable;
 use num::traits::Num;
 
 #[macro_use]
 use maplit::*;
 
-use crate::backing_store::bdd_table::TraverseTable;
+use crate::backing_store;
+use crate::backing_store::bdd_table_robinhood::TraverseTable;
 
 
 /// Weighted model counting parameters for a BDD. It primarily is a storage for
@@ -718,6 +720,13 @@ impl BddManager {
             }
         }
         helper(&cvec, self).unwrap()
+    }
+
+    pub fn print_stats(&self) -> () {
+        let compute_stats = self.get_backing_store_stats();
+        let apply_stats = self.apply_table.get_stats();
+        println!("BDD Manager Stats\nCompute hit count: {}\nCompute lookup count: {}\nCompute total elements: {}\nCompute average offset: {}\nApply lookup: {}\nApply miss: {}\nApply evictions: {}", 
+        compute_stats.hit_count, compute_stats.lookup_count, compute_stats.num_elements, compute_stats.avg_offset, apply_stats.lookup_count, apply_stats.miss_count, apply_stats.conflict_count);
     }
 
     pub fn from_boolexpr(&mut self, expr: &BoolExpr) -> BddPtr {

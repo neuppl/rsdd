@@ -42,7 +42,7 @@ fn pow_cap(v: usize, p: usize) -> usize {
 }
 
 /// Data structure stored in the subtables
-#[derive(Debug, Hash, Clone)]
+#[derive(Debug, Hash, Clone, Eq, PartialEq)]
 struct Element<K, V>
 where
     K: Hash + Clone + Eq + PartialEq + Debug,
@@ -109,30 +109,38 @@ where
         key.hash(&mut hasher);
         let hash_v = hasher.finish();
         let pos = pow_cap(hash_v as usize, self.cap);
+        let e = Element::new(key, val);
         if self.tbl[pos].is_some() {
             self.stat.conflict_count += 1;
         }
-        self.tbl[pos] = Some(Element::new(key.clone(), val.clone()));
+        self.tbl[pos] = Some(e);
     }
 
-
-    #[inline(never)]
     pub fn get(&mut self, key: K) -> Option<V> {
         self.stat.lookup_count += 1;
         let mut hasher : FnvHasher = Default::default();
         key.hash(&mut hasher);
         let hash_v = hasher.finish();
         let pos = pow_cap(hash_v as usize, self.cap);
-        let v = self.tbl[pos].clone();
-        if v.is_none() {
-            return None;
+        let v = &self.tbl[pos];
+        match v {
+            Some(ref v) if v.key == key => return Some(v.val.clone()),
+            _ => {
+                self.stat.miss_count += 1;
+                return None;
+            }
         }
-        let v = v.unwrap();
-        if v.key == key {
-            return Some(v.val.clone());
-        }
-        self.stat.miss_count += 1;
-        return None;
+        // if v.is_none() {
+        //     self.stat.miss_count += 1;
+        //     return None;
+        // }
+
+        // if v.key == key {
+        //     return Some(v.val);
+        // }
+
+        // self.stat.miss_count += 1;
+        // return None;
     }
 
     /// grow the hashtable to accomodate more elements

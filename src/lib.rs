@@ -168,3 +168,9 @@ pub extern "C" fn rsdd_high(mgr: *mut BddManager, a: u64) -> u64 {
         high.raw()
     }
 }
+
+#[no_mangle]
+pub extern "C" fn rsdd_print_stats(mgr: *mut BddManager) -> () {
+    let mgr = unsafe { &mut *mgr };
+    mgr.print_stats();
+}

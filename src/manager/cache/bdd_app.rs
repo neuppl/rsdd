@@ -3,7 +3,7 @@ use manager::cache::lru::*;
 use repr::bdd::*;
 use repr::var_label::VarLabel;
 
-const INITIAL_CAPACITY: usize = 14; // given as a power of two
+const INITIAL_CAPACITY: usize = 20; // given as a power of two
 
 /// An Ite structure, assumed to be in standard form.
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
@@ -38,20 +38,17 @@ impl Ite {
     }
 }
 
-/// The top-level data structure which caches applications
+/// The top-level data structure that caches applications
 pub struct BddApplyTable {
     /// a vector of applications, indexed by the top label of the first pointer.
-    table: Vec<Lru<Ite, BddPtr>>,
+    table: Lru<Ite, BddPtr>,
 }
 
 impl BddApplyTable {
     pub fn new(num_vars: usize) -> BddApplyTable {
         let mut tbl = BddApplyTable {
-            table: Vec::with_capacity(num_vars),
+            table: Lru::new(INITIAL_CAPACITY),
         };
-        for _ in 0..num_vars {
-            tbl.table.push(Lru::new(INITIAL_CAPACITY));
-        }
         tbl
     }
 
@@ -59,51 +56,21 @@ impl BddApplyTable {
     pub fn insert(&mut self, f: BddPtr, g: BddPtr, h: BddPtr, res: BddPtr) -> () {
         let (ite, compl) = Ite::new(f, g, h);
         let tbl = f.var() as usize;
-        self.table[tbl].insert(ite, if compl {res.neg()} else {res});
+        self.table.insert(ite, if compl {res.neg()} else {res});
     }
 
     pub fn get(&mut self, f: BddPtr, g: BddPtr, h: BddPtr) -> Option<BddPtr> {
         let tbl = f.var() as usize;
         let (ite, compl) = Ite::new(f, g, h);
-        let r = self.table[tbl].get(ite);
+        let r = self.table.get(ite);
         if compl { r.map(|v| v.neg()) } else { r }
     }
 
-    pub fn get_stats(&self) -> Vec<ApplyCacheStats> {
-        let mut r = Vec::new();
-        for tbl in self.table.iter() {
-            r.push(tbl.get_stats());
-        }
-        r
+    pub fn get_stats(&self) -> ApplyCacheStats {
+        self.table.get_stats()
     }
 
     /// Push a new application table to the back of the list
     pub fn new_last(&mut self) -> () {
-        self.table.push(Lru::new(INITIAL_CAPACITY));
-    }
-}
-
-#[test]
-fn apply_cache_simple() {
-    let mut tbl = BddApplyTable::new(11);
-    for var in 0..10 {
-        for i in 0..100000 {
-            let f = BddPtr::new(VarLabel::new(var), TableIndex::new(i));
-            let g = BddPtr::new(VarLabel::new(var + 1), TableIndex::new(i));
-            let h = BddPtr::new(VarLabel::new(var + 2), TableIndex::new(i));
-            let result = BddPtr::new(VarLabel::new(var), TableIndex::new(i));
-            tbl.insert(f, g, h, result);
-        }
-    }
-
-    for var in 0..10 {
-        for i in 0..100000 {
-            let f = BddPtr::new(VarLabel::new(var), TableIndex::new(i));
-            let g = BddPtr::new(VarLabel::new(var + 1), TableIndex::new(i));
-            let h = BddPtr::new(VarLabel::new(var + 2), TableIndex::new(i));
-            let result = BddPtr::new(VarLabel::new(var), TableIndex::new(i));
-            tbl.insert(f, g, h, result);
-            assert_eq!(tbl.get(f, g, h).unwrap(), result);
-        }
     }
 }

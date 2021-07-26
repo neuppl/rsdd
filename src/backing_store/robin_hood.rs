@@ -10,7 +10,7 @@ use util::*;
 
 /// The load factor of the table, i.e. how full the table will be when it
 /// automatically resizes
-const LOAD_FACTOR: f64 = 0.7;
+const LOAD_FACTOR: f64 = 0.5;
 
 
 /// data structure stored inside of the hash table
@@ -166,7 +166,6 @@ where
                     if elem.eq(self.get_pos(pos as usize)) {
                         self.stats.hit_count += 1;
                         return BackingPtr(cur_itm.idx() as u32);
-                    } else {
                     }
                 }
                 // check if this item's position is closer than ours
@@ -252,7 +251,9 @@ where
     }
 
     pub fn get_stats(&self) -> BackingCacheStats {
-        self.stats.clone()
+        let mut r = self.stats.clone();
+        r.avg_offset = self.average_offset();
+        r
     }
 }
 
@@ -273,5 +274,4 @@ fn rh_simple() {
         let v_2 = store.get_or_insert(&e);
         assert_eq!(store.deref(v), store.deref(v_2));
     }
-    println!("average offset: {}", store.average_offset());
 }
