@@ -26,6 +26,8 @@ pretty = "0.3.3"
 num = "0.1.41"
 maplit = "1.0.1"
 libc = "0.2"
+cudd-sys = {git = "https://github.com/SHoltzen/cudd-sys-1"}
+
 
 [profile.release]
 debug = true

@@ -245,13 +245,13 @@ impl BddManager {
 
         // attempt a base case
         match (f, g, h) {
-            (f, g, h) if g.is_false() && h.is_false() => return BddPtr::false_node(),
-            (f, g, h) if g.is_true() && h.is_true() => return BddPtr::true_node(),
+            (_, g, h) if g.is_false() && h.is_false() => return BddPtr::false_node(),
+            (_, g, h) if g.is_true() && h.is_true() => return BddPtr::true_node(),
             (f, g, h) if g.is_true() && h.is_false() => return f,
             (f, g, h) if g.is_false() && h.is_true() => return f.neg(),
-            (f, g, h) if f.is_true() => return g,
-            (f, g, h) if f.is_false() => return h,
-            (f, g, h) if g == h => return g,
+            (f, g, _) if f.is_true() => return g,
+            (f, _, h) if f.is_false() => return h,
+            (_, g, h) if g == h => return g,
             _ => ()
         };
 
@@ -620,7 +620,6 @@ impl BddManager {
         wmc: &BddWmc<T>,
         compute_table: &mut TraverseTable<(T, Option<VarLabel>)>
     ) -> (T, Option<VarLabel>) {
-        use repr::bdd::PointerType;
         match ptr.ptr_type() {
             PointerType::PtrTrue => (wmc.one.clone(), Some(self.get_order().last_var())),
             PointerType::PtrFalse => (wmc.zero.clone(), Some(self.get_order().last_var())),
@@ -695,7 +694,7 @@ impl BddManager {
             assert!(lit_vec.len() > 0, "empty cnf");
             let (vlabel, val) = (lit_vec[0].get_label(), lit_vec[0].get_polarity());
             let mut bdd = self.var(vlabel, val);
-            for i in 1..lit_vec.len() {;
+            for i in 1..lit_vec.len() {
                 let (vlabel, val) = (lit_vec[i].get_label(), lit_vec[i].get_polarity());
                 let var = self.var(vlabel, val);
                 bdd = self.or(bdd, var);
