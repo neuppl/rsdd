@@ -1,4 +1,4 @@
-use rsdd::manager::bdd_manager::BddManager;
+use rsdd::manager::rsbdd_manager::BddManager;
 use rsdd::manager::sdd_manager::SddManager;
 use rsdd::repr::cnf::Cnf;
 use rand::SeedableRng;

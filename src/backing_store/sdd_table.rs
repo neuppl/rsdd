@@ -1,5 +1,5 @@
 use repr::sdd::*;
-use manager::bdd_manager::BddManager;
+use manager::rsbdd_manager::BddManager;
 use backing_store::robin_hood::*;
 use util::btree::*;
 use std::collections::HashMap;

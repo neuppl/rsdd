@@ -223,6 +223,7 @@ impl SddManager {
         if r[0].1.is_compl() {
             // guarantee first sub in the first node is not complemented
             // (regular form)
+            // TODO looks like an unnecessary allocation here
             let compl_r = r.iter().map(|&(ref p, ref s)| (*p, s.neg())).collect();
             self.tbl
                 .get_or_insert_sdd(&SddOr { nodes: compl_r }, lca)
@@ -372,6 +373,19 @@ impl SddManager {
 
     pub fn or(&mut self, a: SddPtr, b: SddPtr) -> SddPtr {
         self.or_internal(a, b)
+    }
+
+    /// Computes `f | var = value`
+    pub fn condition(&mut self, f: SddPtr, lbl: VarLabel, value: bool) -> SddPtr {
+        // check base case
+        if f.is_const() {
+            return f;
+        } else if f.is_bdd() {
+            let bdd = self.tbl.bdd_man_mut(f.vtree()).condition(f.as_bdd_ptr(), lbl, value);
+            return SddPtr::new_bdd(bdd, f.vtree() as u16);
+        };
+        panic!()
+        // f is a node; recurse
     }
 
     fn print_sdd_internal(&self, ptr: SddPtr) -> String {
@@ -539,4 +553,16 @@ fn test_lca() {
     assert_eq!(least_common_ancestor(&par_vec, 1, 4), 3);
     assert_eq!(least_common_ancestor(&par_vec, 2, 1), 1);
     assert_eq!(least_common_ancestor(&par_vec, 4, 6), 5);
+}
+
+// check that (a \/ b) /\ a === a
+#[test]
+fn simple_equality() {
+    let mut mgr = SddManager::new(even_split(&vec![VarLabel::new(0), VarLabel::new(1), VarLabel::new(2), 
+        VarLabel::new(3), VarLabel::new(4)], 2));
+    let a = mgr.var(VarLabel::new(0), true);
+    let d = mgr.var(VarLabel::new(3), true);
+    let inner = mgr.or(a, d);
+    let term = mgr.and(inner, a);
+    assert_eq!(a, term);
 }

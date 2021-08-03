@@ -1,3 +1,4 @@
+//! Defines exports and the C api
 #[macro_use] mod util;
 pub mod manager;
 pub mod repr;
@@ -8,22 +9,51 @@ extern crate fnv;
 extern crate twox_hash;
 extern crate quickersort;
 extern crate dimacs;
+extern crate cudd_sys;
 extern crate pretty;
 extern crate num;
 extern crate maplit;
 extern crate libc;
 
 use manager::*;
-use manager::bdd_manager::BddManager;
+use manager::rsbdd_manager::BddManager;
+use manager::sdd_manager::SddManager;
 use repr::bdd::BddPtr;
 use repr::var_label::VarLabel;
+use repr::sdd::VTree;
 
-// Define the public C API for rsdd
-// Note: this API hides complemented edges and other BDD internals
+/// Creates a vtree leaf
+#[no_mangle]
+pub extern "C" fn rsdd_vtree_leaf(var: *const u64, len: libc::size_t) -> *mut libc::c_void {
+    let arg = unsafe {
+        assert!(!var.is_null());
+        let slice = std::slice::from_raw_parts(var, len as usize);
+        slice.iter().map(|x| VarLabel::new(*x)).collect()
+    };
+    Box::into_raw(Box::new(VTree::Leaf(arg))) as *mut libc::c_void
+}
+
+/// Create a new VTree node.
+/// Takes ownership of `l` and `r`.
+#[no_mangle]
+pub extern "C" fn rsdd_vtree_node(l: *mut VTree, r: *mut VTree) -> *mut libc::c_void {
+    let lp = unsafe { Box::from_raw(l) };
+    let rp = unsafe { Box::from_raw(r) };
+    Box::into_raw(Box::new(VTree::Node((), lp, rp))) as *mut libc::c_void
+}
+
+/// Create a new SDD manager.
+/// Takes ownership of `vtree`.
+#[no_mangle]
+pub extern "C" fn rsdd_mk_sdd_manager(vtree: *mut VTree) -> *mut libc::c_void {
+    let vtree = unsafe { Box::from_raw(vtree) };
+    let r = Box::new(SddManager::new(*vtree));
+    Box::into_raw(r) as *mut libc::c_void
+}
 
 #[no_mangle]
 pub extern "C" fn rsdd_mk_bdd_manager_default_order(numvars: usize) -> *mut libc::c_void {
-    let r = Box::new(bdd_manager::BddManager::new_default_order(numvars));
+    let r = Box::new(rsbdd_manager::BddManager::new_default_order(numvars));
     Box::into_raw(r) as *mut libc::c_void
 }
 
@@ -93,7 +123,7 @@ pub extern "C" fn rsdd_compose(mgr: *mut BddManager, a: u64, label: u64, b: u64)
     let mgr = unsafe { &mut *mgr };
     mgr.compose(BddPtr::from_raw(a), repr::var_label::VarLabel::new(label), 
                 BddPtr::from_raw(b)).raw()
-} 
+}
 
 #[no_mangle]
 pub extern "C" fn rsdd_size(mgr: *mut BddManager, bdd: u64) -> usize {

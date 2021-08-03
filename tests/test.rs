@@ -1,6 +1,6 @@
 extern crate rsdd;
 use rsdd::*;
-use manager::bdd_manager::BddManager;
+use manager::rsbdd_manager::BddManager;
 use repr::boolexpr::BoolExpr;
 use manager::sdd_manager::{SddManager, even_split};
 use manager::var_order::VarOrder;
