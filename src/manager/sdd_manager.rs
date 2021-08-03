@@ -60,7 +60,7 @@ fn into_parent_ptr_vec(vtree: &VTree) -> Vec<(Option<usize>, usize)> {
         match cur {
             &BTree::Leaf(_) => vec![(parent, level)],
             &BTree::Node(ref v, ref l, ref r) => {
-                let mut l = helper(l, level + 1, Some(*v));
+                let l = helper(l, level + 1, Some(*v));
                 let mut r = helper(r, level + 1, Some(*v));
                 let mut v = l;
                 v.append(&mut vec![(parent, level)]);
@@ -239,9 +239,6 @@ impl SddManager {
 
 
     fn and_rec(&mut self, a: SddPtr, b: SddPtr) -> SddPtr {
-        // println!("applying\n {}\n {}\n",
-        //          self.print_sdd_internal(a), self.print_sdd_internal(b));
-
         // first, check for a base case
         match (a, b) {
             (a, b) if a.is_true() => return b,
@@ -381,11 +378,13 @@ impl SddManager {
         if f.is_const() {
             return f;
         } else if f.is_bdd() {
+            // check if this BDD contains the label
             let bdd = self.tbl.bdd_man_mut(f.vtree()).condition(f.as_bdd_ptr(), lbl, value);
             return SddPtr::new_bdd(bdd, f.vtree() as u16);
         };
-        panic!()
+        panic!();
         // f is a node; recurse
+
     }
 
     fn print_sdd_internal(&self, ptr: SddPtr) -> String {
@@ -487,7 +486,7 @@ impl SddManager {
             assert!(lit_vec.len() > 0, "empty cnf");
             let (vlabel, val) = (lit_vec[0].get_label(), lit_vec[0].get_polarity());
             let mut sdd = self.var(vlabel, val);
-            for i in 1..lit_vec.len() {;
+            for i in 1..lit_vec.len() {
                 let (vlabel, val) = (lit_vec[i].get_label(), lit_vec[i].get_polarity());
                 let var = self.var(vlabel, val);
                 sdd = self.or(sdd, var);

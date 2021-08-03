@@ -9,7 +9,6 @@ extern crate fnv;
 extern crate twox_hash;
 extern crate quickersort;
 extern crate dimacs;
-extern crate cudd_sys;
 extern crate pretty;
 extern crate num;
 extern crate maplit;
