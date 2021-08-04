@@ -32,13 +32,13 @@ where
             Some(v) => match v {
                 &Leaf(_) => Some(v),
                 &Node(_, _, ref r) => {
-                    let mut cur : &'a BTree<N, L> = r;
+                    let mut cur: &'a BTree<N, L> = r;
                     loop {
                         match cur {
                             &BTree::Leaf(_) => {
                                 self.stack.push(cur);
                                 break;
-                            },
+                            }
                             &BTree::Node(_, ref l, ref r) => {
                                 self.stack.push(cur);
                                 cur = l;
@@ -47,7 +47,7 @@ where
                     }
                     Some(v)
                 }
-            }
+            },
         }
     }
 }
@@ -65,7 +65,7 @@ where
                 &BTree::Leaf(_) => {
                     v.push(cur);
                     return InOrderIter { stack: v };
-                },
+                }
                 &BTree::Node(_, ref l, ref r) => {
                     v.push(cur);
                     cur = l;
@@ -87,13 +87,18 @@ where
     /// Find the depth-first index of a leaf which satisfies F; None
     /// if none is found
     pub fn find_leaf_idx<F>(&self, f: &F) -> Option<usize>
-        where F: Fn(&L) -> bool
+    where
+        F: Fn(&L) -> bool,
     {
         for (idx, i) in self.in_order_iter().enumerate() {
             match i {
                 &BTree::Node(_, _, _) => (),
-                &BTree::Leaf(ref l) =>
-                    if f(l) { return Some(idx) } else {}
+                &BTree::Leaf(ref l) => {
+                    if f(l) {
+                        return Some(idx);
+                    } else {
+                    }
+                }
             }
         }
         None
@@ -125,7 +130,7 @@ where
     pub fn extract_leaf(&self) -> &L {
         match self {
             Self::Leaf(ref v) => v,
-            _ => panic!("extracting non-leaf")
+            _ => panic!("extracting non-leaf"),
         }
     }
 
@@ -142,16 +147,16 @@ where
 #[test]
 fn test_traversal() {
     use self::BTree::*;
-    let vtree : BTree<i32, i32> =
-        Node(4,
-             Box::new(Node(2, Box::new(Leaf(1)), Box::new(Leaf(3)))),
-             Box::new(Node(6, Box::new(Leaf(5)), Box::new(Leaf(7))),
-             ));
+    let vtree: BTree<i32, i32> = Node(
+        4,
+        Box::new(Node(2, Box::new(Leaf(1)), Box::new(Leaf(3)))),
+        Box::new(Node(6, Box::new(Leaf(5)), Box::new(Leaf(7)))),
+    );
 
     for (idx, v) in vtree.in_order_iter().enumerate() {
         let value = match v {
             &Node(ref v, _, _) => v.clone(),
-            &Leaf(ref v) => v.clone()
+            &Leaf(ref v) => v.clone(),
         };
         assert_eq!((idx + 1) as i32, value);
     }
@@ -160,17 +165,17 @@ fn test_traversal() {
 #[test]
 fn test_in_order_tree() {
     use self::BTree::*;
-    let vtree : BTree<i32, i32> =
-        Node(4,
-             Box::new(Node(2, Box::new(Leaf(1)), Box::new(Leaf(3)))),
-             Box::new(Node(6, Box::new(Leaf(5)), Box::new(Leaf(7))),
-             ));
+    let vtree: BTree<i32, i32> = Node(
+        4,
+        Box::new(Node(2, Box::new(Leaf(1)), Box::new(Leaf(3)))),
+        Box::new(Node(6, Box::new(Leaf(5)), Box::new(Leaf(7)))),
+    );
 
     let in_order = vtree.into_order_tree();
     for (idx, v) in in_order.in_order_iter().enumerate() {
         let value = match v {
             &Node(ref v, _, _) => v.clone(),
-            &Leaf(ref v) => v.clone()
+            &Leaf(ref v) => v.clone(),
         };
         assert_eq!(idx, value);
     }

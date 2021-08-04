@@ -1,17 +1,16 @@
 //! A backing store based on robin-hood hashing
 
-use std::ptr;
-use std::hash::{Hasher, Hash};
-use std::mem;
+use backing_store::*;
 use fnv::FnvHasher;
 use std::hash::BuildHasherDefault;
-use backing_store::*;
+use std::hash::{Hash, Hasher};
+use std::mem;
+use std::ptr;
 use util::*;
 
 /// The load factor of the table, i.e. how full the table will be when it
 /// automatically resizes
 const LOAD_FACTOR: f64 = 0.5;
-
 
 /// data structure stored inside of the hash table
 #[derive(Clone, Debug, Copy)]
@@ -26,7 +25,6 @@ BITFIELD!(HashTableElement data : u64 [
     idx set_idx[16..64],         // the index into the backing store for this cell
 ]);
 
-
 impl HashTableElement {
     fn new(idx: BackingPtr, hash: u64) -> HashTableElement {
         let mut init = HashTableElement { data: 0 };
@@ -37,7 +35,6 @@ impl HashTableElement {
     }
 }
 
-
 /// An element of the backing store; used for cache memoization
 #[derive(Clone, Debug, Hash, Eq, PartialEq)]
 pub struct BackingElem<T>
@@ -46,7 +43,7 @@ where
 {
     elem: T,
     hash_mem: usize, // store the hash value so that it is not recomputed
-    mark: bool       // a mark used during garbage collection
+    mark: bool,      // a mark used during garbage collection
 }
 
 impl<T> BackingElem<T>
@@ -58,7 +55,11 @@ where
     }
 
     fn new(elem: T, hash: usize) -> BackingElem<T> {
-        BackingElem { elem: elem, hash_mem: hash, mark: false }
+        BackingElem {
+            elem: elem,
+            hash_mem: hash,
+            mark: false,
+        }
     }
 }
 
@@ -87,7 +88,6 @@ fn propagate(v: &mut [HashTableElement], cap: usize, itm: HashTableElement, pos:
         }
     }
 }
-
 
 /// Implements a mutable vector-backed robin-hood linear probing hash table,
 /// whose keys are given by BDD pointers.
@@ -122,7 +122,6 @@ where
         return r;
     }
 
-
     /// check if item at index `pos` is occupied
     fn is_occupied(&self, pos: usize) -> bool {
         // very oddly, this comparison is extremely costly!
@@ -154,8 +153,7 @@ where
         elem.hash(&mut hasher);
         let hash_v = hasher.finish() as usize;
         let mut pos = hash_v % self.cap;
-        let mut searcher =
-            HashTableElement::new(BackingPtr(self.elem.len() as u32), hash_v as u64);
+        let mut searcher = HashTableElement::new(BackingPtr(self.elem.len() as u32), hash_v as u64);
         loop {
             if self.is_occupied(pos) {
                 let cur_itm = self.tbl[pos].clone();
@@ -191,7 +189,6 @@ where
             }
         }
     }
-
 
     /// Finds the index for a particular bdd, none if it is not found
     /// Does not invalidate references.

@@ -24,7 +24,7 @@ impl VarLabel {
 /// Literal, a variable label and its corresponding truth assignment
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Copy)]
 pub struct Literal {
-    data: u64
+    data: u64,
 }
 
 BITFIELD!(Literal data : u64 [

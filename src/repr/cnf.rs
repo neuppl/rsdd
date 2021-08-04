@@ -1,11 +1,10 @@
-use repr::var_label::{VarLabel, Literal};
-use std::cmp::{min, max};
-use rand::{Rng, thread_rng};
 use manager::var_order::VarOrder;
 use rand;
 use rand::distributions::IndependentSample;
 use rand::StdRng;
-
+use rand::{thread_rng, Rng};
+use repr::var_label::{Literal, VarLabel};
+use std::cmp::{max, min};
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct Cnf {
@@ -63,12 +62,14 @@ impl Cnf {
                 clause_vec.push(var_vec);
             } else {
                 let var = vars.get(range.ind_sample(rng)).unwrap().clone();
-                clause_vec.push(vec!(var));
+                clause_vec.push(vec![var]);
             }
         }
-        Cnf { clauses: clause_vec, num_vars: num_vars }
+        Cnf {
+            clauses: clause_vec,
+            num_vars: num_vars,
+        }
     }
-
 
     pub fn num_vars(&self) -> usize {
         self.num_vars
@@ -85,9 +86,11 @@ impl Cnf {
                 m = max(lit.get_label().value(), m);
             }
         }
-        Cnf { clauses: clauses, num_vars: (m + 1) as usize}
+        Cnf {
+            clauses: clauses,
+            num_vars: (m + 1) as usize,
+        }
     }
-
 
     /// compute the average span of the clauses with the ordering given by
     /// `lbl_to_pos`, which is a mapping from variable labels to their position
@@ -111,10 +114,9 @@ impl Cnf {
 
     /// computes the center of gravity of a particular clause for a given order
     fn center_of_gravity(&self, clause: &[Literal], lbl_to_pos: &[usize]) -> f64 {
-        let sum = clause.iter().fold(
-            0,
-            |acc, &lbl| lbl_to_pos[lbl.get_label().value() as usize] + acc,
-        );
+        let sum = clause.iter().fold(0, |acc, &lbl| {
+            lbl_to_pos[lbl.get_label().value() as usize] + acc
+        });
         let r = (sum as f64) / (clause.len() as f64);
         // println!("   clause: {:?}, lbl: {:?}, cog: {}",
         //          clause, lbl_to_pos, r
@@ -152,11 +154,7 @@ impl Cnf {
             }
             let avg_cog: Vec<f64> = update
                 .into_iter()
-                .map(|(total, cnt)| if cnt == 0 {
-                    0.0
-                } else {
-                    total / (cnt as f64)
-                })
+                .map(|(total, cnt)| if cnt == 0 { 0.0 } else { total / (cnt as f64) })
                 .collect();
 
             // println!("  avg cog: {:?}", avg_cog);
@@ -165,7 +163,7 @@ impl Cnf {
             // now sort avg_cog on the centers of gravity
             avg_cog.sort_by(|&(ref c1, _), &(ref c2, _)| c1.partial_cmp(c2).unwrap());
             // update positions
-            let pos_to_lbl : Vec<usize> = avg_cog.into_iter().map(|(_, p)| p).collect();
+            let pos_to_lbl: Vec<usize> = avg_cog.into_iter().map(|(_, p)| p).collect();
             // now convert to lbl_to_pos
             for (idx, lbl) in pos_to_lbl.into_iter().enumerate() {
                 lbl_to_pos[lbl] = idx;
@@ -179,4 +177,3 @@ impl Cnf {
         VarOrder::new(final_order)
     }
 }
-

@@ -1,9 +1,9 @@
-use repr::var_label::VarLabel;
-use std::collections::{HashMap, HashSet};
+use dimacs::*;
 use rand;
 use rand::distributions::IndependentSample;
 use rand::StdRng;
-use dimacs::*;
+use repr::var_label::VarLabel;
+use std::collections::{HashMap, HashSet};
 
 #[derive(Debug, Clone)]
 pub enum BoolExpr {
@@ -11,7 +11,6 @@ pub enum BoolExpr {
     And(Box<BoolExpr>, Box<BoolExpr>),
     Or(Box<BoolExpr>, Box<BoolExpr>),
 }
-
 
 impl BoolExpr {
     /// Parses a CNF string into a Boolean expression
@@ -79,12 +78,11 @@ impl BoolExpr {
                 }
                 let l1 = var_vec.pop().unwrap();
                 let l2 = var_vec.pop().unwrap();
-                let new_expr = var_vec.into_iter().fold(
-                    BoolExpr::Or(Box::new(l1), Box::new(l2)),
-                    |itm, acc| {
+                let new_expr = var_vec
+                    .into_iter()
+                    .fold(BoolExpr::Or(Box::new(l1), Box::new(l2)), |itm, acc| {
                         BoolExpr::Or(Box::new(itm), Box::new(acc))
-                    },
-                );
+                    });
                 clause_vec.push(new_expr);
             } else {
                 let var = vars.get(range.ind_sample(rng)).unwrap().clone();
@@ -93,15 +91,11 @@ impl BoolExpr {
         }
         let l = clause_vec.pop().unwrap();
         let r = clause_vec.pop().unwrap();
-        clause_vec.into_iter().fold(
-            BoolExpr::And(
-                Box::new(l),
-                Box::new(r),
-            ),
-            |acc, itm| {
+        clause_vec
+            .into_iter()
+            .fold(BoolExpr::And(Box::new(l), Box::new(r)), |acc, itm| {
                 BoolExpr::And(Box::new(itm), Box::new(acc))
-            },
-        )
+            })
     }
 
     /// Evaluates a boolean expression
@@ -112,7 +106,11 @@ impl BoolExpr {
                     None => panic!("Variable {} not found in varset", lbl),
                     Some(a) => a,
                 };
-                if polarity { *v } else { !*v }
+                if polarity {
+                    *v
+                } else {
+                    !*v
+                }
             }
             &BoolExpr::And(ref l, ref r) => {
                 let l_v = (*l).eval(values);
@@ -133,8 +131,7 @@ impl BoolExpr {
                 &BoolExpr::Var(lbl, _) => {
                     cur_set.insert(lbl);
                 }
-                &BoolExpr::And(ref l, ref r) |
-                &BoolExpr::Or(ref l, ref r) => {
+                &BoolExpr::And(ref l, ref r) | &BoolExpr::Or(ref l, ref r) => {
                     traverse(l, cur_set);
                     traverse(r, cur_set);
                 }

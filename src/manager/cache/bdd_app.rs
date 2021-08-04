@@ -24,17 +24,17 @@ impl Ite {
             (f, g, h) if f == h => (f, g, BddPtr::false_node()),
             (f, g, h) if f == h.neg() => (f, g, BddPtr::true_node()),
             (f, g, h) if f == g.neg() => (f, BddPtr::false_node(), g),
-            _ => (f, g, h)
+            _ => (f, g, h),
         };
 
         // now, standardize for negation: ensure f and g are non-negated
-        let (f, g, h, compl) = match(f, g, h) {
+        let (f, g, h, compl) = match (f, g, h) {
             (f, g, h) if f.is_compl() && !g.is_compl() => (f, h, g, false),
             (f, g, h) if !f.is_compl() && g.is_compl() => (f, g.neg(), h.neg(), true),
             (f, g, h) if f.is_compl() && g.is_compl() => (f.neg(), h.neg(), g.neg(), true),
-            _ => (f, g, h, false)
+            _ => (f, g, h, false),
         };
-        (Ite {f, g, h}, compl)
+        (Ite { f, g, h }, compl)
     }
 }
 
@@ -55,13 +55,17 @@ impl BddApplyTable {
     /// Insert an ite (f, g, h) into the apply table
     pub fn insert(&mut self, f: BddPtr, g: BddPtr, h: BddPtr, res: BddPtr) -> () {
         let (ite, compl) = Ite::new(f, g, h);
-        self.table.insert(ite, if compl {res.neg()} else {res});
+        self.table.insert(ite, if compl { res.neg() } else { res });
     }
 
     pub fn get(&mut self, f: BddPtr, g: BddPtr, h: BddPtr) -> Option<BddPtr> {
         let (ite, compl) = Ite::new(f, g, h);
         let r = self.table.get(ite);
-        if compl { r.map(|v| v.neg()) } else { r }
+        if compl {
+            r.map(|v| v.neg())
+        } else {
+            r
+        }
     }
 
     pub fn get_stats(&self) -> ApplyCacheStats {
@@ -69,6 +73,5 @@ impl BddApplyTable {
     }
 
     /// Push a new application table to the back of the list
-    pub fn new_last(&mut self) -> () {
-    }
+    pub fn new_last(&mut self) -> () {}
 }

@@ -1,7 +1,5 @@
 mod rand_cnf;
-extern crate rsdd;
 extern crate rand;
+extern crate rsdd;
 
-fn main() {
-    
-}
+fn main() {}

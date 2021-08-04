@@ -1,9 +1,9 @@
 //! A generic lossy LRU cache
 
-use std::fmt::Debug;
-use util::*;
-use std::hash::{Hasher, Hash};
 use fnv::FnvHasher;
+use std::fmt::Debug;
+use std::hash::{Hash, Hasher};
+use util::*;
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct ApplyCacheStats {
@@ -11,7 +11,7 @@ pub struct ApplyCacheStats {
     pub miss_count: usize,
     pub conflict_count: usize,
     /// percentage of slots being utilized
-    pub utilization: f64
+    pub utilization: f64,
 }
 
 impl ApplyCacheStats {
@@ -20,7 +20,7 @@ impl ApplyCacheStats {
             miss_count: 0,
             lookup_count: 0,
             conflict_count: 0,
-            utilization: 0.0
+            utilization: 0.0,
         }
     }
 }
@@ -58,10 +58,7 @@ where
     V: Eq + PartialEq + Clone,
 {
     fn new(key: K, val: V) -> Element<K, V> {
-        Element {
-            key: key,
-            val: val,
-        }
+        Element { key: key, val: val }
     }
 }
 
@@ -76,7 +73,6 @@ where
     cap: usize, // a particular power of 2
     stat: ApplyCacheStats,
 }
-
 
 impl<K, V> Lru<K, V>
 where
@@ -103,9 +99,8 @@ where
         self.cap
     }
 
-
     pub fn insert(&mut self, key: K, val: V) -> () {
-        let mut hasher : FnvHasher = Default::default();
+        let mut hasher: FnvHasher = Default::default();
         key.hash(&mut hasher);
         let hash_v = hasher.finish();
         let pos = pow_cap(hash_v as usize, self.cap);
@@ -118,7 +113,7 @@ where
 
     pub fn get(&mut self, key: K) -> Option<V> {
         self.stat.lookup_count += 1;
-        let mut hasher : FnvHasher = Default::default();
+        let mut hasher: FnvHasher = Default::default();
         key.hash(&mut hasher);
         let hash_v = hasher.finish();
         let pos = pow_cap(hash_v as usize, self.cap);
@@ -168,7 +163,6 @@ where
         // don't update the stats; we want to keep those
     }
 
-
     pub fn get_stats(&self) -> ApplyCacheStats {
         // compute utilization
         let mut c = 0;
@@ -183,10 +177,9 @@ where
     }
 }
 
-
 #[test]
 fn test_cache() {
-    let mut c : Lru<u64, u64> = Lru::new(14);
+    let mut c: Lru<u64, u64> = Lru::new(14);
     for i in 0..10000 {
         c.insert(i, i);
     }

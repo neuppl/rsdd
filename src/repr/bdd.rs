@@ -1,15 +1,13 @@
-use std::hash::{Hash, Hasher};
-use std::fmt;
-use std::mem;
 use repr::var_label::*;
-
+use std::fmt;
+use std::hash::{Hash, Hasher};
+use std::mem;
 
 /// number of bits allocated for a table index (limit on total BDDs of each
 /// variable)
 const INDEX_BITS: usize = 64 - VAR_BITS - 1; // reserve 1 bit for special
 
 const TRUE_VALUE: u64 = 1; // the variable ID corresponding with a true value
-
 
 /// Index into BDD table
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -138,7 +136,6 @@ impl BddPtr {
     }
 }
 
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BddNode {
     pub low: BddPtr,
@@ -148,7 +145,11 @@ pub struct BddNode {
 
 impl BddNode {
     pub fn new(low: BddPtr, high: BddPtr, var: VarLabel) -> BddNode {
-        BddNode { low: low, high: high, var: var }
+        BddNode {
+            low: low,
+            high: high,
+            var: var,
+        }
     }
 }
 

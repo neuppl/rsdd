@@ -1,24 +1,24 @@
 //! Primary interface for manipulating and constructing BDDs
 
-use manager::cache::bdd_app::*;
-use std::fmt::Debug;
-use manager::var_order::VarOrder;
-use repr::var_label::VarLabel;
-use repr::bdd::*;
-use repr::cnf::Cnf;
-use repr::boolexpr::BoolExpr;
-use std::collections::{HashMap, HashSet};
-use backing_store::BackingCacheStats;
-use manager::cache::lru::ApplyCacheStats;
 use backing_store::bdd_table_robinhood::BddTable;
+use backing_store::BackingCacheStats;
+use manager::cache::bdd_app::*;
+use manager::cache::lru::ApplyCacheStats;
+use manager::var_order::VarOrder;
 use num::traits::Num;
+use repr::bdd::*;
+use repr::boolexpr::BoolExpr;
+use repr::cnf::Cnf;
+use repr::var_label::VarLabel;
+use std::collections::{HashMap, HashSet};
+use std::fmt::Debug;
+use std::ops::Deref;
 
 #[macro_use]
 use maplit::*;
 
 use crate::backing_store;
 use crate::backing_store::bdd_table_robinhood::TraverseTable;
-
 
 /// Weighted model counting parameters for a BDD. It primarily is a storage for
 /// the weight on each variable.
@@ -111,7 +111,11 @@ impl BddManager {
     pub fn var(&mut self, lbl: VarLabel, is_true: bool) -> BddPtr {
         let bdd = BddNode::new(BddPtr::false_node(), BddPtr::true_node(), lbl);
         let r = self.get_or_insert(bdd);
-        if is_true { r } else { r.neg() }
+        if is_true {
+            r
+        } else {
+            r.neg()
+        }
     }
 
     pub fn true_ptr(&self) -> BddPtr {
@@ -153,8 +157,16 @@ impl BddManager {
                 PtrTrue => String::from("T"),
                 PtrFalse => String::from("F"),
                 PtrNode => {
-                    let l_p = if ptr.is_compl() { t.low(ptr).neg() } else { t.low(ptr) };
-                    let h_p = if ptr.is_compl() { t.high(ptr).neg() } else { t.high(ptr) };
+                    let l_p = if ptr.is_compl() {
+                        t.low(ptr).neg()
+                    } else {
+                        t.low(ptr)
+                    };
+                    let h_p = if ptr.is_compl() {
+                        t.high(ptr).neg()
+                    } else {
+                        t.high(ptr)
+                    };
                     let l_s = print_bdd_helper(t, l_p);
                     let h_s = print_bdd_helper(t, h_p);
                     format!("({}, {}, {})", ptr.var(), h_s, l_s)
@@ -163,7 +175,6 @@ impl BddManager {
         }
         print_bdd_helper(self, ptr)
     }
-
 
     pub fn negate(&mut self, ptr: BddPtr) -> BddPtr {
         ptr.neg()
@@ -222,13 +233,15 @@ impl BddManager {
 
     // condition a BDD *only* if the top variable is `v`; used in `ite`
     fn condition_essential(&self, f: BddPtr, lbl: VarLabel, v: bool) -> BddPtr {
-        if f.is_const() || f.var() != lbl.value() { return f };
-        let r = if v { 
-            self.high(f) 
-        } else { 
-            self.low(f) 
+        if f.is_const() || f.var() != lbl.value() {
+            return f;
         };
-        if f.is_compl() {r.neg()} else {r} 
+        let r = if v { self.high(f) } else { self.low(f) };
+        if f.is_compl() {
+            r.neg()
+        } else {
+            r
+        }
     }
 
     fn ite_helper(&mut self, f: BddPtr, g: BddPtr, h: BddPtr) -> BddPtr {
@@ -253,27 +266,30 @@ impl BddManager {
             (f, g, _) if f.is_true() => return g,
             (f, _, h) if f.is_false() => return h,
             (_, g, h) if g == h => return g,
-            _ => ()
+            _ => (),
         };
 
         // attempt to place the variable that comes first in the order as f
         let (f, g, h) = match (f, g, h) {
-            (f, g, h) if g.is_true() && self.get_order().lt(h.label(), f.label()) => { (h, g, f) },
-            (f, g, h) if h.is_false() && self.get_order().lt(g.label(), f.label()) => { (g, f, h) },
-            (f, g, h) if h.is_true() && self.get_order().lt(g.label(), f.label()) => { (g.neg(), f.neg(), h) },
-            (f, g, h) if g.is_false() && self.get_order().lt(h.label(), f.label()) => { (h.neg(), g, f.neg()) },
-            (f, g, h) if g == h && self.get_order().lt(g.label(), f.label()) => { (g, f, f.neg()) },
-            _ => (f, g, h)
+            (f, g, h) if g.is_true() && self.get_order().lt(h.label(), f.label()) => (h, g, f),
+            (f, g, h) if h.is_false() && self.get_order().lt(g.label(), f.label()) => (g, f, h),
+            (f, g, h) if h.is_true() && self.get_order().lt(g.label(), f.label()) => {
+                (g.neg(), f.neg(), h)
+            }
+            (f, g, h) if g.is_false() && self.get_order().lt(h.label(), f.label()) => {
+                (h.neg(), g, f.neg())
+            }
+            (f, g, h) if g == h && self.get_order().lt(g.label(), f.label()) => (g, f, f.neg()),
+            _ => (f, g, h),
         };
 
         // ok now it is normalized, see if this is in the apply table
         match self.apply_table.get(f, g, h) {
             Some(v) => return v,
-            None => ()
+            None => (),
         };
 
-
-        // ok the work! 
+        // ok the work!
         // find the first essential variable for f, g, or h
         let lbl = self.get_order().first_essential(f, g, h);
         let fx = self.condition_essential(f, lbl, true);
@@ -285,13 +301,15 @@ impl BddManager {
         let t = self.ite(fx, gx, hx);
         let f = self.ite(fxn, gxn, hxn);
 
-        if t == f { return t };
+        if t == f {
+            return t;
+        };
 
         // now we have a new BDD
-        let node = BddNode { 
+        let node = BddNode {
             low: f,
             high: t,
-            var: lbl
+            var: lbl,
         };
         let r = self.get_or_insert(node);
         self.apply_table.insert(f, g, h, r);
@@ -303,7 +321,6 @@ impl BddManager {
         let r = self.ite_helper(f, g, h);
         r
     }
-
 
     pub fn and(&mut self, f: BddPtr, g: BddPtr) -> BddPtr {
         // base case
@@ -407,7 +424,7 @@ impl BddManager {
     }
 
     /// disjoins a list of BDDs
-    pub fn or_lst(&mut self, f : &[BddPtr]) -> BddPtr {
+    pub fn or_lst(&mut self, f: &[BddPtr]) -> BddPtr {
         let mut cur_bdd = self.false_ptr();
         for &itm in f {
             cur_bdd = self.or(cur_bdd, itm);
@@ -416,7 +433,7 @@ impl BddManager {
     }
 
     /// disjoins a list of BDDs
-    pub fn and_lst(&mut self, f : &[BddPtr]) -> BddPtr {
+    pub fn and_lst(&mut self, f: &[BddPtr]) -> BddPtr {
         let mut cur_bdd = self.true_ptr();
         for &itm in f {
             cur_bdd = self.and(cur_bdd, itm);
@@ -433,14 +450,15 @@ impl BddManager {
         self.ite(f, g.neg(), g)
     }
 
-
     /// An abstract transformation on a BDD which applies a transformation `f`
     /// to all nodes for a particular variable
-    fn map_var(&mut self,
-               bdd: BddPtr,
-               lbl: VarLabel,
-               seen: &mut HashSet<BddPtr>,
-               f:&Fn(&mut BddManager, BddPtr) -> BddPtr) -> BddPtr {
+    fn map_var(
+        &mut self,
+        bdd: BddPtr,
+        lbl: VarLabel,
+        seen: &mut HashSet<BddPtr>,
+        f: &Fn(&mut BddManager, BddPtr) -> BddPtr,
+    ) -> BddPtr {
         if seen.contains(&bdd) {
             return bdd;
         }
@@ -462,7 +480,11 @@ impl BddManager {
                     var: bdd.label(),
                 };
                 let r = self.get_or_insert(new_bdd);
-                if bdd.is_compl() { r.neg() } else { r }
+                if bdd.is_compl() {
+                    r.neg()
+                } else {
+                    r
+                }
             } else {
                 // nothing changed
                 bdd
@@ -472,21 +494,29 @@ impl BddManager {
         }
     }
 
-    fn cond_helper(&mut self, bdd: BddPtr, lbl: VarLabel,
-                   value: bool,
-                   cache: &mut HashMap<BddPtr, BddPtr>) -> BddPtr {
+    fn cond_helper(
+        &mut self,
+        bdd: BddPtr,
+        lbl: VarLabel,
+        value: bool,
+        cache: &mut HashMap<BddPtr, BddPtr>,
+    ) -> BddPtr {
         if self.get_order().lt(lbl, bdd.label()) || bdd.is_const() {
             // we passed the variable in the order, we will never find it
             bdd
         } else if bdd.label() == lbl {
             let node = self.deref(bdd).into_node();
-            let r = if value {node.high} else {node.low};
-            if bdd.is_compl() { r.neg() } else { r }
+            let r = if value { node.high } else { node.low };
+            if bdd.is_compl() {
+                r.neg()
+            } else {
+                r
+            }
         } else {
             // check cache
             match cache.get(&bdd) {
                 None => (),
-                Some(v) => return *v
+                Some(v) => return *v,
             };
 
             // recurse on the children
@@ -508,7 +538,11 @@ impl BddManager {
                     var: bdd.label(),
                 };
                 let r = self.get_or_insert(new_bdd);
-                if bdd.is_compl() { r.neg() } else { r }
+                if bdd.is_compl() {
+                    r.neg()
+                } else {
+                    r
+                }
             } else {
                 // nothing changed
                 bdd
@@ -553,7 +587,11 @@ impl BddManager {
                     }
                 }
             };
-            if ptr.is_compl() { !r } else { r }
+            if ptr.is_compl() {
+                !r
+            } else {
+                r
+            }
         }
         eval_bdd_helper(self, bdd, assgn)
     }
@@ -589,34 +627,10 @@ impl BddManager {
         self.count_nodes_h(ptr, &mut HashSet::new())
     }
 
-
-
     /// The total number of nodes allocated by the manager
     pub fn total_nodes(&self) -> usize {
         self.compute_table.num_nodes()
     }
-
-    // fn count_nodes_h(&self, ptr: BddPtr, set: &mut TraverseTable<()>) -> usize {
-    //     if !set.get(&ptr).is_none() || ptr.is_const() {
-    //         return 0;
-    //     }
-    //     set.set(&ptr, ());
-    //     match ptr.ptr_type() {
-    //         PointerType::PtrFalse => 1,
-    //         PointerType::PtrTrue => 1,
-    //         PointerType::PtrNode => {
-    //             let n = self.deref(ptr).into_node();
-    //             let c_l = self.count_nodes_h(n.low, set);
-    //             let c_r = self.count_nodes_h(n.high, set);
-    //             return c_l + c_r + 1;
-    //         }
-    //     }
-    // }
-
-    // /// Count the number of nodes in a BDD
-    // pub fn count_nodes(&self, ptr: BddPtr) -> usize {
-    //     self.count_nodes_h(ptr, &mut TraverseTable::new(&self.compute_table))
-    // }
 
     /// a helper function for WMC which tracks the current variable level for
     /// on-the-fly smoothing. Returns a pair: the first element is the sum of
@@ -626,7 +640,7 @@ impl BddManager {
         &self,
         ptr: BddPtr,
         wmc: &BddWmc<T>,
-        compute_table: &mut TraverseTable<(T, Option<VarLabel>)>
+        compute_table: &mut TraverseTable<(T, Option<VarLabel>)>,
     ) -> (T, Option<VarLabel>) {
         match ptr.ptr_type() {
             PointerType::PtrTrue => (wmc.one.clone(), Some(self.get_order().last_var())),
@@ -634,7 +648,7 @@ impl BddManager {
             PointerType::PtrNode => {
                 match compute_table.get(&ptr) {
                     Some(a) => return *a,
-                    None => ()
+                    None => (),
                 };
 
                 let order = self.get_order();
@@ -650,18 +664,23 @@ impl BddManager {
                 let mut high_lvl = high_lvl_op.unwrap();
                 // smooth low
                 while order.lt(ptr.label(), low_lvl) {
-                    let (low_factor, high_factor) = wmc.var_to_val.get(&VarLabel::new(low_lvl.value())).unwrap();
+                    let (low_factor, high_factor) =
+                        wmc.var_to_val.get(&VarLabel::new(low_lvl.value())).unwrap();
                     low_v = (low_v.clone() * (*low_factor)) + (low_v * (*high_factor));
                     low_lvl = order.above(low_lvl).unwrap();
                 }
                 // smooth high
                 while order.lt(ptr.label(), high_lvl) {
-                    let (low_factor, high_factor) = wmc.var_to_val.get(&VarLabel::new(high_lvl.value())).unwrap();
+                    let (low_factor, high_factor) = wmc
+                        .var_to_val
+                        .get(&VarLabel::new(high_lvl.value()))
+                        .unwrap();
                     high_v = (high_v.clone() * (*low_factor)) + (high_v * (*high_factor));
                     high_lvl = order.above(high_lvl).unwrap();
                 }
                 // compute new
-                let (low_factor, high_factor) = wmc.var_to_val.get(&VarLabel::new(bdd.var.value())).unwrap();
+                let (low_factor, high_factor) =
+                    wmc.var_to_val.get(&VarLabel::new(bdd.var.value())).unwrap();
                 let res = (low_v * low_factor.clone()) + (high_v * high_factor.clone());
                 if order.get(ptr.label()) == 0 {
                     (res, None)
@@ -687,8 +706,10 @@ impl BddManager {
             let mut lvl = lvl_op;
             let order = self.get_order();
             while lvl.is_some() {
-                let (low_factor, high_factor) =
-                    params.var_to_val.get(&VarLabel::new(lvl.unwrap().value())).unwrap();
+                let (low_factor, high_factor) = params
+                    .var_to_val
+                    .get(&VarLabel::new(lvl.unwrap().value()))
+                    .unwrap();
                 v = (v.clone() * (*low_factor)) + (v * (*high_factor));
                 lvl = order.above(lvl.unwrap());
             }
@@ -751,7 +772,6 @@ impl BddManager {
             }
         }
     }
-
 }
 
 // check that (a \/ b) /\ a === a
@@ -800,7 +820,6 @@ fn test_newvar() {
         man.print_bdd(v1),
         man.print_bdd(r2)
     );
-
 }
 
 #[test]
@@ -809,8 +828,8 @@ fn test_wmc() {
     let v1 = man.var(VarLabel::new(0), true);
     let v2 = man.var(VarLabel::new(1), true);
     let r1 = man.or(v1, v2);
-    let weights = hashmap!{VarLabel::new(0) => (2,3),
-                           VarLabel::new(1) => (5,7)};
+    let weights = hashmap! {VarLabel::new(0) => (2,3),
+    VarLabel::new(1) => (5,7)};
     let params = BddWmc::new_with_default(0, 1, weights);
     let wmc = man.wmc(r1, &params);
     assert_eq!(wmc, 50);
@@ -822,10 +841,10 @@ fn test_wmc_smooth() {
     let v1 = man.var(VarLabel::new(0), true);
     let v2 = man.var(VarLabel::new(2), true);
     let r1 = man.or(v1, v2);
-    let weights = hashmap!{
-        VarLabel::new(0) => (2,3),
-        VarLabel::new(1) => (5,7),
-        VarLabel::new(2) => (11,13)};
+    let weights = hashmap! {
+    VarLabel::new(0) => (2,3),
+    VarLabel::new(1) => (5,7),
+    VarLabel::new(2) => (11,13)};
     let params = BddWmc::new_with_default(0, 1, weights);
     let wmc = man.wmc(r1, &params);
     assert_eq!(wmc, 1176);
@@ -835,10 +854,10 @@ fn test_wmc_smooth() {
 fn test_wmc_smooth2() {
     let man = BddManager::new_default_order(3);
     let r1 = BddPtr::true_node();
-    let weights = hashmap!{
-        VarLabel::new(0) => (2,3),
-        VarLabel::new(1) => (5,7),
-        VarLabel::new(2) => (11,13)};
+    let weights = hashmap! {
+    VarLabel::new(0) => (2,3),
+    VarLabel::new(1) => (5,7),
+    VarLabel::new(2) => (11,13)};
     let params = BddWmc::new_with_default(0, 1, weights);
     let wmc = man.wmc(r1, &params);
     assert_eq!(wmc, 1440);
@@ -868,9 +887,6 @@ fn test_condition_compl() {
         man.print_bdd(v1)
     );
 }
-
-
-
 
 #[test]
 fn test_exist() {
@@ -985,6 +1001,4 @@ fn simple_cond() {
         man.print_bdd(res),
         man.print_bdd(expected)
     );
-
 }
-

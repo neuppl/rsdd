@@ -1,10 +1,10 @@
 //! A closed-address cuckoo backing store.
 
 use backing_store::*;
-use util::zero_vec;
-use std::hash::{Hasher, Hash};
 use fnv::FnvHasher;
 use std::fmt::Debug;
+use std::hash::{Hash, Hasher};
+use util::zero_vec;
 
 /// the size of each sub-cuckoo-table, as a power of two
 const TBL_SZ: usize = 19;
@@ -42,7 +42,6 @@ fn rehash(v: usize) -> usize {
     // knuth variant on division
     // v.wrapping_mul(v.wrapping_add(3))
 }
-
 
 struct Elem<T>
 where
@@ -113,20 +112,20 @@ where
         &self.store[ptr.0 as usize]
     }
 
-
     pub fn get_or_insert(&mut self, elem: T) -> BackingPtr {
         let mut hasher = FnvHasher::default();
         elem.hash(&mut hasher);
         let mut hash_v = hasher.finish() as usize;
         // cur_idx tracks the current index in each sub-table to begin
         // searching from
-        let mut cur_idx: [BackingPtr; NUM_TBL] = [BackingPtr(0),
-                                                  // BackingPtr(0),
-                                                  // BackingPtr(0),
-                                                  BackingPtr(0),
+        let mut cur_idx: [BackingPtr; NUM_TBL] = [
+            BackingPtr(0),
+            // BackingPtr(0),
+            // BackingPtr(0),
+            BackingPtr(0),
         ];
         // index into the hash table for updates
-        let mut hash_idx : [usize; NUM_TBL] = [0, 0];
+        let mut hash_idx: [usize; NUM_TBL] = [0, 0];
         for idx in 0..NUM_TBL {
             hash_v = rehash(hash_v);
             let loc = pow_cap(hash_v, TBL_SZ);
@@ -225,12 +224,10 @@ where
         self.store.len()
     }
 
-
     pub fn get_stats(&self) -> BackingCacheStats {
         BackingCacheStats::new()
     }
 }
-
 
 #[test]
 fn cuckoo_simple() {
@@ -250,5 +247,4 @@ fn cuckoo_simple() {
     println!("fill: {}", store.fill_ratio());
     println!("max chain: {}", store.max_chain());
     println!("avg chain: {}", store.avg_chain());
-
 }

@@ -1,17 +1,16 @@
 //! A trimmed and compressed SDD with complemented edges as a
 //! collection of BDDs.
 
-use util::btree::*;
-use repr::var_label::VarLabel;
 use repr::bdd::*;
+use repr::var_label::VarLabel;
 use std::mem;
+use util::btree::*;
 
 /// holds metadata for an SDD pointer
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Ord, PartialOrd, Copy)]
 struct PackedInternalData {
-    data: u32
+    data: u32,
 }
-
 
 BITFIELD!(PackedInternalData data : u32 [
     vtree set_vtree[0..16],
@@ -37,7 +36,7 @@ pub struct SddPtr {
     /// the index into the table *or* a sub-BDD pointer, depending on the is_bdd
     /// flag
     idx: usize,
-    pack: PackedInternalData
+    pack: PackedInternalData,
 }
 
 /// An SddOr node is a vector of (prime, sub) pairs.
@@ -49,14 +48,14 @@ pub struct SddOr {
 pub enum SddPtrType {
     True,
     False,
-    Node
+    Node,
 }
 
 impl SddPtr {
     pub fn new_node(idx: usize, vtree: u16) -> SddPtr {
         SddPtr {
             idx: idx,
-            pack: PackedInternalData::new(vtree, 0, 0, 0)
+            pack: PackedInternalData::new(vtree, 0, 0, 0),
         }
     }
 
@@ -81,7 +80,7 @@ impl SddPtr {
     pub fn new_const(v: bool) -> SddPtr {
         SddPtr {
             idx: 0,
-            pack: PackedInternalData::new(0, 0, 1, if v {0} else {1})
+            pack: PackedInternalData::new(0, 0, 1, if v { 0 } else { 1 }),
         }
     }
 
@@ -89,8 +88,12 @@ impl SddPtr {
     pub fn new_bdd(ptr: BddPtr, vtree: u16) -> SddPtr {
         SddPtr {
             idx: ptr.raw() as usize,
-            pack: PackedInternalData::new(vtree, 1, if ptr.is_const() { 1 } else { 0 }, 
-                    if ptr.is_compl() { 1 } else { 0 })
+            pack: PackedInternalData::new(
+                vtree,
+                1,
+                if ptr.is_const() { 1 } else { 0 },
+                if ptr.is_compl() { 1 } else { 0 },
+            ),
         }
     }
 

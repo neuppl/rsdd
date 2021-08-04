@@ -1,4 +1,4 @@
-use std::collections::{HashMap};
+use std::collections::HashMap;
 use std::hash::Hash;
 
 #[derive(Debug, Eq, PartialEq, Hash, Clone, Copy)]
@@ -26,10 +26,7 @@ where
 
 impl<InternalRef> ExternalRefTable<InternalRef>
 where
-    InternalRef: Hash
-        + PartialEq
-        + Clone
-        + Eq,
+    InternalRef: Hash + PartialEq + Clone + Eq,
 {
     pub fn new() -> ExternalRefTable<InternalRef> {
         ExternalRefTable {
@@ -38,7 +35,6 @@ where
             count: 0,
         }
     }
-
 
     /// generates a new ExternalRef, or increments an existing ref's counter and
     /// returns it
@@ -60,15 +56,13 @@ where
                 self.ref_table.insert(new_ext, new_elem);
                 new_ext
             }
-            Some(v) => {
-                match self.ref_table.get_mut(&v) {
-                    None => panic!("invalid state: external ref with no internal representation"),
-                    Some(a) => {
-                        a.rc += 1;
-                        a.r.clone()
-                    }
+            Some(v) => match self.ref_table.get_mut(&v) {
+                None => panic!("invalid state: external ref with no internal representation"),
+                Some(a) => {
+                    a.rc += 1;
+                    a.r.clone()
                 }
-            }
+            },
         }
     }
 

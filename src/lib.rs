@@ -1,25 +1,26 @@
 //! Defines exports and the C api
-#[macro_use] mod util;
+#[macro_use]
+mod util;
+mod backing_store;
 pub mod manager;
 pub mod repr;
-mod backing_store;
 
-extern crate rand;
-extern crate fnv;
-extern crate twox_hash;
-extern crate quickersort;
 extern crate dimacs;
-extern crate pretty;
-extern crate num;
-extern crate maplit;
+extern crate fnv;
 extern crate libc;
+extern crate maplit;
+extern crate num;
+extern crate pretty;
+extern crate quickersort;
+extern crate rand;
+extern crate twox_hash;
 
-use manager::*;
 use manager::rsbdd_manager::BddManager;
 use manager::sdd_manager::SddManager;
+use manager::*;
 use repr::bdd::BddPtr;
-use repr::var_label::VarLabel;
 use repr::sdd::VTree;
+use repr::var_label::VarLabel;
 
 /// Creates a vtree leaf
 #[no_mangle]
@@ -96,7 +97,12 @@ pub extern "C" fn rsdd_xor(mgr: *mut BddManager, a: u64, b: u64) -> u64 {
 #[no_mangle]
 pub extern "C" fn rsdd_ite(mgr: *mut BddManager, a: u64, b: u64, c: u64) -> u64 {
     let mgr = unsafe { &mut *mgr };
-    mgr.ite(BddPtr::from_raw(a), BddPtr::from_raw(b), BddPtr::from_raw(c)).raw()
+    mgr.ite(
+        BddPtr::from_raw(a),
+        BddPtr::from_raw(b),
+        BddPtr::from_raw(c),
+    )
+    .raw()
 }
 
 #[no_mangle]
@@ -108,20 +114,30 @@ pub extern "C" fn rsdd_true(mgr: *mut BddManager) -> u64 {
 #[no_mangle]
 pub extern "C" fn rsdd_exists(mgr: *mut BddManager, bdd: u64, lbl: u64) -> u64 {
     let mgr = unsafe { &mut *mgr };
-    mgr.exists(BddPtr::from_raw(bdd), repr::var_label::VarLabel::new(lbl)).raw()
+    mgr.exists(BddPtr::from_raw(bdd), repr::var_label::VarLabel::new(lbl))
+        .raw()
 }
 
 #[no_mangle]
 pub extern "C" fn rsdd_condition(mgr: *mut BddManager, bdd: u64, lbl: u64, value: bool) -> u64 {
     let mgr = unsafe { &mut *mgr };
-    mgr.condition(BddPtr::from_raw(bdd), repr::var_label::VarLabel::new(lbl), value).raw()
+    mgr.condition(
+        BddPtr::from_raw(bdd),
+        repr::var_label::VarLabel::new(lbl),
+        value,
+    )
+    .raw()
 }
 
 #[no_mangle]
 pub extern "C" fn rsdd_compose(mgr: *mut BddManager, a: u64, label: u64, b: u64) -> u64 {
     let mgr = unsafe { &mut *mgr };
-    mgr.compose(BddPtr::from_raw(a), repr::var_label::VarLabel::new(label), 
-                BddPtr::from_raw(b)).raw()
+    mgr.compose(
+        BddPtr::from_raw(a),
+        repr::var_label::VarLabel::new(label),
+        BddPtr::from_raw(b),
+    )
+    .raw()
 }
 
 #[no_mangle]
@@ -160,7 +176,6 @@ pub extern "C" fn rsdd_topvar(mgr: *mut BddManager, ptr: u64) -> u64 {
     let mgr = unsafe { &mut *mgr };
     mgr.topvar(BddPtr::from_raw(ptr)).value()
 }
-
 
 #[no_mangle]
 pub extern "C" fn rsdd_negate(mgr: *mut BddManager, ptr: u64) -> u64 {

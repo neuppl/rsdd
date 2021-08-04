@@ -59,7 +59,6 @@ impl VarOrder {
         self.var_to_pos[a.value() as usize] <= self.var_to_pos[b.value() as usize]
     }
 
-
     /// returns whichever BddPtr occurs first in a given ordering
     pub fn first(&self, a: BddPtr, b: BddPtr) -> BddPtr {
         if a.is_const() {
@@ -69,14 +68,22 @@ impl VarOrder {
         } else {
             let pa = self.get(VarLabel::new(a.var()));
             let pb = self.get(VarLabel::new(b.var()));
-            if pa < pb { a } else { b }
+            if pa < pb {
+                a
+            } else {
+                b
+            }
         }
     }
 
     pub fn sort(&self, a: BddPtr, b: BddPtr) -> (BddPtr, BddPtr) {
         let pa = self.get(VarLabel::new(a.var()));
         let pb = self.get(VarLabel::new(b.var()));
-        if pa < pb { (a, b) } else { (b, a) }
+        if pa < pb {
+            (a, b)
+        } else {
+            (b, a)
+        }
     }
 
     pub fn order_iter(&self) -> Iter<usize> {
