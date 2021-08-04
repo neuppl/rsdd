@@ -88,7 +88,7 @@ impl BddManager {
         self.compute_table.order()
     }
 
-    fn deref(&self, ptr: BddPtr) -> Bdd {
+    fn deref_bdd(&self, ptr: BddPtr) -> Bdd {
         self.compute_table.deref(ptr)
     }
 
@@ -96,7 +96,7 @@ impl BddManager {
     // BDDs
     pub fn low(&self, ptr: BddPtr) -> BddPtr {
         assert!(!ptr.is_const());
-        let b = self.deref(ptr).into_node();
+        let b = self.deref_bdd(ptr).into_node();
         b.low
     }
 
@@ -104,7 +104,7 @@ impl BddManager {
     /// BDDs
     pub fn high(&self, ptr: BddPtr) -> BddPtr {
         assert!(!ptr.is_const());
-        let b = self.deref(ptr).into_node();
+        let b = self.deref_bdd(ptr).into_node();
         b.high
     }
 
@@ -135,7 +135,7 @@ impl BddManager {
     }
 
     pub fn topvar(&self, ptr: BddPtr) -> VarLabel {
-        let bdd = self.deref(ptr).into_node();
+        let bdd = self.deref_bdd(ptr).into_node();
         bdd.var
     }
 
@@ -469,7 +469,7 @@ impl BddManager {
             f(self, bdd)
         } else {
             // recurse on the children
-            let n = self.deref(bdd).into_node();
+            let n = self.deref_bdd(bdd).into_node();
             let l = self.map_var(n.low, lbl, seen, f);
             let h = self.map_var(n.high, lbl, seen, f);
             let res = if l != n.low || h != n.high {
@@ -505,7 +505,7 @@ impl BddManager {
             // we passed the variable in the order, we will never find it
             bdd
         } else if bdd.label() == lbl {
-            let node = self.deref(bdd).into_node();
+            let node = self.deref_bdd(bdd).into_node();
             let r = if value { node.high } else { node.low };
             if bdd.is_compl() {
                 r.neg()
@@ -520,7 +520,7 @@ impl BddManager {
             };
 
             // recurse on the children
-            let n = self.deref(bdd).into_node();
+            let n = self.deref_bdd(bdd).into_node();
             let l = self.cond_helper(n.low, lbl, value, cache);
             let h = self.cond_helper(n.high, lbl, value, cache);
             if l == h {
@@ -574,7 +574,7 @@ impl BddManager {
             } else if ptr.is_false() {
                 return false;
             }
-            let bdd = man.deref(ptr);
+            let bdd = man.deref_bdd(ptr);
             let r = match bdd {
                 Bdd::BddTrue => true,
                 Bdd::BddFalse => false,
@@ -615,7 +615,7 @@ impl BddManager {
             PointerType::PtrFalse => 1,
             PointerType::PtrTrue => 1,
             PointerType::PtrNode => {
-                let n = self.deref(ptr).into_node();
+                let n = self.deref_bdd(ptr).into_node();
                 let c_l = self.count_nodes_h(n.low, set);
                 let c_r = self.count_nodes_h(n.high, set);
                 return c_l + c_r + 1;
@@ -652,7 +652,7 @@ impl BddManager {
                 };
 
                 let order = self.get_order();
-                let bdd = self.deref(ptr).into_node();
+                let bdd = self.deref_bdd(ptr).into_node();
                 let (low, high) = if ptr.is_compl() {
                     (bdd.low.neg(), bdd.high.neg())
                 } else {
