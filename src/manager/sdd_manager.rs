@@ -316,11 +316,9 @@ impl<'a> SddManager {
         let lca = least_common_ancestor(&self.parent_ptr, av, bv);
 
         // check if we have this application cached
-        let reg = if a.is_compl() { (a.neg(), b.neg()) } else {(a, b)};
-        let c = self.app_cache[lca].get(reg);
+        let c = self.app_cache[lca].get((a, b));
         if c.is_some() {
-            let r = c.unwrap();
-            return if a.is_compl() { r.neg() } else { r }
+            return c.unwrap();
         }
 
         // now we determine the current iterator for primes and subs
