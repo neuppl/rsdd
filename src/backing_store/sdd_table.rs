@@ -75,6 +75,11 @@ impl SddTable {
         }
     }
 
+    /// Converts a SDD var label into its internal BDD var label; panics on failure
+    pub fn sdd_to_bdd_label(&self, label: &VarLabel) -> &VarLabel {
+        self.sdd_to_bdd.get(label).unwrap()
+    }
+
     pub fn is_bdd(&self, ptr: SddPtr) -> bool {
         match self.tables[ptr.vtree() as usize] {
             SubTable::BddSubTable{man: _, conv: _} => true,
@@ -111,6 +116,17 @@ impl SddTable {
             },
             _ => panic!("dereferencing BDD into SDD")
         }
+    }
+
+    /// Fetch the slice for a set of or-nodes; panics if this is not an SDD node
+    pub fn sdd_get_or(&self, ptr: SddPtr) -> &[(SddPtr, SddPtr)] {
+        match &self.tables[ptr.vtree() as usize] {
+            &SubTable::SddSubTable{ref tbl} => {
+                    &tbl.deref(BackingPtr(ptr.idx() as u32))
+            },
+            _ => panic!("dereferencing BDD into SDD")
+        }
+
     }
 
     /// Fetch the BDD manager for a particular SDD node level `node`

@@ -121,6 +121,14 @@ where
         r
     }
 
+    /// Attempt to extract the data from a leaf node; panics if not a leaf
+    pub fn extract_leaf(&self) -> &L {
+        match self {
+            Self::Leaf(ref v) => v,
+            _ => panic!("extracting non-leaf")
+        }
+    }
+
     /// Flatten a BTree into a depth-first iteration
     pub fn flatten(&self) -> Vec<&BTree<N, L>> {
         let mut v = Vec::new();

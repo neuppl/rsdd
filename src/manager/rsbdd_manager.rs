@@ -70,10 +70,9 @@ impl BddManager {
     }
 
     pub fn new(order: VarOrder) -> BddManager {
-        let len = order.len();
         BddManager {
             compute_table: BddTable::new(order),
-            apply_table: BddApplyTable::new(len),
+            apply_table: BddApplyTable::new(),
         }
     }
 
@@ -202,6 +201,8 @@ impl BddManager {
 
     /// Compose `g` into `f` by substituting for `lbl`
     pub fn compose(&mut self, f: BddPtr, lbl: VarLabel, g: BddPtr) -> BddPtr {
+        // TODO this can be optimized with a specialized implementation to make
+        // it a single traversal
         let var = self.var(lbl, true);
         let iff = self.iff(var, g);
         let a = self.and(iff, f);
@@ -281,16 +282,15 @@ impl BddManager {
         let fxn = self.condition_essential(f, lbl, false);
         let gxn = self.condition_essential(g, lbl, false);
         let hxn = self.condition_essential(h, lbl, false);
-        let T = self.ite(fx, gx, hx);
-        let F = self.ite(fxn, gxn, hxn);
+        let t = self.ite(fx, gx, hx);
+        let f = self.ite(fxn, gxn, hxn);
 
-        // println!("tbdd: {}, fbdd: {}", self.print_bdd(T), self.print_bdd(F));
-        if T == F { return T };
+        if t == f { return t };
 
         // now we have a new BDD
         let node = BddNode { 
-            low: F,
-            high: T,
+            low: f,
+            high: t,
             var: lbl
         };
         let r = self.get_or_insert(node);
@@ -338,7 +338,9 @@ impl BddManager {
         } else {
             (g, f, reg_g, reg_f)
         };
+
         // check the cache
+        // increase cache efficiency!
         match self.apply_table.get(f, g, BddPtr::false_node()) {
             Some(v) => {
                 return v;

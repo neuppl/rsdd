@@ -283,7 +283,7 @@ pub fn rand_bdds() -> () {
     }
 }
 
-// #[test]
+#[test]
 pub fn big_sdd() -> () {
     // let file_contents = File::open("/Users/sholtzen/Downloads/sdd-1.1.1/cnf/c8-easier.cnf");
     let file_contents = include_str!("../cnf/c8-easier.cnf");
@@ -296,10 +296,10 @@ pub fn big_sdd() -> () {
     man.from_cnf(&cnf);
 }
 
-#[test]
+// #[test]
 pub fn big_bdd() -> () {
     // let file_contents = File::open("/Users/sholtzen/Downloads/sdd-1.1.1/cnf/c8-easier.cnf");
-    let file_contents = include_str!("../cnf/s641.cnf");
+    let file_contents = include_str!("../cnf/c8-easier.cnf");
     let cnf = Cnf::from_file(String::from(file_contents));
     let v : Vec<VarLabel> = cnf.force_order()
         .get_vec()

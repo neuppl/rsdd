@@ -72,10 +72,12 @@ impl SddPtr {
         }
     }
 
+    /// true if the node is complemented
     pub fn is_compl(&self) -> bool {
         self.pack.compl() == 1
     }
 
+    /// create a new constant value
     pub fn new_const(v: bool) -> SddPtr {
         SddPtr {
             idx: 0,
@@ -83,28 +85,41 @@ impl SddPtr {
         }
     }
 
+    /// create a new BDD pointer at the vtree `vtree`
     pub fn new_bdd(ptr: BddPtr, vtree: u16) -> SddPtr {
         SddPtr {
             idx: ptr.raw() as usize,
-            pack: PackedInternalData::new(vtree, 1, 0, 0)
+            pack: PackedInternalData::new(vtree, 1, if ptr.is_const() { 1 } else { 0 }, 
+                    if ptr.is_compl() { 1 } else { 0 })
         }
     }
 
     /// produce an uncomplemented version of an SDD
     pub fn regular(&self) -> SddPtr {
-        let mut v = self.clone();
-        v.pack.set_compl(0);
-        v
+        if self.is_bdd() {
+            // produce a regular BDD pointer
+            let bdd = BddPtr::from_raw(self.idx as u64);
+            let mut v = self.clone();
+            v.pack.set_compl(0);
+            v.idx = bdd.regular().raw() as usize;
+            v
+        } else {
+            let mut v = self.clone();
+            v.pack.set_compl(0);
+            v
+        }
     }
 
     pub fn is_const(&self) -> bool {
         self.pack.is_const() == 1
     }
 
+    /// true if this SddPtr represents a logically true Boolean function
     pub fn is_true(&self) -> bool {
         self.is_const() && !self.is_compl()
     }
 
+    /// true if this SddPtr represents a false true Boolean function
     pub fn is_false(&self) -> bool {
         self.is_const() && self.is_compl()
     }
@@ -128,6 +143,7 @@ impl SddPtr {
         self.idx
     }
 
+    /// retrieve the vtree index (as its index in a left-first depth-first traversal)
     pub fn vtree(&self) -> usize {
         self.pack.vtree() as usize
     }

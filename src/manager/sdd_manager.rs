@@ -1,7 +1,7 @@
 use repr::sdd::*;
 use backing_store::sdd_table::*;
 use repr::var_label::VarLabel;
-use std::collections::{HashMap, HashSet};
+use std::{collections::{HashMap, HashSet}};
 use manager::cache::lru::*;
 use repr::cnf::Cnf;
 use quickersort;
@@ -43,6 +43,7 @@ pub struct SddManager {
     /// a helper structure which matches the vtree and is used for efficient LCA
     /// computation
     parent_ptr: Vec<(Option<usize>, usize)>,
+    /// the apply cache
     app_cache: Vec<Lru<(SddPtr, SddPtr), SddPtr>>,
 }
 
@@ -110,39 +111,58 @@ fn is_prime(_: &VTree, idx_a: usize, idx_b: usize) -> bool {
     idx_a < idx_b
 }
 
-impl SddManager {
+impl<'a> SddManager {
     pub fn new(vtree: VTree) -> SddManager {
         let mut app_cache = Vec::new();
         for _ in vtree.in_order_iter() {
             app_cache.push(Lru::new(17));
         }
-        SddManager {
+
+        let m = SddManager {
             tbl: SddTable::new(&vtree),
             parent_ptr: into_parent_ptr_vec(&vtree),
             vtree: vtree,
-            app_cache: app_cache,
+            app_cache: app_cache
+        };
+
+        return m
+    }
+
+    /// Find the index into self.vtree that contains the label `lbl`
+    /// panics if this does not exist.
+    fn get_vtree_idx(&self, lbl: VarLabel) -> usize {
+        match self.vtree.find_leaf_idx(&|ref l| l.contains(&lbl)) {
+            None => panic!("var {:?} not found", lbl),
+            Some(a) => a,
         }
     }
 
+    /// Generate a new variable of label `lbl` with truth value `is_true`
     pub fn var(&mut self, lbl: VarLabel, is_true: bool) -> SddPtr {
-        let idx = match self.vtree.find_leaf_idx(&|ref l| l.contains(&lbl)) {
-            None => panic!("var {:?} not found", lbl),
-            Some(a) => a,
-        };
         // convert the var label into the correct BDD var label
         let vlbl = self.tbl.sdd_to_bdd.get(&lbl).unwrap().clone();
+        let idx = self.get_vtree_idx(lbl);
         SddPtr::new_bdd(self.tbl.bdd_man_mut(idx).var(vlbl, is_true), idx as u16)
     }
 
-
+    /// Logically negate an SddPtr
     pub fn negate(&self, a: SddPtr) -> SddPtr {
         a.neg()
     }
 
+    /// Get a pointer to the vtree for `f`
+    fn get_vtree(&self, f: SddPtr) -> &VTree {
+        return self.vtree.in_order_iter().nth(f.vtree()).unwrap()
+    }
+
+
     /// Compresses, trims, and canonicalizes the list of (prime, sub) terms and
-    /// generates a canonicalized term
+    /// creates a new canonicalized term
+    /// `node`: a list of (prime, sub) pairs
+    /// `table`: an index into `self.tbl` to store the result
     #[inline(never)] // for now, do not inline for profiling purposes
-    fn compress(&mut self, mut node: Vec<(SddPtr, SddPtr)>, lca: usize) -> SddPtr {
+    fn compress(&mut self, mut node: Vec<(SddPtr, SddPtr)>, table: usize) -> SddPtr {
+        // base case
         if node.len() == 0 {
             return SddPtr::new_const(false);
         } else if node.len() == 1 {
@@ -163,6 +183,8 @@ impl SddManager {
             } else if s1.is_false() && s2.is_true() {
                 return p2;
             }
+        } else if node.iter().all(|(ref _p, ref s)| s.is_true()) {
+            return SddPtr::new_const(true);
         }
 
         // this sort guarantees several things:
@@ -179,7 +201,7 @@ impl SddManager {
         }
 
         // to compress, we must disjoin all primes which share a sub
-        let mut r = Vec::with_capacity(20);
+        let mut r = Vec::new();
         let (mut p, mut s) = node[0];
         for i in 1..node.len() {
             let (cur_p, cur_s) = node[i];
@@ -211,26 +233,38 @@ impl SddManager {
             }
         }
         if r.len() == 2 {
-            // check for terms of the form [(a, T), (!a, F)] => a
+            // again check for terms of the form [(a, T), (!a, F)] => a
             let (p1, s1) = r[0];
             let (p2, s2) = r[1];
+
+            // println!("here, compressing\np1:{}\np2:{}\ns1:{}\ns2:{}", 
+            //     self.print_sdd(p1), self.print_sdd(p2), self.print_sdd(s1), self.print_sdd(s2));
+            
             if s1.is_true() && s2.is_false() {
                 return p1;
             } else if s1.is_false() && s2.is_true() {
                 return p2;
             }
         }
-        if r[0].1.is_compl() {
+        if r.iter().all(|(ref _p, ref s)| s.is_true()) {
+            return SddPtr::new_const(true);
+        }
+        if r.iter().all(|(ref _p, ref s)| s.is_false()) {
+            return SddPtr::new_const(false);
+        }
+        let res = if r[0].1.is_compl() {
             // guarantee first sub in the first node is not complemented
             // (regular form)
             // TODO looks like an unnecessary allocation here
             let compl_r = r.iter().map(|&(ref p, ref s)| (*p, s.neg())).collect();
             self.tbl
-                .get_or_insert_sdd(&SddOr { nodes: compl_r }, lca)
+                .get_or_insert_sdd(&SddOr { nodes: compl_r }, table)
                 .neg()
         } else {
-            self.tbl.get_or_insert_sdd(&SddOr { nodes: r }, lca)
-        }
+            self.tbl.get_or_insert_sdd(&SddOr { nodes: r }, table)
+        };
+        // println!("result: {}\n", self.print_sdd(res));
+        res
     }
 
     pub fn or_internal(&mut self, a: SddPtr, b: SddPtr) -> SddPtr {
@@ -282,9 +316,11 @@ impl SddManager {
         let lca = least_common_ancestor(&self.parent_ptr, av, bv);
 
         // check if we have this application cached
-        let c = self.app_cache[lca].get((a, b));
+        let reg = if a.is_compl() { (a.neg(), b.neg()) } else {(a, b)};
+        let c = self.app_cache[lca].get(reg);
         if c.is_some() {
-            return c.unwrap();
+            let r = c.unwrap();
+            return if a.is_compl() { r.neg() } else { r }
         }
 
         // now we determine the current iterator for primes and subs
@@ -295,16 +331,14 @@ impl SddManager {
         //   4. The lca is a shared parent equal to neither
         // these pointers are necessary to ensure that the vectors live
         // long enough
-        let outer_v: Vec<(SddPtr, SddPtr)>;
-        let inner_v: Vec<(SddPtr, SddPtr)>;
-        let (outer, inner) = if av == bv {
-            let outer = self.tbl.sdd_slice_or_panic(a);
-            let inner = self.tbl.sdd_slice_or_panic(b);
+        let (outer_v, inner_v) = if av == bv {
+            let outer = self.tbl.sdd_get_or(a).to_vec();
+            let inner = self.tbl.sdd_get_or(b).to_vec();
             (outer, inner)
         } else if lca == av {
-            let outer = self.tbl.sdd_slice_or_panic(a);
-            inner_v = vec![(SddPtr::new_const(true), b.regular())];
-            (outer, inner_v.as_slice())
+            let outer = self.tbl.sdd_get_or(a).to_vec();
+            let inner_v = vec![(SddPtr::new_const(true), b.regular())];
+            (outer, inner_v)
         } else if lca == bv {
             // the sub must always be true
             let v = if a.is_compl() {
@@ -312,9 +346,9 @@ impl SddManager {
             } else {
                 SddPtr::new_const(true)
             };
-            outer_v = vec![(a, v), (a.neg(), v.neg())];
-            let inner = self.tbl.sdd_slice_or_panic(b);
-            (outer_v.as_slice(), inner)
+            let outer_v = vec![(a, v), (a.neg(), v.neg())];
+            let inner = self.tbl.sdd_get_or(b).to_vec();
+            (outer_v, inner)
         } else {
             // avoid double-negations by checking to see if `a` is already
             // negated
@@ -323,28 +357,37 @@ impl SddManager {
             } else {
                 SddPtr::new_const(true)
             };
-            outer_v = vec![(a, v), (a.neg(), v.neg())];
-            inner_v = vec![(SddPtr::new_const(true), b.regular())];
-            (outer_v.as_slice(), inner_v.as_slice())
+            let outer_v = vec![(a, v), (a.neg(), v.neg())];
+            let inner_v = vec![(SddPtr::new_const(true), b.regular())];
+            (outer_v, inner_v)
         };
 
 
         // iterate over each prime/sum pair and do the relevant application
-        // TODO: Optimize this by avoiding unnecessary conjunctions of primes
-        //       specifically, from the SDD library:
-        // if p1i = p2j, then p1k x p2j = false for all k<>i
-        // if p1i = !p2j, then p1k x p2j = p1k for all k<>i
-        // if p1i*p2j=p2j, then pik x p2j = false for all k<>i
-        let mut r: Vec<(SddPtr, SddPtr)> = Vec::with_capacity(30);
-        for &(ref p1, ref s1) in outer.iter() {
+        // for these three cases:
+        // (1) if p1i = p2j or if p1i => p2j, then p1k x p2j = false for all k<>i
+        // (2) if p1i = !p2j, then p1k x p2j = p1k for all k<>i
+        // (3) no relation between primes
+        let mut r: Vec<(SddPtr, SddPtr)> = Vec::new();
+
+        // *******
+        // case (1)
+        // attempt to find two equal primes
+        
+        
+        // *******
+        // case (2)
+
+        // *******
+        // case (3)
+        for &(ref p1, ref s1) in outer_v.iter() {
             let s1 = if a.is_compl() { s1.neg() } else { *s1 };
-            for &(ref p2, ref s2) in inner.iter() {
+            for &(ref p2, ref s2) in inner_v.iter() {
                 let s2 = if b.is_compl() { s2.neg() } else { *s2 };
                 let p = self.and_rec(*p1, *p2);
                 if p.is_false() {
                     continue;
                 }
-
                 let s = self.and_rec(s1, s2);
                 // check if one of the nodes is true; if it is, we can
                 // return a `true` SddPtr here
@@ -353,7 +396,6 @@ impl SddManager {
                     self.app_cache[lca].insert((a, b), new_v.clone());
                     return new_v;
                 }
-
                 r.push((p, s));
             }
         }
@@ -374,18 +416,71 @@ impl SddManager {
 
     /// Computes `f | var = value`
     pub fn condition(&mut self, f: SddPtr, lbl: VarLabel, value: bool) -> SddPtr {
+        // TODO : this can bail out early by checking the vtree
         // check base case
         if f.is_const() {
             return f;
         } else if f.is_bdd() {
             // check if this BDD contains the label
-            let bdd = self.tbl.bdd_man_mut(f.vtree()).condition(f.as_bdd_ptr(), lbl, value);
-            return SddPtr::new_bdd(bdd, f.vtree() as u16);
+            if self.get_vtree(f).extract_leaf().contains(&lbl) {
+                // it does; condition and return
+                let mapped = self.tbl.sdd_to_bdd_label(&lbl).clone();
+                let bdd = self.tbl.bdd_man_mut(f.vtree()).condition(f.as_bdd_ptr(), mapped, value);
+                return SddPtr::new_bdd(bdd, f.vtree() as u16);
+            } else {
+                // do nothing
+                return f;
+            }
         };
-        panic!();
-        // f is a node; recurse
 
+        let mut v = Vec::new();
+        // f is a node; recurse and compress the result
+        for (prime, sub) in self.tbl.sdd_slice_or_panic(f) {
+            let newp = self.condition(*prime, lbl, value);
+            let news = self.condition(*sub, lbl, value);
+            v.push((newp, news));
+        }
+        let r = self.compress(v, f.vtree());
+        if f.is_compl() { return r.neg() } else {return r }
     }
+
+
+    /// Computes the SDD representing the logical function `if f then g else h`
+    pub fn ite(&mut self, f: SddPtr, g: SddPtr, h: SddPtr) -> SddPtr {
+        // TODO make this a primitive operation
+        let fg = self.and(f, g);
+        let negfh = self.and(f.neg(), h);
+        self.or(fg, negfh)
+    }
+
+    /// Computes the SDD representing the logical function `f <=> g`
+    pub fn iff(&mut self, f: SddPtr, g: SddPtr) -> SddPtr {
+        self.ite(f, g, g.neg())
+    }
+
+    /// Computes the SDD representing the logical function `f xor g`
+    pub fn xor(&mut self, f: SddPtr, g: SddPtr) -> SddPtr {
+        self.ite(f, g.neg(), g)
+    }
+
+    /// Existentially quantifies out the variable `lbl` from `f`
+    pub fn exists(&mut self, sdd: SddPtr, lbl: VarLabel) -> SddPtr {
+        // TODO this can be optimized by specializing it
+        let v1 = self.condition(sdd, lbl, true);
+        let v2 = self.condition(sdd, lbl, false);
+        self.or(v1, v2)
+    }
+
+    /// Compose `g` into `f` by substituting for `lbl`
+    pub fn compose(&mut self, f: SddPtr, lbl: VarLabel, g: SddPtr) -> SddPtr {
+        // TODO this can be optimized with a specialized implementation to make
+        // it a single traversal
+        let var = self.var(lbl, true);
+        let iff = self.iff(var, g);
+        let a = self.and(iff, f);
+        self.exists(a, lbl)
+    }
+
 
     fn print_sdd_internal(&self, ptr: SddPtr) -> String {
         use pretty::*;
@@ -439,7 +534,6 @@ impl SddManager {
             } else if sdd.is_true() {
                 true
             } else if sdd.is_bdd() {
-                assert!(!sdd.is_compl());
                 let mut labels: HashSet<VarLabel> = HashSet::new();
                 for lbl in man.tbl.bdd_conv(sdd.vtree()).values() {
                     labels.insert(lbl.clone());
@@ -564,4 +658,73 @@ fn simple_equality() {
     let inner = mgr.or(a, d);
     let term = mgr.and(inner, a);
     assert_eq!(a, term);
+}
+
+// check that (a \/ b) | !b === a
+#[test]
+fn sdd_simple_cond() {
+    let mut mgr = SddManager::new(even_split(&vec![VarLabel::new(0), VarLabel::new(1), VarLabel::new(2), 
+        VarLabel::new(3), VarLabel::new(4)], 2));
+    let a = mgr.var(VarLabel::new(0), true);
+    let d = mgr.var(VarLabel::new(3), true);
+    let inner = mgr.or(a, d);
+    let term = mgr.condition(inner, VarLabel::new(3), false);
+    assert_eq!(a, term, "Got:\n{}\nexpected:\n{}\n", mgr.print_sdd(term), mgr.print_sdd(a));
+}
+
+#[test]
+fn sdd_test_exist() {
+    let mut man = SddManager::new(even_split(&vec![VarLabel::new(0), VarLabel::new(1), VarLabel::new(2), 
+        VarLabel::new(3), VarLabel::new(4)], 2));
+    // 1 /\ 2 /\ 3
+    let v1 = man.var(VarLabel::new(0), true);
+    let v2 = man.var(VarLabel::new(1), true);
+    let v3 = man.var(VarLabel::new(2), true);
+    let a1 = man.and(v1, v2);
+    let r1 = man.and(a1, v3);
+    let r_expected = man.and(v1, v3);
+    let res = man.exists(r1, VarLabel::new(1));
+    assert!(
+        man.sdd_eq(r_expected, res),
+        "Got:\nOne: {}\nExpected: {}",
+        man.print_sdd(res),
+        man.print_sdd(r_expected)
+    );
+}
+
+#[test]
+fn sdd_ite1() {
+    let mut man = SddManager::new(even_split(&vec![VarLabel::new(0), VarLabel::new(1), VarLabel::new(2), 
+        VarLabel::new(3), VarLabel::new(4)], 2));
+    let v1 = man.var(VarLabel::new(0), true);
+    let v2 = man.var(VarLabel::new(1), true);
+    let r1 = man.or(v1, v2);
+    let r2 = man.ite(r1, v1, SddPtr::new_const(false));
+    assert!(
+        man.sdd_eq(v1, r2),
+        "Not eq:\n {}\n{}",
+        man.print_sdd(v1),
+        man.print_sdd(r2)
+    );
+}
+
+#[test]
+fn sdd_circuit1() {
+    let mut man = SddManager::new(even_split(&vec![VarLabel::new(0), VarLabel::new(1), VarLabel::new(2), 
+        VarLabel::new(3), VarLabel::new(4)], 2));
+    let x = man.var(VarLabel::new(0), false);
+    let y = man.var(VarLabel::new(1), true);
+    let delta = man.and(x, y);
+    let yp = man.var(VarLabel::new(2), true);
+    let inner = man.iff(yp, y);
+    let conj = man.and(inner, delta);
+    let res = man.exists(conj, VarLabel::new(1));
+
+    let expected = man.and(x, yp);
+    assert!(
+        man.sdd_eq(res, expected),
+        "Not eq:\nGot: {}\nExpected: {}",
+        man.print_sdd(res),
+        man.print_sdd(expected)
+    );
 }

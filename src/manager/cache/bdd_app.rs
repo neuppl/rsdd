@@ -45,8 +45,8 @@ pub struct BddApplyTable {
 }
 
 impl BddApplyTable {
-    pub fn new(num_vars: usize) -> BddApplyTable {
-        let mut tbl = BddApplyTable {
+    pub fn new() -> BddApplyTable {
+        let tbl = BddApplyTable {
             table: Lru::new(INITIAL_CAPACITY),
         };
         tbl
@@ -55,12 +55,10 @@ impl BddApplyTable {
     /// Insert an ite (f, g, h) into the apply table
     pub fn insert(&mut self, f: BddPtr, g: BddPtr, h: BddPtr, res: BddPtr) -> () {
         let (ite, compl) = Ite::new(f, g, h);
-        let tbl = f.var() as usize;
         self.table.insert(ite, if compl {res.neg()} else {res});
     }
 
     pub fn get(&mut self, f: BddPtr, g: BddPtr, h: BddPtr) -> Option<BddPtr> {
-        let tbl = f.var() as usize;
         let (ite, compl) = Ite::new(f, g, h);
         let r = self.table.get(ite);
         if compl { r.map(|v| v.neg()) } else { r }
