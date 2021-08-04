@@ -58,7 +58,8 @@ from these for the following reasons:
 * The API does not use reference counting for memory management, and instead
   relies on the user to actively relinquish decision diagram nodes.
 * SDDs use complemented edges internally to minimize memory usage. In addition,
-  SDDs specialize to use 
+  SDDs specialize to use BDDs for right-linear v-trees.
 * These libraries are written in pure safe rust (no `unsafe`). This makes it easier
-  to quickly and safely experiment when compared `C++` or `C`, in particular with multithreading.
+  to quickly and safely experiment when compared `C++` or `C`, in particular with 
+  multithreading or with alternative hash-table back-ends.
 * A C API is provided for ease of integration (see `src/lib.rs`)
