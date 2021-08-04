@@ -795,3 +795,34 @@ fn sdd_circuit1() {
         man.print_sdd(expected)
     );
 }
+
+
+#[test]
+fn sdd_circuit2() {
+    // same as circuit1, but with a different variable order
+    let mut man = SddManager::new(even_split(
+        &vec![
+            VarLabel::new(0),
+            VarLabel::new(1),
+            VarLabel::new(2),
+            VarLabel::new(3),
+            VarLabel::new(4),
+        ],
+        2,
+    ));
+    let x = man.var(VarLabel::new(3), false);
+    let y = man.var(VarLabel::new(1), true);
+    let delta = man.and(x, y);
+    let yp = man.var(VarLabel::new(4), true);
+    let inner = man.iff(yp, y);
+    let conj = man.and(inner, delta);
+    let res = man.exists(conj, VarLabel::new(1));
+
+    let expected = man.and(x, yp);
+    assert!(
+        man.sdd_eq(res, expected),
+        "Not eq:\nGot: {}\nExpected: {}",
+        man.print_sdd(res),
+        man.print_sdd(expected)
+    );
+}
