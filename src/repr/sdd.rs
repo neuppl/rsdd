@@ -7,6 +7,7 @@ use std::mem;
 use util::btree::*;
 
 /// holds metadata for an SDD pointer
+#[repr(C)]
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Ord, PartialOrd, Copy)]
 struct PackedInternalData {
     data: u32,
@@ -31,6 +32,7 @@ impl PackedInternalData {
 }
 
 /// An SddPtr is either (1) a BDD pointer, or (2) a pointer to an SDD node.
+#[repr(C)]
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Ord, PartialOrd, Copy)]
 pub struct SddPtr {
     /// the index into the table *or* a sub-BDD pointer, depending on the is_bdd
