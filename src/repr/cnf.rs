@@ -124,14 +124,19 @@ impl Cnf {
         r
     }
 
+    pub fn linear_order(&self) -> VarOrder {
+        let v =(0..(self.num_vars)).into_iter().map(|x| VarLabel::new(x as u64)).collect();
+        return VarOrder::new(v);
+    }
+
     /// heuristically generate a variable ordering which minimizes the average
     /// clause span
     pub fn force_order(&self) -> VarOrder {
         // map from position -> label (i.e., first element is the first in the
         // order)
         let mut lbl_to_pos: Vec<usize> = (0..(self.num_vars)).collect();
-        let mut rng = thread_rng();
-        rng.shuffle(&mut lbl_to_pos);
+        // let mut rng = thread_rng();
+        // rng.shuffle(&mut lbl_to_pos);
         // perform 20 iterations of force-update
         for _ in 0..10 {
             let mut cog: Vec<f64> = Vec::with_capacity(self.clauses.len());

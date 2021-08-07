@@ -174,7 +174,6 @@ pub extern "C" fn rsdd_is_true(mgr: *mut BddManager, ptr: u64) -> bool {
 
 #[no_mangle]
 pub extern "C" fn rsdd_is_var(mgr: *mut BddManager, ptr: u64) -> bool {
-    let mgr = unsafe { &mut *mgr };
     let ptr = BddPtr::from_raw(ptr);
     !ptr.is_const()
 }

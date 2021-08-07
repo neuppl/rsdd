@@ -20,6 +20,14 @@ This project is under active research development; if you are interested in
 contributing please contact [Steven Holtzen](http://web.cs.ucla.edu/~sholtzen/)
 at `s.holtzen@northeastern.edu`.
 
+## Building
+
+After cloning the repository, the following commands are available:
+
+* `cargo build`: build a dynamically linkable library in `target/debug/`
+* `cargo build --release`: build a release build in `target/release`
+* `cargo test`: run the test suite
+
 # Example Usage
 
 The following demo shows how to quickly build a BDD, after adding `rsdd` to your

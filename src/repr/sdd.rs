@@ -1,12 +1,15 @@
-//! A trimmed and compressed SDD with complemented edges as a
-//! collection of BDDs.
+//! Defines the internal representations for a trimmed and compressed SDD with
+//! complemented edges.
 
 use repr::bdd::*;
 use repr::var_label::VarLabel;
 use std::mem;
 use util::btree::*;
 
-/// holds metadata for an SDD pointer
+/// holds metadata for an SDD pointer as a packed u32. It has the following fields:
+/// `vtree`: holds the index into a depth-first left-first traversal of the SDD vtree
+/// `is_bdd`: true if this SDD pointer points to a BDD
+/// `is_const`: true if this SDD pointer is a constant (true or false)
 #[repr(C)]
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Ord, PartialOrd, Copy)]
 struct PackedInternalData {
@@ -35,7 +38,7 @@ impl PackedInternalData {
 #[repr(C)]
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Ord, PartialOrd, Copy)]
 pub struct SddPtr {
-    /// the index into the table *or* a sub-BDD pointer, depending on the is_bdd
+    /// the index into the table *or* a BDD pointer, depending on the is_bdd
     /// flag
     idx: usize,
     pack: PackedInternalData,

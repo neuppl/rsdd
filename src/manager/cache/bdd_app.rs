@@ -1,7 +1,6 @@
 //! Apply cache for BDD operations
 use manager::cache::lru::*;
 use repr::bdd::*;
-use repr::var_label::VarLabel;
 
 const INITIAL_CAPACITY: usize = 20; // given as a power of two
 
@@ -23,7 +22,7 @@ impl Ite {
             (f, g, h) if g == h => (f, BddPtr::true_node(), g),
             (f, g, h) if f == h => (f, g, BddPtr::false_node()),
             (f, g, h) if f == h.neg() => (f, g, BddPtr::true_node()),
-            (f, g, h) if f == g.neg() => (f, BddPtr::false_node(), g),
+            (f, g, _) if f == g.neg() => (f, BddPtr::false_node(), g),
             _ => (f, g, h),
         };
 

@@ -100,10 +100,10 @@ impl SddTable {
         }
     }
 
-    /// Fetch the BDD manager for a particular SDD node level `node`
+    /// Fetch the BDD manager for a particular SDD vtree `vtree_idx`
     /// Panics if it not a BDD
-    pub fn bdd_man(&self, node: usize) -> &BddManager {
-        match &self.tables[node] {
+    pub fn bdd_man(&self, vtree_idx: usize) -> &BddManager {
+        match &self.tables[vtree_idx] {
             &SubTable::BddSubTable { ref man, ref conv } => man,
             _ => panic!("dereferencing SDD into BDD"),
         }

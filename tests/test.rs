@@ -353,14 +353,15 @@ pub fn big_sdd() -> () {
     let var_vec: Vec<VarLabel> = v.into_iter().map(|v| VarLabel::new(v as u64)).collect();
     let vtree = even_split(&var_vec, 3);
     let mut man = SddManager::new(vtree);
-    man.from_cnf(&cnf);
+    let r = man.from_cnf(&cnf);
     man.print_stats();
+    println!("num nodes: {}", man.count_nodes(r));
 }
 
-// #[test]
+#[test]
 pub fn big_bdd() -> () {
     // let file_contents = File::open("/Users/sholtzen/Downloads/sdd-1.1.1/cnf/c8-easier.cnf");
-    let file_contents = include_str!("../cnf/c8-easier.cnf");
+    let file_contents = include_str!("../cnf/c8-very-easy.cnf");
     let cnf = Cnf::from_file(String::from(file_contents));
     let v: Vec<VarLabel> = cnf
         .force_order()
@@ -369,7 +370,8 @@ pub fn big_bdd() -> () {
         .map(|x| VarLabel::new(x as u64))
         .collect();
     let mut man = BddManager::new(VarOrder::new(v));
-    man.from_cnf(&cnf);
+    let r = man.from_cnf(&cnf);
+    println!("size: {}", man.count_nodes(r))
     // assert!(man.is_false(r), "Expected unsat");
 }
 

@@ -1,3 +1,6 @@
+//! The main implementation of the SDD manager, the primary way of interacting
+//! with SDDs.
+
 use backing_store::sdd_table::*;
 use manager::cache::lru::*;
 use quickersort;
@@ -7,6 +10,8 @@ use repr::sdd::*;
 use repr::var_label::VarLabel;
 use std::collections::{HashMap, HashSet};
 use util::btree::*;
+
+use super::rsbdd_manager::BddManager;
 
 /*
 /// SDD weighted model counting parameters
@@ -168,6 +173,13 @@ impl<'a> SddManager {
         return self.vtree.in_order_iter().nth(f.vtree()).unwrap();
     }
 
+    /// get the BDD manager for `f`, where `f` is a BDD pointer
+    /// panics if `f` is not a BDD pointer
+    fn get_bdd_mgr(&self, f: SddPtr) -> &BddManager {
+        assert!(f.is_bdd());
+        &self.tbl.bdd_man(f.vtree())
+    }
+
     /// Compresses, trims, and canonicalizes the list of (prime, sub) terms and
     /// creates a new canonicalized term
     /// `node`: a list of (prime, sub) pairs
@@ -185,6 +197,8 @@ impl<'a> SddManager {
             } else if s.is_true() {
                 // the sub is true, so return the prime
                 return p;
+            } else {
+                assert!(false, "invalid SDD node")
             }
         } else if node.len() == 2 {
             // check for terms of the form [(a, T), (!a, F)] => a
@@ -232,7 +246,6 @@ impl<'a> SddManager {
         // canonicity
         // TODO: combine these into a single initial sort
         quickersort::sort_by(&mut r[..], &|a, b| a.0.cmp(&b.0));
-        r.dedup();
 
         if r.len() == 1 {
             let (p, s) = r[0];
@@ -368,23 +381,39 @@ impl<'a> SddManager {
         };
 
         // iterate over each prime/sum pair and do the relevant application
-        // for these three cases:
+        // there are 2 simplifying cases:
         // (1) if p1i = p2j or if p1i => p2j, then p1k x p2j = false for all k<>i
         // (2) if p1i = !p2j, then p1k x p2j = p1k for all k<>i
-        // (3) no relation between primes
         let mut r: Vec<(SddPtr, SddPtr)> = Vec::new();
-
-        // *******
-        // case (1)
-        // attempt to find two equal primes
-
-        // *******
-        // case (2)
-
-        // *******
-        // case (3)
         for &(ref p1, ref s1) in outer_v.iter() {
+            // check if there exists an equal prime
+            // let eq_itm = inner_v.iter().find(|(ref p2, ref _s2)| self.sdd_eq(*p1, *p2));          
             let s1 = if a.is_compl() { s1.neg() } else { *s1 };
+            // if eq_itm.is_some() {
+            //     let (_, s2) = eq_itm.unwrap();
+            //     let s2 = if b.is_compl() { s2.neg() } else { *s2 };
+            //     // this sub is the only one with a non-false prime, so no need to iterate
+            //     r.push((*p1, self.and_rec(s1, s2)));
+            //     continue;
+            // }
+
+            // check for a negated equal prime
+            // let eq_neg = inner_v.iter().find(|(ref p2, ref _s2)| self.sdd_eq(*p1, p2.neg()));          
+            // if eq_neg.is_some() {
+            //     // iterate but skip prime conjunction
+            //     for &(ref p2, ref s2) in inner_v.iter() {
+            //         if self.sdd_eq(*p1, p2.neg()) {
+            //             // skip this one; we know these primes are false when conjoined
+            //             continue;
+            //         }
+            //         let s2 = if b.is_compl() { s2.neg() } else { *s2 };
+            //         let s = self.and_rec(s1, s2);
+            //         r.push((*p1, s));
+            //     }
+            //     continue;
+            // }
+
+            // no special case
             for &(ref p2, ref s2) in inner_v.iter() {
                 let s2 = if b.is_compl() { s2.neg() } else { *s2 };
                 let p = self.and_rec(*p1, *p2);
@@ -393,13 +422,19 @@ impl<'a> SddManager {
                 }
                 let s = self.and_rec(s1, s2);
                 // check if one of the nodes is true; if it is, we can
-                // return a `true` SddPtr here
+                // return a `true` SddPtr here, for trimming
                 if p.is_true() && s.is_true() {
                     let new_v = SddPtr::new_const(true);
                     self.app_cache[lca].insert((a, b), new_v.clone());
                     return new_v;
                 }
                 r.push((p, s));
+                // check if p1 => p2 (which is true iff (p1 && p2) == p1); if it
+                // does we can stop early because the rest of the primes will be
+                // false
+                // if self.sdd_eq(*p1, p) {
+                //     break;
+                // }
             }
         }
 
@@ -490,6 +525,34 @@ impl<'a> SddManager {
         let a = self.and(iff, f);
         self.exists(a, lbl)
     }
+
+    fn count_nodes_h(&self, f: SddPtr, sddcache: &mut HashSet<SddPtr>) -> u64 {
+        if sddcache.contains(&f.regular()) {
+            return 0;
+        }
+        sddcache.insert(f.regular());
+        if f.is_const() {
+            return 1;
+        }
+        if f.is_bdd() {
+            // traverse down the BDD
+            let mgr = self.get_bdd_mgr(f);
+            let fbdd = f.as_bdd_ptr();
+            let l = SddPtr::new_bdd(mgr.low(fbdd), f.vtree() as u16);
+            let h = SddPtr::new_bdd(mgr.high(fbdd), f.vtree() as u16);
+            return 1 + self.count_nodes_h(l, sddcache) + self.count_nodes_h(h, sddcache);
+        };
+        // it's an SDD node; iterate for each node
+        self.tbl.sdd_get_or(f).iter().fold(0, |acc, (ref p, ref s)| {
+            acc + 1 + self.count_nodes_h(*p, sddcache) + self.count_nodes_h(*s, sddcache)
+        })
+    }
+
+    /// Counts the number of unique nodes in `f`
+    pub fn count_nodes(&self, f: SddPtr) -> u64 {
+        self.count_nodes_h(f, &mut HashSet::new())
+    }
+
 
     fn print_sdd_internal(&self, ptr: SddPtr) -> String {
         use pretty::*;
@@ -635,6 +698,7 @@ impl<'a> SddManager {
             }
         }
     }
+
 
     pub fn get_stats(&self) -> &SddStats {
         &self.stats
