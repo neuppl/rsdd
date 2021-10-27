@@ -10,6 +10,7 @@ use repr::bdd::*;
 use repr::boolexpr::BoolExpr;
 use repr::cnf::Cnf;
 use repr::var_label::VarLabel;
+use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
 use std::ops::Deref;
@@ -632,25 +633,19 @@ impl BddManager {
         self.compute_table.num_nodes()
     }
 
-    /// a helper function for WMC which tracks the current variable level for
-    /// on-the-fly smoothing. Returns a pair: the first element is the sum of
-    /// the node, and the second element is the expected parent of that node; in
-    /// the case of the node being the top variable, then `None` is returned
+
+
+
     fn wmc_helper<T: Num + Clone + Debug + Copy>(
         &self,
         ptr: BddPtr,
         wmc: &BddWmc<T>,
-        compute_table: &mut TraverseTable<(T, Option<VarLabel>)>,
+        smooth: bool
     ) -> (T, Option<VarLabel>) {
         match ptr.ptr_type() {
             PointerType::PtrTrue => (wmc.one.clone(), Some(self.get_order().last_var())),
             PointerType::PtrFalse => (wmc.zero.clone(), Some(self.get_order().last_var())),
             PointerType::PtrNode => {
-                match compute_table.get(&ptr) {
-                    Some(a) => return *a,
-                    None => (),
-                };
-
                 let order = self.get_order();
                 let bdd = self.deref_bdd(ptr).into_node();
                 let (low, high) = if ptr.is_compl() {
@@ -658,68 +653,122 @@ impl BddManager {
                 } else {
                     (bdd.low, bdd.high)
                 };
-                let (mut low_v, low_lvl_op) = self.wmc_helper(low, wmc, compute_table);
-                let (mut high_v, high_lvl_op) = self.wmc_helper(high, wmc, compute_table);
+                let (mut low_v, low_lvl_op) = self.wmc_helper(low, wmc, smooth);
+                let (mut high_v, high_lvl_op) = self.wmc_helper(high, wmc, smooth);
                 let mut low_lvl = low_lvl_op.unwrap();
                 let mut high_lvl = high_lvl_op.unwrap();
-                // smooth low
-                while order.lt(ptr.label(), low_lvl) {
-                    let (low_factor, high_factor) =
-                        wmc.var_to_val.get(&VarLabel::new(low_lvl.value())).unwrap();
-                    low_v = (low_v.clone() * (*low_factor)) + (low_v * (*high_factor));
-                    low_lvl = order.above(low_lvl).unwrap();
-                }
-                // smooth high
-                while order.lt(ptr.label(), high_lvl) {
-                    let (low_factor, high_factor) = wmc
-                        .var_to_val
-                        .get(&VarLabel::new(high_lvl.value()))
-                        .unwrap();
-                    high_v = (high_v.clone() * (*low_factor)) + (high_v * (*high_factor));
-                    high_lvl = order.above(high_lvl).unwrap();
+                if smooth {
+                    // smooth low
+                    while order.lt(ptr.label(), low_lvl) {
+                        let (low_factor, high_factor) = wmc.var_to_val.get(&low_lvl).unwrap();
+                        low_v = (low_v.clone() * (*low_factor)) + (low_v * (*high_factor));
+                        low_lvl = order.above(low_lvl).unwrap();
+                    }
+                    // smooth high
+                    while order.lt(ptr.label(), high_lvl) {
+                        let (low_factor, high_factor) = wmc.var_to_val.get(&high_lvl).unwrap();
+                        high_v = (high_v.clone() * (*low_factor)) + (high_v * (*high_factor));
+                        high_lvl = order.above(high_lvl).unwrap();
+                    }
                 }
                 // compute new
-                let (low_factor, high_factor) =
-                    wmc.var_to_val.get(&VarLabel::new(bdd.var.value())).unwrap();
+                let (low_factor, high_factor) = wmc.var_to_val.get(&bdd.var).unwrap();
                 let res = (low_v * low_factor.clone()) + (high_v * high_factor.clone());
                 if order.get(ptr.label()) == 0 {
                     (res, None)
                 } else {
-                    let r = (res, Some(order.above(ptr.label()).unwrap()));
-                    compute_table.set(&ptr, r);
-                    r
+                    (res, Some(order.above(ptr.label()).unwrap()))
                 }
             }
         }
     }
 
     /// Weighted-model count.
+    /// if `smooth` is true, then the BDD is smoothed in real time as the WMC is
+    /// performed. This can actually be skipped for certain classes of WMC
+    /// problems, and is a huge savings if it can be. By default, it should be
+    /// `true`.
     pub fn wmc<T: Num + Clone + Debug + Copy>(&self, ptr: BddPtr, params: &BddWmc<T>) -> T {
         // call wmc_helper and smooth the result
-        let mut tbl = TraverseTable::new(&self.compute_table);
-        let (mut v, lvl_op) = self.wmc_helper(ptr, params, &mut tbl);
+        let (mut v, lvl_op) = self.wmc_helper(ptr, params, true);
         if lvl_op.is_none() {
             // no smoothing required
             v
         } else {
-            // need to smooth
-            let mut lvl = lvl_op;
-            let order = self.get_order();
-            while lvl.is_some() {
-                let (low_factor, high_factor) = params
-                    .var_to_val
-                    .get(&VarLabel::new(lvl.unwrap().value()))
-                    .unwrap();
-                v = (v.clone() * (*low_factor)) + (v * (*high_factor));
-                lvl = order.above(lvl.unwrap());
-            }
-            v
+                let mut lvl = lvl_op;
+                let order = self.get_order();
+                while lvl.is_some() {
+                    let (low_factor, high_factor) =
+                        params.var_to_val.get(&lvl.unwrap()).unwrap();
+                    v = (v.clone() * (*low_factor)) + (v * (*high_factor));
+                    lvl = order.above(lvl.unwrap());
+                }
+                v
         }
     }
 
+
+    // /// Weighted-model count.
+    // pub fn wmc<T: Num + Clone + Debug + Copy>(&self, ptr: BddPtr, params: &BddWmc<T>) -> T {
+    //     // call wmc_helper and smooth the result
+    //     let mut tbl = TraverseTable::new(&self.compute_table);
+    //     let (mut v, lvl_op) = self.wmc_helper(ptr, params, &mut tbl);
+    //     if lvl_op.is_none() {
+    //         // no smoothing required
+    //         v
+    //     } else {
+    //         // need to smooth
+    //         let mut lvl = lvl_op;
+    //         let order = self.get_order();
+    //         while lvl.is_some() {
+    //             let (low_factor, high_factor) = params
+    //                 .var_to_val
+    //                 .get(&VarLabel::new(lvl.unwrap().value()))
+    //                 .unwrap();
+    //             v = (v.clone() * (*low_factor)) + (v * (*high_factor));
+    //             lvl = order.above(lvl.unwrap());
+    //         }
+    //         v
+    //     }
+    // }
+
+    /// Compile a BDD from a CNF
     pub fn from_cnf(&mut self, cnf: &Cnf) -> BddPtr {
         let mut cvec: Vec<BddPtr> = Vec::with_capacity(cnf.clauses().len());
-        for lit_vec in cnf.clauses().iter() {
+
+        // sort the clauses based on a best-effort bottom-up ordering of clauses
+        let mut cnf_sorted = cnf.clauses().to_vec();
+        let order = self.get_order();
+        cnf_sorted.sort_by(|c1, c2| {
+            // order the clause with the first-most variable last
+            let fst1 = c1
+                .iter()
+                .max_by(|l1, l2| {
+                    if order.lt(l1.get_label(), l2.get_label()) {
+                        Ordering::Less
+                    } else {
+                        Ordering::Equal
+                    }
+                })
+                .unwrap();
+            let fst2 = c2
+                .iter()
+                .max_by(|l1, l2| {
+                    if order.lt(l1.get_label(), l2.get_label()) {
+                        Ordering::Less
+                    } else {
+                        Ordering::Equal
+                    }
+                })
+                .unwrap();
+            if order.lt(fst1.get_label(), fst2.get_label()) {
+                Ordering::Less
+            } else {
+                Ordering::Equal
+            }
+        });
+
+        for lit_vec in cnf_sorted.iter() {
             assert!(lit_vec.len() > 0, "empty cnf");
             let (vlabel, val) = (lit_vec[0].get_label(), lit_vec[0].get_polarity());
             let mut bdd = self.var(vlabel, val);
@@ -1001,4 +1050,26 @@ fn simple_cond() {
         man.print_bdd(res),
         man.print_bdd(expected)
     );
+}
+
+
+#[test]
+fn wmc_test_2() {
+    let mut man = BddManager::new_default_order(4);
+    let x = man.var(VarLabel::new(0), true);
+    let y = man.var(VarLabel::new(1), true);
+    let f1 = man.var(VarLabel::new(2), true);
+    let f2 = man.var(VarLabel::new(3), true);
+    let map = hashmap! { VarLabel::new(0) => (1.0, 1.0),
+                             VarLabel::new(1) => (1.0, 1.0),
+                             VarLabel::new(2) => (0.8, 0.2),
+                             VarLabel::new(3) => (0.7, 0.3) };
+    let wmc = BddWmc::new_with_default(0.0, 1.0, map);
+    let iff1 = man.iff(x, f1);
+    let iff2 = man.iff(y, f2);
+    let obs = man.or(x, y);
+    let and1 = man.and(iff1, iff2);
+    let f = man.and(and1, obs);
+    assert_eq!(man.wmc(f, &wmc), 0.2*0.3 + 0.2*0.7 + 0.8*0.3);
+
 }

@@ -387,18 +387,20 @@ impl<'a> SddManager {
         let mut r: Vec<(SddPtr, SddPtr)> = Vec::new();
         for &(ref p1, ref s1) in outer_v.iter() {
             // check if there exists an equal prime
-            // let eq_itm = inner_v.iter().find(|(ref p2, ref _s2)| self.sdd_eq(*p1, *p2));          
+            let eq_itm = inner_v
+                .iter()
+                .find(|(ref p2, ref _s2)| self.sdd_eq(*p1, *p2));
             let s1 = if a.is_compl() { s1.neg() } else { *s1 };
-            // if eq_itm.is_some() {
-            //     let (_, s2) = eq_itm.unwrap();
-            //     let s2 = if b.is_compl() { s2.neg() } else { *s2 };
-            //     // this sub is the only one with a non-false prime, so no need to iterate
-            //     r.push((*p1, self.and_rec(s1, s2)));
-            //     continue;
-            // }
+            if eq_itm.is_some() {
+                let (_, s2) = eq_itm.unwrap();
+                let s2 = if b.is_compl() { s2.neg() } else { *s2 };
+                // this sub is the only one with a non-false prime, so no need to iterate
+                r.push((*p1, self.and_rec(s1, s2)));
+                continue;
+            }
 
             // check for a negated equal prime
-            // let eq_neg = inner_v.iter().find(|(ref p2, ref _s2)| self.sdd_eq(*p1, p2.neg()));          
+            // let eq_neg = inner_v.iter().find(|(ref p2, ref _s2)| self.sdd_eq(*p1, p2.neg()));
             // if eq_neg.is_some() {
             //     // iterate but skip prime conjunction
             //     for &(ref p2, ref s2) in inner_v.iter() {
@@ -432,9 +434,9 @@ impl<'a> SddManager {
                 // check if p1 => p2 (which is true iff (p1 && p2) == p1); if it
                 // does we can stop early because the rest of the primes will be
                 // false
-                // if self.sdd_eq(*p1, p) {
-                //     break;
-                // }
+                if self.sdd_eq(*p1, p) {
+                    break;
+                }
             }
         }
 
@@ -543,16 +545,18 @@ impl<'a> SddManager {
             return 1 + self.count_nodes_h(l, sddcache) + self.count_nodes_h(h, sddcache);
         };
         // it's an SDD node; iterate for each node
-        self.tbl.sdd_get_or(f).iter().fold(0, |acc, (ref p, ref s)| {
-            acc + 1 + self.count_nodes_h(*p, sddcache) + self.count_nodes_h(*s, sddcache)
-        })
+        self.tbl
+            .sdd_get_or(f)
+            .iter()
+            .fold(0, |acc, (ref p, ref s)| {
+                acc + 1 + self.count_nodes_h(*p, sddcache) + self.count_nodes_h(*s, sddcache)
+            })
     }
 
     /// Counts the number of unique nodes in `f`
     pub fn count_nodes(&self, f: SddPtr) -> u64 {
         self.count_nodes_h(f, &mut HashSet::new())
     }
-
 
     fn print_sdd_internal(&self, ptr: SddPtr) -> String {
         use pretty::*;
@@ -698,7 +702,6 @@ impl<'a> SddManager {
             }
         }
     }
-
 
     pub fn get_stats(&self) -> &SddStats {
         &self.stats
@@ -859,7 +862,6 @@ fn sdd_circuit1() {
         man.print_sdd(expected)
     );
 }
-
 
 #[test]
 fn sdd_circuit2() {

@@ -125,7 +125,10 @@ impl Cnf {
     }
 
     pub fn linear_order(&self) -> VarOrder {
-        let v =(0..(self.num_vars)).into_iter().map(|x| VarLabel::new(x as u64)).collect();
+        let v = (0..(self.num_vars))
+            .into_iter()
+            .map(|x| VarLabel::new(x as u64))
+            .collect();
         return VarOrder::new(v);
     }
 

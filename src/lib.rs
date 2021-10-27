@@ -19,7 +19,7 @@ use manager::rsbdd_manager::BddManager;
 use manager::sdd_manager::SddManager;
 use manager::*;
 use repr::bdd::BddPtr;
-use repr::sdd::{VTree, SddPtr};
+use repr::sdd::{SddPtr, VTree};
 use repr::var_label::VarLabel;
 
 /// Creates a vtree leaf
@@ -56,7 +56,6 @@ pub extern "C" fn rsdd_mk_sdd_manager(vtree: *mut VTree) -> *mut libc::c_void {
     let r = Box::new(SddManager::new(*vtree));
     Box::into_raw(r) as *mut libc::c_void
 }
-
 
 /// Create a new BDD manager with number of variables `numvars`
 #[no_mangle]
