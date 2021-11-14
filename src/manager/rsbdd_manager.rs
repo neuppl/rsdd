@@ -698,6 +698,8 @@ impl BddManager {
                 let mut lvl = lvl_op;
                 let order = self.get_order();
                 while lvl.is_some() {
+                    assert!(params.var_to_val.contains_key(&lvl.unwrap()), 
+                        "Error in weighted model count: variable index {:?} not found in weight table", lvl);
                     let (low_factor, high_factor) =
                         params.var_to_val.get(&lvl.unwrap()).unwrap();
                     v = (v.clone() * (*low_factor)) + (v * (*high_factor));
