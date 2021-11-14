@@ -194,13 +194,13 @@ impl Cnf {
                 if clause_str.is_empty() {
                     clause_str=lit_str;
                 } else {
-                    clause_str = format!("{} \\/ {}", clause_str, lit_str);
+                    clause_str = format!("{} || {}", clause_str, lit_str);
                 }
             }
             if r.is_empty() {
-                r = clause_str;
+                r = format!("({})", clause_str);
             } else {
-                r = format!(" {} /\\ ({})", r, clause_str);
+                r = format!(" {} && ({})", r, clause_str);
             }
         }
         return r
