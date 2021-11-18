@@ -58,9 +58,25 @@ impl<T: Num + Clone + Debug + Copy> BddWmc<T> {
     }
 }
 
+/// An auxiliary data structure for tracking statistics about BDD manager
+/// performance (for fine-tuning)
+struct BddManagerStats {
+    /// For now, always track the number of recursive calls. In the future,
+    /// this should probably be gated behind a debug build (since I suspect
+    /// it may have non-trivial performance overhead and synchronization cost)
+    num_recursive_calls: usize
+}
+
+impl BddManagerStats {
+    pub fn new() -> BddManagerStats {
+        BddManagerStats { num_recursive_calls: 0 }
+    }
+}
+
 pub struct BddManager {
     compute_table: BddTable,
     apply_table: BddApplyTable,
+    stats: BddManagerStats
 }
 
 impl BddManager {
@@ -74,6 +90,7 @@ impl BddManager {
         BddManager {
             compute_table: BddTable::new(order),
             apply_table: BddApplyTable::new(),
+            stats: BddManagerStats::new()
         }
     }
 
@@ -246,6 +263,7 @@ impl BddManager {
     }
 
     fn ite_helper(&mut self, f: BddPtr, g: BddPtr, h: BddPtr) -> BddPtr {
+        self.stats.num_recursive_calls += 1;
         // standardize
         // println!("ite: if {} then {} else {}", self.print_bdd(f), self.print_bdd(g), self.print_bdd(h));
         // See pgs. 115-117 of "Algorithms and Data Structures in VLSI Design"
@@ -324,6 +342,7 @@ impl BddManager {
     }
 
     pub fn and(&mut self, f: BddPtr, g: BddPtr) -> BddPtr {
+        self.stats.num_recursive_calls += 1;
         // base case
         let reg_f = f.regular();
         let reg_g = g.regular();
@@ -458,8 +477,9 @@ impl BddManager {
         bdd: BddPtr,
         lbl: VarLabel,
         seen: &mut HashSet<BddPtr>,
-        f: &Fn(&mut BddManager, BddPtr) -> BddPtr,
+        f: &dyn Fn(&mut BddManager, BddPtr) -> BddPtr,
     ) -> BddPtr {
+        self.stats.num_recursive_calls += 1;
         if seen.contains(&bdd) {
             return bdd;
         }
@@ -502,6 +522,7 @@ impl BddManager {
         value: bool,
         cache: &mut HashMap<BddPtr, BddPtr>,
     ) -> BddPtr {
+        self.stats.num_recursive_calls += 1;
         if self.get_order().lt(lbl, bdd.label()) || bdd.is_const() {
             // we passed the variable in the order, we will never find it
             bdd
@@ -822,6 +843,10 @@ impl BddManager {
                 self.or(r1, r2)
             }
         }
+    }
+
+    pub fn num_recursive_calls(&self) -> usize {
+        return self.stats.num_recursive_calls
     }
 }
 
