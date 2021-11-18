@@ -236,7 +236,6 @@ impl BddManager {
         let iff = self.iff(var, g);
         let a = self.and(iff, f);
         let r = self.exists(a, lbl);
-        println!("Composed {:?} into {:?} with var {:?}, got {:?}", self.print_bdd(g), self.print_bdd(f), lbl, self.print_bdd(r));
         r
     }
 
