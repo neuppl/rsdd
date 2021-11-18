@@ -1075,7 +1075,6 @@ fn test_compose_4() {
         man.print_bdd(res),
         man.print_bdd(expected)
     );
-    panic!()
 }
 
 #[test]
