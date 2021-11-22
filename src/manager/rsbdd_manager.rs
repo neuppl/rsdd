@@ -58,9 +58,25 @@ impl<T: Num + Clone + Debug + Copy> BddWmc<T> {
     }
 }
 
+/// An auxiliary data structure for tracking statistics about BDD manager
+/// performance (for fine-tuning)
+struct BddManagerStats {
+    /// For now, always track the number of recursive calls. In the future,
+    /// this should probably be gated behind a debug build (since I suspect
+    /// it may have non-trivial performance overhead and synchronization cost)
+    num_recursive_calls: usize
+}
+
+impl BddManagerStats {
+    pub fn new() -> BddManagerStats {
+        BddManagerStats { num_recursive_calls: 0 }
+    }
+}
+
 pub struct BddManager {
     compute_table: BddTable,
     apply_table: BddApplyTable,
+    stats: BddManagerStats
 }
 
 impl BddManager {
@@ -74,6 +90,7 @@ impl BddManager {
         BddManager {
             compute_table: BddTable::new(order),
             apply_table: BddApplyTable::new(),
+            stats: BddManagerStats::new()
         }
     }
 
@@ -218,7 +235,8 @@ impl BddManager {
         let var = self.var(lbl, true);
         let iff = self.iff(var, g);
         let a = self.and(iff, f);
-        self.exists(a, lbl)
+        let r = self.exists(a, lbl);
+        r
     }
 
     /// true if `a` represents a variable (both high and low are constant)
@@ -246,6 +264,7 @@ impl BddManager {
     }
 
     fn ite_helper(&mut self, f: BddPtr, g: BddPtr, h: BddPtr) -> BddPtr {
+        self.stats.num_recursive_calls += 1;
         // standardize
         // println!("ite: if {} then {} else {}", self.print_bdd(f), self.print_bdd(g), self.print_bdd(h));
         // See pgs. 115-117 of "Algorithms and Data Structures in VLSI Design"
@@ -285,10 +304,12 @@ impl BddManager {
         };
 
         // ok now it is normalized, see if this is in the apply table
-        match self.apply_table.get(f, g, h) {
-            Some(v) => return v,
-            None => (),
-        };
+        //match self.apply_table.get(f, g, h) {
+        //    Some(v) => {
+        //        return v
+        //    },
+        //    None => (),
+        //};
 
         // ok the work!
         // find the first essential variable for f, g, or h
@@ -324,6 +345,7 @@ impl BddManager {
     }
 
     pub fn and(&mut self, f: BddPtr, g: BddPtr) -> BddPtr {
+        self.stats.num_recursive_calls += 1;
         // base case
         let reg_f = f.regular();
         let reg_g = g.regular();
@@ -359,12 +381,12 @@ impl BddManager {
 
         // check the cache
         // increase cache efficiency!
-        match self.apply_table.get(f, g, BddPtr::false_node()) {
-            Some(v) => {
-                return v;
-            }
-            None => {}
-        };
+        //match self.apply_table.get(f, g, BddPtr::false_node()) {
+        //    Some(v) => {
+        //        return v;
+        //    }
+        //    None => {}
+        //};
 
         // now we know that these are nodes, compute the cofactors
         let topf = self.get_order().get(f.label());
@@ -458,8 +480,9 @@ impl BddManager {
         bdd: BddPtr,
         lbl: VarLabel,
         seen: &mut HashSet<BddPtr>,
-        f: &Fn(&mut BddManager, BddPtr) -> BddPtr,
+        f: &dyn Fn(&mut BddManager, BddPtr) -> BddPtr,
     ) -> BddPtr {
+        self.stats.num_recursive_calls += 1;
         if seen.contains(&bdd) {
             return bdd;
         }
@@ -502,6 +525,7 @@ impl BddManager {
         value: bool,
         cache: &mut HashMap<BddPtr, BddPtr>,
     ) -> BddPtr {
+        self.stats.num_recursive_calls += 1;
         if self.get_order().lt(lbl, bdd.label()) || bdd.is_const() {
             // we passed the variable in the order, we will never find it
             bdd
@@ -698,6 +722,8 @@ impl BddManager {
                 let mut lvl = lvl_op;
                 let order = self.get_order();
                 while lvl.is_some() {
+                    assert!(params.var_to_val.contains_key(&lvl.unwrap()), 
+                        "Error in weighted model count: variable index {:?} not found in weight table", lvl);
                     let (low_factor, high_factor) =
                         params.var_to_val.get(&lvl.unwrap()).unwrap();
                     v = (v.clone() * (*low_factor)) + (v * (*high_factor));
@@ -820,6 +846,10 @@ impl BddManager {
                 self.or(r1, r2)
             }
         }
+    }
+
+    pub fn num_recursive_calls(&self) -> usize {
+        return self.stats.num_recursive_calls
     }
 }
 
@@ -979,7 +1009,6 @@ fn test_exist_compl() {
 #[test]
 fn test_compose() {
     let mut man = BddManager::new_default_order(3);
-    // 1 /\ 2 /\ 3
     let v0 = man.var(VarLabel::new(0), true);
     let v1 = man.var(VarLabel::new(1), true);
     let v2 = man.var(VarLabel::new(2), true);
@@ -991,6 +1020,59 @@ fn test_compose() {
         "\nGot: {}\nExpected: {}",
         man.print_bdd(res),
         man.print_bdd(v0_and_v2)
+    );
+}
+
+#[test]
+fn test_compose_2() {
+    let mut man = BddManager::new_default_order(4);
+    let v0 = man.var(VarLabel::new(0), true);
+    let v1 = man.var(VarLabel::new(1), true);
+    let v2 = man.var(VarLabel::new(2), true);
+    let v3 = man.var(VarLabel::new(3), true);
+    let v0_and_v1 = man.and(v0, v1);
+    let v2_and_v3 = man.and(v2, v3);
+    let v0v2v3 = man.and(v0, v2_and_v3);
+    let res = man.compose(v0_and_v1, VarLabel::new(1), v2_and_v3);
+    assert!(
+        man.eq_bdd(res, v0v2v3),
+        "\nGot: {}\nExpected: {}",
+        man.print_bdd(res),
+        man.print_bdd(v0v2v3)
+    );
+}
+
+#[test]
+fn test_compose_3() {
+    let mut man = BddManager::new_default_order(4);
+    let v0 = man.var(VarLabel::new(0), true);
+    let v1 = man.var(VarLabel::new(1), true);
+    let v2 = man.var(VarLabel::new(2), true);
+    let f = man.ite(v0, man.false_ptr(), v1);
+    let res = man.compose(f, VarLabel::new(1), v2);
+    let expected = man.ite(v0, man.false_ptr(), v2);
+    assert!(
+        man.eq_bdd(res, expected),
+        "\nGot: {}\nExpected: {}",
+        man.print_bdd(res),
+        man.print_bdd(expected)
+    );
+}
+
+#[test]
+fn test_compose_4() {
+    let mut man = BddManager::new_default_order(20);
+    let v0 = man.var(VarLabel::new(4), true);
+    let v1 = man.var(VarLabel::new(5), true);
+    let v2 = man.var(VarLabel::new(6), true);
+    let f = man.ite(v1, man.false_ptr(), v2);
+    let res = man.compose(f, VarLabel::new(6), v0);
+    let expected = man.ite(v1, man.false_ptr(), v0);
+    assert!(
+        man.eq_bdd(res, expected),
+        "\nGot: {}\nExpected: {}",
+        man.print_bdd(res),
+        man.print_bdd(expected)
     );
 }
 

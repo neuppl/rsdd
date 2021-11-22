@@ -202,6 +202,7 @@ impl<'a> SddManager {
     }
 
     /// Get a pointer to the vtree for `f`
+    /// Equivalent to finding the variable order of a variable in a BDD
     fn get_vtree(&self, f: SddPtr) -> &VTree {
         return self.vtree.in_order_iter().nth(f.vtree()).unwrap();
     }
@@ -217,7 +218,6 @@ impl<'a> SddManager {
     /// creates a new canonicalized term
     /// `node`: a list of (prime, sub) pairs
     /// `table`: an index into `self.tbl` to store the result
-    #[inline(never)] // for now, do not inline for profiling purposes
     fn compress(&mut self, mut node: Vec<(SddPtr, SddPtr)>, table: usize) -> SddPtr {
         // base case
         if node.len() == 0 {

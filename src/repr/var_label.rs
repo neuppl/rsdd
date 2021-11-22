@@ -1,5 +1,7 @@
 //! A generic data structure for tracking variable labels throughout the library
 use std::mem;
+use std::fmt;
+ 
 
 /// number of bits allocated for variable label (limit on total number of
 /// variables)
@@ -22,7 +24,7 @@ impl VarLabel {
 }
 
 /// Literal, a variable label and its corresponding truth assignment
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Copy)]
+#[derive(Clone, PartialEq, Eq, Hash, Copy)]
 pub struct Literal {
     data: u64,
 }
@@ -46,5 +48,14 @@ impl Literal {
         ret.set_label(label.0);
         ret.set_polarity(if polarity { 1 } else { 0 });
         ret
+    }
+}
+
+impl fmt::Debug for Literal {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Literal")
+            .field("label", &self.get_label())
+            .field("polarity", &self.get_polarity())
+            .finish()
     }
 }

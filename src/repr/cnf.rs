@@ -184,4 +184,25 @@ impl Cnf {
             .collect();
         VarOrder::new(final_order)
     }
+
+    pub fn to_string(&self) -> String {
+        let mut r = String::new();
+        for clause in self.clauses.iter() {
+            let mut clause_str = String::new();
+            for lit in clause.iter() {
+                let lit_str = format!("{}{}", if lit.get_polarity() { "" } else { "!" }, lit.get_label().value());
+                if clause_str.is_empty() {
+                    clause_str=lit_str;
+                } else {
+                    clause_str = format!("{} || {}", clause_str, lit_str);
+                }
+            }
+            if r.is_empty() {
+                r = format!("({})", clause_str);
+            } else {
+                r = format!(" {} && ({})", r, clause_str);
+            }
+        }
+        return r
+    }
 }

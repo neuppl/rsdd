@@ -224,3 +224,9 @@ pub extern "C" fn rsdd_print_stats(mgr: *mut BddManager) -> () {
     let mgr = unsafe { &mut *mgr };
     mgr.print_stats();
 }
+
+#[no_mangle]
+pub extern "C" fn rsdd_num_recursive_calls(mgr: *mut BddManager) -> u64 {
+    let mgr = unsafe { &mut *mgr };
+    mgr.num_recursive_calls() as u64
+}
