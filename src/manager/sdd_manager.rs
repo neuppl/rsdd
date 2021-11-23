@@ -60,7 +60,7 @@ impl<T: Num + Clone + Debug + Copy> SddWmc<T> {
     }
 
     // Given an SDD VarLabel, set the weight in the appropriate BddWmc struct
-    pub fn set_weight(&mut self, man: SddManager, lbl: VarLabel, low: T, high: T) -> () { 
+    pub fn set_weight(&mut self, man: &mut SddManager, lbl: VarLabel, low: T, high: T) -> () { 
        let vlbl = man.tbl.sdd_to_bdd.get(&lbl).unwrap().clone(); 
        let idx = man.get_vtree_idx(lbl);
        match &mut self.wmc_structs[idx] { 
@@ -176,6 +176,53 @@ impl<'a> SddManager {
         };
 
         return m;
+    }
+
+    // Walks the Sdd, caching results of previously computed values 
+    fn unsmoothed_wmc_h<T: Num + Clone + Debug + Copy>(
+        &self, 
+        ptr: SddPtr, 
+        weights: &SddWmc<T>,
+        tbl: &mut HashMap<SddPtr, T>
+    ) -> T { 
+        match tbl.get(&ptr.regular()) { 
+            Some(v) => *v,
+            None => { 
+                if ptr.is_false() { 
+                    return weights.zero;
+                }
+                if ptr.is_true() { 
+                    return weights.one;
+                }
+                if ptr.is_bdd() { 
+                    let mgr = self.get_bdd_mgr(ptr);
+                    let bdd_ptr = ptr.as_bdd_ptr();
+                    let pot_wmc = &weights.wmc_structs[ptr.vtree()]; 
+                    let bdd_wmc = match pot_wmc { 
+                        WmcStruct::Bdd(wmc) => wmc,
+                        WmcStruct::Dummy(_) => panic!("Oh the humanity!"),
+                    }; 
+                    let wmc_val = mgr.wmc(bdd_ptr, bdd_wmc);
+                    tbl.insert(ptr.regular(), wmc_val);
+                    return wmc_val;
+                }
+                self.tbl
+                    .sdd_get_or(ptr)
+                    .iter()
+                    .fold(weights.zero, |acc, (ref p, ref s)| {
+                        acc + 
+                            (self.unsmoothed_wmc_h(*p, weights, tbl) * 
+                             self.unsmoothed_wmc_h(*s, weights, tbl))})
+            }
+        }
+    }
+
+    pub fn unsmoothed_wmc<T: Num + Clone + Debug + Copy>(
+        &mut self, 
+        ptr: SddPtr, 
+        weights: &SddWmc<T> 
+    ) -> T { 
+       self.unsmoothed_wmc_h(ptr, weights, &mut HashMap::new()) 
     }
 
 
@@ -938,20 +985,20 @@ fn sdd_wmc1() {
                 ],
                 2,);    
     let mut man = SddManager::new(vtree.clone());
-    let mut wmc_map = SddWmc::new(vtree.clone())
+    let mut wmc_map = SddWmc::new(0.0, 1.0, vtree.clone());
     let x = man.var(VarLabel::new(0), true);
-    wmc_map.set_weight(VarLabel::new(0), 1.0, 1.0);
+    wmc_map.set_weight(&mut man, VarLabel::new(0), 1.0, 1.0);
     let y = man.var(VarLabel::new(1), true);
-    wmc_map.set_weight(VarLabel::new(1), 1.0, 1.0);
+    wmc_map.set_weight(&mut man, VarLabel::new(1), 1.0, 1.0);
     let fx = man.var(VarLabel::new(2), true);
-    wmc_map.set_weight(VarLabel::new(2), 0.5, 0.5);
+    wmc_map.set_weight(&mut man, VarLabel::new(2), 0.5, 0.5);
     let fy = man.var(VarLabel::new(3), true);
-    wmc_map.set_weight(VarLabel::new(3), 0.5, 0.5);
+    wmc_map.set_weight(&mut man, VarLabel::new(3), 0.5, 0.5);
     let x_fx = man.iff(x, fx);
     let y_fy = man.iff(y, fy);
     let ptr = man.and(x_fx, y_fy);
-    let wmc_res = man.unsmoothed_wmc(ptr, &wmc_map);
-    let expected = 0.25;
+    let wmc_res: f64 = man.unsmoothed_wmc(ptr, &wmc_map);
+    let expected: f64 = 0.25;
     let diff = (wmc_res - expected).abs(); 
     assert!( 
         (diff < 0.0001), 
