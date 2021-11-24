@@ -210,9 +210,11 @@ impl<'a> SddManager {
                     .sdd_get_or(ptr)
                     .iter()
                     .fold(weights.zero, |acc, (ref p, ref s)| {
+                        let p = if ptr.is_compl() { p.neg() } else { *p };
+                        let s = if ptr.is_compl() { s.neg() } else { *s }; 
                         acc + 
-                            (self.unsmoothed_wmc_h(*p, weights, tbl) * 
-                             self.unsmoothed_wmc_h(*s, weights, tbl))})
+                            (self.unsmoothed_wmc_h(p, weights, tbl) *
+                             self.unsmoothed_wmc_h(s, weights, tbl))})
             }
         }
     }
@@ -998,7 +1000,7 @@ fn sdd_wmc1() {
     let y_fy = man.iff(y, fy);
     let ptr = man.and(x_fx, y_fy);
     let wmc_res: f64 = man.unsmoothed_wmc(ptr, &wmc_map);
-    let expected: f64 = 0.25;
+    let expected: f64 = 1.0;
     let diff = (wmc_res - expected).abs(); 
     assert!( 
         (diff < 0.0001), 
