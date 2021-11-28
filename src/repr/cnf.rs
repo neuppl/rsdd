@@ -5,6 +5,8 @@ use rand::StdRng;
 use rand::{thread_rng, Rng};
 use repr::var_label::{Literal, VarLabel};
 use std::cmp::{max, min};
+extern crate quickcheck;
+use self::quickcheck::{Arbitrary, Gen};
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct Cnf {
@@ -204,5 +206,22 @@ impl Cnf {
             }
         }
         return r
+    }
+}
+
+
+impl Arbitrary for Cnf {
+    fn arbitrary(g: &mut Gen) -> Cnf {
+        let num_vars = (u64::arbitrary(g) % 8) + 1;
+        let num_clauses = (usize::arbitrary(g) % 16) + 1;
+        let mut clauses = Vec::new();
+        for _ in 0..num_clauses {
+            let clause = vec![Literal::new(VarLabel::new(u64::arbitrary(g) % num_vars), bool::arbitrary(g)),
+                                Literal::new(VarLabel::new(u64::arbitrary(g) % num_vars), bool::arbitrary(g)),
+                                Literal::new(VarLabel::new(u64::arbitrary(g) % num_vars), bool::arbitrary(g))
+            ];
+            clauses.push(clause);
+        }
+        Cnf::new(clauses)
     }
 }
