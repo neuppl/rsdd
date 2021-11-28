@@ -5,7 +5,7 @@ use repr::bdd::*;
 const INITIAL_CAPACITY: usize = 20; // given as a power of two
 
 /// An Ite structure, assumed to be in standard form.
-#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq, Copy)]
 pub struct Ite {
     pub f: BddPtr,
     pub g: BddPtr,
@@ -19,7 +19,6 @@ impl Ite {
         // See pgs. 115-117 of "Algorithms and Data Structures in VLSI Design"
         // first, introduce constants if possible
         let (f, g, h) = match (f, g, h) {
-            (f, g, h) if g == h => (f, BddPtr::true_node(), g),
             (f, g, h) if f == h => (f, g, BddPtr::false_node()),
             (f, g, h) if f == h.neg() => (f, g, BddPtr::true_node()),
             (f, g, h) if f == g.neg() => (f, BddPtr::false_node(), h),
@@ -58,10 +57,12 @@ impl BddApplyTable {
         // convert the ITE into a canonical form
         let (ite, compl) = Ite::new(f, g, h);
         self.table.insert(ite, if compl { res.neg() } else { res });
+        println!("Inserted Ite({:?}, {:?}, {:?}, standardized {:?}", f, g, h, ite);
     }
 
     pub fn get(&mut self, f: BddPtr, g: BddPtr, h: BddPtr) -> Option<BddPtr> {
         let (ite, compl) = Ite::new(f, g, h);
+        println!("Looking up Ite({:?}, {:?}, {:?}, standardized {:?}\n", f, g, h, ite);
         let r = self.table.get(ite);
         if compl {
             r.map(|v| v.neg())
@@ -89,6 +90,15 @@ mod test_bdd_apply_table {
           tbl.insert(f, g, h, r);
           let lookup = tbl.get(f, g, h);
           r == lookup.unwrap()
+      }
+  }
+
+  quickcheck! {
+      fn insert_eq_neg(f: BddPtr, g: BddPtr, r: BddPtr) -> bool {
+          let mut tbl = super::BddApplyTable::new();
+          tbl.insert(f, BddPtr::true_node(), g, r);
+          let lookup = tbl.get(f.neg(), g.neg(), BddPtr::false_node());
+          r.neg() == lookup.unwrap()
       }
   }
 }

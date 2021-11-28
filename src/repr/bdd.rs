@@ -40,7 +40,7 @@ impl fmt::Debug for BddPtr {
             PointerType::PtrFalse => write!(f, "BddPtr(F)"),
             PointerType::PtrTrue => write!(f, "BddPtr(T)"),
             PointerType::PtrNode => {
-                write!(f, "BddPtr(Cur var: {}, Index: {})", self.var(), self.idx())
+                write!(f, "BddPtr(Cur var: {}, Is complemented: {}, Index: {})", self.var(), self.is_compl(), self.idx())
             }
         }
     }
@@ -143,11 +143,16 @@ impl BddPtr {
 
 impl Arbitrary for BddPtr {
     fn arbitrary(g: &mut Gen) -> BddPtr {
-        let vlbl = u64::arbitrary(g) % (var_label::MAX_VAR_SIZE as u64);
-        let idx = u64::arbitrary(g) % (MAX_INDEX_SIZE as u64);
-        let p = BddPtr::new(VarLabel::new(vlbl), TableIndex::new(idx));
-        let c = bool::arbitrary(g);
-        if c {p.neg()} else {p}
+        if bool::arbitrary(g) {
+            // generate a constant
+            if bool::arbitrary(g) { BddPtr::true_node() } else { BddPtr::false_node() }
+        } else {
+            let vlbl = u64::arbitrary(g) % (var_label::MAX_VAR_SIZE as u64);
+            let idx = u64::arbitrary(g) % (MAX_INDEX_SIZE as u64);
+            let p = BddPtr::new(VarLabel::new(vlbl), TableIndex::new(idx));
+            let c = bool::arbitrary(g);
+            if c {p.neg()} else {p}
+        }
     }
 }
 
