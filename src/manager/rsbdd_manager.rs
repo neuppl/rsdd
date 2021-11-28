@@ -265,6 +265,10 @@ impl BddManager {
 
     fn ite_helper(&mut self, f: BddPtr, g: BddPtr, h: BddPtr) -> BddPtr {
         self.stats.num_recursive_calls += 1;
+        // a wise man once said: there are parts of the code that are easier to
+        // prove correct than they are to debug or test. This is one of those
+        // parts.  Is it proven correct? Unfortunately, no.
+        // 
         // standardize
         // See pgs. 115-117 of "Algorithms and Data Structures in VLSI Design"
         // attempt a base case

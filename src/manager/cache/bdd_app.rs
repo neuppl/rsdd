@@ -77,3 +77,19 @@ impl BddApplyTable {
     /// Push a new application table to the back of the list
     pub fn new_last(&mut self) -> () {}
 }
+
+
+
+#[cfg(test)]
+mod test_bdd_apply_table {
+    use BddPtr;
+  quickcheck! {
+      fn insert_eq(f: BddPtr, g: BddPtr, h: BddPtr, r: BddPtr) -> bool {
+          let mut tbl = super::BddApplyTable::new();
+          tbl.insert(f, g, h, r);
+          let lookup = tbl.get(f, g, h);
+          r == lookup.unwrap()
+      }
+  }
+}
+

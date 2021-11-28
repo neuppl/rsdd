@@ -2,10 +2,14 @@ use repr::var_label::*;
 use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::mem;
+extern crate quickcheck;
+use repr::var_label;
+use self::quickcheck::{Arbitrary, Gen};
 
 /// number of bits allocated for a table index (limit on total BDDs of each
 /// variable)
 const INDEX_BITS: usize = 64 - VAR_BITS - 1; // reserve 1 bit for special
+const MAX_INDEX_SIZE: usize = 1 << INDEX_BITS;
 
 const TRUE_VALUE: u64 = 1; // the variable ID corresponding with a true value
 
@@ -41,6 +45,7 @@ impl fmt::Debug for BddPtr {
         }
     }
 }
+
 
 pub enum PointerType {
     PtrFalse,
@@ -135,6 +140,18 @@ impl BddPtr {
         VarLabel::new(self.var() as u64)
     }
 }
+
+impl Arbitrary for BddPtr {
+    fn arbitrary(g: &mut Gen) -> BddPtr {
+        let vlbl = u64::arbitrary(g) % (var_label::MAX_VAR_SIZE as u64);
+        let idx = u64::arbitrary(g) % (MAX_INDEX_SIZE as u64);
+        let p = BddPtr::new(VarLabel::new(vlbl), TableIndex::new(idx));
+        let c = bool::arbitrary(g);
+        if c {p.neg()} else {p}
+    }
+}
+
+
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BddNode {

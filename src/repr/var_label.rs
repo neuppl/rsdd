@@ -6,6 +6,7 @@ use std::fmt;
 /// number of bits allocated for variable label (limit on total number of
 /// variables)
 pub const VAR_BITS: usize = 18;
+pub const MAX_VAR_SIZE: usize = 1 << VAR_BITS;
 
 /// a label for each distinct variable in the BDD
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Copy)]
