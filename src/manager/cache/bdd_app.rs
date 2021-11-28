@@ -57,12 +57,12 @@ impl BddApplyTable {
         // convert the ITE into a canonical form
         let (ite, compl) = Ite::new(f, g, h);
         self.table.insert(ite, if compl { res.neg() } else { res });
-        println!("Inserted Ite({:?}, {:?}, {:?}, standardized {:?}", f, g, h, ite);
+        // println!("Inserted Ite({:?}, {:?}, {:?}, standardized {:?}", f, g, h, ite);
     }
 
     pub fn get(&mut self, f: BddPtr, g: BddPtr, h: BddPtr) -> Option<BddPtr> {
         let (ite, compl) = Ite::new(f, g, h);
-        println!("Looking up Ite({:?}, {:?}, {:?}, standardized {:?}\n", f, g, h, ite);
+        // println!("Looking up Ite({:?}, {:?}, {:?}, standardized {:?}\n", f, g, h, ite);
         let r = self.table.get(ite);
         if compl {
             r.map(|v| v.neg())
