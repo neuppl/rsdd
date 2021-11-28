@@ -327,7 +327,7 @@ impl BddManager {
         let r = self.get_or_insert(node);
         self.apply_table.insert(f, g, h, r);
         if r_cached.is_some() {
-            assert_eq!(r_cached.unwrap(), r);
+            assert_eq!(r_cached.unwrap(), r, "Bdds did not match: Found {}, expected {}", self.print_bdd(r_cached.unwrap()), self.print_bdd(r));
         }
         r
     }
