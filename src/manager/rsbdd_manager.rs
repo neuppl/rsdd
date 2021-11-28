@@ -304,12 +304,12 @@ impl BddManager {
         };
 
         // ok now it is normalized, see if this is in the apply table
-        //match self.apply_table.get(f, g, h) {
-        //    Some(v) => {
-        //        return v
-        //    },
-        //    None => (),
-        //};
+        match self.apply_table.get(f, g, h) {
+           Some(v) => {
+               return v
+           },
+           None => (),
+        };
 
         // ok the work!
         // find the first essential variable for f, g, or h
@@ -381,12 +381,12 @@ impl BddManager {
 
         // check the cache
         // increase cache efficiency!
-        //match self.apply_table.get(f, g, BddPtr::false_node()) {
-        //    Some(v) => {
-        //        return v;
-        //    }
-        //    None => {}
-        //};
+        match self.apply_table.get(f, g, BddPtr::false_node()) {
+           Some(v) => {
+               return v;
+           }
+           None => {}
+        };
 
         // now we know that these are nodes, compute the cofactors
         let topf = self.get_order().get(f.label());
@@ -1153,5 +1153,4 @@ fn wmc_test_2() {
     let and1 = man.and(iff1, iff2);
     let f = man.and(and1, obs);
     assert_eq!(man.wmc(f, &wmc), 0.2*0.3 + 0.2*0.7 + 0.8*0.3);
-
 }
