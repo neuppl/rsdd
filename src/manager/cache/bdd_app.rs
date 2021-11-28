@@ -13,7 +13,7 @@ pub struct Ite {
 }
 
 impl Ite {
-    /// Returns a new Ite and a Bool indicating whether to complement the Ite
+    /// Returns a new Ite in standard form and a Bool indicating whether to complement the Ite
     pub fn new(f: BddPtr, g: BddPtr, h: BddPtr) -> (Ite, bool) {
         // standardize the ite
         // See pgs. 115-117 of "Algorithms and Data Structures in VLSI Design"
@@ -22,7 +22,7 @@ impl Ite {
             (f, g, h) if g == h => (f, BddPtr::true_node(), g),
             (f, g, h) if f == h => (f, g, BddPtr::false_node()),
             (f, g, h) if f == h.neg() => (f, g, BddPtr::true_node()),
-            (f, g, _) if f == g.neg() => (f, BddPtr::false_node(), g),
+            (f, g, h) if f == g.neg() => (f, BddPtr::false_node(), h),
             _ => (f, g, h),
         };
 
