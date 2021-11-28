@@ -298,13 +298,12 @@ impl BddManager {
         };
 
         // ok now it is normalized, see if this is in the apply table
-        // match self.apply_table.get(f, g, h) {
-        //    Some(v) => {
-        //        return v
-        //    },
-        //    None => (),
-        // };
-        let r_cached = self.apply_table.get(f, g, h);
+        match self.apply_table.get(f, g, h) {
+           Some(v) => {
+               return v
+           },
+           None => (),
+        };
 
         // ok the work!
         // find the first essential variable for f, g, or h
@@ -330,9 +329,6 @@ impl BddManager {
         };
         let r = self.get_or_insert(node);
         self.apply_table.insert(f, g, h, r);
-        if r_cached.is_some() {
-            assert_eq!(r_cached.unwrap(), r, "Bdds did not match: Found {}, expected {}", self.print_bdd(r_cached.unwrap()), self.print_bdd(r));
-        }
         r
     }
 
