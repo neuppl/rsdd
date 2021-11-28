@@ -266,17 +266,7 @@ impl BddManager {
     fn ite_helper(&mut self, f: BddPtr, g: BddPtr, h: BddPtr) -> BddPtr {
         self.stats.num_recursive_calls += 1;
         // standardize
-        // println!("ite: if {} then {} else {}", self.print_bdd(f), self.print_bdd(g), self.print_bdd(h));
         // See pgs. 115-117 of "Algorithms and Data Structures in VLSI Design"
-        // first, introduce constants if possible
-        // let (f, g, h) = match (f, g, h) {
-        //     (f, g, h) if g == h => (f, BddPtr::true_node(), g),
-        //     (f, g, h) if f == h => (f, g, BddPtr::false_node()),
-        //     (f, g, h) if f == h.neg() => (f, g, BddPtr::true_node()),
-        //     (f, g, h) if f == g.neg() => (f, BddPtr::false_node(), g),
-        //     _ => (f, g, h)
-        // };
-
         // attempt a base case
         match (f, g, h) {
             (_, g, h) if g.is_false() && h.is_false() => return BddPtr::false_node(),
@@ -304,12 +294,13 @@ impl BddManager {
         };
 
         // ok now it is normalized, see if this is in the apply table
-        match self.apply_table.get(f, g, h) {
-           Some(v) => {
-               return v
-           },
-           None => (),
-        };
+        // match self.apply_table.get(f, g, h) {
+        //    Some(v) => {
+        //        return v
+        //    },
+        //    None => (),
+        // };
+        let r_cached = self.apply_table.get(f, g, h);
 
         // ok the work!
         // find the first essential variable for f, g, or h
@@ -335,6 +326,9 @@ impl BddManager {
         };
         let r = self.get_or_insert(node);
         self.apply_table.insert(f, g, h, r);
+        if r_cached.is_some() {
+            assert_eq!(r_cached.unwrap(), r);
+        }
         r
     }
 
