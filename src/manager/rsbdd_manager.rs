@@ -265,18 +265,12 @@ impl BddManager {
 
     fn ite_helper(&mut self, f: BddPtr, g: BddPtr, h: BddPtr) -> BddPtr {
         self.stats.num_recursive_calls += 1;
+        // a wise man once said: there are parts of the code that are easier to
+        // prove correct than they are to debug or test. This is one of those
+        // parts.  Is it proven correct? Unfortunately, no.
+        // 
         // standardize
-        // println!("ite: if {} then {} else {}", self.print_bdd(f), self.print_bdd(g), self.print_bdd(h));
         // See pgs. 115-117 of "Algorithms and Data Structures in VLSI Design"
-        // first, introduce constants if possible
-        // let (f, g, h) = match (f, g, h) {
-        //     (f, g, h) if g == h => (f, BddPtr::true_node(), g),
-        //     (f, g, h) if f == h => (f, g, BddPtr::false_node()),
-        //     (f, g, h) if f == h.neg() => (f, g, BddPtr::true_node()),
-        //     (f, g, h) if f == g.neg() => (f, BddPtr::false_node(), g),
-        //     _ => (f, g, h)
-        // };
-
         // attempt a base case
         match (f, g, h) {
             (_, g, h) if g.is_false() && h.is_false() => return BddPtr::false_node(),
@@ -304,12 +298,12 @@ impl BddManager {
         };
 
         // ok now it is normalized, see if this is in the apply table
-        //match self.apply_table.get(f, g, h) {
-        //    Some(v) => {
-        //        return v
-        //    },
-        //    None => (),
-        //};
+        match self.apply_table.get(f, g, h) {
+           Some(v) => {
+               return v
+           },
+           None => (),
+        };
 
         // ok the work!
         // find the first essential variable for f, g, or h
@@ -381,12 +375,12 @@ impl BddManager {
 
         // check the cache
         // increase cache efficiency!
-        //match self.apply_table.get(f, g, BddPtr::false_node()) {
+        // match self.apply_table.get(f, g, BddPtr::false_node()) {
         //    Some(v) => {
         //        return v;
         //    }
         //    None => {}
-        //};
+        // };
 
         // now we know that these are nodes, compute the cofactors
         let topf = self.get_order().get(f.label());
@@ -1153,5 +1147,41 @@ fn wmc_test_2() {
     let and1 = man.and(iff1, iff2);
     let f = man.and(and1, obs);
     assert_eq!(man.wmc(f, &wmc), 0.2*0.3 + 0.2*0.7 + 0.8*0.3);
+}
+
+
+#[cfg(test)]
+mod test_bdd_manager {
+    use repr::cnf::Cnf;
+    use repr::var_label::VarLabel;
+  quickcheck! {
+      fn test_cond_and(c: Cnf) -> bool {
+          let mut mgr = super::BddManager::new_default_order(16);
+          let cnf = mgr.from_cnf(&c);
+          let v1 = VarLabel::new(0);
+          let bdd1 = mgr.exists(cnf, v1);
+
+          let bdd2 = mgr.condition(cnf, v1, true);
+          let bdd3 = mgr.condition(cnf, v1, false);
+          let bdd4 = mgr.or(bdd2, bdd3);
+          bdd4 == bdd1
+      }
+  }
+
+  quickcheck! {
+      fn ite_iff(c1: Cnf, c2: Cnf) -> bool {
+          let mut mgr = super::BddManager::new_default_order(16);
+          let cnf1 = mgr.from_cnf(&c1);
+          let cnf2 = mgr.from_cnf(&c2);
+          let iff1 = mgr.iff(cnf1, cnf2);
+
+          let clause1 = mgr.or(cnf1, cnf2.neg());
+          let clause2 = mgr.or(cnf1.neg(), cnf2);
+          let and = mgr.and(clause1, clause2);
+
+          and == iff1
+      }
+  }
 
 }
+

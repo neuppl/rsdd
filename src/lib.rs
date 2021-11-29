@@ -1,10 +1,4 @@
 //! Defines exports and the C api
-#[macro_use]
-mod util;
-mod backing_store;
-pub mod manager;
-pub mod repr;
-
 extern crate dimacs;
 extern crate fnv;
 extern crate libc;
@@ -13,7 +7,17 @@ extern crate num;
 extern crate pretty;
 extern crate quickersort;
 extern crate rand;
+#[cfg(test)]
+#[macro_use]
+extern crate quickcheck;
 extern crate twox_hash;
+
+#[macro_use]
+mod util;
+mod backing_store;
+pub mod manager;
+pub mod repr;
+
 
 use manager::rsbdd_manager::BddManager;
 use manager::sdd_manager::SddManager;
