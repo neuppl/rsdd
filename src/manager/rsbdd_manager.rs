@@ -298,12 +298,12 @@ impl BddManager {
         };
 
         // ok now it is normalized, see if this is in the apply table
-        match self.apply_table.get(f, g, h) {
-           Some(v) => {
-               return v
-           },
-           None => (),
-        };
+        // match self.apply_table.get(f, g, h) {
+        //    Some(v) => {
+        //        return v
+        //    },
+        //    None => (),
+        // };
 
         // ok the work!
         // find the first essential variable for f, g, or h
