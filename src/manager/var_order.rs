@@ -16,7 +16,6 @@ impl VarOrder {
     pub fn new(order: Vec<VarLabel>) -> VarOrder {
         let mut v = util::malloc_vec(order.len());
         let mut pos_to_var = Vec::new();
-        // println!("order: {:?}", order);
         for i in 0..order.len() {
             v[order[i].value() as usize] = i;
             pos_to_var.push(order[i].value() as usize);

@@ -1,7 +1,8 @@
 //! A generic data structure for tracking variable labels throughout the library
 use std::mem;
 use std::fmt;
- 
+extern crate quickcheck;
+use self::quickcheck::{Arbitrary, Gen};
 
 /// number of bits allocated for variable label (limit on total number of
 /// variables)
@@ -58,5 +59,12 @@ impl fmt::Debug for Literal {
             .field("label", &self.get_label())
             .field("polarity", &self.get_polarity())
             .finish()
+    }
+}
+
+impl Arbitrary for Literal {
+     fn arbitrary(g: &mut Gen) -> Literal {
+        let varlbl = u64::arbitrary(g) % 16;
+        Literal::new(VarLabel::new(varlbl), bool::arbitrary(g))
     }
 }

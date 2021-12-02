@@ -3,16 +3,57 @@ use rand;
 use rand::distributions::IndependentSample;
 use rand::StdRng;
 use rand::{thread_rng, Rng};
+use std::collections::HashMap;
 use repr::var_label::{Literal, VarLabel};
 use std::cmp::{max, min};
 extern crate quickcheck;
 use self::quickcheck::{Arbitrary, Gen};
+#[macro_use]
+use maplit::*;
+
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct Cnf {
     clauses: Vec<Vec<Literal>>,
     num_vars: usize,
 }
+
+pub struct AssignmentIter {
+    cur: Option<Vec<bool>>,
+    num_vars: usize
+}
+
+impl AssignmentIter {
+    pub fn new(num_vars: usize) -> AssignmentIter {
+        AssignmentIter {
+            cur: None, num_vars
+        }
+    }
+}
+
+impl Iterator for AssignmentIter {
+    type Item = Vec<bool>;
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.cur.is_none() {
+            self.cur = Some((0..self.num_vars).map(|_| false).collect());
+            return self.cur.clone()
+        } else {
+            // attempt to do a binary increment of the current state
+            let (new_c, carry) = self.cur.as_ref().unwrap().iter().fold((Vec::new(), true), |(mut cur_l, carry), cur_assgn| {
+                // half-adder
+                let new_itm = cur_assgn ^ carry;
+                let new_carry = *cur_assgn && carry;
+                cur_l.push(new_itm);
+                (cur_l, new_carry)
+            });
+            
+            self.cur = Some(new_c);
+            if carry { None } else { self.cur.clone() }
+        }
+    }
+}
+
+
 
 impl Cnf {
     pub fn from_file(v: String) -> Cnf {
@@ -43,6 +84,7 @@ impl Cnf {
             num_vars: m + 1,
         }
     }
+
 
     pub fn rand_cnf(rng: &mut StdRng, num_vars: usize, num_clauses: usize) -> Cnf {
         assert!(num_clauses > 2, "requires at least 2 clauses in CNF");
@@ -81,16 +123,36 @@ impl Cnf {
         self.clauses.as_slice()
     }
 
-    pub fn new(clauses: Vec<Vec<Literal>>) -> Cnf {
-        let mut m = 0;
-        for clause in clauses.iter() {
+    /// evaluate this CNF on an assignment
+    /// assignment[x] is the assignment to VarLabel(x)
+    pub fn eval(&self, assignment: &Vec<bool>) -> bool {
+        assert!(assignment.len() >= self.num_vars());
+        for clause in self.clauses.iter() {
+            let mut clause_sat = false;
             for lit in clause.iter() {
-                m = max(lit.get_label().value(), m);
+                let assgn = assignment[lit.label() as usize];
+                if lit.get_polarity() == assgn { clause_sat = true; }
+            }
+            if !clause_sat {
+                return false;
             }
         }
+        // no unsat clauses
+        return true;
+    }
+
+    pub fn new(mut clauses: Vec<Vec<Literal>>) -> Cnf {
+        let mut m = 0;
+        clauses.retain(|x| x.len() > 0);
+        for clause in clauses.iter() {
+            for lit in clause.iter() {
+                m = max(lit.get_label().value() + 1, m);
+            }
+        }
+        // filter out empty clauses
         Cnf {
             clauses: clauses,
-            num_vars: (m + 1) as usize,
+            num_vars: m as usize,
         }
     }
 
@@ -120,10 +182,29 @@ impl Cnf {
             lbl_to_pos[lbl.get_label().value() as usize] + acc
         });
         let r = (sum as f64) / (clause.len() as f64);
-        // println!("   clause: {:?}, lbl: {:?}, cog: {}",
-        //          clause, lbl_to_pos, r
-        // );
         r
+    }
+
+    /// compute a weighted model count of a CNF
+    /// Note: not efficient! this is exponential in #variables
+    /// mostly for internal testing purposes 
+    pub fn wmc(&self, weights: &HashMap<VarLabel, (usize, usize)>) -> usize {
+        let mut total = 0;
+        let mut weight_vec = Vec::new();
+        for i in 0..self.num_vars() {
+            weight_vec.push(weights[&VarLabel::new(i as u64)]);
+        }
+        for assgn in AssignmentIter::new(self.num_vars()) {
+            if assgn.is_empty() { break };
+            if self.eval(&assgn) {
+                let assgn_w = assgn.iter().enumerate().fold(1, |v, (idx, &polarity)| {
+                    let (loww, highw) = weight_vec[idx];
+                    v * (if polarity { highw } else { loww })
+                });
+                total += assgn_w;
+            }
+        }
+        return total
     }
 
     pub fn linear_order(&self) -> VarOrder {
@@ -224,4 +305,15 @@ impl Arbitrary for Cnf {
         }
         Cnf::new(clauses)
     }
+}
+
+#[test]
+fn test_cnf_wmc() {
+    let v = vec![vec![Literal::new(VarLabel::new(0), true), Literal::new(VarLabel::new(1), false)]];
+    let cnf = Cnf::new(v);
+    let weights = hashmap! {
+        VarLabel::new(0) => (1, 1),
+        VarLabel::new(1) => (1, 1),
+    };
+    assert_eq!(cnf.wmc(&weights), 3);
 }
