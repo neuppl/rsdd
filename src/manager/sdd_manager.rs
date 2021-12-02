@@ -210,10 +210,9 @@ impl<'a> SddManager {
                     .sdd_get_or(ptr)
                     .iter()
                     .fold(weights.zero, |acc, (ref p, ref s)| {
-                        let p = if ptr.is_compl() { p.neg() } else { *p };
                         let s = if ptr.is_compl() { s.neg() } else { *s }; 
                         acc + 
-                            (self.unsmoothed_wmc_h(p, weights, tbl) *
+                            (self.unsmoothed_wmc_h(*p, weights, tbl) *
                              self.unsmoothed_wmc_h(s, weights, tbl))})
             }
         }
@@ -1008,4 +1007,31 @@ fn sdd_wmc1() {
         diff, 
         wmc_res
     );
+}
+
+#[test]
+fn sdd_wmc2() {
+    let vtree = even_split(&vec![
+        VarLabel::new(0),
+        VarLabel::new(1),
+        VarLabel::new(2),
+        VarLabel::new(3),
+    ],
+    2,);
+    let mut man = SddManager::new(vtree.clone());
+    let mut wmc_map = SddWmc::new(0.0, 1.0, vtree.clone());
+    let x = man.var(VarLabel::new(0), true);
+    wmc_map.set_weight(&mut man, VarLabel::new(0), 1.0, 1.0);
+    let y = man.var(VarLabel::new(1), true);
+    wmc_map.set_weight(&mut man, VarLabel::new(1), 1.0, 1.0);
+    let f1 = man.var(VarLabel::new(2), true);
+    wmc_map.set_weight(&mut man, VarLabel::new(2), 0.8, 0.2);
+    let f2 = man.var(VarLabel::new(3), true);
+    wmc_map.set_weight(&mut man, VarLabel::new(3), 0.7, 0.3);
+    let iff1 = man.iff(x, f1);
+    let iff2 = man.iff(y, f2);
+    let obs = man.or(x, y);
+    let and1 = man.and(iff1, iff2);
+    let f = man.and(and1, obs);
+    assert_eq!(man.unsmoothed_wmc(f, &wmc_map), 0.2*0.3 + 0.2*0.7 + 0.8*0.3);
 }
