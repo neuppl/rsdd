@@ -11,6 +11,7 @@ extern crate rand;
 #[macro_use]
 extern crate quickcheck;
 extern crate twox_hash;
+extern crate time_test;
 
 #[macro_use]
 mod util;
