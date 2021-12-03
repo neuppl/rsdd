@@ -755,6 +755,7 @@ impl BddManager {
     /// Compile a BDD from a CNF
     pub fn from_cnf(&mut self, cnf: &Cnf) -> BddPtr {
         let mut cvec: Vec<BddPtr> = Vec::with_capacity(cnf.clauses().len());
+        if cnf.clauses().is_empty() { return BddPtr::false_node() }
 
         // sort the clauses based on a best-effort bottom-up ordering of clauses
         let mut cnf_sorted = cnf.clauses().to_vec();
@@ -789,7 +790,9 @@ impl BddManager {
         });
 
         for lit_vec in cnf_sorted.iter() {
-            assert!(lit_vec.len() > 0, "empty cnf");
+            // empty clause is False, which contributes nothing
+            if lit_vec.len() == 0 { continue };
+
             let (vlabel, val) = (lit_vec[0].get_label(), lit_vec[0].get_polarity());
             let mut bdd = self.var(vlabel, val);
             for i in 1..lit_vec.len() {
@@ -816,7 +819,8 @@ impl BddManager {
                 }
             }
         }
-        helper(&cvec, self).unwrap()
+        let r = helper(&cvec, self);
+        if r.is_none() { return BddPtr::true_node() } else { return r.unwrap() }
     }
 
     pub fn print_stats(&self) -> () {
@@ -1154,6 +1158,11 @@ fn wmc_test_2() {
 mod test_bdd_manager {
     use repr::cnf::Cnf;
     use repr::var_label::VarLabel;
+    use std::collections::HashMap;
+    use quickcheck::TestResult;
+    use std::iter::FromIterator;
+    use repr::var_label::Literal;
+    
   quickcheck! {
       fn test_cond_and(c: Cnf) -> bool {
           let mut mgr = super::BddManager::new_default_order(16);
@@ -1183,5 +1192,26 @@ mod test_bdd_manager {
       }
   }
 
+  quickcheck! {
+      fn wmc_eq(clauses: Vec<Vec<Literal>>) -> TestResult {
+          let c1 = Cnf::new(clauses);
+
+          // constrain the size
+          if c1.num_vars() == 0 || c1.num_vars() > 8 { return TestResult::discard() }
+          if c1.clauses().len() > 16 { return TestResult::discard() }
+
+          let mut mgr = super::BddManager::new_default_order(c1.num_vars());
+          let weight_map : HashMap<VarLabel, (usize, usize)> = HashMap::from_iter(
+              (0..16).map(|x| (VarLabel::new(x as u64), (2, 3))));
+          let cnf1 = mgr.from_cnf(&c1);
+          let bddwmc = super::BddWmc::new_with_default(0, 1, weight_map.clone());
+          let bddres = mgr.wmc(cnf1, &bddwmc);
+          let cnfres = c1.wmc(&weight_map);
+          if bddres != cnfres {
+            println!("error on input {}: bddres {}, cnfres {}", c1.to_string(), bddres, cnfres);
+          }
+          TestResult::from_bool(bddres == cnfres)
+      }
+  }
 }
 
