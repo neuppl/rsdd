@@ -1035,3 +1035,41 @@ fn sdd_wmc2() {
     let f = man.and(and1, obs);
     assert_eq!(man.unsmoothed_wmc(f, &wmc_map), 0.2*0.3 + 0.2*0.7 + 0.8*0.3);
 }
+
+#[cfg(test)]
+mod test_sdd_manager {
+    use repr::cnf::Cnf;
+    use repr::var_label::VarLabel;
+  quickcheck! {
+      fn test_cond_and(c: Cnf) -> bool {
+          let order : Vec<VarLabel> = (0..16).map(|x| VarLabel::new(x)).collect();
+          let mut mgr = super::SddManager::new(super::even_split(&order, 4));
+          let cnf = mgr.from_cnf(&c);
+          let v1 = VarLabel::new(0);
+          let bdd1 = mgr.exists(cnf, v1);
+
+          let bdd2 = mgr.condition(cnf, v1, true);
+          let bdd3 = mgr.condition(cnf, v1, false);
+          let bdd4 = mgr.or(bdd2, bdd3);
+          bdd4 == bdd1
+      }
+  }
+
+  quickcheck! {
+      fn ite_iff(c1: Cnf, c2: Cnf) -> bool {
+          let order : Vec<VarLabel> = (0..16).map(|x| VarLabel::new(x)).collect();
+          let mut mgr = super::SddManager::new(super::even_split(&order, 4));
+          let cnf1 = mgr.from_cnf(&c1);
+          let cnf2 = mgr.from_cnf(&c2);
+          let iff1 = mgr.iff(cnf1, cnf2);
+
+          let clause1 = mgr.or(cnf1, cnf2.neg());
+          let clause2 = mgr.or(cnf1.neg(), cnf2);
+          let and = mgr.and(clause1, clause2);
+
+          and == iff1
+      }
+  }
+
+}
+
