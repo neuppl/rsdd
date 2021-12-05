@@ -61,12 +61,22 @@ impl<T: Num + Clone + Debug + Copy> SddWmc<T> {
 
     // Given an SDD VarLabel, set the weight in the appropriate BddWmc struct
     pub fn set_weight(&mut self, man: &mut SddManager, lbl: VarLabel, low: T, high: T) -> () { 
-       let vlbl = man.tbl.sdd_to_bdd.get(&lbl).unwrap().clone(); 
+       let vlbl = man.tbl.sdd_to_bdd_label(&lbl);
        let idx = man.get_vtree_idx(lbl);
        match &mut self.wmc_structs[idx] { 
-           &mut WmcStruct::Bdd(ref mut s) => s.set_weight(vlbl, low, high),
+           &mut WmcStruct::Bdd(ref mut s) => s.set_weight(*vlbl, low, high),
            _ => panic!("Attempted to set weight for non-bdd node"),
        }
+    }
+
+    pub fn new_with_default(zero: T, one: T, mgr: &mut SddManager, tbl: &HashMap<VarLabel, (T, T)>) -> SddWmc<T> {
+        // TODO add manager num_vars so this assertion can be implemented
+        // assert!(tbl.len() == mgr.tbl.num_vars);
+        let mut n = SddWmc::new(zero, one, mgr.get_vtree_root().clone());
+        for (k, (low, high)) in tbl.iter() {
+            n.set_weight(mgr, *k, *low, *high);
+        }
+        n
     }
 
 }
@@ -253,6 +263,10 @@ impl<'a> SddManager {
     /// Equivalent to finding the variable order of a variable in a BDD
     fn get_vtree(&self, f: SddPtr) -> &VTree {
         return self.vtree.in_order_iter().nth(f.vtree()).unwrap();
+    }
+
+    pub fn get_vtree_root(&self) -> &VTree {
+        &self.vtree
     }
 
     /// get the BDD manager for `f`, where `f` is a BDD pointer
@@ -1039,7 +1053,12 @@ fn sdd_wmc2() {
 #[cfg(test)]
 mod test_sdd_manager {
     use repr::cnf::Cnf;
-    use repr::var_label::VarLabel;
+    use manager::rsbdd_manager::{BddManager, BddWmc};
+    use repr::var_label::{VarLabel, Literal};
+    use quickcheck::TestResult;
+    use std::collections::HashMap;
+    use std::iter::FromIterator;
+
   quickcheck! {
       fn test_cond_and(c: Cnf) -> bool {
           let order : Vec<VarLabel> = (0..16).map(|x| VarLabel::new(x)).collect();
@@ -1070,6 +1089,33 @@ mod test_sdd_manager {
           and == iff1
       }
   }
+
+
+  quickcheck! {
+      fn sdd_wmc_eq(clauses: Vec<Vec<Literal>>) -> TestResult {
+
+          let cnf = Cnf::new(clauses);
+          if cnf.num_vars() < 9 || cnf.num_vars() > 16 { return TestResult::discard() }
+          if cnf.clauses().len() > 16 { return TestResult::discard() }
+
+         let weight_map : HashMap<VarLabel, (f64, f64)> = HashMap::from_iter(
+              (0..cnf.num_vars()).map(|x| (VarLabel::new(x as u64), (0.5, 0.5))));
+
+          let order : Vec<VarLabel> = (0..cnf.num_vars()).map(|x| VarLabel::new(x as u64)).collect();
+          let mut mgr = super::SddManager::new(super::even_split(&order, 3));
+          let cnf_sdd = mgr.from_cnf(&cnf);
+          let sdd_wmc = super::SddWmc::new_with_default(0.0, 1.0, &mut mgr, &weight_map);
+          let sdd_res = mgr.unsmoothed_wmc(cnf_sdd, &sdd_wmc);
+
+
+          let mut bddmgr = BddManager::new_default_order(cnf.num_vars());
+          let cnf_bdd = bddmgr.from_cnf(&cnf);
+          let bdd_res = bddmgr.wmc(cnf_bdd, &BddWmc::new_with_default(0.0, 1.0, weight_map));
+
+          TestResult::from_bool(sdd_res == bdd_res)
+      }
+  }
+
 
 }
 

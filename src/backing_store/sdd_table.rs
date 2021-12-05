@@ -32,6 +32,7 @@ pub struct SddTable {
 
 impl SddTable {
     pub fn new(vtree: &VTree) -> SddTable {
+        println!("making new table with vtree {:?}", vtree);
         let mut t = SddTable {
             tables: Vec::new(),
             sdd_to_bdd: HashMap::new(),
@@ -71,6 +72,9 @@ impl SddTable {
 
     /// Converts a SDD var label into its internal BDD var label; panics on failure
     pub fn sdd_to_bdd_label(&self, label: &VarLabel) -> &VarLabel {
+        if self.sdd_to_bdd.get(label).is_none() {
+            println!("not found {:?} in table {:?}", label, self.sdd_to_bdd)
+        };
         self.sdd_to_bdd.get(label).unwrap()
     }
 
