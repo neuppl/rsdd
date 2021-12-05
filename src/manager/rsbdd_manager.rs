@@ -17,7 +17,7 @@ use std::ops::Deref;
 
 #[macro_use]
 use maplit::*;
-use time_test::time_test;
+// use time_test::time_test;
 
 use crate::backing_store;
 use crate::backing_store::bdd_table_robinhood::TraverseTable;
@@ -1155,10 +1155,10 @@ fn wmc_test_2() {
 }
 #[test]
 fn iff_regression() { 
-    time_test!();
+    // time_test!();
     let mut man = BddManager::new_default_order(0);
     let mut ptrvec = Vec::new();
-    for i in 0..20 { 
+    for i in 0..40 { 
         let vlab = man.new_var();
         let flab = man.new_var();
         let vptr = man.var(vlab, true);
@@ -1166,6 +1166,7 @@ fn iff_regression() {
         let sent = man.iff(vptr, fptr);
         ptrvec.push(sent);
     }
+    ptrvec.reverse();
     let resptr = ptrvec
         .iter()
         .fold(man.true_ptr(), |acc, x| man.and(acc, *x));

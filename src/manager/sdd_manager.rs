@@ -194,7 +194,7 @@ impl<'a> SddManager {
                 if ptr.is_true() { 
                     return weights.one;
                 }
-                if ptr.is_bdd() { 
+                if ptr.is_bdd() {
                     let mgr = self.get_bdd_mgr(ptr);
                     let bdd_ptr = ptr.as_bdd_ptr();
                     let pot_wmc = &weights.wmc_structs[ptr.vtree()]; 
