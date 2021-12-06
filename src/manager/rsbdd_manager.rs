@@ -375,13 +375,12 @@ impl BddManager {
         };
 
         // check the cache
-        // increase cache efficiency!
-        // match self.apply_table.get(f, g, BddPtr::false_node()) {
-        //    Some(v) => {
-        //        return v;
-        //    }
-        //    None => {}
-        // };
+        match self.apply_table.get(f, g, BddPtr::false_node()) {
+           Some(v) => {
+               return v;
+           }
+           None => {}
+        };
 
         // now we know that these are nodes, compute the cofactors
         let topf = self.get_order().get(f.label());
@@ -1166,7 +1165,7 @@ fn iff_regression() {
         let sent = man.iff(vptr, fptr);
         ptrvec.push(sent);
     }
-    ptrvec.reverse();
+    // ptrvec.reverse();
     let resptr = ptrvec
         .iter()
         .fold(man.true_ptr(), |acc, x| man.and(acc, *x));
