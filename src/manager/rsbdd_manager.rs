@@ -299,12 +299,12 @@ impl BddManager {
         };
 
         // ok now it is normalized, see if this is in the apply table
-        // match self.apply_table.get(f, g, h) {
-        //    Some(v) => {
-        //        return v
-        //    },
-        //    None => (),
-        // };
+        match self.apply_table.get(f, g, h) {
+           Some(v) => {
+               return v
+           },
+           None => (),
+        };
 
         // ok the work!
         // find the first essential variable for f, g, or h
@@ -368,6 +368,8 @@ impl BddManager {
 
         // now, both of the nodes are not constant
         // normalize the nodes to increase cache efficiency
+        // 
+        // TODO is this a redundant normalization?
         let (f, g, reg_f, _) = if reg_f < reg_g {
             (f, g, reg_f, reg_g)
         } else {
@@ -1196,7 +1198,12 @@ mod test_bdd_manager {
   }
 
   quickcheck! {
-      fn ite_iff(c1: Cnf, c2: Cnf) -> bool {
+      fn bdd_ite_iff(c1: Vec<Vec<Literal>>, c2: Vec<Vec<Literal>>) -> TestResult {
+          let c1 = Cnf::new(c1);
+          let c2 = Cnf::new(c2);
+
+          if c1.num_vars() == 0 || c1.num_vars() > 8 { return TestResult::discard() }
+          if c1.clauses().len() > 12 { return TestResult::discard() }
           let mut mgr = super::BddManager::new_default_order(16);
           let cnf1 = mgr.from_cnf(&c1);
           let cnf2 = mgr.from_cnf(&c2);
@@ -1206,7 +1213,7 @@ mod test_bdd_manager {
           let clause2 = mgr.or(cnf1.neg(), cnf2);
           let and = mgr.and(clause1, clause2);
 
-          and == iff1
+          TestResult::from_bool(and == iff1)
       }
   }
 
