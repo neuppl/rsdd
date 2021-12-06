@@ -90,9 +90,10 @@ impl BddManager {
     }
 
     pub fn new(order: VarOrder) -> BddManager {
+        let l = order.len();
         BddManager {
             compute_table: BddTable::new(order),
-            apply_table: BddApplyTable::new(),
+            apply_table: BddApplyTable::new(l),
             stats: BddManagerStats::new(),
         }
     }
@@ -101,7 +102,7 @@ impl BddManager {
     /// new variable at the end of the current order. Returns the label of the
     /// new variable
     pub fn new_var(&mut self) -> VarLabel {
-        self.apply_table.new_last();
+        self.apply_table.push_table();
         self.compute_table.new_last()
     }
 
@@ -842,10 +843,10 @@ impl BddManager {
     }
 
     pub fn print_stats(&self) -> () {
-        let compute_stats = self.get_backing_store_stats();
-        let apply_stats = self.apply_table.get_stats();
-        println!("BDD Manager Stats\nCompute hit count: {}\nCompute lookup count: {}\nCompute total elements: {}\nCompute average offset: {}\nApply lookup: {}\nApply miss: {}\nApply evictions: {}", 
-        compute_stats.hit_count, compute_stats.lookup_count, compute_stats.num_elements, compute_stats.avg_offset, apply_stats.lookup_count, apply_stats.miss_count, apply_stats.conflict_count);
+        // let compute_stats = self.get_backing_store_stats();
+        // let apply_stats = self.apply_table.get_stats();
+        // println!("BDD Manager Stats\nCompute hit count: {}\nCompute lookup count: {}\nCompute total elements: {}\nCompute average offset: {}\nApply lookup: {}\nApply miss: {}\nApply evictions: {}", 
+        // compute_stats.hit_count, compute_stats.lookup_count, compute_stats.num_elements, compute_stats.avg_offset, apply_stats.lookup_count, apply_stats.miss_count, apply_stats.conflict_count);
     }
 
     pub fn from_boolexpr(&mut self, expr: &BoolExpr) -> BddPtr {

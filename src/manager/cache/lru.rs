@@ -5,6 +5,9 @@ use std::fmt::Debug;
 use std::hash::{Hash, Hasher};
 use util::*;
 
+// if the LRU is GROW_RATIO% full, it will double in size on insertion
+const GROW_RATIO : f64 = 0.7;
+
 #[derive(Debug, PartialEq, Clone)]
 pub struct ApplyCacheStats {
     pub lookup_count: usize,
@@ -71,6 +74,7 @@ where
     tbl: Vec<Option<Element<K, V>>>,
     len: usize,
     cap: usize, // a particular power of 2
+    num_filled: usize, // current number of filled cells
     stat: ApplyCacheStats,
 }
 
@@ -86,6 +90,7 @@ where
             tbl: v,
             len: 0,
             cap: cap,
+            num_filled: 0,
             stat: ApplyCacheStats::new(),
         }
     }
@@ -100,6 +105,11 @@ where
     }
 
     pub fn insert(&mut self, key: K, val: V) -> () {
+        // see if we need to grow
+        if (self.num_filled as f64 / ( 1 << self.cap ) as f64) > GROW_RATIO {
+            self.grow();
+        }
+
         let mut hasher: FnvHasher = Default::default();
         key.hash(&mut hasher);
         let hash_v = hasher.finish();
@@ -107,6 +117,8 @@ where
         let e = Element::new(key, val);
         if self.tbl[pos].is_some() {
             self.stat.conflict_count += 1;
+        } else {
+            self.num_filled += 1;
         }
         self.tbl[pos] = Some(e);
     }
@@ -146,6 +158,7 @@ where
             tbl: new_v,
             len: 0,
             cap: new_sz,
+            num_filled: 0,
             stat: ApplyCacheStats::new(),
         };
 
