@@ -1,3 +1,5 @@
+[![Build](https://github.com/SHoltzen/rsdd/actions/workflows/rust.yml/badge.svg)](https://github.com/SHoltzen/rsdd/actions/workflows/rust.yml)
+
 # RSDD
 
 This library is a  `rust` implementation of decision diagrams ([binary decision
