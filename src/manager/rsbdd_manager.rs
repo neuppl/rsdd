@@ -65,19 +65,21 @@ struct BddManagerStats {
     /// For now, always track the number of recursive calls. In the future,
     /// this should probably be gated behind a debug build (since I suspect
     /// it may have non-trivial performance overhead and synchronization cost)
-    num_recursive_calls: usize
+    num_recursive_calls: usize,
 }
 
 impl BddManagerStats {
     pub fn new() -> BddManagerStats {
-        BddManagerStats { num_recursive_calls: 0 }
+        BddManagerStats {
+            num_recursive_calls: 0,
+        }
     }
 }
 
 pub struct BddManager {
     compute_table: BddTable,
     apply_table: BddApplyTable,
-    stats: BddManagerStats
+    stats: BddManagerStats,
 }
 
 impl BddManager {
@@ -91,7 +93,7 @@ impl BddManager {
         BddManager {
             compute_table: BddTable::new(order),
             apply_table: BddApplyTable::new(),
-            stats: BddManagerStats::new()
+            stats: BddManagerStats::new(),
         }
     }
 
@@ -269,7 +271,7 @@ impl BddManager {
         // a wise man once said: there are parts of the code that are easier to
         // prove correct than they are to debug or test. This is one of those
         // parts.  Is it proven correct? Unfortunately, no.
-        // 
+        //
         // standardize
         // See pgs. 115-117 of "Algorithms and Data Structures in VLSI Design"
         // attempt a base case
@@ -300,10 +302,8 @@ impl BddManager {
 
         // ok now it is normalized, see if this is in the apply table
         match self.apply_table.get(f, g, h) {
-           Some(v) => {
-               return v
-           },
-           None => (),
+            Some(v) => return v,
+            None => (),
         };
 
         // ok the work!
@@ -368,7 +368,7 @@ impl BddManager {
 
         // now, both of the nodes are not constant
         // normalize the nodes to increase cache efficiency
-        // 
+        //
         // TODO is this a redundant normalization?
         let (f, g, reg_f, _) = if reg_f < reg_g {
             (f, g, reg_f, reg_g)
@@ -378,10 +378,10 @@ impl BddManager {
 
         // check the cache
         match self.apply_table.get(f, g, BddPtr::false_node()) {
-           Some(v) => {
-               return v;
-           }
-           None => {}
+            Some(v) => {
+                return v;
+            }
+            None => {}
         };
 
         // now we know that these are nodes, compute the cofactors
@@ -653,47 +653,54 @@ impl BddManager {
         self.compute_table.num_nodes()
     }
 
-
-
-
     fn wmc_helper<T: Num + Clone + Debug + Copy>(
         &self,
         ptr: BddPtr,
         wmc: &BddWmc<T>,
-        smooth: bool
+        smooth: bool,
+        tbl: &mut HashMap<BddPtr, T>,
     ) -> (T, Option<VarLabel>) {
         match ptr.ptr_type() {
             PointerType::PtrTrue => (wmc.one.clone(), Some(self.get_order().last_var())),
             PointerType::PtrFalse => (wmc.zero.clone(), Some(self.get_order().last_var())),
             PointerType::PtrNode => {
                 let order = self.get_order();
-                let bdd = self.deref_bdd(ptr).into_node();
-                let (low, high) = if ptr.is_compl() {
-                    (bdd.low.neg(), bdd.high.neg())
-                } else {
-                    (bdd.low, bdd.high)
+                let res = match tbl.get(&ptr) {
+                    Some(v) => *v,
+                    None => {
+                        let bdd = self.deref_bdd(ptr).into_node();
+                        let (low, high) = if ptr.is_compl() {
+                            (bdd.low.neg(), bdd.high.neg())
+                        } else {
+                            (bdd.low, bdd.high)
+                        };
+                        let (mut low_v, low_lvl_op) = self.wmc_helper(low, wmc, smooth, tbl);
+                        let (mut high_v, high_lvl_op) = self.wmc_helper(high, wmc, smooth, tbl);
+                        let mut low_lvl = low_lvl_op.unwrap();
+                        let mut high_lvl = high_lvl_op.unwrap();
+                        if smooth {
+                            // smooth low
+                            while order.lt(ptr.label(), low_lvl) {
+                                let (low_factor, high_factor) =
+                                    wmc.var_to_val.get(&low_lvl).unwrap();
+                                low_v = (low_v.clone() * (*low_factor)) + (low_v * (*high_factor));
+                                low_lvl = order.above(low_lvl).unwrap();
+                            }
+                            // smooth high
+                            while order.lt(ptr.label(), high_lvl) {
+                                let (low_factor, high_factor) =
+                                    wmc.var_to_val.get(&high_lvl).unwrap();
+                                high_v =
+                                    (high_v.clone() * (*low_factor)) + (high_v * (*high_factor));
+                                high_lvl = order.above(high_lvl).unwrap();
+                            }
+                        }
+                        // compute new
+                        let (low_factor, high_factor) = wmc.var_to_val.get(&bdd.var).unwrap();
+                        (low_v * low_factor.clone()) + (high_v * high_factor.clone())
+                    }
                 };
-                let (mut low_v, low_lvl_op) = self.wmc_helper(low, wmc, smooth);
-                let (mut high_v, high_lvl_op) = self.wmc_helper(high, wmc, smooth);
-                let mut low_lvl = low_lvl_op.unwrap();
-                let mut high_lvl = high_lvl_op.unwrap();
-                if smooth {
-                    // smooth low
-                    while order.lt(ptr.label(), low_lvl) {
-                        let (low_factor, high_factor) = wmc.var_to_val.get(&low_lvl).unwrap();
-                        low_v = (low_v.clone() * (*low_factor)) + (low_v * (*high_factor));
-                        low_lvl = order.above(low_lvl).unwrap();
-                    }
-                    // smooth high
-                    while order.lt(ptr.label(), high_lvl) {
-                        let (low_factor, high_factor) = wmc.var_to_val.get(&high_lvl).unwrap();
-                        high_v = (high_v.clone() * (*low_factor)) + (high_v * (*high_factor));
-                        high_lvl = order.above(high_lvl).unwrap();
-                    }
-                }
-                // compute new
-                let (low_factor, high_factor) = wmc.var_to_val.get(&bdd.var).unwrap();
-                let res = (low_v * low_factor.clone()) + (high_v * high_factor.clone());
+                tbl.insert(ptr, res);
                 if order.get(ptr.label()) == 0 {
                     (res, None)
                 } else {
@@ -710,25 +717,26 @@ impl BddManager {
     /// `true`.
     pub fn wmc<T: Num + Clone + Debug + Copy>(&self, ptr: BddPtr, params: &BddWmc<T>) -> T {
         // call wmc_helper and smooth the result
-        let (mut v, lvl_op) = self.wmc_helper(ptr, params, true);
+        let (mut v, lvl_op) = self.wmc_helper(ptr, params, true, &mut HashMap::new());
         if lvl_op.is_none() {
             // no smoothing required
             v
         } else {
-                let mut lvl = lvl_op;
-                let order = self.get_order();
-                while lvl.is_some() {
-                    assert!(params.var_to_val.contains_key(&lvl.unwrap()), 
-                        "Error in weighted model count: variable index {:?} not found in weight table", lvl);
-                    let (low_factor, high_factor) =
-                        params.var_to_val.get(&lvl.unwrap()).unwrap();
-                    v = (v.clone() * (*low_factor)) + (v * (*high_factor));
-                    lvl = order.above(lvl.unwrap());
-                }
-                v
+            let mut lvl = lvl_op;
+            let order = self.get_order();
+            while lvl.is_some() {
+                assert!(
+                    params.var_to_val.contains_key(&lvl.unwrap()),
+                    "Error in weighted model count: variable index {:?} not found in weight table",
+                    lvl
+                );
+                let (low_factor, high_factor) = params.var_to_val.get(&lvl.unwrap()).unwrap();
+                v = (v.clone() * (*low_factor)) + (v * (*high_factor));
+                lvl = order.above(lvl.unwrap());
+            }
+            v
         }
     }
-
 
     // /// Weighted-model count.
     // pub fn wmc<T: Num + Clone + Debug + Copy>(&self, ptr: BddPtr, params: &BddWmc<T>) -> T {
@@ -757,7 +765,9 @@ impl BddManager {
     /// Compile a BDD from a CNF
     pub fn from_cnf(&mut self, cnf: &Cnf) -> BddPtr {
         let mut cvec: Vec<BddPtr> = Vec::with_capacity(cnf.clauses().len());
-        if cnf.clauses().is_empty() { return BddPtr::false_node() }
+        if cnf.clauses().is_empty() {
+            return BddPtr::false_node();
+        }
 
         // sort the clauses based on a best-effort bottom-up ordering of clauses
         let mut cnf_sorted = cnf.clauses().to_vec();
@@ -793,7 +803,9 @@ impl BddManager {
 
         for lit_vec in cnf_sorted.iter() {
             // empty clause is False, which contributes nothing
-            if lit_vec.len() == 0 { continue };
+            if lit_vec.len() == 0 {
+                continue;
+            };
 
             let (vlabel, val) = (lit_vec[0].get_label(), lit_vec[0].get_polarity());
             let mut bdd = self.var(vlabel, val);
@@ -822,7 +834,11 @@ impl BddManager {
             }
         }
         let r = helper(&cvec, self);
-        if r.is_none() { return BddPtr::true_node() } else { return r.unwrap() }
+        if r.is_none() {
+            return BddPtr::true_node();
+        } else {
+            return r.unwrap();
+        }
     }
 
     pub fn print_stats(&self) -> () {
@@ -849,7 +865,7 @@ impl BddManager {
     }
 
     pub fn num_recursive_calls(&self) -> usize {
-        return self.stats.num_recursive_calls
+        return self.stats.num_recursive_calls;
     }
 }
 
@@ -1134,7 +1150,6 @@ fn simple_cond() {
     );
 }
 
-
 #[test]
 fn wmc_test_2() {
     let mut man = BddManager::new_default_order(4);
@@ -1143,23 +1158,23 @@ fn wmc_test_2() {
     let f1 = man.var(VarLabel::new(2), true);
     let f2 = man.var(VarLabel::new(3), true);
     let map = hashmap! { VarLabel::new(0) => (1.0, 1.0),
-                             VarLabel::new(1) => (1.0, 1.0),
-                             VarLabel::new(2) => (0.8, 0.2),
-                             VarLabel::new(3) => (0.7, 0.3) };
+    VarLabel::new(1) => (1.0, 1.0),
+    VarLabel::new(2) => (0.8, 0.2),
+    VarLabel::new(3) => (0.7, 0.3) };
     let wmc = BddWmc::new_with_default(0.0, 1.0, map);
     let iff1 = man.iff(x, f1);
     let iff2 = man.iff(y, f2);
     let obs = man.or(x, y);
     let and1 = man.and(iff1, iff2);
     let f = man.and(and1, obs);
-    assert_eq!(man.wmc(f, &wmc), 0.2*0.3 + 0.2*0.7 + 0.8*0.3);
+    assert_eq!(man.wmc(f, &wmc), 0.2 * 0.3 + 0.2 * 0.7 + 0.8 * 0.3);
 }
 #[test]
-fn iff_regression() { 
+fn iff_regression() {
     // time_test!();
     let mut man = BddManager::new_default_order(0);
     let mut ptrvec = Vec::new();
-    for i in 0..40 { 
+    for i in 0..40 {
         let vlab = man.new_var();
         let flab = man.new_var();
         let vptr = man.var(vlab, true);
@@ -1176,67 +1191,66 @@ fn iff_regression() {
 
 #[cfg(test)]
 mod test_bdd_manager {
+    use quickcheck::TestResult;
     use repr::cnf::Cnf;
+    use repr::var_label::Literal;
     use repr::var_label::VarLabel;
     use std::collections::HashMap;
-    use quickcheck::TestResult;
     use std::iter::FromIterator;
-    use repr::var_label::Literal;
-    
-  quickcheck! {
-      fn test_cond_and(c: Cnf) -> bool {
-          let mut mgr = super::BddManager::new_default_order(16);
-          let cnf = mgr.from_cnf(&c);
-          let v1 = VarLabel::new(0);
-          let bdd1 = mgr.exists(cnf, v1);
 
-          let bdd2 = mgr.condition(cnf, v1, true);
-          let bdd3 = mgr.condition(cnf, v1, false);
-          let bdd4 = mgr.or(bdd2, bdd3);
-          bdd4 == bdd1
-      }
-  }
+    quickcheck! {
+        fn test_cond_and(c: Cnf) -> bool {
+            let mut mgr = super::BddManager::new_default_order(16);
+            let cnf = mgr.from_cnf(&c);
+            let v1 = VarLabel::new(0);
+            let bdd1 = mgr.exists(cnf, v1);
 
-  quickcheck! {
-      fn bdd_ite_iff(c1: Vec<Vec<Literal>>, c2: Vec<Vec<Literal>>) -> TestResult {
-          let c1 = Cnf::new(c1);
-          let c2 = Cnf::new(c2);
+            let bdd2 = mgr.condition(cnf, v1, true);
+            let bdd3 = mgr.condition(cnf, v1, false);
+            let bdd4 = mgr.or(bdd2, bdd3);
+            bdd4 == bdd1
+        }
+    }
 
-          if c1.num_vars() == 0 || c1.num_vars() > 8 { return TestResult::discard() }
-          if c1.clauses().len() > 12 { return TestResult::discard() }
-          let mut mgr = super::BddManager::new_default_order(16);
-          let cnf1 = mgr.from_cnf(&c1);
-          let cnf2 = mgr.from_cnf(&c2);
-          let iff1 = mgr.iff(cnf1, cnf2);
+    quickcheck! {
+        fn bdd_ite_iff(c1: Vec<Vec<Literal>>, c2: Vec<Vec<Literal>>) -> TestResult {
+            let c1 = Cnf::new(c1);
+            let c2 = Cnf::new(c2);
 
-          let clause1 = mgr.or(cnf1, cnf2.neg());
-          let clause2 = mgr.or(cnf1.neg(), cnf2);
-          let and = mgr.and(clause1, clause2);
+            if c1.num_vars() == 0 || c1.num_vars() > 8 { return TestResult::discard() }
+            if c1.clauses().len() > 12 { return TestResult::discard() }
+            let mut mgr = super::BddManager::new_default_order(16);
+            let cnf1 = mgr.from_cnf(&c1);
+            let cnf2 = mgr.from_cnf(&c2);
+            let iff1 = mgr.iff(cnf1, cnf2);
 
-          TestResult::from_bool(and == iff1)
-      }
-  }
+            let clause1 = mgr.or(cnf1, cnf2.neg());
+            let clause2 = mgr.or(cnf1.neg(), cnf2);
+            let and = mgr.and(clause1, clause2);
 
-  quickcheck! {
-      fn wmc_eq(clauses: Vec<Vec<Literal>>) -> TestResult {
-          let c1 = Cnf::new(clauses);
+            TestResult::from_bool(and == iff1)
+        }
+    }
 
-          // constrain the size
-          if c1.num_vars() == 0 || c1.num_vars() > 8 { return TestResult::discard() }
-          if c1.clauses().len() > 16 { return TestResult::discard() }
+    quickcheck! {
+        fn wmc_eq(clauses: Vec<Vec<Literal>>) -> TestResult {
+            let c1 = Cnf::new(clauses);
 
-          let mut mgr = super::BddManager::new_default_order(c1.num_vars());
-          let weight_map : HashMap<VarLabel, (usize, usize)> = HashMap::from_iter(
-              (0..16).map(|x| (VarLabel::new(x as u64), (2, 3))));
-          let cnf1 = mgr.from_cnf(&c1);
-          let bddwmc = super::BddWmc::new_with_default(0, 1, weight_map.clone());
-          let bddres = mgr.wmc(cnf1, &bddwmc);
-          let cnfres = c1.wmc(&weight_map);
-          if bddres != cnfres {
-            println!("error on input {}: bddres {}, cnfres {}", c1.to_string(), bddres, cnfres);
-          }
-          TestResult::from_bool(bddres == cnfres)
-      }
-  }
+            // constrain the size
+            if c1.num_vars() == 0 || c1.num_vars() > 8 { return TestResult::discard() }
+            if c1.clauses().len() > 16 { return TestResult::discard() }
+
+            let mut mgr = super::BddManager::new_default_order(c1.num_vars());
+            let weight_map : HashMap<VarLabel, (usize, usize)> = HashMap::from_iter(
+                (0..16).map(|x| (VarLabel::new(x as u64), (2, 3))));
+            let cnf1 = mgr.from_cnf(&c1);
+            let bddwmc = super::BddWmc::new_with_default(0, 1, weight_map.clone());
+            let bddres = mgr.wmc(cnf1, &bddwmc);
+            let cnfres = c1.wmc(&weight_map);
+            if bddres != cnfres {
+              println!("error on input {}: bddres {}, cnfres {}", c1.to_string(), bddres, cnfres);
+            }
+            TestResult::from_bool(bddres == cnfres)
+        }
+    }
 }
-
