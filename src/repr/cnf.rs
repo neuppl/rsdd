@@ -177,6 +177,9 @@ impl Cnf {
     }
 
     /// computes the center of gravity of a particular clause for a given order
+    /// Aloul, Fadi A., Igor L. Markov, and Karem A. Sakallah. "FORCE: a fast
+    /// and easy-to-implement variable-ordering heuristic." Proceedings of the
+    /// 13th ACM Great Lakes symposium on VLSI. 2003.
     fn center_of_gravity(&self, clause: &[Literal], lbl_to_pos: &[usize]) -> f64 {
         let sum = clause.iter().fold(0, |acc, &lbl| {
             lbl_to_pos[lbl.get_label().value() as usize] + acc

@@ -3,7 +3,6 @@ use manager::cache::lru::*;
 use repr::bdd::*;
 
 const INITIAL_CAPACITY: usize = 8; // given as a power of two
-const GROWTH_RATE: f64 = 1.5; // multiplicative growth factor
 
 /// An Ite structure, assumed to be in standard form.
 #[derive(Debug, Clone, Hash, PartialEq, Eq, Copy)]
@@ -84,31 +83,4 @@ impl BddApplyTable {
 }
 
 
-
-#[cfg(test)]
-mod test_bdd_apply_table {
-//     use quickcheck::TestResult;
-//     use BddPtr;
-//   quickcheck! {
-//       fn insert_eq(f: BddPtr, g: BddPtr, h: BddPtr, r: BddPtr) -> TestResult {
-//           let mut tbl = super::BddApplyTable::new(16);
-//           tbl.insert(f, g, h, r);
-//           let lookup = tbl.get(f, g, h);
-//           r == lookup.unwrap()
-//       }
-//   }
-
-//   quickcheck! {
-//       fn insert_eq_neg(f: BddPtr, g: BddPtr, r: BddPtr) -> bool {
-//           let mut tbl = super::BddApplyTable::new(16);
-//           tbl.insert(f, BddPtr::true_node(), g, r);
-//           let lookup = tbl.get(f.neg(), g.neg(), BddPtr::false_node());
-//           if lookup.is_some() {
-//             r.neg() == lookup.unwrap()
-//           } else {
-//               true
-//           }
-//       }
-//   }
-}
 

@@ -1,6 +1,8 @@
+//! Contains the core datastructures for constructing and maintaining decision
+//! diagrams.
+
 mod cache;
 
-pub mod cudd_manager;
 mod ref_table;
 pub mod rsbdd_manager;
 pub mod sdd_manager;

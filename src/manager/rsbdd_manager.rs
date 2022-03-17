@@ -1,4 +1,6 @@
-//! Primary interface for manipulating and constructing BDDs
+//! Primary interface for manipulating and constructing BDDs. Contains the BDD
+//! manager, which manages the global state necessary for constructing canonical
+//! binary decision diagrams.
 
 use backing_store::bdd_table_robinhood::BddTable;
 use backing_store::BackingCacheStats;
@@ -13,14 +15,10 @@ use repr::var_label::VarLabel;
 use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
-use std::ops::Deref;
 
 #[macro_use]
 use maplit::*;
 // use time_test::time_test;
-
-use crate::backing_store;
-use crate::backing_store::bdd_table_robinhood::TraverseTable;
 
 /// Weighted model counting parameters for a BDD. It primarily is a storage for
 /// the weight on each variable.
@@ -1170,9 +1168,9 @@ fn wmc_test_2() {
     let f = man.and(and1, obs);
     assert_eq!(man.wmc(f, &wmc), 0.2 * 0.3 + 0.2 * 0.7 + 0.8 * 0.3);
 }
+
 #[test]
 fn iff_regression() {
-    // time_test!();
     let mut man = BddManager::new_default_order(0);
     let mut ptrvec = Vec::new();
     for i in 0..40 {
@@ -1183,75 +1181,9 @@ fn iff_regression() {
         let sent = man.iff(vptr, fptr);
         ptrvec.push(sent);
     }
-    // ptrvec.reverse();
     let resptr = ptrvec
         .iter()
         .fold(man.true_ptr(), |acc, x| man.and(acc, *x));
     assert!(true);
 }
 
-#[cfg(test)]
-mod test_bdd_manager {
-    use quickcheck::TestResult;
-    use repr::cnf::Cnf;
-    use repr::var_label::Literal;
-    use repr::var_label::VarLabel;
-    use std::collections::HashMap;
-    use std::iter::FromIterator;
-
-    quickcheck! {
-        fn test_cond_and(c: Cnf) -> bool {
-            let mut mgr = super::BddManager::new_default_order(16);
-            let cnf = mgr.from_cnf(&c);
-            let v1 = VarLabel::new(0);
-            let bdd1 = mgr.exists(cnf, v1);
-
-            let bdd2 = mgr.condition(cnf, v1, true);
-            let bdd3 = mgr.condition(cnf, v1, false);
-            let bdd4 = mgr.or(bdd2, bdd3);
-            bdd4 == bdd1
-        }
-    }
-
-    quickcheck! {
-        fn bdd_ite_iff(c1: Vec<Vec<Literal>>, c2: Vec<Vec<Literal>>) -> TestResult {
-            let c1 = Cnf::new(c1);
-            let c2 = Cnf::new(c2);
-
-            if c1.num_vars() == 0 || c1.num_vars() > 8 { return TestResult::discard() }
-            if c1.clauses().len() > 12 { return TestResult::discard() }
-            let mut mgr = super::BddManager::new_default_order(16);
-            let cnf1 = mgr.from_cnf(&c1);
-            let cnf2 = mgr.from_cnf(&c2);
-            let iff1 = mgr.iff(cnf1, cnf2);
-
-            let clause1 = mgr.or(cnf1, cnf2.neg());
-            let clause2 = mgr.or(cnf1.neg(), cnf2);
-            let and = mgr.and(clause1, clause2);
-
-            TestResult::from_bool(and == iff1)
-        }
-    }
-
-    quickcheck! {
-        fn wmc_eq(clauses: Vec<Vec<Literal>>) -> TestResult {
-            let c1 = Cnf::new(clauses);
-
-            // constrain the size
-            if c1.num_vars() == 0 || c1.num_vars() > 8 { return TestResult::discard() }
-            if c1.clauses().len() > 16 { return TestResult::discard() }
-
-            let mut mgr = super::BddManager::new_default_order(c1.num_vars());
-            let weight_map : HashMap<VarLabel, (usize, usize)> = HashMap::from_iter(
-                (0..16).map(|x| (VarLabel::new(x as u64), (2, 3))));
-            let cnf1 = mgr.from_cnf(&c1);
-            let bddwmc = super::BddWmc::new_with_default(0, 1, weight_map.clone());
-            let bddres = mgr.wmc(cnf1, &bddwmc);
-            let cnfres = c1.wmc(&weight_map);
-            if bddres != cnfres {
-              println!("error on input {}: bddres {}, cnfres {}", c1.to_string(), bddres, cnfres);
-            }
-            TestResult::from_bool(bddres == cnfres)
-        }
-    }
-}

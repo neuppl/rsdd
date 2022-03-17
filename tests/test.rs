@@ -1,6 +1,11 @@
+//! Contains all randomized and integration tests for the RSDD library
+//! Many of these are property based tests that are created using QuickCheck
+
 extern crate rsdd;
-use manager::rsbdd_manager::BddManager;
-use manager::sdd_manager::{even_split, SddManager};
+#[macro_use]
+extern crate quickcheck;
+use manager::rsbdd_manager::{BddManager, BddWmc};
+use manager::sdd_manager::{even_split, SddManager, SddWmc};
 use manager::var_order::VarOrder;
 use repr::boolexpr::BoolExpr;
 use repr::cnf::Cnf;
@@ -302,108 +307,140 @@ fn test_sdd_canonicity() -> () {
     }
 }
 
-/// generate 10 random CNFs and test to see that they compile to the same value
-#[test]
-pub fn rand_bdds() -> () {
-    let mut rng = rand::StdRng::new().unwrap();
-    rng.reseed(&[0]);
-    for _ in 1..20 {
-        let num_vars = 20;
-        let cnf = BoolExpr::rand_cnf(&mut rng, num_vars, 30);
-        let mut man = BddManager::new_default_order(num_vars);
-        let r = man.from_boolexpr(&cnf);
-        // check that they evaluate to the same value for a variety of
-        // assignments
-        // println!("bdd: {},\n cnf: {:?}", man.print_bdd(r), cnf);
-        for _ in 1..100 {
-            let assgn = random_assignment(num_vars);
-            assert_eq!(
-                man.eval_bdd(r, &assgn),
-                cnf.eval(&assgn),
-                "Not eq:\n CNF: {:?}\nBDD:{}",
-                cnf,
-                man.print_bdd(r)
-            );
+
+#[cfg(test)]
+mod test_bdd_manager {
+    use quickcheck::TestResult;
+    use repr::cnf::Cnf;
+    use repr::var_label::Literal;
+    use repr::var_label::VarLabel;
+    use std::collections::HashMap;
+    use std::iter::FromIterator;
+
+    quickcheck! {
+        fn test_cond_and(c: Cnf) -> bool {
+            let mut mgr = super::BddManager::new_default_order(16);
+            let cnf = mgr.from_cnf(&c);
+            let v1 = VarLabel::new(0);
+            let bdd1 = mgr.exists(cnf, v1);
+
+            let bdd2 = mgr.condition(cnf, v1, true);
+            let bdd3 = mgr.condition(cnf, v1, false);
+            let bdd4 = mgr.or(bdd2, bdd3);
+            bdd4 == bdd1
         }
-        // check for canonicity: conjoin it with itself and make sure that it is
-        // still the same
-        let r2 = man.and(r, r);
-        assert!(
-            man.eq_bdd(r2, r),
-            "Not canonical: \nbdd1: {}\nbdd2: {}",
-            man.print_bdd(r),
-            man.print_bdd(r2)
-        );
-        let r3 = man.or(r, r);
-        assert!(
-            man.eq_bdd(r3, r),
-            "Not canonical: \nbdd1: {}\nbdd2: {}",
-            man.print_bdd(r),
-            man.print_bdd(r3)
-        );
+    }
+
+    quickcheck! {
+        fn bdd_ite_iff(c1: Vec<Vec<Literal>>, c2: Vec<Vec<Literal>>) -> TestResult {
+            let c1 = Cnf::new(c1);
+            let c2 = Cnf::new(c2);
+
+            if c1.num_vars() == 0 || c1.num_vars() > 8 { return TestResult::discard() }
+            if c1.clauses().len() > 12 { return TestResult::discard() }
+            let mut mgr = super::BddManager::new_default_order(16);
+            let cnf1 = mgr.from_cnf(&c1);
+            let cnf2 = mgr.from_cnf(&c2);
+            let iff1 = mgr.iff(cnf1, cnf2);
+
+            let clause1 = mgr.or(cnf1, cnf2.neg());
+            let clause2 = mgr.or(cnf1.neg(), cnf2);
+            let and = mgr.and(clause1, clause2);
+
+            TestResult::from_bool(and == iff1)
+        }
+    }
+
+    quickcheck! {
+        fn wmc_eq(clauses: Vec<Vec<Literal>>) -> TestResult {
+            let c1 = Cnf::new(clauses);
+
+            // constrain the size
+            if c1.num_vars() == 0 || c1.num_vars() > 8 { return TestResult::discard() }
+            if c1.clauses().len() > 16 { return TestResult::discard() }
+
+            let mut mgr = super::BddManager::new_default_order(c1.num_vars());
+            let weight_map : HashMap<VarLabel, (usize, usize)> = HashMap::from_iter(
+                (0..16).map(|x| (VarLabel::new(x as u64), (2, 3))));
+            let cnf1 = mgr.from_cnf(&c1);
+            let bddwmc = super::BddWmc::new_with_default(0, 1, weight_map.clone());
+            let bddres = mgr.wmc(cnf1, &bddwmc);
+            let cnfres = c1.wmc(&weight_map);
+            if bddres != cnfres {
+              println!("error on input {}: bddres {}, cnfres {}", c1.to_string(), bddres, cnfres);
+            }
+            TestResult::from_bool(bddres == cnfres)
+        }
     }
 }
 
-#[test]
-pub fn big_sdd() -> () {
-    // let file_contents = File::open("/Users/sholtzen/Downloads/sdd-1.1.1/cnf/c8-easier.cnf");
-    let file_contents = include_str!("../cnf/c8-very-easy.cnf");
-    let cnf = Cnf::from_file(String::from(file_contents));
-    let v: Vec<usize> = cnf.force_order().get_vec();
-    let var_vec: Vec<VarLabel> = v.into_iter().map(|v| VarLabel::new(v as u64)).collect();
-    let vtree = even_split(&var_vec, 4);
-    let mut man = SddManager::new(vtree);
-    let r = man.from_cnf(&cnf);
-    man.print_stats();
-    println!("num nodes: {}", man.count_nodes(r));
+
+#[cfg(test)]
+mod test_sdd_manager {
+    use repr::cnf::Cnf;
+    use manager::rsbdd_manager::{BddManager, BddWmc};
+    use repr::var_label::{VarLabel, Literal};
+    use quickcheck::TestResult;
+    use std::collections::HashMap;
+    use std::iter::FromIterator;
+
+  quickcheck! {
+      fn test_cond_and(c: Cnf) -> bool {
+          let order : Vec<VarLabel> = (0..16).map(|x| VarLabel::new(x)).collect();
+          let mut mgr = super::SddManager::new(super::even_split(&order, 4));
+          let cnf = mgr.from_cnf(&c);
+          let v1 = VarLabel::new(0);
+          let bdd1 = mgr.exists(cnf, v1);
+
+          let bdd2 = mgr.condition(cnf, v1, true);
+          let bdd3 = mgr.condition(cnf, v1, false);
+          let bdd4 = mgr.or(bdd2, bdd3);
+          bdd4 == bdd1
+      }
+  }
+
+  quickcheck! {
+      fn ite_iff(c1: Cnf, c2: Cnf) -> bool {
+          let order : Vec<VarLabel> = (0..16).map(|x| VarLabel::new(x)).collect();
+          let mut mgr = super::SddManager::new(super::even_split(&order, 4));
+          let cnf1 = mgr.from_cnf(&c1);
+          let cnf2 = mgr.from_cnf(&c2);
+          let iff1 = mgr.iff(cnf1, cnf2);
+
+          let clause1 = mgr.or(cnf1, cnf2.neg());
+          let clause2 = mgr.or(cnf1.neg(), cnf2);
+          let and = mgr.and(clause1, clause2);
+
+          and == iff1
+      }
+  }
+
+
+  quickcheck! {
+      fn sdd_wmc_eq(clauses: Vec<Vec<Literal>>) -> TestResult {
+
+          let cnf = Cnf::new(clauses);
+          if cnf.num_vars() < 9 || cnf.num_vars() > 16 { return TestResult::discard() }
+          if cnf.clauses().len() > 16 { return TestResult::discard() }
+
+         let weight_map : HashMap<VarLabel, (f64, f64)> = HashMap::from_iter(
+              (0..cnf.num_vars()).map(|x| (VarLabel::new(x as u64), (0.5, 0.5))));
+
+          let order : Vec<VarLabel> = (0..cnf.num_vars()).map(|x| VarLabel::new(x as u64)).collect();
+          let mut mgr = super::SddManager::new(super::even_split(&order, 3));
+          let cnf_sdd = mgr.from_cnf(&cnf);
+          let sdd_wmc = super::SddWmc::new_with_default(0.0, 1.0, &mut mgr, &weight_map);
+          let sdd_res = mgr.unsmoothed_wmc(cnf_sdd, &sdd_wmc);
+
+
+          let mut bddmgr = BddManager::new_default_order(cnf.num_vars());
+          let cnf_bdd = bddmgr.from_cnf(&cnf);
+          let bdd_res = bddmgr.wmc(cnf_bdd, &BddWmc::new_with_default(0.0, 1.0, weight_map));
+
+          TestResult::from_bool(sdd_res == bdd_res)
+      }
+  }
+
+
 }
 
-#[test]
-pub fn big_bdd() -> () {
-    // let file_contents = File::open("/Users/sholtzen/Downloads/sdd-1.1.1/cnf/c8-easier.cnf");
-    let file_contents = include_str!("../cnf/c8-easier.cnf");
-    let cnf = Cnf::from_file(String::from(file_contents));
-    let v: Vec<VarLabel> = cnf
-        .force_order()
-        .get_vec()
-        .into_iter()
-        .map(|x| VarLabel::new(x as u64))
-        .collect();
-    let mut man = BddManager::new(VarOrder::new(v));
-    let r = man.from_cnf(&cnf);
-    println!("size: {}", man.count_nodes(r))
-    // assert!(man.is_false(r), "Expected unsat");
-}
-
-/// Randomized tests
-#[test]
-pub fn random_sdd() {
-    let mut rng = rand::StdRng::new().unwrap();
-    rng.reseed(&[0]);
-    for _ in 1..20 {
-        let num_vars = 10;
-        let cnf = BoolExpr::rand_cnf(&mut rng, num_vars, 20);
-        let v: Vec<VarLabel> = (0..num_vars).map(|x| VarLabel::new(x as u64)).collect();
-        let vtree = even_split(&v, 1);
-        let mut man = SddManager::new(vtree);
-        let r = man.from_boolexpr(&cnf);
-        // check that they evaluate to the same value for a variety of
-        // assignments
-        // println!("expr: {:?}\nsdd: {}", cnf, man.print_sdd(r));
-        for _ in 1..30 {
-            let assgn = random_assignment(num_vars);
-            assert_eq!(
-                man.eval_sdd(r, &assgn),
-                cnf.eval(&assgn),
-                "Not equal: {:?}\n{}",
-                cnf,
-                man.print_sdd(r)
-            );
-        }
-        // check canonicity
-        let new_r = man.and(r, r);
-        assert!(man.sdd_eq(r, new_r));
-        let new_r = man.or(r, r);
-        assert!(man.sdd_eq(r, new_r));
-    }
-}

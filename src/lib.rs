@@ -7,6 +7,7 @@ extern crate num;
 extern crate pretty;
 extern crate quickersort;
 extern crate rand;
+extern crate egg;
 #[cfg(test)]
 #[macro_use]
 extern crate quickcheck;
