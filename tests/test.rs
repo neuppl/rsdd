@@ -440,7 +440,5 @@ mod test_sdd_manager {
           TestResult::from_bool(sdd_res == bdd_res)
       }
   }
-
-
 }
 

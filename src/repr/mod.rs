@@ -6,4 +6,4 @@ pub mod boolexpr;
 pub mod cnf;
 pub mod sdd;
 pub mod var_label;
-pub mod logical_formula;
+pub mod bdd_plan;

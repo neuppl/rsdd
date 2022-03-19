@@ -8,9 +8,8 @@ extern crate pretty;
 extern crate quickersort;
 extern crate rand;
 extern crate egg;
-#[cfg(test)]
 #[macro_use]
-extern crate quickcheck;
+extern crate serde;
 extern crate twox_hash;
 extern crate time_test;
 

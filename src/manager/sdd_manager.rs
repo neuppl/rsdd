@@ -276,111 +276,61 @@ impl<'a> SddManager {
         &self.tbl.bdd_man(f.vtree())
     }
 
-    /// Compresses, trims, and canonicalizes the list of (prime, sub) terms and
-    /// creates a new canonicalized term
+    /// Canonicalizes the list of (prime, sub) terms in-place
     /// `node`: a list of (prime, sub) pairs
-    /// `table`: an index into `self.tbl` to store the result
-    fn compress(&mut self, mut node: Vec<(SddPtr, SddPtr)>, table: usize) -> SddPtr {
-        // base case
+    fn compress(&mut self, node: &mut Vec<(SddPtr, SddPtr)>) -> () {
+        let mut i = 0;
+        println!("compressing...");
+        while i < node.len() {
+            // see if we can compress i
+            let mut compressed = false;
+            for j in (i+1)..node.len() {
+                if self.sdd_eq(node[i].1, node[j].1) { 
+                    // compress j into i and remove j from the node list
+                    node[i].0 = self.or(node[i].0, node[j].0);
+                    node.remove(j);
+                    compressed = true;
+                    break
+                }
+            }
+            if !compressed {
+                i = i + 1;
+            }
+        }
+    }
+
+    /// Returns a canonicalized SDD pointer from a list of (prime, sub) pairs
+    fn canonicalize(&mut self, mut node: Vec<(SddPtr, SddPtr)>, table: usize) -> SddPtr {
+        // first compress
+        self.compress(&mut node);
+        // check for a base case
         if node.len() == 0 {
-            return SddPtr::new_const(false);
-        } else if node.len() == 1 {
-            let (p, s) = node[0];
-            if p.is_true() {
-                // the prime is true, so we can return the sub
-                return s;
-            } else if s.is_true() {
-                // the sub is true, so return the prime
-                return p;
-            } else {
-                assert!(false, "invalid SDD node")
+            return SddPtr::new_const(true)
+        }
+        if node.len() == 1 {
+            if node[0].0.is_true() {
+                return node[0].1;
             }
         } else if node.len() == 2 {
-            // check for terms of the form [(a, T), (!a, F)] => a
-            let (p1, s1) = node[0];
-            let (p2, s2) = node[1];
-            if s1.is_true() && s2.is_false() {
-                return p1;
-            } else if s1.is_false() && s2.is_true() {
-                return p2;
-            }
-        } else if node.iter().all(|(ref _p, ref s)| s.is_true()) {
-            return SddPtr::new_const(true);
-        }
-
-        // this sort guarantees several things:
-        // (1) if there is a constant sub (i.e., false), it will be at the *end*
-        //     of the returned vector (because we reverse the order by pushing)
-        // (2) two equal subs will be adjacent in the ordering, which allows for a
-        //     single pass for doing compression
-        quickersort::sort_by(&mut node[..], &|a, b| a.1.cmp(&b.1));
-        node.dedup();
-        // first, check if all the subs are equal; if they are, then return true
-        let s0 = node[0].1;
-        if node.iter().all(|&(ref _p, ref s)| *s == s0) {
-            return s0;
-        }
-
-        // to compress, we must disjoin all primes which share a sub
-        let mut r = Vec::new();
-        let (mut p, mut s) = node[0];
-        for i in 1..node.len() {
-            let (cur_p, cur_s) = node[i];
-            if s == cur_s {
-                // disjoin the prime
-                p = self.or_internal(p, cur_p);
-            } else {
-                // found a unique sub, start a new chain
-                r.push((p, s));
-                p = cur_p;
-                s = cur_s;
+            if node[0].1.is_true() && node[1].1.is_false() {
+                return node[0].0
+            } else if node[0].1.is_false() && node[1].1.is_true() {
+                return node[1].0
             }
         }
-        r.push((p, s));
-        // now all the subs are unique, sort by primes now to guarantee
-        // canonicity
-        // TODO: combine these into a single initial sort
-        quickersort::sort_by(&mut r[..], &|a, b| a.0.cmp(&b.0));
-
-        if r.len() == 1 {
-            let (p, s) = r[0];
-            if p.is_true() {
-                // the prime is true, so we can return the sub
-                return s;
-            } else if s.is_true() {
-                // the sub is true, so return the prime
-                return p;
+        // we have a fresh SDD pointer, uniqify it
+        quickersort::sort_by(&mut node[..], &|a, b| a.0.cmp(&b.0));
+        let r = if node[0].1.is_compl() {
+            for i in 0..node.len() {
+                node[i].1 = node[i].1.neg();
             }
-        }
-        if r.len() == 2 {
-            // again check for terms of the form [(a, T), (!a, F)] => a
-            let (p1, s1) = r[0];
-            let (p2, s2) = r[1];
-            if s1.is_true() && s2.is_false() {
-                return p1;
-            } else if s1.is_false() && s2.is_true() {
-                return p2;
-            }
-        }
-        if r.iter().all(|(ref _p, ref s)| s.is_true()) {
-            return SddPtr::new_const(true);
-        }
-        if r.iter().all(|(ref _p, ref s)| s.is_false()) {
-            return SddPtr::new_const(false);
-        }
-        let res = if r[0].1.is_compl() {
-            // guarantee first sub in the first node is not complemented
-            // (regular form)
-            // TODO looks like an unnecessary allocation here
-            let compl_r = r.iter().map(|&(ref p, ref s)| (*p, s.neg())).collect();
             self.tbl
-                .get_or_insert_sdd(&SddOr { nodes: compl_r }, table)
+                .get_or_insert_sdd(&SddOr { nodes: node}, table)
                 .neg()
         } else {
-            self.tbl.get_or_insert_sdd(&SddOr { nodes: r }, table)
+            self.tbl.get_or_insert_sdd(&SddOr { nodes: node }, table)
         };
-        // println!("result: {}\n", self.print_sdd(res));
-        res
+        return r
     }
 
     pub fn or_internal(&mut self, a: SddPtr, b: SddPtr) -> SddPtr {
@@ -475,7 +425,7 @@ impl<'a> SddManager {
             (outer_v, inner_v)
         };
 
-        // iterate over each prime/sum pair and do the relevant application
+        // iterate over each prime/sub pair and do the relevant application
         // there are 2 simplifying cases:
         // (1) if p1i = p2j or if p1i => p2j, then p1k x p2j = false for all k<>i
         // (2) if p1i = !p2j, then p1k x p2j = p1k for all k<>i
@@ -536,8 +486,10 @@ impl<'a> SddManager {
         }
 
         // canonicalize
-        let ptr = self.compress(r, lca);
+        println!("length before compress: {}", r.len());
+        let ptr = self.canonicalize(r, lca);
         self.app_cache[lca].insert((a, b), ptr);
+        println!("result: {}", self.print_sdd(ptr));
         ptr
     }
 
@@ -579,7 +531,7 @@ impl<'a> SddManager {
             let news = self.condition(*sub, lbl, value);
             v.push((newp, news));
         }
-        let r = self.compress(v, f.vtree());
+        let r = self.canonicalize(v, f.vtree());
         if f.is_compl() {
             return r.neg();
         } else {
@@ -998,7 +950,7 @@ fn sdd_wmc1() {
                     VarLabel::new(2),
                     VarLabel::new(3),
                 ],
-                2,);    
+                2,);
     let mut man = SddManager::new(vtree.clone());
     let mut wmc_map = SddWmc::new(0.0, 1.0, vtree.clone());
     let x = man.var(VarLabel::new(0), true);

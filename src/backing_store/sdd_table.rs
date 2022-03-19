@@ -85,7 +85,7 @@ impl SddTable {
         }
     }
 
-    /// get or insert a particular SDD node with vtree-node `vnode`
+    /// Get or insert a particular SDD node with vtree-node `vnode`
     pub fn get_or_insert_sdd(&mut self, sdd: &SddOr, vnode: usize) -> SddPtr {
         match &mut self.tables[vnode] {
             &mut SubTable::SddSubTable { ref mut tbl } => {

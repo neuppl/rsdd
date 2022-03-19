@@ -1,7 +1,7 @@
 use rand::SeedableRng;
-use rsdd::manager::rsbdd_manager::BddManager;
-use rsdd::manager::sdd_manager::SddManager;
-use rsdd::repr::cnf::Cnf;
+use manager::rsbdd_manager::BddManager;
+use manager::sdd_manager::SddManager;
+use repr::cnf::Cnf;
 use std::time::{Duration, Instant};
 
 fn rand_small_bdds_no_heuristic() -> () {

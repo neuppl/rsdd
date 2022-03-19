@@ -11,15 +11,18 @@ crate-type = ["staticlib", "rlib", "dylib"]
 [build]
 rustflags = ["-C", "link-args=-Wl,-undefined,dynamic_lookup,-export-dynamic"]
 
-[[bin]]
-name = "rsdd-bench"
-path = "src/bench/bench.rs"
+[dev-dependencies]
+criterion = "0.3"
+
+[[bench]]
+name = "rsdd_benchmark"
+harness = false
+
 
 [dependencies]
 fnv = "1.0.3"
 rand = "0.3.18"
 twox-hash = "1.1.0"
-clap = "2.28"
 quickersort = "3.0"
 dimacs = "0.2.0"
 pretty = "0.3.3"
@@ -29,6 +32,8 @@ libc = "0.2"
 quickcheck = "1.0.3"
 time-test = "0.2.2"
 egg = "0.7.1"
+serde = { version = "1.0", features = ["derive"] }
+clap = "3.1.6"
 
 
 [profile.release]
