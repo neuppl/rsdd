@@ -280,7 +280,6 @@ impl<'a> SddManager {
     /// `node`: a list of (prime, sub) pairs
     fn compress(&mut self, node: &mut Vec<(SddPtr, SddPtr)>) -> () {
         let mut i = 0;
-        println!("compressing...");
         while i < node.len() {
             // see if we can compress i
             let mut compressed = false;
@@ -486,10 +485,8 @@ impl<'a> SddManager {
         }
 
         // canonicalize
-        println!("length before compress: {}", r.len());
         let ptr = self.canonicalize(r, lca);
         self.app_cache[lca].insert((a, b), ptr);
-        println!("result: {}", self.print_sdd(ptr));
         ptr
     }
 

@@ -442,3 +442,16 @@ mod test_sdd_manager {
   }
 }
 
+// #[test]
+// pub fn big_sdd() -> () {
+//     // let file_contents = File::open("/Users/sholtzen/Downloads/sdd-1.1.1/cnf/c8-easier.cnf");
+//     let file_contents = include_str!("../cnf/s344.cnf");
+//     let cnf = Cnf::from_file(String::from(file_contents));
+//     let v: Vec<usize> = cnf.force_order().get_vec();
+//     let var_vec: Vec<VarLabel> = v.into_iter().map(|v| VarLabel::new(v as u64)).collect();
+//     let vtree = even_split(&var_vec, 4);
+//     let mut man = SddManager::new(vtree);
+//     let r = man.from_cnf(&cnf);
+//     man.print_stats();
+//     println!("num nodes: {}", man.count_nodes(r));
+// }
