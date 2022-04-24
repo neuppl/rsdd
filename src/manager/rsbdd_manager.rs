@@ -18,6 +18,8 @@ use std::fmt::Debug;
 
 #[macro_use]
 use maplit::*;
+
+use crate::repr::bdd_plan::BddPlan;
 // use time_test::time_test;
 
 /// Weighted model counting parameters for a BDD. It primarily is a storage for
@@ -860,6 +862,40 @@ impl BddManager {
                 let r2 = self.from_boolexpr(r);
                 self.or(r1, r2)
             }
+        }
+    }
+
+    /// Compiles a plan into a BDD
+    pub fn compile_plan(&mut self, expr: &BddPlan) -> BddPtr {
+        match expr {
+            &BddPlan::Literal(var, polarity) => self.var(VarLabel::new(var as u64), polarity),
+            &BddPlan::And(ref l, ref r) => {
+                let r1 = self.compile_plan(&*l);
+                let r2 = self.compile_plan(&*r);
+                self.and(r1, r2)
+            }
+            &BddPlan::Or(ref l, ref r) => {
+                let r1 = self.compile_plan(&*l);
+                let r2 = self.compile_plan(&*r);
+                self.or(r1, r2)
+            }
+            &BddPlan::Iff(ref l, ref r) => {
+                let r1 = self.compile_plan(&*l);
+                let r2 = self.compile_plan(&*r);
+                self.iff(r1, r2)
+            }
+            &BddPlan::Ite(ref f, ref g, ref h ) => {
+                let f = self.compile_plan(&*f);
+                let g = self.compile_plan(&*g);
+                let h = self.compile_plan(&*h);
+                self.ite(f, g, h)
+            },
+            &BddPlan::Not(ref f) => {
+                let f = self.compile_plan(&*f);
+                self.negate(f)
+            }
+            &BddPlan::ConstTrue => self.true_ptr(),
+            &BddPlan::ConstFalse => self.false_ptr(),
         }
     }
 

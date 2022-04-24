@@ -25,7 +25,8 @@ use manager::sdd_manager::SddManager;
 use manager::*;
 use repr::bdd::BddPtr;
 use repr::sdd::{SddPtr, VTree};
-use repr::var_label::VarLabel;
+use repr::var_label::{VarLabel, Literal};
+use repr::bdd_plan::BddPlan;
 
 /// Creates a vtree leaf
 #[no_mangle]
@@ -234,4 +235,76 @@ pub extern "C" fn rsdd_print_stats(mgr: *mut BddManager) -> () {
 pub extern "C" fn rsdd_num_recursive_calls(mgr: *mut BddManager) -> u64 {
     let mgr = unsafe { &mut *mgr };
     mgr.num_recursive_calls() as u64
+}
+
+#[no_mangle]
+pub extern "C" fn rsdd_plan_literal(label: u64, polarity: bool) -> *const BddPlan {
+    Box::into_raw(Box::new(BddPlan::Literal(label, polarity)))
+}
+
+#[no_mangle]
+pub extern "C" fn rsdd_plan_const_true() -> *const BddPlan {
+    Box::into_raw(Box::new(BddPlan::ConstTrue))
+}
+
+#[no_mangle]
+pub extern "C" fn rsdd_plan_const_false() -> *mut BddPlan {
+    Box::into_raw(Box::new(BddPlan::ConstFalse))
+}
+
+/// Takes ownership of `a` and `b`, returns a `BddPlan` representing the conjunction
+#[no_mangle]
+pub extern "C" fn rsdd_plan_and(a: *mut BddPlan, b: *mut BddPlan) -> *mut BddPlan {
+    unsafe {
+        let a = Box::from_raw(a);
+        let b = Box::from_raw(b);
+        Box::into_raw(Box::new(BddPlan::And(a, b)))
+    }
+}
+
+/// Takes ownership of `a` and `b`, returns a `BddPlan` representing the conjunction
+#[no_mangle]
+pub extern "C" fn rsdd_plan_or(a: *mut BddPlan, b: *mut BddPlan) -> *mut BddPlan {
+    unsafe {
+        let a = Box::from_raw(a);
+        let b = Box::from_raw(b);
+        Box::into_raw(Box::new(BddPlan::Or(a, b)))
+    }
+}
+
+/// Takes ownership of `a` and `b`, returns a `BddPlan` representing the conjunction
+#[no_mangle]
+pub extern "C" fn rsdd_plan_iff(a: *mut BddPlan, b: *mut BddPlan) -> *mut BddPlan {
+    unsafe {
+        let a = Box::from_raw(a);
+        let b = Box::from_raw(b);
+        Box::into_raw(Box::new(BddPlan::Iff(a, b)))
+    }
+}
+
+/// Takes ownership of `a` and `b`, returns a `BddPlan` representing the conjunction
+#[no_mangle]
+pub extern "C" fn rsdd_plan_ite(f: *mut BddPlan, g: *mut BddPlan, h: *mut BddPlan) -> *mut BddPlan {
+    unsafe {
+        let f = Box::from_raw(f);
+        let g = Box::from_raw(g);
+        let h = Box::from_raw(h);
+        Box::into_raw(Box::new(BddPlan::Ite(f, g, h)))
+    }
+}
+
+/// Frees a plan object
+#[no_mangle]
+pub extern "C" fn rsdd_plan_free(a: *mut BddPlan) -> () {
+    unsafe {
+        let a = Box::from_raw(a);
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn rsdd_compile_plan(mgr: *mut BddManager, plan: *mut BddPlan) -> u64 {
+    unsafe {
+        let mat = &mut *mgr;
+        mat.compile_plan(&*plan).raw()
+    }
 }
