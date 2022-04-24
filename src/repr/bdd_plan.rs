@@ -1,16 +1,15 @@
-//! Represent an arbitrary logical formula as an abstract syntax tree
+//! Represents a deferred BDD computation
 
-use super::var_label::VarLabel;
-use serde::{Serialize, Deserialize};
+use super::var_label::Literal;
 
-#[derive(Serialize, Deserialize, Debug)]
-enum LogicalFormula {
-    Var(VarLabel),
-    True,
-    False,
-    And(Box<LogicalFormula>, Box<LogicalFormula>),
-    Or(Box<LogicalFormula>, Box<LogicalFormula>),
-    Iff(Box<LogicalFormula>, Box<LogicalFormula>),
-    Not(Box<LogicalFormula>),
+#[derive(Debug, Clone)]
+pub enum BddPlan {
+    And(Box<BddPlan>, Box<BddPlan>),
+    Or(Box<BddPlan>, Box<BddPlan>),
+    Iff(Box<BddPlan>, Box<BddPlan>),
+    Ite(Box<BddPlan>, Box<BddPlan>, Box<BddPlan>),
+    Not(Box<BddPlan>),
+    ConstTrue,
+    ConstFalse,
+    Literal(u64, bool)
 }
-
