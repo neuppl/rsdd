@@ -20,6 +20,7 @@ use std::fmt::Debug;
 use maplit::*;
 
 use crate::repr::bdd_plan::BddPlan;
+use crate::repr::var_label::Literal;
 // use time_test::time_test;
 
 /// Weighted model counting parameters for a BDD. It primarily is a storage for
@@ -56,6 +57,19 @@ impl<T: Num + Clone + Debug + Copy> BddWmc<T> {
     /// Sets the weight of a literal
     pub fn set_weight(&mut self, idx: VarLabel, low: T, high: T) -> () {
         self.var_to_val.insert(idx, (low, high));
+    }
+
+    /// get the weight of an asignment
+    pub fn get_weight(&self, assgn: &[Literal]) -> T {
+        let mut prod = self.one;
+        for lit in assgn.iter() {
+            if lit.get_polarity() {
+                prod = prod * self.var_to_val.get(&lit.get_label()).unwrap().1
+            } else {
+                prod = prod * self.var_to_val.get(&lit.get_label()).unwrap().0
+            }
+        }
+        return prod;
     }
 }
 
