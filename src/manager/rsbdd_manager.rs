@@ -784,7 +784,7 @@ impl BddManager {
             return BddPtr::true_node();
         }
         // check if there is an empty clause -- if so, UNSAT
-        if cnf.clauses().iter().find(|x| x.len() == 0).is_some() {
+        if cnf.clauses().iter().find(|x| x.is_empty()).is_some() {
             return BddPtr::false_node();
         }
 
