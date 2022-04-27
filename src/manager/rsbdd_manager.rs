@@ -781,7 +781,7 @@ impl BddManager {
     pub fn from_cnf(&mut self, cnf: &Cnf) -> BddPtr {
         let mut cvec: Vec<BddPtr> = Vec::with_capacity(cnf.clauses().len());
         if cnf.clauses().is_empty() {
-            return BddPtr::false_node();
+            return BddPtr::true_node();
         }
 
         // sort the clauses based on a best-effort bottom-up ordering of clauses
