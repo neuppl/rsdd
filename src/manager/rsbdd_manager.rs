@@ -783,6 +783,10 @@ impl BddManager {
         if cnf.clauses().is_empty() {
             return BddPtr::true_node();
         }
+        // check if there is an empty clause -- if so, UNSAT
+        if cnf.clauses().iter().find(|x| x.len() == 0).is_some() {
+            return BddPtr::false_node();
+        }
 
         // sort the clauses based on a best-effort bottom-up ordering of clauses
         let mut cnf_sorted = cnf.clauses().to_vec();
@@ -817,10 +821,6 @@ impl BddManager {
         });
 
         for lit_vec in cnf_sorted.iter() {
-            // empty clause is False, which contributes nothing
-            if lit_vec.len() == 0 {
-                continue;
-            };
 
             let (vlabel, val) = (lit_vec[0].get_label(), lit_vec[0].get_polarity());
             let mut bdd = self.var(vlabel, val);
