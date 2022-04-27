@@ -81,7 +81,7 @@ impl Cnf {
         }
         Cnf {
             clauses: clause_vec,
-            num_vars: m + 1,
+            num_vars: m,
         }
     }
 
