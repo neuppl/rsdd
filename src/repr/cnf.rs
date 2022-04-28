@@ -156,6 +156,63 @@ impl Cnf {
         }
     }
 
+    /// checks if clause contains the negated literal `lit`
+    fn contains_negated_literal(clause: &[Literal], lit: Literal) -> Option<usize> {
+        for (idx, l) in clause.iter().enumerate() {
+            if l.get_label() == lit.get_label() && l.polarity() != lit.polarity() {
+                return Some(idx);
+            }
+        }
+        return None;
+    }
+
+
+    /// checks if lit => clause
+    fn literal_implies(clause: &[Literal], lit: Literal) -> bool {
+        for l in clause.iter() {
+            if l.get_label() == lit.get_label() && l.polarity() == lit.polarity() {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /// Simplifies the CNF by performing unit propagation on the clauses
+    pub fn unit_propagate(&mut self) -> () {
+        // first, collect the units
+        let mut prev_clauses = self.clauses.clone();
+        // loop until fixed point while propagating
+        loop {
+            let mut units : Vec<Vec<Literal>> = self.clauses.iter().filter(|x| x.len() == 1).map(|x| x.clone()).collect();
+            self.clauses = self.clauses.iter().filter(|x| x.len() > 1).filter_map(|clause| {
+                // check if this clause is implied by any of our units
+                let mut v = clause.clone();
+                for unit in units.iter() {
+                    if Cnf::literal_implies(clause, unit[0]) {
+                        return None
+                    };
+                    match Cnf::contains_negated_literal(clause, unit[0]) {
+                        Some(idx) => {
+                            v.remove(idx);
+                        },
+                        None => ()
+                    }
+                }
+                Some(v)
+            }).collect();
+            self.clauses.append(&mut units);
+            // check for an UNSAT clause; if we have one, break
+            if self.clauses.iter().find(|x| x.is_empty()).is_some() {
+                self.clauses = vec![Vec::new()];
+                return;
+            }
+            if prev_clauses == self.clauses {
+                break;
+            }
+            prev_clauses = self.clauses.clone();
+        }
+    }
+
     /// compute the average span of the clauses with the ordering given by
     /// `lbl_to_pos`, which is a mapping from variable labels to their position
     /// in the ordering
@@ -310,6 +367,19 @@ impl Arbitrary for Cnf {
     }
 }
 
+// #[test]
+// fn test_unit_propagate() {
+//     let v = vec![vec![Literal::new(VarLabel::new(0), false)],
+//                  vec![Literal::new(VarLabel::new(0), true), Literal::new(VarLabel::new(1), false)]];
+//     let propagated = vec![vec![Literal::new(VarLabel::new(0), false)],
+//                           vec![Literal::new(VarLabel::new(1), false)]];
+
+//     let mut cnf = Cnf::new(v);
+
+//     cnf.unit_propagate();
+//     assert_eq!(cnf.clauses, propagated);
+// }
+
 #[test]
 fn test_cnf_wmc() {
     let v = vec![vec![Literal::new(VarLabel::new(0), true), Literal::new(VarLabel::new(1), false)]];
@@ -320,3 +390,4 @@ fn test_cnf_wmc() {
     };
     assert_eq!(cnf.wmc(&weights), 3);
 }
+
