@@ -183,24 +183,25 @@ impl Cnf {
         let mut prev_clauses = self.clauses.clone();
         // loop until fixed point while propagating
         loop {
-            let mut units : Vec<Vec<Literal>> = self.clauses.iter().filter(|x| x.len() == 1).map(|x| x.clone()).collect();
-            self.clauses = self.clauses.iter().filter(|x| x.len() > 1).filter_map(|clause| {
+            let mut units : Vec<Literal> = self.clauses.iter().filter(|x| x.len() == 1).map(|x| x[0]).collect();
+            self.clauses = self.clauses.iter().filter_map(|clause| {
+                // if this is a unit clause, keep it
+                if clause.len() == 1 {
+                    return Some(clause.clone());
+                }
                 // check if this clause is implied by any of our units
-                let mut v = clause.clone();
                 for unit in units.iter() {
-                    if Cnf::literal_implies(clause, unit[0]) {
+                    if Cnf::literal_implies(clause, *unit) {
                         return None
                     };
-                    match Cnf::contains_negated_literal(clause, unit[0]) {
-                        Some(idx) => {
-                            v.remove(idx);
-                        },
-                        None => ()
-                    }
                 }
-                Some(v)
+                // filter out any negated literals
+                let new_c : Vec<Literal> = clause.clone().into_iter().filter(|x| {
+                    // if the unit list does not contain a negated literal, keep it
+                    !units.contains(&Literal::new(x.get_label(), !x.get_polarity()))
+                }).collect();
+                Some(new_c)
             }).collect();
-            self.clauses.append(&mut units);
             // check for an UNSAT clause; if we have one, break
             if self.clauses.iter().find(|x| x.is_empty()).is_some() {
                 self.clauses = vec![Vec::new()];
@@ -367,18 +368,18 @@ impl Arbitrary for Cnf {
     }
 }
 
-// #[test]
-// fn test_unit_propagate() {
-//     let v = vec![vec![Literal::new(VarLabel::new(0), false)],
-//                  vec![Literal::new(VarLabel::new(0), true), Literal::new(VarLabel::new(1), false)]];
-//     let propagated = vec![vec![Literal::new(VarLabel::new(0), false)],
-//                           vec![Literal::new(VarLabel::new(1), false)]];
+#[test]
+fn test_unit_propagate() {
+    let v = vec![vec![Literal::new(VarLabel::new(0), false)],
+                 vec![Literal::new(VarLabel::new(0), true), Literal::new(VarLabel::new(1), false)]];
+    let propagated = vec![vec![Literal::new(VarLabel::new(0), false)],
+                          vec![Literal::new(VarLabel::new(1), false)]];
 
-//     let mut cnf = Cnf::new(v);
+    let mut cnf = Cnf::new(v);
 
-//     cnf.unit_propagate();
-//     assert_eq!(cnf.clauses, propagated);
-// }
+    cnf.unit_propagate();
+    assert_eq!(cnf.clauses, propagated);
+}
 
 #[test]
 fn test_cnf_wmc() {
