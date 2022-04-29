@@ -208,11 +208,11 @@ impl<'a> SddManager {
                     let mgr = self.get_bdd_mgr(ptr);
                     let bdd_ptr = ptr.as_bdd_ptr();
                     let pot_wmc = &weights.wmc_structs[ptr.vtree()]; 
-                    let bdd_wmc = match pot_wmc { 
+                    let mut bdd_wmc = match pot_wmc { 
                         WmcStruct::Bdd(wmc) => wmc,
                         WmcStruct::Dummy(_) => panic!("Oh the humanity!"),
                     }; 
-                    let wmc_val = mgr.wmc(bdd_ptr, bdd_wmc);
+                    let wmc_val = mgr.wmc(bdd_ptr, &mut bdd_wmc);
                     tbl.insert(ptr.regular(), wmc_val);
                     return wmc_val;
                 }

@@ -731,8 +731,11 @@ impl BddManager {
     /// problems, and is a huge savings if it can be. By default, it should be
     /// `true`.
     pub fn wmc<T: Num + Clone + Debug + Copy>(&self, ptr: BddPtr, params: &BddWmc<T>) -> T {
-        // call wmc_helper and smooth the result
-        let (mut v, lvl_op) = self.wmc_helper(ptr, params, true, &mut HashMap::new());
+        self.cached_wmc(ptr, params, &mut HashMap::new())
+    }
+
+    pub fn cached_wmc<T: Num + Clone + Debug + Copy>(&self, ptr: BddPtr, params: &BddWmc<T>, cache: &mut HashMap<BddPtr, T>) -> T {
+        let (mut v, lvl_op) = self.wmc_helper(ptr, params, true, cache);
         if lvl_op.is_none() {
             // no smoothing required
             v

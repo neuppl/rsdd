@@ -358,10 +358,11 @@ impl Arbitrary for Cnf {
         let num_clauses = (usize::arbitrary(g) % 16) + 1;
         let mut clauses = Vec::new();
         for _ in 0..num_clauses {
-            let clause = vec![Literal::new(VarLabel::new(u64::arbitrary(g) % num_vars), bool::arbitrary(g)),
-                                Literal::new(VarLabel::new(u64::arbitrary(g) % num_vars), bool::arbitrary(g)),
-                                Literal::new(VarLabel::new(u64::arbitrary(g) % num_vars), bool::arbitrary(g))
-            ];
+            let clause_size = (usize::arbitrary(g) % 3) + 1;
+            let mut clause : Vec<Literal> = Vec::new();
+            for _ in 0..clause_size {
+                clause.push(Literal::new(VarLabel::new(u64::arbitrary(g) % num_vars), bool::arbitrary(g)));
+            }
             clauses.push(clause);
         }
         Cnf::new(clauses)
@@ -376,7 +377,6 @@ fn test_unit_propagate() {
                           vec![Literal::new(VarLabel::new(1), false)]];
 
     let mut cnf = Cnf::new(v);
-
     cnf.unit_propagate();
     assert_eq!(cnf.clauses, propagated);
 }
