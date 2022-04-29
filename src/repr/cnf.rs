@@ -381,6 +381,24 @@ fn test_unit_propagate() {
     assert_eq!(cnf.clauses, propagated);
 }
 
+#[cfg(test)]
+mod test_sdd_manager {
+    use repr::cnf::Cnf;
+    use manager::rsbdd_manager::{BddManager};
+
+    quickcheck! {
+        fn test_unit_propagate(c: Cnf) -> bool {
+            let mut mgr = BddManager::new_default_order(16);
+            let bdd1 = mgr.from_cnf(&c);
+            let mut c2 = c.clone();
+            c2.unit_propagate();
+            let bdd2 = mgr.from_cnf(&c2);
+            bdd1 == bdd2
+        }
+    }
+}
+
+
 #[test]
 fn test_cnf_wmc() {
     let v = vec![vec![Literal::new(VarLabel::new(0), true), Literal::new(VarLabel::new(1), false)]];

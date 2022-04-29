@@ -12,6 +12,8 @@ extern crate egg;
 extern crate serde;
 extern crate twox_hash;
 extern crate time_test;
+#[macro_use]
+extern crate quickcheck;
 
 #[macro_use]
 mod util;
