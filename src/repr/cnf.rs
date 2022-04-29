@@ -330,7 +330,7 @@ impl Cnf {
     }
 
     /// Updates the CNF to a new CNF that results from conditioning on the supplied literal
-    pub fn condition(&mut self, lit: Literal) -> () {
+    pub fn condition(&mut self, lit: Literal) -> Cnf {
         let new_cnf : Vec<Vec<Literal>> = self.clauses().iter().filter_map(|clause| {
             // first, check if there is a true literal -- if there is, filter out this clause
             if clause.iter().find(|outer| outer.get_label() == lit.get_label() && outer.get_polarity() == lit.get_polarity()).is_some() {
@@ -342,7 +342,7 @@ impl Cnf {
                 Some(filtered)
             }
         }).collect();
-        self.clauses = new_cnf;
+        return Cnf::new(new_cnf);
     }
 
     pub fn to_string(&self) -> String {
