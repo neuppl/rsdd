@@ -329,6 +329,22 @@ impl Cnf {
         VarOrder::new(final_order)
     }
 
+    /// Updates the CNF to a new CNF that results from conditioning on the supplied literal
+    pub fn condition(&mut self, lit: Literal) -> () {
+        let new_cnf : Vec<Vec<Literal>> = self.clauses().iter().filter_map(|clause| {
+            // first, check if there is a true literal -- if there is, filter out this clause
+            if clause.iter().find(|outer| outer.get_label() == lit.get_label() && outer.get_polarity() == lit.get_polarity()).is_some() {
+                None
+            } else {
+                // next, filter out clauses with false literals
+                let filtered : Vec<Literal> = clause.into_iter().filter(|outer| 
+                    lit.get_label() == outer.get_label() && lit.get_polarity() != outer.get_polarity()).map(|x| *x).collect();
+                Some(filtered)
+            }
+        }).collect();
+        self.clauses = new_cnf;
+    }
+
     pub fn to_string(&self) -> String {
         let mut r = String::new();
         for clause in self.clauses.iter() {
