@@ -338,7 +338,7 @@ impl Cnf {
             } else {
                 // next, filter out clauses with false literals
                 let filtered : Vec<Literal> = clause.into_iter().filter(|outer| 
-                    lit.get_label() == outer.get_label() && lit.get_polarity() != outer.get_polarity()).map(|x| *x).collect();
+                    !(lit.get_label() == outer.get_label() && lit.get_polarity() != outer.get_polarity())).map(|x| *x).collect();
                 Some(filtered)
             }
         }).collect();
