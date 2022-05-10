@@ -332,10 +332,24 @@ mod test_bdd_manager {
     }
 
     quickcheck! {
-        fn bdd_ite_iff(c1: Vec<Vec<Literal>>, c2: Vec<Vec<Literal>>) -> TestResult {
-            let c1 = Cnf::new(c1);
-            let c2 = Cnf::new(c2);
+        fn test_ite_and(c1: Cnf, c2: Cnf) -> bool {
+            let mut mgr = super::BddManager::new_default_order(16);
+            let cnf1 = mgr.from_cnf(&c1);
+            let cnf2 = mgr.from_cnf(&c2);
 
+            let andbdd = mgr.and(cnf1, cnf2);
+            let itebdd = mgr.ite(cnf1, cnf2, mgr.false_ptr());
+
+            println!("bdd 1: {}\nbdd 2: {}", mgr.print_bdd(andbdd), mgr.print_bdd(itebdd));
+            andbdd == itebdd
+        }
+
+    }
+
+
+
+    quickcheck! {
+        fn bdd_ite_iff(c1: Cnf, c2: Cnf) -> TestResult {
             if c1.num_vars() == 0 || c1.num_vars() > 8 { return TestResult::discard() }
             if c1.clauses().len() > 12 { return TestResult::discard() }
             let mut mgr = super::BddManager::new_default_order(16);
@@ -343,8 +357,8 @@ mod test_bdd_manager {
             let cnf2 = mgr.from_cnf(&c2);
             let iff1 = mgr.iff(cnf1, cnf2);
 
-            let clause1 = mgr.or(cnf1, cnf2.neg());
-            let clause2 = mgr.or(cnf1.neg(), cnf2);
+            let clause1 = mgr.and(cnf1, cnf2);
+            let clause2 = mgr.and(cnf1.neg(), cnf2.neg());
             let and = mgr.and(clause1, clause2);
 
             TestResult::from_bool(and == iff1)
@@ -352,9 +366,7 @@ mod test_bdd_manager {
     }
 
     quickcheck! {
-        fn wmc_eq(clauses: Vec<Vec<Literal>>) -> TestResult {
-            let c1 = Cnf::new(clauses);
-
+        fn wmc_eq(c1: Cnf) -> TestResult {
             // constrain the size
             if c1.num_vars() == 0 || c1.num_vars() > 8 { return TestResult::discard() }
             if c1.clauses().len() > 16 { return TestResult::discard() }

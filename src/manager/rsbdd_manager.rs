@@ -15,6 +15,7 @@ use repr::var_label::VarLabel;
 use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
+use std::collections::BinaryHeap;
 
 #[macro_use]
 use maplit::*;
@@ -22,6 +23,32 @@ use maplit::*;
 use crate::repr::bdd_plan::BddPlan;
 use crate::repr::var_label::Literal;
 // use time_test::time_test;
+
+#[derive(Eq, PartialEq, Debug)]
+struct CompiledCNF {
+    ptr: BddPtr,
+    sz: usize
+}
+
+// The priority queue depends on `Ord`.
+// Explicitly implement the trait so the queue becomes a min-heap
+// instead of a max-heap.
+impl Ord for CompiledCNF {
+    fn cmp(&self, other: &Self) -> Ordering {
+        // Notice that the we flip the ordering on costs.
+        // In case of a tie we compare positions - this step is necessary
+        // to make implementations of `PartialEq` and `Ord` consistent.
+        other.sz.cmp(&self.sz)
+        .then_with(|| self.ptr.raw().cmp(&other.ptr.raw()))
+    }
+}
+
+// `PartialOrd` needs to be implemented as well.
+impl PartialOrd for CompiledCNF {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
 
 /// Weighted model counting parameters for a BDD. It primarily is a storage for
 /// the weight on each variable.
@@ -316,10 +343,10 @@ impl BddManager {
         };
 
         // ok now it is normalized, see if this is in the apply table
-        match self.apply_table.get(f, g, h) {
-            Some(v) => return v,
-            None => (),
-        };
+        // match self.apply_table.get(f, g, h) {
+        //     Some(v) => return v,
+        //     None => (),
+        // };
 
         // ok the work!
         // find the first essential variable for f, g, or h
@@ -756,29 +783,46 @@ impl BddManager {
         }
     }
 
-    // /// Weighted-model count.
-    // pub fn wmc<T: Num + Clone + Debug + Copy>(&self, ptr: BddPtr, params: &BddWmc<T>) -> T {
-    //     // call wmc_helper and smooth the result
-    //     let mut tbl = TraverseTable::new(&self.compute_table);
-    //     let (mut v, lvl_op) = self.wmc_helper(ptr, params, &mut tbl);
-    //     if lvl_op.is_none() {
-    //         // no smoothing required
-    //         v
-    //     } else {
-    //         // need to smooth
-    //         let mut lvl = lvl_op;
-    //         let order = self.get_order();
-    //         while lvl.is_some() {
-    //             let (low_factor, high_factor) = params
-    //                 .var_to_val
-    //                 .get(&VarLabel::new(lvl.unwrap().value()))
-    //                 .unwrap();
-    //             v = (v.clone() * (*low_factor)) + (v * (*high_factor));
-    //             lvl = order.above(lvl.unwrap());
-    //         }
-    //         v
-    //     }
-    // }
+    pub fn from_cnf_with_assignments(&mut self, cnf: &Cnf, assgn: &Vec<Option<bool>>) -> BddPtr {
+        let clauses = cnf.clauses();
+        if clauses.is_empty() {
+            return self.true_ptr();
+        }
+        let mut compiled_heap : BinaryHeap<CompiledCNF> = BinaryHeap::new();
+        // push each clause onto the compiled_heap
+        for clause in clauses.iter() {
+            let mut cur_ptr = self.false_ptr();
+            for lit in clause.iter() {
+                match assgn[lit.get_label().value() as usize] {
+                    None => {
+                        let new_v = self.var(lit.get_label(), lit.get_polarity());
+                        cur_ptr = self.or(new_v, cur_ptr);
+                    },
+                    Some(v) if v == lit.get_polarity() => {
+                        cur_ptr = self.true_ptr();
+                        break;
+                    },
+                    _ => {
+                        continue;
+                    }
+                }
+            }
+            let sz = self.count_nodes(cur_ptr);
+            compiled_heap.push(CompiledCNF { ptr: cur_ptr, sz });
+        }
+    
+        while compiled_heap.len() > 1 {
+            let CompiledCNF { ptr: ptr1, sz: _sz } = compiled_heap.pop().unwrap();
+            let CompiledCNF { ptr: ptr2, sz: _sz } = compiled_heap.pop().unwrap();
+            let ptr = self.and(ptr1, ptr2);
+            let sz = 1;
+            // let sz = mgr.count_nodes(ptr);
+            compiled_heap.push(CompiledCNF { ptr, sz })
+        }
+    
+        let CompiledCNF { ptr, sz } = compiled_heap.pop().unwrap();
+        return ptr;
+    }
 
     /// Compile a BDD from a CNF
     pub fn from_cnf(&mut self, cnf: &Cnf) -> BddPtr {

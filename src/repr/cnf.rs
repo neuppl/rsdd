@@ -95,7 +95,23 @@ impl<'a> UnitPropagate<'a> {
             } else {
                 &self.cnf.clauses()[self.watch_list_pos[loc][i]]
             };
-            // let clause = &self.cnf.clauses()[watching_clauses[i]];
+
+            // if clause is satisfied, do not change its watched literals (increment i)
+            let mut is_sat = false;
+            for lit in clause.iter() {
+                match self.assignments[lit.get_label().value() as usize] {
+                    Some(v) if lit.get_polarity() == v => { 
+                        i += 1;
+                        is_sat = true;
+                        break;
+                    },
+                    _ => ()
+                }
+            }
+            if is_sat {
+                continue;
+            }
+            
             let mut remaining_lits = clause.iter().enumerate().map(|(idx, x)| (idx, x)).filter(|(_, x)| {
                 // if it is assigned, check if it is consistent
                 match self.assignments[x.get_label().value() as usize] {
@@ -116,16 +132,17 @@ impl<'a> UnitPropagate<'a> {
                 // find a new literal to watch
                 // first, remove the current watch
                 let (idx, new_lit) = remaining_lits.nth(0).unwrap();
+                let new_loc = new_lit.get_label().value() as usize;
                 if new_assignment.get_polarity() {
-                    self.watch_list_neg[loc].remove(i);
+                    self.watch_list_neg[loc].swap_remove(i);
                 } else {
-                    self.watch_list_pos[loc].remove(i);
+                    self.watch_list_pos[loc].swap_remove(i);
                 };
                 // now add the new one
                 if new_lit.get_polarity() {
-                    self.watch_list_neg[new_lit.get_label().value() as usize].push(idx);
+                    self.watch_list_neg[new_loc].push(idx);
                 } else {
-                    self.watch_list_pos[new_lit.get_label().value() as usize].push(idx);
+                    self.watch_list_pos[new_loc].push(idx);
                 }
             }
         }
@@ -461,35 +478,94 @@ impl Arbitrary for Cnf {
 }
 
 #[test]
-fn test_unit_propagate() {
+fn test_unit_propagate_1() {
     let v = vec![vec![Literal::new(VarLabel::new(0), false)],
                  vec![Literal::new(VarLabel::new(0), true), Literal::new(VarLabel::new(1), false)],
                  vec![Literal::new(VarLabel::new(1), true), Literal::new(VarLabel::new(2), true)]];
 
     let mut cnf = Cnf::new(v);
-    let mut up = UnitPropagate::new(&cnf);
-    println!("{:?}", up);
-    // this needs to be tested WAY more, and test unsetting and setting together
-    // cnf.unit_propagate();
-    // assert_eq!(cnf.clauses, propagated);
+    let mut up = UnitPropagate::new(&cnf).unwrap();
+    let assgn = up.get_assgn();
+    assert_eq!(assgn[0], Some(false));
+    assert_eq!(assgn[1], Some(false));
+    assert_eq!(assgn[2], Some(true));
 }
 
-// #[cfg(test)]
-// mod test_sdd_manager {
-//     use repr::cnf::Cnf;
-//     use manager::rsbdd_manager::{BddManager};
+#[test]
+fn test_unit_propagate_2() {
+    let v = vec![vec![Literal::new(VarLabel::new(0), true), Literal::new(VarLabel::new(1), false)],
+                 vec![Literal::new(VarLabel::new(1), true), Literal::new(VarLabel::new(2), true)]];
 
-//     quickcheck! {
-//         fn test_unit_propagate(c: Cnf) -> bool {
-//             let mut mgr = BddManager::new_default_order(16);
-//             let bdd1 = mgr.from_cnf(&c);
-//             let mut c2 = c.clone();
-//             c2.unit_propagate();
-//             let bdd2 = mgr.from_cnf(&c2);
-//             bdd1 == bdd2
-//         }
-//     }
-// }
+    let mut cnf = Cnf::new(v);
+    let mut up = UnitPropagate::new(&cnf).unwrap();
+    let assgn = up.get_assgn();
+    assert_eq!(assgn[0], None);
+    assert_eq!(assgn[1], None);
+    assert_eq!(assgn[2], None);
+}
+
+#[test]
+fn test_unit_propagate_3() {
+    let v = vec![vec![Literal::new(VarLabel::new(0), false)],
+                 vec![Literal::new(VarLabel::new(0), false), Literal::new(VarLabel::new(1), false)],
+                 vec![Literal::new(VarLabel::new(0), false), Literal::new(VarLabel::new(1), true)],
+                 vec![Literal::new(VarLabel::new(1), true), Literal::new(VarLabel::new(2), true)]];
+
+    let mut cnf = Cnf::new(v);
+    let mut up = UnitPropagate::new(&cnf).unwrap();
+    let assgn = up.get_assgn();
+    assert_eq!(assgn[0], Some(false));
+    assert_eq!(assgn[1], None);
+    assert_eq!(assgn[2], None);
+}
+
+#[test]
+fn test_unit_propagate_4() {
+    let v = vec![vec![Literal::new(VarLabel::new(0), false)],
+                 vec![Literal::new(VarLabel::new(0), true), Literal::new(VarLabel::new(1), false)],
+                 vec![Literal::new(VarLabel::new(1), true), Literal::new(VarLabel::new(0), true)],
+                 vec![Literal::new(VarLabel::new(1), true), Literal::new(VarLabel::new(2), true)]];
+
+    let mut cnf = Cnf::new(v);
+    let mut up = UnitPropagate::new(&cnf);
+    assert!(up.is_none());
+}
+
+
+
+#[cfg(test)]
+mod test_cnf {
+    use quickcheck::TestResult;
+    use repr::cnf::Cnf;
+    use manager::rsbdd_manager::{BddManager};
+    use crate::repr::{var_label::{Literal, VarLabel}, cnf::UnitPropagate};
+
+    // quickcheck! {
+    //     fn test_unit_propagate(lits: Vec<Vec<Literal>>) -> TestResult {
+    //         let c1 = Cnf::new(lits);
+
+    //         if c1.num_vars() < 3 || c1.num_vars() > 8 { return TestResult::discard() }
+    //         let mut mgr = BddManager::new_default_order(16);
+    //         let mut bdd1 = mgr.from_cnf(&c1);
+    //         let bdd1 = mgr.condition(bdd1, VarLabel::new(0), true);
+    //         let bdd1 = mgr.condition(bdd1, VarLabel::new(1), true);
+            
+    //         // let mut assgn : Vec<Option<bool>> = vec![None; c1.num_vars()];
+    //         let mut up = match UnitPropagate::new(&c1) {
+    //             Some(v) => v,
+    //             None => return TestResult::from_bool(bdd1.is_false())
+    //         };
+    //         up.set(Literal::new(VarLabel::new(0), true));
+    //         up.set(Literal::new(VarLabel::new(1), true));
+    //         // assgn[0] = Some(true);
+    //         // assgn[1] = Some(true);
+    //         let bdd2 = mgr.from_cnf_with_assignments(&c1, &up.get_assgn());
+
+    //         println!("checked {:?}\n\tImplied literals: {:?}\n\tbdd1: {}\n\tbdd 2: {}", c1, up.get_assgn(), mgr.print_bdd(bdd1), mgr.print_bdd(bdd2));
+    //         TestResult::from_bool(bdd1 == bdd2)
+    //     }
+    // }
+}
 
 
 #[test]
