@@ -337,13 +337,12 @@ mod test_bdd_manager {
             let cnf1 = mgr.from_cnf(&c1);
             let cnf2 = mgr.from_cnf(&c2);
 
-            let andbdd = mgr.and(cnf1, cnf2);
             let itebdd = mgr.ite(cnf1, cnf2, mgr.false_ptr());
+            let andbdd = mgr.and(cnf1, cnf2);
+            println!("bdd and: {}\nbdd ite: {}\n", mgr.print_bdd(andbdd), mgr.print_bdd(itebdd));
 
-            println!("bdd 1: {}\nbdd 2: {}", mgr.print_bdd(andbdd), mgr.print_bdd(itebdd));
             andbdd == itebdd
         }
-
     }
 
 

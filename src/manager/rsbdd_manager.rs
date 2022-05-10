@@ -317,6 +317,14 @@ impl BddManager {
         // standardize
         // See pgs. 115-117 of "Algorithms and Data Structures in VLSI Design"
         // attempt a base case
+        match self.apply_table.get(f, g, h) {
+            Some(v) => return v,
+            None => (),
+        };
+        let f_orig = f;
+        let g_orig = g;
+        let h_orig = h;
+
         match (f, g, h) {
             (_, g, h) if g.is_false() && h.is_false() => return BddPtr::false_node(),
             (_, g, h) if g.is_true() && h.is_true() => return BddPtr::true_node(),
@@ -342,12 +350,6 @@ impl BddManager {
             _ => (f, g, h),
         };
 
-        // ok now it is normalized, see if this is in the apply table
-        // match self.apply_table.get(f, g, h) {
-        //     Some(v) => return v,
-        //     None => (),
-        // };
-
         // ok the work!
         // find the first essential variable for f, g, or h
         let lbl = self.get_order().first_essential(f, g, h);
@@ -371,7 +373,7 @@ impl BddManager {
             var: lbl,
         };
         let r = self.get_or_insert(node);
-        self.apply_table.insert(f, g, h, r);
+        self.apply_table.insert(f_orig, g_orig, h_orig, r);
         r
     }
 
