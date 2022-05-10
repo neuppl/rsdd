@@ -359,7 +359,7 @@ mod test_bdd_manager {
 
             let clause1 = mgr.and(cnf1, cnf2);
             let clause2 = mgr.and(cnf1.neg(), cnf2.neg());
-            let and = mgr.and(clause1, clause2);
+            let and = mgr.or(clause1, clause2);
 
             TestResult::from_bool(and == iff1)
         }
