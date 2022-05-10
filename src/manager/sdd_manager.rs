@@ -3,7 +3,6 @@
 
 use backing_store::sdd_table::*;
 use manager::cache::lru::*;
-use quickersort;
 use repr::boolexpr::BoolExpr;
 use repr::cnf::Cnf;
 use repr::sdd::*;
@@ -317,8 +316,10 @@ impl<'a> SddManager {
                 return node[1].0
             }
         }
+
         // we have a fresh SDD pointer, uniqify it
-        quickersort::sort_by(&mut node[..], &|a, b| a.0.cmp(&b.0));
+        node.sort_by(|a, b| a.0.cmp(&b.0));
+
         let r = if node[0].1.is_compl() {
             for i in 0..node.len() {
                 node[i].1 = node[i].1.neg();

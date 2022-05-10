@@ -5,7 +5,6 @@ extern crate libc;
 extern crate maplit;
 extern crate num;
 extern crate pretty;
-extern crate quickersort;
 extern crate rand;
 extern crate egg;
 #[macro_use]

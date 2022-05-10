@@ -23,7 +23,6 @@ harness = false
 fnv = "1.0.3"
 rand = "0.3.18"
 twox-hash = "1.1.0"
-quickersort = "3.0"
 dimacs = "0.2.0"
 pretty = "0.3.3"
 num = "0.1.41"

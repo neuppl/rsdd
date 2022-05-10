@@ -51,6 +51,15 @@ impl Literal {
         ret.set_polarity(if polarity { 1 } else { 0 });
         ret
     }
+
+    pub fn implies_true(&self, other: &Literal) -> bool {
+        self.get_label() == other.get_label() && self.get_polarity() == other.get_polarity()
+    }
+
+    pub fn implies_false(&self, other: &Literal) -> bool {
+        self.get_label() == other.get_label() && self.get_polarity() != other.get_polarity()
+    }
+
 }
 
 impl fmt::Debug for Literal {
