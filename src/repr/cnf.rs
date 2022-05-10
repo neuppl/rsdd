@@ -137,6 +137,10 @@ impl<'a> UnitPropagate<'a> {
         }
         return true;
     }
+
+    pub fn get_assgn(&self) -> &Vec<Option<bool>> {
+        &self.assignments
+    }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
