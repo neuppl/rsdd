@@ -375,8 +375,11 @@ impl Cnf {
         let mut lbl_to_pos: Vec<usize> = (0..(self.num_vars)).collect();
         // let mut rng = thread_rng();
         // rng.shuffle(&mut lbl_to_pos);
-        // perform 20 iterations of force-update
-        for _ in 0..10 {
+        // perform 100 iterations of force-update
+        let mut cur_span : f64 = self.average_span(&lbl_to_pos);
+        let mut prev_span = 0.0;
+        loop {
+            prev_span = cur_span;
             let mut cog: Vec<f64> = Vec::with_capacity(self.clauses.len());
             for clause in self.clauses.iter() {
                 cog.push(self.center_of_gravity(clause, &lbl_to_pos));
@@ -411,7 +414,10 @@ impl Cnf {
             for (idx, lbl) in pos_to_lbl.into_iter().enumerate() {
                 lbl_to_pos[lbl] = idx;
             }
-            // println!("new order: {:?}", lbl_to_pos);
+            cur_span = self.average_span(&lbl_to_pos);
+            if prev_span - cur_span < 1.0 {
+                break;
+            }
         }
         let final_order: Vec<VarLabel> = lbl_to_pos
             .into_iter()
@@ -520,17 +526,18 @@ fn test_unit_propagate_3() {
 }
 
 #[test]
-fn test_unit_propagate_4() {
-    let v = vec![vec![Literal::new(VarLabel::new(0), false)],
-                 vec![Literal::new(VarLabel::new(0), true), Literal::new(VarLabel::new(1), false)],
-                 vec![Literal::new(VarLabel::new(1), true), Literal::new(VarLabel::new(0), true)],
-                 vec![Literal::new(VarLabel::new(1), true), Literal::new(VarLabel::new(2), true)]];
+fn test_force_order() {
+    let v = vec![vec![Literal::new(VarLabel::new(1), false), Literal::new(VarLabel::new(4), false)],
+                 vec![Literal::new(VarLabel::new(2), false), Literal::new(VarLabel::new(4), true)],
+                 vec![Literal::new(VarLabel::new(2), false), Literal::new(VarLabel::new(5), true)],
+                 vec![Literal::new(VarLabel::new(5), false), Literal::new(VarLabel::new(3), true)],
+                 ];
 
     let mut cnf = Cnf::new(v);
-    let mut up = UnitPropagate::new(&cnf);
-    assert!(up.is_none());
-}
+    println!("order: {:?}", cnf.force_order().get_vec());
 
+    assert!(false)
+}
 
 
 #[cfg(test)]
@@ -540,31 +547,35 @@ mod test_cnf {
     use manager::rsbdd_manager::{BddManager};
     use crate::repr::{var_label::{Literal, VarLabel}, cnf::UnitPropagate};
 
-    // quickcheck! {
-    //     fn test_unit_propagate(lits: Vec<Vec<Literal>>) -> TestResult {
-    //         let c1 = Cnf::new(lits);
-
-    //         if c1.num_vars() < 3 || c1.num_vars() > 8 { return TestResult::discard() }
-    //         let mut mgr = BddManager::new_default_order(16);
-    //         let mut bdd1 = mgr.from_cnf(&c1);
-    //         let bdd1 = mgr.condition(bdd1, VarLabel::new(0), true);
-    //         let bdd1 = mgr.condition(bdd1, VarLabel::new(1), true);
+    quickcheck! {
+        fn test_unit_propagate(c1: Cnf) -> TestResult {
+            if c1.num_vars() < 2 || c1.num_vars() > 8 { return TestResult::discard() }
+            let mut mgr = BddManager::new_default_order(16);
+            let mut bdd1 = mgr.from_cnf(&c1);
+            let bdd1 = mgr.condition(bdd1, VarLabel::new(0), true);
+            let bdd1 = mgr.condition(bdd1, VarLabel::new(1), true);
             
-    //         // let mut assgn : Vec<Option<bool>> = vec![None; c1.num_vars()];
-    //         let mut up = match UnitPropagate::new(&c1) {
-    //             Some(v) => v,
-    //             None => return TestResult::from_bool(bdd1.is_false())
-    //         };
-    //         up.set(Literal::new(VarLabel::new(0), true));
-    //         up.set(Literal::new(VarLabel::new(1), true));
-    //         // assgn[0] = Some(true);
-    //         // assgn[1] = Some(true);
-    //         let bdd2 = mgr.from_cnf_with_assignments(&c1, &up.get_assgn());
+            // let mut assgn : Vec<Option<bool>> = vec![None; c1.num_vars()];
+            let mut up = match UnitPropagate::new(&c1) {
+                Some(v) => v,
+                None => return TestResult::from_bool(bdd1.is_false())
+            };
+            if !up.set(Literal::new(VarLabel::new(0), true)) {
+                assert!(bdd1.is_false())
+            }
+            if !up.set(Literal::new(VarLabel::new(1), true)) {
+                assert!(bdd1.is_false());
+            }
 
-    //         println!("checked {:?}\n\tImplied literals: {:?}\n\tbdd1: {}\n\tbdd 2: {}", c1, up.get_assgn(), mgr.print_bdd(bdd1), mgr.print_bdd(bdd2));
-    //         TestResult::from_bool(bdd1 == bdd2)
-    //     }
-    // }
+            // check that all units are implied 
+            // assgn[0] = Some(true);
+            // assgn[1] = Some(true);
+            let bdd2 = mgr.from_cnf_with_assignments(&c1, &up.get_assgn());
+
+            println!("checked {:?}\n\tImplied literals: {:?}\n\tbdd1: {}\n\tbdd 2: {}", c1, up.get_assgn(), mgr.print_bdd(bdd1), mgr.print_bdd(bdd2));
+            TestResult::from_bool(bdd1 == bdd2)
+        }
+    }
 }
 
 

@@ -35,7 +35,6 @@ impl Ite {
         };
         assert!(!f.is_compl() && !g.is_compl());
         (Ite { f, g, h }, compl)
-        // (Ite { f, g, h }, false)
     }
 }
 
