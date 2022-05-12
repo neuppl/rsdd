@@ -16,6 +16,10 @@ use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
 use std::collections::BinaryHeap;
+use rand::Rng;
+use rand::rngs::ThreadRng;
+use rand::*;
+
 
 #[macro_use]
 use maplit::*;
@@ -47,6 +51,22 @@ impl Ord for CompiledCNF {
 impl PartialOrd for CompiledCNF {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
+    }
+}
+
+
+#[derive(Debug)]
+pub struct Model {
+    assignments: Vec<bool>
+}
+
+impl Model {
+    pub fn new(assignments: Vec<bool>) -> Model {
+        Model { assignments }
+    }
+
+    pub fn get_assignment(&self, var: VarLabel) -> bool {
+        return self.assignments[var.value() as usize]
     }
 }
 
@@ -98,6 +118,11 @@ impl<T: Num + Clone + Debug + Copy> BddWmc<T> {
         }
         return prod;
     }
+
+    pub fn get_var_weight(&self, label: VarLabel) -> &(T, T) {
+        return &self.var_to_val.get(&label).unwrap()
+    }
+
 }
 
 /// An auxiliary data structure for tracking statistics about BDD manager
@@ -137,6 +162,10 @@ impl BddManager {
             apply_table: BddApplyTable::new(l),
             stats: BddManagerStats::new(),
         }
+    }
+
+    pub fn num_vars(&self) -> usize {
+        return self.get_order().len()
     }
 
     /// Generate a new variable which was not in the original order. Places the
@@ -783,6 +812,43 @@ impl BddManager {
             }
             v
         }
+    }
+
+    fn sample_h(&self, ptr: BddPtr, rng: &mut ThreadRng, wmc: &BddWmc<f64>,
+            assgn: &mut Vec<bool>, cache: &HashMap<BddPtr, f64>, cur_level: usize) -> () {
+        // check for smoothing
+        if ptr.is_const() {
+            return;
+        }
+        
+        // let mut rng = rand::thread_rng();
+        let topvar  : VarLabel = self.topvar(ptr);
+        let expected = self.get_order().var_at_pos(cur_level);
+        if topvar != expected {
+            // smooth by sampling the expected variable
+            let w = wmc.get_var_weight(expected);
+            let v : bool = rng.gen_bool(w.1 / (w.0 + w.1));
+            assgn[expected.value_usize()] = v;
+            self.sample_h(ptr, rng, wmc, assgn, cache, cur_level+1);
+        } else {
+            // sample the top variable
+            let w = wmc.get_var_weight(topvar);
+            let l_weight = cache.get(&self.low(ptr)).unwrap();
+            let h_weight = cache.get(&self.high(ptr)).unwrap();
+            let v : bool = rng.gen_bool((w.1 * h_weight) / (w.0 * l_weight + w.1 * h_weight));
+            assgn[topvar.value_usize()] = v;
+            self.sample_h(ptr, rng, wmc, assgn, cache, cur_level+1);
+        }
+    }
+
+    /// Draws a sample from the models of the BDD according to the distribution specified by `wmc`
+    pub fn sample(&self, ptr: BddPtr, wmc: &BddWmc<f64>) -> Model {
+        let mut rng = rand::thread_rng();
+        let mut r = vec![false; self.num_vars()];
+        let mut cache : HashMap<BddPtr, f64> = HashMap::new();
+        let _z = self.cached_wmc(ptr, &wmc, &mut cache);
+        self.sample_h(ptr, &mut rng, wmc, &mut r, &cache, 0);
+        return Model::new(r);
     }
 
     pub fn from_cnf_with_assignments(&mut self, cnf: &Cnf, assgn: &Vec<Option<bool>>) -> BddPtr {

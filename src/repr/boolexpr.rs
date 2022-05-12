@@ -1,7 +1,7 @@
 use dimacs::*;
 use rand;
-use rand::distributions::IndependentSample;
-use rand::StdRng;
+use rand::Rng;
+use rand::rngs::ThreadRng;
 use repr::var_label::VarLabel;
 use std::collections::{HashMap, HashSet};
 
@@ -59,12 +59,12 @@ impl BoolExpr {
     }
 
     /// Build a random CNF expression
-    pub fn rand_cnf(rng: &mut StdRng, num_vars: usize, num_clauses: usize) -> BoolExpr {
+    pub fn rand_cnf(rng: &mut ThreadRng, num_vars: usize, num_clauses: usize) -> BoolExpr {
         assert!(num_clauses > 2, "requires at least 2 clauses in CNF");
         let vars: Vec<BoolExpr> = (1..num_vars)
             .map(|x| BoolExpr::Var(x, rand::random()))
             .collect();
-        let range = rand::distributions::Range::new(0, vars.len());
+        // let range = rand::distributions::Range::new(0, vars.len());
         let clause_size = 3;
         // we generate a random cnf
         let mut clause_vec: Vec<BoolExpr> = Vec::new();
@@ -73,7 +73,7 @@ impl BoolExpr {
             if num_vars > 1 {
                 let mut var_vec: Vec<BoolExpr> = Vec::new();
                 for _ in 0..clause_size {
-                    let var = vars.get(range.ind_sample(rng)).unwrap().clone();
+                    let var = vars.get(rng.gen_range(0..vars.len())).unwrap().clone();
                     var_vec.push(var);
                 }
                 let l1 = var_vec.pop().unwrap();
@@ -85,7 +85,7 @@ impl BoolExpr {
                     });
                 clause_vec.push(new_expr);
             } else {
-                let var = vars.get(range.ind_sample(rng)).unwrap().clone();
+                let var = vars.get(rng.gen_range(0..vars.len())).unwrap().clone();
                 clause_vec.push(var);
             }
         }

@@ -23,6 +23,10 @@ impl VarLabel {
     pub fn value(&self) -> u64 {
         self.0
     }
+
+    pub fn value_usize(&self) -> usize {
+        self.0 as usize
+    }
 }
 
 /// Literal, a variable label and its corresponding truth assignment
