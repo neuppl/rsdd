@@ -1,8 +1,11 @@
+//! Stores the variable order for a the BDD manager Variables that occur first
+//! in the order occur first in the BDD, starting from the root.
 use repr::bdd::*;
 use repr::var_label::VarLabel;
 use std::slice::Iter;
 use util;
 
+#[derive(Debug, Clone)]
 pub struct VarOrder {
     /// an associative array, each index corresponds to a variable. I.e., the
     /// position of variable i in the order is given by the value of the array at

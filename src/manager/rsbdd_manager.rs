@@ -734,8 +734,14 @@ impl BddManager {
         tbl: &mut HashMap<BddPtr, T>,
     ) -> (T, Option<VarLabel>) {
         match ptr.ptr_type() {
-            PointerType::PtrTrue => (wmc.one.clone(), Some(self.get_order().last_var())),
-            PointerType::PtrFalse => (wmc.zero.clone(), Some(self.get_order().last_var())),
+            PointerType::PtrTrue => { 
+                tbl.insert(ptr, wmc.one.clone());
+                (wmc.one.clone(), Some(self.get_order().last_var()))
+            },
+            PointerType::PtrFalse => { 
+                tbl.insert(ptr, wmc.zero.clone());
+                (wmc.zero.clone(), Some(self.get_order().last_var()))
+            },
             PointerType::PtrNode => {
                 let order = self.get_order();
                 let res = match tbl.get(&ptr) {
@@ -818,7 +824,16 @@ impl BddManager {
             assgn: &mut Vec<bool>, cache: &HashMap<BddPtr, f64>, cur_level: usize) -> () {
         // check for smoothing
         if ptr.is_const() {
-            return;
+            if cur_level == self.num_vars() {
+                // base case, return
+                return;
+            } else {
+                let expected = self.get_order().var_at_pos(cur_level);
+                let w = wmc.get_var_weight(expected);
+                let v : bool = rng.gen_bool(w.1 / (w.0 + w.1));
+                assgn[expected.value_usize()] = v;
+                return self.sample_h(ptr, rng, wmc, assgn, cache, cur_level+1);
+            }
         }
         
         // let mut rng = rand::thread_rng();
@@ -832,12 +847,19 @@ impl BddManager {
             self.sample_h(ptr, rng, wmc, assgn, cache, cur_level+1);
         } else {
             // sample the top variable
+            let low = if ptr.is_compl() { self.low(ptr).neg() } else { self.low(ptr) };
+            let high = if ptr.is_compl() { self.high(ptr).neg() } else { self.high(ptr) };
             let w = wmc.get_var_weight(topvar);
-            let l_weight = cache.get(&self.low(ptr)).unwrap();
-            let h_weight = cache.get(&self.high(ptr)).unwrap();
+            let l_weight = cache.get(&low).unwrap();
+            let h_weight = cache.get(&high).unwrap();
             let v : bool = rng.gen_bool((w.1 * h_weight) / (w.0 * l_weight + w.1 * h_weight));
+            // let v = if ptr.is_compl() {!v} else {v};
             assgn[topvar.value_usize()] = v;
-            self.sample_h(ptr, rng, wmc, assgn, cache, cur_level+1);
+            if v {
+                self.sample_h(high, rng, wmc, assgn, cache, cur_level+1);
+            } else { 
+                self.sample_h(low, rng, wmc, assgn, cache, cur_level+1);
+            }
         }
     }
 
@@ -1333,6 +1355,44 @@ fn wmc_test_2() {
     let f = man.and(and1, obs);
     assert_eq!(man.wmc(f, &wmc), 0.2 * 0.3 + 0.2 * 0.7 + 0.8 * 0.3);
 }
+
+// #[test]
+// fn test_sample() {
+//     let mut man = BddManager::new_default_order(5);
+//     let x = man.var(VarLabel::new(0), true);
+//     let y = man.var(VarLabel::new(1), true);
+//     let f1 = man.var(VarLabel::new(2), true);
+//     let f2 = man.var(VarLabel::new(3), true);
+//     let iff1 = man.iff(x, f1);
+//     let iff2 = man.iff(y, f2);
+//     let obs = man.or(x, y);
+//     let and1 = man.and(iff1, iff2);
+//     let r1 = man.and(and1, obs);
+//     let map = hashmap! { VarLabel::new(0) => (1.0, 1.0),
+//     VarLabel::new(1) => (1.0, 1.0),
+//     VarLabel::new(2) => (0.8, 0.2),
+//     VarLabel::new(4) => (0.8, 0.2),
+//     VarLabel::new(3) => (0.7, 0.3) };
+//     let params : BddWmc<f64> = BddWmc::new_with_default(0.0, 1.0, map);
+//     let mut c = 0;
+//     let query_var = VarLabel::new(4);
+//     let n = 100;
+//     for _ in 0..n {
+//         let s1 = man.sample(r1, &params);
+//         if s1.get_assignment(query_var) {
+//             c += 1
+//         }
+//     }
+//     let v = man.var(query_var, true);
+//     let query_bdd = man.and(v, r1);
+//     let z = man.wmc(r1, &params);
+//     let px = man.wmc(query_bdd, &params);
+
+//     println!("Got: {}, true: {}", c as f64 / n as f64, px / z);
+
+//     assert!(false);
+//     // assert_eq!(wmc, 50.0);
+// }
 
 #[test]
 fn iff_regression() {
