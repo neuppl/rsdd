@@ -19,9 +19,14 @@ impl VarLabel {
         assert!(v < 1 << VAR_BITS, "Variable identifier overflow");
         VarLabel(v)
     }
+
     #[inline]
     pub fn value(&self) -> u64 {
         self.0
+    }
+
+    pub fn new_usize(v: usize) -> VarLabel {
+        return VarLabel::new(v as u64)
     }
 
     pub fn value_usize(&self) -> usize {

@@ -524,20 +524,6 @@ fn test_unit_propagate_3() {
     assert_eq!(assgn[2], None);
 }
 
-// #[test]
-// fn test_force_order() {
-//     let v = vec![vec![Literal::new(VarLabel::new(1), false), Literal::new(VarLabel::new(4), false)],
-//                  vec![Literal::new(VarLabel::new(2), false), Literal::new(VarLabel::new(4), true)],
-//                  vec![Literal::new(VarLabel::new(2), false), Literal::new(VarLabel::new(5), true)],
-//                  vec![Literal::new(VarLabel::new(5), false), Literal::new(VarLabel::new(3), true)],
-//                  ];
-
-//     let mut cnf = Cnf::new(v);
-//     println!("order: {:?}", cnf.force_order().get_vec());
-
-//     assert!(false)
-// }
-
 
 #[cfg(test)]
 mod test_cnf {

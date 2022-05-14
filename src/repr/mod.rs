@@ -7,3 +7,4 @@ pub mod cnf;
 pub mod sdd;
 pub mod var_label;
 pub mod bdd_plan;
+pub mod model;

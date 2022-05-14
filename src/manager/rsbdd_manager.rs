@@ -19,6 +19,7 @@ use std::collections::BinaryHeap;
 use rand::Rng;
 use rand::rngs::ThreadRng;
 use rand::*;
+use repr::model;
 
 
 #[macro_use]
@@ -78,17 +79,21 @@ pub struct BddWmc<T: Num + Clone + Debug + Copy> {
     pub one: T,
     /// a vector which maps variable labels to `(low, high)`
     /// valuations.
-    var_to_val: HashMap<VarLabel, (T, T)>,
+    var_to_val: Vec<(T, T)>,
 }
 
 impl<T: Num + Clone + Debug + Copy> BddWmc<T> {
     /// Generates a new `BddWmc` with a default `var_to_val`; it is private because we
     /// do not want to expose the structure of the associative array
     pub fn new_with_default(zero: T, one: T, var_to_val: HashMap<VarLabel, (T, T)>) -> BddWmc<T> {
+        let mut var_to_val_vec = vec![(zero, zero); var_to_val.len()];
+        for (key, value) in var_to_val.iter() {
+            var_to_val_vec[key.value_usize()] = *value;
+        }
         BddWmc {
             zero: zero,
             one: one,
-            var_to_val: var_to_val,
+            var_to_val: var_to_val_vec,
         }
     }
 
@@ -97,13 +102,8 @@ impl<T: Num + Clone + Debug + Copy> BddWmc<T> {
         BddWmc {
             zero: zero,
             one: one,
-            var_to_val: HashMap::new(),
+            var_to_val: Vec::new(),
         }
-    }
-
-    /// Sets the weight of a literal
-    pub fn set_weight(&mut self, idx: VarLabel, low: T, high: T) -> () {
-        self.var_to_val.insert(idx, (low, high));
     }
 
     /// get the weight of an asignment
@@ -111,18 +111,21 @@ impl<T: Num + Clone + Debug + Copy> BddWmc<T> {
         let mut prod = self.one;
         for lit in assgn.iter() {
             if lit.get_polarity() {
-                prod = prod * self.var_to_val.get(&lit.get_label()).unwrap().1
+                prod = prod * self.var_to_val[lit.get_label().value_usize()].1
             } else {
-                prod = prod * self.var_to_val.get(&lit.get_label()).unwrap().0
+                prod = prod * self.var_to_val[lit.get_label().value_usize()].0
             }
         }
         return prod;
     }
 
-    pub fn get_var_weight(&self, label: VarLabel) -> &(T, T) {
-        return &self.var_to_val.get(&label).unwrap()
+    pub fn set_weight(&self, lbl: VarLabel, low: T, high: T) -> () {
+        todo!()
     }
 
+    pub fn get_var_weight(&self, label: VarLabel) -> &(T, T) {
+        return &self.var_to_val[label.value_usize()];
+    }
 }
 
 /// An auxiliary data structure for tracking statistics about BDD manager
@@ -760,22 +763,20 @@ impl BddManager {
                         if smooth {
                             // smooth low
                             while order.lt(ptr.label(), low_lvl) {
-                                let (low_factor, high_factor) =
-                                    wmc.var_to_val.get(&low_lvl).unwrap();
+                                let (low_factor, high_factor) = wmc.get_var_weight(low_lvl);
                                 low_v = (low_v.clone() * (*low_factor)) + (low_v * (*high_factor));
                                 low_lvl = order.above(low_lvl).unwrap();
                             }
                             // smooth high
                             while order.lt(ptr.label(), high_lvl) {
-                                let (low_factor, high_factor) =
-                                    wmc.var_to_val.get(&high_lvl).unwrap();
+                                let (low_factor, high_factor) = wmc.get_var_weight(high_lvl);
                                 high_v =
                                     (high_v.clone() * (*low_factor)) + (high_v * (*high_factor));
                                 high_lvl = order.above(high_lvl).unwrap();
                             }
                         }
                         // compute new
-                        let (low_factor, high_factor) = wmc.var_to_val.get(&bdd.var).unwrap();
+                        let (low_factor, high_factor) = wmc.get_var_weight(bdd.var);
                         (low_v * low_factor.clone()) + (high_v * high_factor.clone())
                     }
                 };
@@ -807,12 +808,7 @@ impl BddManager {
             let mut lvl = lvl_op;
             let order = self.get_order();
             while lvl.is_some() {
-                assert!(
-                    params.var_to_val.contains_key(&lvl.unwrap()),
-                    "Error in weighted model count: variable index {:?} not found in weight table",
-                    lvl
-                );
-                let (low_factor, high_factor) = params.var_to_val.get(&lvl.unwrap()).unwrap();
+                let (low_factor, high_factor) = params.get_var_weight(lvl.unwrap());
                 v = (v.clone() * (*low_factor)) + (v * (*high_factor));
                 lvl = order.above(lvl.unwrap());
             }
@@ -873,7 +869,7 @@ impl BddManager {
         return Model::new(r);
     }
 
-    pub fn from_cnf_with_assignments(&mut self, cnf: &Cnf, assgn: &Vec<Option<bool>>) -> BddPtr {
+    pub fn from_cnf_with_assignments(&mut self, cnf: &Cnf, assgn: &model::PartialModel) -> BddPtr {
         let clauses = cnf.clauses();
         if clauses.is_empty() {
             return self.true_ptr();
@@ -883,7 +879,7 @@ impl BddManager {
         for clause in clauses.iter() {
             let mut cur_ptr = self.false_ptr();
             for lit in clause.iter() {
-                match assgn[lit.get_label().value() as usize] {
+                match assgn.get(lit.get_label()) {
                     None => {
                         let new_v = self.var(lit.get_label(), lit.get_polarity());
                         cur_ptr = self.or(new_v, cur_ptr);
@@ -905,8 +901,8 @@ impl BddManager {
             let CompiledCNF { ptr: ptr1, sz: _sz } = compiled_heap.pop().unwrap();
             let CompiledCNF { ptr: ptr2, sz: _sz } = compiled_heap.pop().unwrap();
             let ptr = self.and(ptr1, ptr2);
-            let sz = 1;
-            // let sz = mgr.count_nodes(ptr);
+            // let sz = self.count_nodes(ptr);
+            let sz = self.count_nodes(ptr);
             compiled_heap.push(CompiledCNF { ptr, sz })
         }
     
