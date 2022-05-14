@@ -14,6 +14,11 @@ impl PartialModel {
         PartialModel { assignments }
     }
 
+    /// Creates a partial model from a total model (assignment to all vars)
+    pub fn from_total_model(assignments: Vec<bool>) -> PartialModel {
+        PartialModel { assignments: assignments.into_iter().map(|x| Some(x)).collect() }
+    }
+
     pub fn from_litvec(assignments: &[Literal], num_vars: usize) -> PartialModel {
         let mut init_assgn = vec![None; num_vars];
         for assgn in assignments {
@@ -50,6 +55,13 @@ impl PartialModel {
         self.assignments.iter().enumerate().filter_map(|(idx, x)| match x {
             None => None,
             Some(v) => Some(Literal::new(VarLabel::new_usize(idx), *v))
+        })
+    }
+
+    pub fn unassigned_vars<'a>(&'a self) -> impl Iterator<Item = VarLabel> + 'a {
+        self.assignments.iter().enumerate().filter_map(|(idx, x)| match x {
+            None => Some(VarLabel::new_usize(idx)),
+            Some(_) => None
         })
     }
 }
