@@ -7,6 +7,7 @@ use repr::var_label::{Literal, VarLabel};
 use std::cmp::{max, min};
 extern crate quickcheck;
 use self::quickcheck::{Arbitrary, Gen};
+use repr::model::PartialModel;
 #[macro_use]
 use maplit::*;
 
@@ -20,7 +21,7 @@ pub struct UnitPropagate<'a> {
     // similar to the above, but for negative label
     watch_list_neg: Vec<Vec<usize>>,
     // vector of assignments
-    assignments: Vec<Option<bool>>,
+    assignments: PartialModel,
     cnf: &'a Cnf
 }
 
@@ -35,6 +36,9 @@ impl<'a> UnitPropagate<'a> {
             watch_list_neg.push(Vec::new());
             assignments.push(None);
         }
+
+
+        // do initial unit propagation
         let mut implied : Vec<Literal> = Vec::new();
         for (idx, c) in cnf.clauses().iter().enumerate() {
             if c.len() == 0 {
@@ -54,27 +58,30 @@ impl<'a> UnitPropagate<'a> {
             } else {
                 watch_list_neg[c[0].get_label().value() as usize].push(idx)
             }
-
         }
-        let mut cur = UnitPropagate { watch_list_pos, watch_list_neg, assignments, cnf };
+
+        let mut cur = UnitPropagate { watch_list_pos, watch_list_neg, assignments: PartialModel::from_vec(assignments), cnf };
+
         for unit in implied {
             let r = cur.set(unit);
             if !r {
                 return None
             }
         }
+
         return Some(cur)
     }
     
     /// Set a variable to a particular value
     /// returns true if SAT, false if UNSAT
     pub fn set(&mut self, new_assignment: Literal) -> bool {
-        let loc = new_assignment.get_label().value() as usize;
-        match self.assignments[loc] {
+        match self.assignments.get(new_assignment.get_label()) {
             None => (),
             Some(v) => if new_assignment.get_polarity() != v { return false } else { return true }
         };
-        self.assignments[loc] = Some(new_assignment.get_polarity());
+        self.assignments.set(new_assignment.get_label(), new_assignment.get_polarity());
+
+        let loc = new_assignment.get_label().value() as usize;
 
 
         let mut implied_lits : Vec<Literal> = Vec::new();
@@ -98,7 +105,7 @@ impl<'a> UnitPropagate<'a> {
             // if clause is satisfied, do not change its watched literals (increment i)
             let mut is_sat = false;
             for lit in clause.iter() {
-                match self.assignments[lit.get_label().value() as usize] {
+                match self.assignments.get(lit.get_label()) {
                     Some(v) if lit.get_polarity() == v => { 
                         i += 1;
                         is_sat = true;
@@ -113,7 +120,7 @@ impl<'a> UnitPropagate<'a> {
             
             let mut remaining_lits = clause.iter().enumerate().map(|(idx, x)| (idx, x)).filter(|(_, x)| {
                 // if it is assigned, check if it is consistent
-                match self.assignments[x.get_label().value() as usize] {
+                match self.assignments.get(x.get_label()) {
                     None => true,
                     Some(v) => v == x.get_polarity()
                 }
@@ -154,7 +161,7 @@ impl<'a> UnitPropagate<'a> {
         return true;
     }
 
-    pub fn get_assgn(&self) -> &Vec<Option<bool>> {
+    pub fn get_assgn(&self) -> &PartialModel {
         &self.assignments
     }
 }
@@ -490,7 +497,7 @@ fn test_unit_propagate_1() {
 
     let mut cnf = Cnf::new(v);
     let mut up = UnitPropagate::new(&cnf).unwrap();
-    let assgn = up.get_assgn();
+    let assgn = up.get_assgn().get_vec();
     assert_eq!(assgn[0], Some(false));
     assert_eq!(assgn[1], Some(false));
     assert_eq!(assgn[2], Some(true));
@@ -503,7 +510,7 @@ fn test_unit_propagate_2() {
 
     let mut cnf = Cnf::new(v);
     let mut up = UnitPropagate::new(&cnf).unwrap();
-    let assgn = up.get_assgn();
+    let assgn = up.get_assgn().get_vec();
     assert_eq!(assgn[0], None);
     assert_eq!(assgn[1], None);
     assert_eq!(assgn[2], None);
@@ -518,7 +525,7 @@ fn test_unit_propagate_3() {
 
     let mut cnf = Cnf::new(v);
     let mut up = UnitPropagate::new(&cnf).unwrap();
-    let assgn = up.get_assgn();
+    let assgn = up.get_assgn().get_vec();
     assert_eq!(assgn[0], Some(false));
     assert_eq!(assgn[1], None);
     assert_eq!(assgn[2], None);
