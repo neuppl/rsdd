@@ -1,5 +1,6 @@
 //! Stores the variable order for a the BDD manager Variables that occur first
 //! in the order occur first in the BDD, starting from the root.
+//! Lower numbers occur first in the order (i.e., closer to the root)
 use repr::bdd::*;
 use repr::var_label::VarLabel;
 use std::slice::Iter;
@@ -88,8 +89,15 @@ impl VarOrder {
         }
     }
 
+    /// Produces an iterator of var -> position, where the 
+    /// result[i] gives the position of variable i in the order
     pub fn order_iter(&self) -> Iter<usize> {
         self.var_to_pos.iter()
+    }
+
+    /// Iterate through the variables in the order in which they appear in the order
+    pub fn in_order_iter<'a>(&'a self) -> impl Iterator<Item = VarLabel> + 'a  {
+        self.pos_to_var.iter().map(|x| VarLabel::new_usize(*x))
     }
 
     /// Get the variable that appears above `a` in the current order; `None` if
