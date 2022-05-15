@@ -3,7 +3,7 @@
 use super::var_label::{Literal, VarLabel};
 
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct PartialModel {
     /// None if variable is unset
     assignments: Vec<Option<bool>>
