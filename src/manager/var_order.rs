@@ -100,6 +100,12 @@ impl VarOrder {
         self.pos_to_var.iter().map(|x| VarLabel::new_usize(*x))
     }
 
+    /// Iterate through the variables in the the reverse order in which they appear in the order
+    pub fn reverse_in_order_iter<'a>(&'a self) -> impl Iterator<Item = VarLabel> + 'a  {
+        self.pos_to_var.iter().map(|x| VarLabel::new_usize(*x)).rev()
+    }
+
+
     /// Get the variable that appears above `a` in the current order; `None` if
     /// `a` is first in the order
     pub fn above(&self, a: VarLabel) -> Option<VarLabel> {
