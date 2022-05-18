@@ -60,7 +60,7 @@ impl BddApplyTable {
     /// Insert an ite (f, g, h) into the apply table
     pub fn insert(&mut self, f: BddPtr, g: BddPtr, h: BddPtr, res: BddPtr) -> () {
         // convert the ITE into a canonical form
-        while f.label().value_usize() > self.table.len() {
+        while f.label().value_usize() >= self.table.len() {
             self.push_table();
         }
         let (ite, compl) = Ite::new(f, g, h);
