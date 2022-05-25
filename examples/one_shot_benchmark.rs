@@ -9,6 +9,7 @@ fn compile_bdd(str: String) -> () {
   let cnf = Cnf::from_file(str);
   let mut man = BddManager::new_default_order(cnf.num_vars());
   man.from_cnf(&cnf);
+  println!("# recursive calls: {}", man.num_recursive_calls());
 }
 
 fn bench_cnf_bdd(cnf_str: String) -> Duration {
@@ -23,6 +24,12 @@ fn main() {
     ("bench-02", String::from(include_str!("../cnf/bench-02.cnf"))),
     ("bench-03", String::from(include_str!("../cnf/bench-03.cnf"))),
     // ("c8-easier", String::from(include_str!("../cnf/c8-easier.cnf"))),
+    ("php-4-6", String::from(include_str!("../cnf/php-4-6.cnf"))),
+    ("php-5-4", String::from(include_str!("../cnf/php-5-4.cnf"))),
+    // ("php-12-14", String::from(include_str!("../cnf/php-12-14.cnf"))),
+    ("rand-3-25-75-1", String::from(include_str!("../cnf/rand-3-25-75-1.cnf"))),
+    ("rand-3-100-400-1", String::from(include_str!("../cnf/rand-3-50-200-1.cnf"))),
+    ("rand-3-100-400-1", String::from(include_str!("../cnf/rand-3-100-400-1.cnf"))),
     ("c8-very-easy", String::from(include_str!("../cnf/c8-very-easy.cnf"))),
     // ("c8", String::from(include_str!("../cnf/c8.cnf"))),
     // ("count", String::from(include_str!("../cnf/count.cnf"))),
