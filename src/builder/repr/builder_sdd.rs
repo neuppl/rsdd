@@ -1,7 +1,7 @@
 //! Defines the internal representations for a trimmed and compressed SDD with
 //! complemented edges.
 
-use crate::repr::bdd::*;
+use crate::builder::repr::builder_bdd::*;
 use crate::repr::var_label::VarLabel;
 use std::mem;
 use crate::util::btree::*;

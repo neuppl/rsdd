@@ -2,25 +2,29 @@
 //! manager, which manages the global state necessary for constructing canonical
 //! binary decision diagrams.
 
-use crate::backing_store::bdd_table_robinhood::BddTable;
-use crate::backing_store::BackingCacheStats;
-use crate::manager::cache::bdd_app::*;
-use crate::manager::var_order::VarOrder;
-use num::traits::Num;
-use rand::rngs::ThreadRng;
-use rand::Rng;
-use crate::repr::bdd::*;
-use crate::repr::boolexpr::BoolExpr;
-use crate::repr::cnf::Cnf;
-use crate::repr::model;
-use crate::repr::var_label::VarLabel;
+use crate::{
+    backing_store::bdd_table_robinhood::BddTable,
+    backing_store::BackingCacheStats,
+    builder::cache::bdd_app::*,
+    builder::var_order::VarOrder,
+    builder::repr::builder_bdd::*,
+    repr::boolexpr::BoolExpr,
+    repr::cnf::Cnf,
+    repr::model,
+    repr::var_label::VarLabel,
+    repr::bdd_plan::BddPlan,
+    repr::var_label::Literal,
+};
+
+
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
+use num::traits::Num;
+use rand::rngs::ThreadRng;
+use rand::Rng;
 
-use crate::repr::bdd_plan::BddPlan;
-use crate::repr::var_label::Literal;
 // use time_test::time_test;
 
 #[derive(Eq, PartialEq, Debug)]
@@ -52,13 +56,13 @@ impl PartialOrd for CompiledCNF {
 }
 
 #[derive(Debug)]
-pub struct Model {
+pub struct Assignment {
     assignments: Vec<bool>,
 }
 
-impl Model {
-    pub fn new(assignments: Vec<bool>) -> Model {
-        Model { assignments }
+impl Assignment {
+    pub fn new(assignments: Vec<bool>) -> Assignment {
+        Assignment { assignments }
     }
 
     pub fn get_assignment(&self, var: VarLabel) -> bool {
@@ -251,8 +255,7 @@ impl BddManager {
         }
     }
 
-    pub fn to_string(&self, ptr: BddPtr) -> String {
-        use crate::repr::bdd::PointerType::*;
+    pub fn to_string_debug(&self, ptr: BddPtr) -> String {
         fn print_bdd_helper(t: &BddManager, ptr: BddPtr) -> String {
             match ptr.ptr_type() {
                 PtrTrue => String::from("T"),
@@ -281,8 +284,9 @@ impl BddManager {
         ptr.neg()
     }
 
+    /// Print a debug form of the BDD with the label remapping given by `map`
     pub fn print_bdd_lbl(&self, ptr: BddPtr, map: &HashMap<VarLabel, VarLabel>) -> String {
-        use crate::repr::bdd::PointerType::*;
+        use crate::builder::repr::builder_bdd::PointerType::*;
         fn print_bdd_helper(
             t: &BddManager,
             ptr: BddPtr,
@@ -851,13 +855,13 @@ impl BddManager {
     }
 
     /// Draws a sample from the models of the BDD according to the distribution specified by `wmc`
-    pub fn sample(&self, ptr: BddPtr, wmc: &BddWmc<f64>) -> Model {
+    pub fn sample(&self, ptr: BddPtr, wmc: &BddWmc<f64>) -> Assignment {
         let mut rng = rand::thread_rng();
         let mut r = vec![false; self.num_vars()];
         let mut cache: HashMap<BddPtr, f64> = HashMap::new();
         let _z = self.cached_wmc(ptr, &wmc, &mut cache);
         self.sample_h(ptr, &mut rng, wmc, &mut r, &cache, 0);
-        return Model::new(r);
+        return Assignment::new(r);
     }
 
     pub fn from_cnf_with_assignments(&mut self, cnf: &Cnf, assgn: &model::PartialModel) -> BddPtr {
@@ -1049,8 +1053,9 @@ mod tests {
     use maplit::*;
 
     use crate::{
-        manager::rsbdd_manager::{BddManager, BddWmc},
-        repr::{bdd::BddPtr, var_label::VarLabel},
+        builder::bdd_builder::{BddManager, BddWmc},
+        builder::repr::{builder_bdd::BddPtr}, 
+        repr::var_label::VarLabel,
     };
 
     // check that (a \/ b) /\ a === a
@@ -1064,8 +1069,8 @@ mod tests {
         assert!(
             man.eq_bdd(v1, r2),
             "Not eq:\n {}\n{}",
-            man.to_string(v1),
-            man.to_string(r2)
+            man.to_string_debug(v1),
+            man.to_string_debug(r2)
         );
     }
 
@@ -1079,8 +1084,8 @@ mod tests {
         assert!(
             man.eq_bdd(v1, r2),
             "Not eq:\n {}\n{}",
-            man.to_string(v1),
-            man.to_string(r2)
+            man.to_string_debug(v1),
+            man.to_string_debug(r2)
         );
     }
 
@@ -1096,8 +1101,8 @@ mod tests {
         assert!(
             man.eq_bdd(v1, r2),
             "Not eq:\n {}\n{}",
-            man.to_string(v1),
-            man.to_string(r2)
+            man.to_string_debug(v1),
+            man.to_string_debug(r2)
         );
     }
 
@@ -1162,8 +1167,8 @@ mod tests {
         assert!(
             man.eq_bdd(r3, v1),
             "Not eq:\nOne: {}\nTwo: {}",
-            man.to_string(r3),
-            man.to_string(v1)
+            man.to_string_debug(r3),
+            man.to_string_debug(v1)
         );
     }
 
@@ -1181,8 +1186,8 @@ mod tests {
         assert!(
             man.eq_bdd(r_expected, res),
             "Got:\nOne: {}\nExpected: {}",
-            man.to_string(res),
-            man.to_string(r_expected)
+            man.to_string_debug(res),
+            man.to_string_debug(r_expected)
         );
     }
 
@@ -1201,8 +1206,8 @@ mod tests {
         assert!(
             man.eq_bdd(r_expected, res),
             "Got:\n: {}\nExpected: {}",
-            man.to_string(res),
-            man.to_string(r_expected)
+            man.to_string_debug(res),
+            man.to_string_debug(r_expected)
         );
     }
 
@@ -1218,8 +1223,8 @@ mod tests {
         assert!(
             man.eq_bdd(res, v0_and_v2),
             "\nGot: {}\nExpected: {}",
-            man.to_string(res),
-            man.to_string(v0_and_v2)
+            man.to_string_debug(res),
+            man.to_string_debug(v0_and_v2)
         );
     }
 
@@ -1237,8 +1242,8 @@ mod tests {
         assert!(
             man.eq_bdd(res, v0v2v3),
             "\nGot: {}\nExpected: {}",
-            man.to_string(res),
-            man.to_string(v0v2v3)
+            man.to_string_debug(res),
+            man.to_string_debug(v0v2v3)
         );
     }
 
@@ -1254,8 +1259,8 @@ mod tests {
         assert!(
             man.eq_bdd(res, expected),
             "\nGot: {}\nExpected: {}",
-            man.to_string(res),
-            man.to_string(expected)
+            man.to_string_debug(res),
+            man.to_string_debug(expected)
         );
     }
 
@@ -1271,8 +1276,8 @@ mod tests {
         assert!(
             man.eq_bdd(res, expected),
             "\nGot: {}\nExpected: {}",
-            man.to_string(res),
-            man.to_string(expected)
+            man.to_string_debug(res),
+            man.to_string_debug(expected)
         );
     }
 
@@ -1288,8 +1293,8 @@ mod tests {
         assert!(
             man.eq_bdd(r3, v1),
             "Not eq:\nOne: {}\nTwo: {}",
-            man.to_string(r3),
-            man.to_string(v1)
+            man.to_string_debug(r3),
+            man.to_string_debug(v1)
         );
     }
 
@@ -1308,8 +1313,8 @@ mod tests {
         assert!(
             man.eq_bdd(res, expected),
             "Not eq:\nGot: {}\nExpected: {}",
-            man.to_string(res),
-            man.to_string(expected)
+            man.to_string_debug(res),
+            man.to_string_debug(expected)
         );
     }
 
@@ -1328,9 +1333,9 @@ mod tests {
         assert!(
             man.eq_bdd(res, expected),
             "\nOriginal BDD: {}\nNot eq:\nGot: {}\nExpected: {}",
-            man.to_string(r2),
-            man.to_string(res),
-            man.to_string(expected)
+            man.to_string_debug(r2),
+            man.to_string_debug(res),
+            man.to_string_debug(expected)
         );
     }
 

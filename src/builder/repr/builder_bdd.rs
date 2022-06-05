@@ -124,13 +124,14 @@ impl BddPtr {
         self.compl() == 1
     }
 
-    /// gets a non-complemented version of self
+    /// Gets a non-complemented version of self
     pub fn regular(&self) -> BddPtr {
         let mut new = self.clone();
         new.set_compl(0);
         new
     }
 
+    /// Negate the BDD pointer
     pub fn neg(&self) -> BddPtr {
         let mut r = self.clone();
         if self.is_compl() {
@@ -141,6 +142,7 @@ impl BddPtr {
         r
     }
 
+    /// Get the variable label of this BddPtr
     pub fn label(&self) -> VarLabel {
         VarLabel::new(self.var() as u64)
     }

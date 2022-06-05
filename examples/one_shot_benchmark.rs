@@ -2,7 +2,7 @@ extern crate criterion;
 extern crate rsdd;
 
 use criterion::black_box;
-use rsdd::{manager::rsbdd_manager::BddManager, repr::cnf::Cnf};
+use rsdd::{builder::bdd_builder::BddManager, repr::cnf::Cnf};
 use std::time::{Duration, Instant};
 
 fn compile_bdd(str: String) -> () {

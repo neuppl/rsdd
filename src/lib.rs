@@ -15,15 +15,15 @@ extern crate twox_hash;
 #[macro_use]
 mod util;
 mod backing_store;
-pub mod manager;
+pub mod builder;
 pub mod repr;
 
-use crate::manager::rsbdd_manager::BddManager;
-use crate::manager::sdd_manager::SddManager;
-use crate::manager::*;
-use crate::repr::bdd::BddPtr;
+use crate::builder::bdd_builder::BddManager;
+use crate::builder::sdd_builder::SddManager;
+use crate::builder::*;
+use crate::builder::repr::builder_bdd::BddPtr;
 use crate::repr::bdd_plan::BddPlan;
-use crate::repr::sdd::{SddPtr, VTree};
+use crate::builder::repr::builder_sdd::{SddPtr, VTree};
 use crate::repr::var_label::VarLabel;
 
 /// Creates a vtree leaf
@@ -64,7 +64,7 @@ pub extern "C" fn rsdd_mk_sdd_manager(vtree: *mut VTree) -> *mut libc::c_void {
 /// Create a new BDD manager with number of variables `numvars`
 #[no_mangle]
 pub extern "C" fn rsdd_mk_bdd_manager_default_order(numvars: usize) -> *mut libc::c_void {
-    let r = Box::new(rsbdd_manager::BddManager::new_default_order(numvars));
+    let r = Box::new(bdd_builder::BddManager::new_default_order(numvars));
     Box::into_raw(r) as *mut libc::c_void
 }
 

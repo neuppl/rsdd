@@ -1,8 +1,8 @@
 extern crate criterion;
 extern crate rsdd;
 
-use rsdd::manager::sdd_manager::SddManager;
-use rsdd::{manager::rsbdd_manager::BddManager, repr::cnf::Cnf};
+use rsdd::builder::sdd_builder::SddManager;
+use rsdd::{builder::bdd_builder::BddManager, repr::cnf::Cnf};
 
 use criterion::*;
 

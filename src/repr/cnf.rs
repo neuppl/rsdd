@@ -1,4 +1,4 @@
-use crate::manager::var_order::VarOrder;
+use crate::builder::var_order::VarOrder;
 use rand;
 use rand::rngs::ThreadRng;
 use rand::Rng;

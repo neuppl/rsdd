@@ -1,11 +1,16 @@
-use crate::backing_store::robin_hood::*;
-use crate::backing_store::*;
-use crate::manager::rsbdd_manager::BddManager;
-use crate::manager::var_order::VarOrder;
-use crate::repr::sdd::*;
-use crate::repr::var_label::VarLabel;
+//! Caching backing store for the SddBuilder
+
+use crate::{
+    backing_store::robin_hood::*,
+    backing_store::*,
+    builder::bdd_builder::BddManager,
+    builder::var_order::VarOrder,
+    builder::repr::builder_sdd::*,
+    repr::var_label::VarLabel,
+    util::btree::*,
+};
+
 use std::collections::HashMap;
-use crate::util::btree::*;
 
 const DEFAULT_RH_SZ: usize = 32768;
 

@@ -3,7 +3,9 @@
 
 mod cache;
 
+pub mod repr;
+
 pub mod cnf_plan;
-pub mod rsbdd_manager;
-pub mod sdd_manager;
+pub mod bdd_builder;
+pub mod sdd_builder;
 pub mod var_order;

@@ -256,7 +256,7 @@ where
 // tests
 #[cfg(test)]
 mod tests {
-    use crate::repr::bdd::{BddPtr, TableIndex, ToplessBdd};
+    use crate::builder::repr::builder_bdd::{BddPtr, TableIndex, ToplessBdd};
     use crate::repr::var_label::VarLabel;
 
     use super::BackedRobinHoodTable;
