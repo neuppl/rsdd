@@ -4,12 +4,12 @@
 extern crate rsdd;
 #[macro_use]
 extern crate quickcheck;
-use manager::rsbdd_manager::{BddManager, BddWmc};
-use manager::sdd_manager::{even_split, SddManager, SddWmc};
-use manager::var_order::VarOrder;
-use repr::boolexpr::BoolExpr;
-use repr::cnf::Cnf;
-use repr::var_label::VarLabel;
+use crate::manager::rsbdd_manager::{BddManager, BddWmc};
+use crate::manager::sdd_manager::{even_split, SddManager, SddWmc};
+use crate::manager::var_order::VarOrder;
+use crate::repr::boolexpr::BoolExpr;
+use crate::repr::cnf::Cnf;
+use crate::repr::var_label::VarLabel;
 use rsdd::*;
 use std::collections::HashMap;
 extern crate rand;
@@ -310,9 +310,9 @@ fn test_sdd_canonicity() -> () {
 #[cfg(test)]
 mod test_bdd_manager {
     use quickcheck::TestResult;
-    use repr::cnf::Cnf;
-    use repr::var_label::Literal;
-    use repr::var_label::VarLabel;
+    use crate::repr::cnf::Cnf;
+    use crate::repr::var_label::Literal;
+    use crate::repr::var_label::VarLabel;
     use std::collections::HashMap;
     use std::iter::FromIterator;
 
@@ -384,10 +384,10 @@ mod test_bdd_manager {
 
 #[cfg(test)]
 mod test_sdd_manager {
-    use manager::rsbdd_manager::{BddManager, BddWmc};
+    use crate::manager::rsbdd_manager::{BddManager, BddWmc};
     use quickcheck::TestResult;
-    use repr::cnf::Cnf;
-    use repr::var_label::{Literal, VarLabel};
+    use crate::repr::cnf::Cnf;
+    use crate::repr::var_label::{Literal, VarLabel};
     use std::collections::HashMap;
     use std::iter::FromIterator;
 

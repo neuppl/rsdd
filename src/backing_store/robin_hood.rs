@@ -1,10 +1,10 @@
 //! A backing store based on robin-hood hashing
 
-use backing_store::*;
+use crate::backing_store::*;
 use fnv::FnvHasher;
 use std::hash::{Hash, Hasher};
 use std::mem;
-use util::*;
+use crate::util::*;
 
 /// The load factor of the table, i.e. how full the table will be when it
 /// automatically resizes
@@ -256,8 +256,8 @@ where
 // tests
 #[cfg(test)]
 mod tests {
-    use repr::bdd::{BddPtr, TableIndex, ToplessBdd};
-    use repr::var_label::VarLabel;
+    use crate::repr::bdd::{BddPtr, TableIndex, ToplessBdd};
+    use crate::repr::var_label::VarLabel;
 
     use super::BackedRobinHoodTable;
     fn _mk_ptr(idx: u64) -> BddPtr {

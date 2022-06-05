@@ -1,10 +1,10 @@
-use repr::var_label::*;
+use crate::repr::var_label::*;
 use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::mem;
 extern crate quickcheck;
 use self::quickcheck::{Arbitrary, Gen};
-use repr::var_label;
+use crate::repr::var_label;
 
 /// number of bits allocated for a table index (limit on total BDDs of each
 /// variable)

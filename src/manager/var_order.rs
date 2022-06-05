@@ -1,10 +1,10 @@
 //! Stores the variable order for a the BDD manager Variables that occur first
 //! in the order occur first in the BDD, starting from the root.
 //! Lower numbers occur first in the order (i.e., closer to the root)
-use repr::bdd::*;
-use repr::var_label::VarLabel;
+use crate::repr::bdd::*;
+use crate::repr::var_label::VarLabel;
 use std::slice::Iter;
-use util;
+use crate::util;
 
 #[derive(Debug, Clone)]
 pub struct VarOrder {

@@ -1,11 +1,11 @@
-use backing_store::robin_hood::*;
-use backing_store::*;
-use manager::rsbdd_manager::BddManager;
-use manager::var_order::VarOrder;
-use repr::sdd::*;
-use repr::var_label::VarLabel;
+use crate::backing_store::robin_hood::*;
+use crate::backing_store::*;
+use crate::manager::rsbdd_manager::BddManager;
+use crate::manager::var_order::VarOrder;
+use crate::repr::sdd::*;
+use crate::repr::var_label::VarLabel;
 use std::collections::HashMap;
-use util::btree::*;
+use crate::util::btree::*;
 
 const DEFAULT_RH_SZ: usize = 32768;
 

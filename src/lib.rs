@@ -18,13 +18,13 @@ mod backing_store;
 pub mod manager;
 pub mod repr;
 
-use manager::rsbdd_manager::BddManager;
-use manager::sdd_manager::SddManager;
-use manager::*;
-use repr::bdd::BddPtr;
-use repr::bdd_plan::BddPlan;
-use repr::sdd::{SddPtr, VTree};
-use repr::var_label::VarLabel;
+use crate::manager::rsbdd_manager::BddManager;
+use crate::manager::sdd_manager::SddManager;
+use crate::manager::*;
+use crate::repr::bdd::BddPtr;
+use crate::repr::bdd_plan::BddPlan;
+use crate::repr::sdd::{SddPtr, VTree};
+use crate::repr::var_label::VarLabel;
 
 /// Creates a vtree leaf
 #[no_mangle]

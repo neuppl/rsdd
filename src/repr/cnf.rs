@@ -1,13 +1,13 @@
-use manager::var_order::VarOrder;
+use crate::manager::var_order::VarOrder;
 use rand;
 use rand::rngs::ThreadRng;
 use rand::Rng;
-use repr::var_label::{Literal, VarLabel};
+use crate::repr::var_label::{Literal, VarLabel};
 use std::cmp::{max, min};
 use std::collections::HashMap;
 extern crate quickcheck;
 use self::quickcheck::{Arbitrary, Gen};
-use repr::model::PartialModel;
+use crate::repr::model::PartialModel;
 
 /// A data-structure for manipulating unit propagation with CNFs
 #[derive(Debug, Clone)]

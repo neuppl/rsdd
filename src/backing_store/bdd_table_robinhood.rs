@@ -1,8 +1,8 @@
-use backing_store::robin_hood::*;
-use backing_store::{BackingCacheStats, BackingPtr};
-use manager::var_order::VarOrder;
-use repr::bdd::*;
-use repr::var_label::VarLabel;
+use crate::backing_store::robin_hood::*;
+use crate::backing_store::{BackingCacheStats, BackingPtr};
+use crate::manager::var_order::VarOrder;
+use crate::repr::bdd::*;
+use crate::repr::var_label::VarLabel;
 
 const DEFAULT_SUBTABLE_SZ: usize = 16384;
 

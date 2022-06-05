@@ -1,10 +1,10 @@
 //! Defines the internal representations for a trimmed and compressed SDD with
 //! complemented edges.
 
-use repr::bdd::*;
-use repr::var_label::VarLabel;
+use crate::repr::bdd::*;
+use crate::repr::var_label::VarLabel;
 use std::mem;
-use util::btree::*;
+use crate::util::btree::*;
 
 /// holds metadata for an SDD pointer as a packed u32. It has the following fields:
 /// `vtree`: holds the index into a depth-first left-first traversal of the SDD vtree

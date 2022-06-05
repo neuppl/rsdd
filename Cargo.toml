@@ -1,6 +1,7 @@
 [package]
 name = "rsdd"
 version = "0.1.0"
+edition = "2018"
 authors = ["Steven Holtzen <sholtzen@gmail.com>"]
 
 [lib]

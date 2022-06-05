@@ -3,7 +3,7 @@
 use fnv::FnvHasher;
 use std::fmt::Debug;
 use std::hash::{Hash, Hasher};
-use util::*;
+use crate::util::*;
 
 // if the LRU is GROW_RATIO% full, it will double in size on insertion
 const GROW_RATIO: f64 = 0.7;

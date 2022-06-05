@@ -1,16 +1,16 @@
 //! The main implementation of the SDD manager, the primary way of interacting
 //! with SDDs.
 
-use backing_store::sdd_table::*;
-use manager::cache::lru::*;
+use crate::backing_store::sdd_table::*;
+use crate::manager::cache::lru::*;
 use num::traits::Num;
-use repr::boolexpr::BoolExpr;
-use repr::cnf::Cnf;
-use repr::sdd::*;
-use repr::var_label::VarLabel;
+use crate::repr::boolexpr::BoolExpr;
+use crate::repr::cnf::Cnf;
+use crate::repr::sdd::*;
+use crate::repr::var_label::VarLabel;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
-use util::btree::*;
+use crate::util::btree::*;
 
 use super::rsbdd_manager::{BddManager, BddWmc};
 

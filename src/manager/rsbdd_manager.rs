@@ -2,18 +2,18 @@
 //! manager, which manages the global state necessary for constructing canonical
 //! binary decision diagrams.
 
-use backing_store::bdd_table_robinhood::BddTable;
-use backing_store::BackingCacheStats;
-use manager::cache::bdd_app::*;
-use manager::var_order::VarOrder;
+use crate::backing_store::bdd_table_robinhood::BddTable;
+use crate::backing_store::BackingCacheStats;
+use crate::manager::cache::bdd_app::*;
+use crate::manager::var_order::VarOrder;
 use num::traits::Num;
 use rand::rngs::ThreadRng;
 use rand::Rng;
-use repr::bdd::*;
-use repr::boolexpr::BoolExpr;
-use repr::cnf::Cnf;
-use repr::model;
-use repr::var_label::VarLabel;
+use crate::repr::bdd::*;
+use crate::repr::boolexpr::BoolExpr;
+use crate::repr::cnf::Cnf;
+use crate::repr::model;
+use crate::repr::var_label::VarLabel;
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
 use std::collections::{HashMap, HashSet};
@@ -246,7 +246,7 @@ impl BddManager {
     }
 
     pub fn to_string(&self, ptr: BddPtr) -> String {
-        use repr::bdd::PointerType::*;
+        use crate::repr::bdd::PointerType::*;
         fn print_bdd_helper(t: &BddManager, ptr: BddPtr) -> String {
             match ptr.ptr_type() {
                 PtrTrue => String::from("T"),
@@ -276,7 +276,7 @@ impl BddManager {
     }
 
     pub fn print_bdd_lbl(&self, ptr: BddPtr, map: &HashMap<VarLabel, VarLabel>) -> String {
-        use repr::bdd::PointerType::*;
+        use crate::repr::bdd::PointerType::*;
         fn print_bdd_helper(
             t: &BddManager,
             ptr: BddPtr,
