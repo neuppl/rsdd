@@ -2,11 +2,10 @@
 
 use super::var_label::{Literal, VarLabel};
 
-
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct PartialModel {
     /// None if variable is unset
-    assignments: Vec<Option<bool>>
+    assignments: Vec<Option<bool>>,
 }
 
 impl PartialModel {
@@ -16,7 +15,9 @@ impl PartialModel {
 
     /// Creates a partial model from a total model (assignment to all vars)
     pub fn from_total_model(assignments: Vec<bool>) -> PartialModel {
-        PartialModel { assignments: assignments.into_iter().map(|x| Some(x)).collect() }
+        PartialModel {
+            assignments: assignments.into_iter().map(|x| Some(x)).collect(),
+        }
     }
 
     pub fn from_litvec(assignments: &[Literal], num_vars: usize) -> PartialModel {
@@ -24,7 +25,9 @@ impl PartialModel {
         for assgn in assignments {
             init_assgn[assgn.get_label().value_usize()] = Some(assgn.get_polarity());
         }
-        PartialModel { assignments: init_assgn }
+        PartialModel {
+            assignments: init_assgn,
+        }
     }
 
     /// Unsets a variable's value in the model
@@ -47,21 +50,27 @@ impl PartialModel {
 
     /// True if this is a set variable, false otherwise
     pub fn is_set(&self, label: VarLabel) -> bool {
-        return self.assignments[label.value_usize()].is_some()
+        return self.assignments[label.value_usize()].is_some();
     }
 
     /// Produces an iterator of all the assigned literals
     pub fn assignment_iter<'a>(&'a self) -> impl Iterator<Item = Literal> + 'a {
-        self.assignments.iter().enumerate().filter_map(|(idx, x)| match x {
-            None => None,
-            Some(v) => Some(Literal::new(VarLabel::new_usize(idx), *v))
-        })
+        self.assignments
+            .iter()
+            .enumerate()
+            .filter_map(|(idx, x)| match x {
+                None => None,
+                Some(v) => Some(Literal::new(VarLabel::new_usize(idx), *v)),
+            })
     }
 
     pub fn unassigned_vars<'a>(&'a self) -> impl Iterator<Item = VarLabel> + 'a {
-        self.assignments.iter().enumerate().filter_map(|(idx, x)| match x {
-            None => Some(VarLabel::new_usize(idx)),
-            Some(_) => None
-        })
+        self.assignments
+            .iter()
+            .enumerate()
+            .filter_map(|(idx, x)| match x {
+                None => Some(VarLabel::new_usize(idx)),
+                Some(_) => None,
+            })
     }
 }

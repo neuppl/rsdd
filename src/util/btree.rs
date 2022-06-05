@@ -39,7 +39,7 @@ where
                                 self.stack.push(cur);
                                 break;
                             }
-                            &BTree::Node(_, ref l, ref r) => {
+                            &BTree::Node(_, ref l, _) => {
                                 self.stack.push(cur);
                                 cur = l;
                             }
@@ -66,7 +66,7 @@ where
                     v.push(cur);
                     return InOrderIter { stack: v };
                 }
-                &BTree::Node(_, ref l, ref r) => {
+                &BTree::Node(_, ref l, _) => {
                     v.push(cur);
                     cur = l;
                 }

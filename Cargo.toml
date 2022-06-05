@@ -30,10 +30,8 @@ maplit = "1.0.1"
 libc = "0.2"
 quickcheck = "1.0.3"
 time-test = "0.2.2"
-egg = "0.7.1"
 serde = { version = "1.0", features = ["derive"] }
 clap = "3.1.6"
-
 
 [profile.release]
 debug = true

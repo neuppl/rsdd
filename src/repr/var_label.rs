@@ -1,6 +1,6 @@
 //! A generic data structure for tracking variable labels throughout the library
-use std::mem;
 use std::fmt;
+use std::mem;
 extern crate quickcheck;
 use self::quickcheck::{Arbitrary, Gen};
 
@@ -26,7 +26,7 @@ impl VarLabel {
     }
 
     pub fn new_usize(v: usize) -> VarLabel {
-        return VarLabel::new(v as u64)
+        return VarLabel::new(v as u64);
     }
 
     pub fn value_usize(&self) -> usize {
@@ -68,7 +68,6 @@ impl Literal {
     pub fn implies_false(&self, other: &Literal) -> bool {
         self.get_label() == other.get_label() && self.get_polarity() != other.get_polarity()
     }
-
 }
 
 impl fmt::Debug for Literal {
@@ -81,7 +80,7 @@ impl fmt::Debug for Literal {
 }
 
 impl Arbitrary for Literal {
-     fn arbitrary(g: &mut Gen) -> Literal {
+    fn arbitrary(g: &mut Gen) -> Literal {
         let varlbl = u64::arbitrary(g) % 16;
         Literal::new(VarLabel::new(varlbl), bool::arbitrary(g))
     }

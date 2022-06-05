@@ -3,8 +3,8 @@ use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::mem;
 extern crate quickcheck;
-use repr::var_label;
 use self::quickcheck::{Arbitrary, Gen};
+use repr::var_label;
 
 /// number of bits allocated for a table index (limit on total BDDs of each
 /// variable)
@@ -40,12 +40,17 @@ impl fmt::Debug for BddPtr {
             PointerType::PtrFalse => write!(f, "BddPtr(F)"),
             PointerType::PtrTrue => write!(f, "BddPtr(T)"),
             PointerType::PtrNode => {
-                write!(f, "BddPtr(Cur var: {}, Is complemented: {}, Index: {})", self.var(), self.is_compl(), self.idx())
+                write!(
+                    f,
+                    "BddPtr(Cur var: {}, Is complemented: {}, Index: {})",
+                    self.var(),
+                    self.is_compl(),
+                    self.idx()
+                )
             }
         }
     }
 }
-
 
 pub enum PointerType {
     PtrFalse,
@@ -145,18 +150,24 @@ impl Arbitrary for BddPtr {
     fn arbitrary(g: &mut Gen) -> BddPtr {
         if bool::arbitrary(g) {
             // generate a constant
-            if bool::arbitrary(g) { BddPtr::true_node() } else { BddPtr::false_node() }
+            if bool::arbitrary(g) {
+                BddPtr::true_node()
+            } else {
+                BddPtr::false_node()
+            }
         } else {
             let vlbl = u64::arbitrary(g) % (var_label::MAX_VAR_SIZE as u64);
             let idx = u64::arbitrary(g) % (MAX_INDEX_SIZE as u64);
             let p = BddPtr::new(VarLabel::new(vlbl), TableIndex::new(idx));
             let c = bool::arbitrary(g);
-            if c {p.neg()} else {p}
+            if c {
+                p.neg()
+            } else {
+                p
+            }
         }
     }
 }
-
-
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BddNode {
@@ -201,6 +212,8 @@ impl Bdd {
 }
 
 /// The primary BDD storage object
+/// Called 'Topless' because it does not keep keep track of the top variable (as
+/// this is implicit in the storage table)
 #[derive(Debug, Clone, PartialEq, Eq, Copy)]
 pub struct ToplessBdd {
     pub low: BddPtr,

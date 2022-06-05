@@ -1,6 +1,5 @@
 //! Backing stores are unique tables which support a `get_or_insert` operation.
 pub mod bdd_table_robinhood;
-mod cuckoo_store;
 mod robin_hood;
 pub mod sdd_table;
 

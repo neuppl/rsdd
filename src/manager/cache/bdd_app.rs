@@ -86,6 +86,3 @@ impl BddApplyTable {
     //     self.table.get_stats()
     // }
 }
-
-
-

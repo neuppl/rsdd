@@ -6,7 +6,7 @@ use std::hash::{Hash, Hasher};
 use util::*;
 
 // if the LRU is GROW_RATIO% full, it will double in size on insertion
-const GROW_RATIO : f64 = 0.7;
+const GROW_RATIO: f64 = 0.7;
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct ApplyCacheStats {
@@ -31,11 +31,6 @@ impl ApplyCacheStats {
 #[inline]
 fn mask(p: usize) -> usize {
     (1 << p) - 1
-}
-
-#[inline]
-fn wrap_add(v: usize, p: usize) -> usize {
-    (v + 1) & mask(p)
 }
 
 /// cap `v` at 2^`p`
@@ -73,7 +68,7 @@ where
 {
     tbl: Vec<Option<Element<K, V>>>,
     len: usize,
-    cap: usize, // a particular power of 2
+    cap: usize,        // a particular power of 2
     num_filled: usize, // current number of filled cells
     stat: ApplyCacheStats,
 }
@@ -95,18 +90,9 @@ where
         }
     }
 
-    pub fn len(&self) -> usize {
-        self.len
-    }
-
-    /// the capacity for this table (as a power of 2)
-    pub fn cap(&self) -> usize {
-        self.cap
-    }
-
     pub fn insert(&mut self, key: K, val: V) -> () {
         // see if we need to grow
-        if (self.num_filled as f64 / ( 1 << self.cap ) as f64) > GROW_RATIO {
+        if (self.num_filled as f64 / (1 << self.cap) as f64) > GROW_RATIO {
             self.grow();
         }
 
@@ -137,17 +123,6 @@ where
                 return None;
             }
         }
-        // if v.is_none() {
-        //     self.stat.miss_count += 1;
-        //     return None;
-        // }
-
-        // if v.key == key {
-        //     return Some(v.val);
-        // }
-
-        // self.stat.miss_count += 1;
-        // return None;
     }
 
     /// grow the hashtable to accomodate more elements
@@ -176,7 +151,7 @@ where
         // don't update the stats; we want to keep those
     }
 
-    pub fn get_stats(&self) -> ApplyCacheStats {
+    pub fn _get_stats(&self) -> ApplyCacheStats {
         // compute utilization
         let mut c = 0;
         for i in self.tbl.iter() {
@@ -196,10 +171,4 @@ fn test_cache() {
     for i in 0..10000 {
         c.insert(i, i);
     }
-    // for i in 0..10000 {
-    //     if c.get(i).is_none() {
-    //         panic!("could not find {}", i);
-    //     }
-    //     assert_eq!(c.get(i).unwrap(), i)
-    // }
 }

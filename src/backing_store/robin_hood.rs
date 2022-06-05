@@ -2,10 +2,8 @@
 
 use backing_store::*;
 use fnv::FnvHasher;
-use std::hash::BuildHasherDefault;
 use std::hash::{Hash, Hasher};
 use std::mem;
-use std::ptr;
 use util::*;
 
 /// The load factor of the table, i.e. how full the table will be when it
@@ -134,7 +132,7 @@ where
     }
 
     /// check the distance the element at index `pos` is from its desired location
-    fn probe_distance(&self, pos: usize) -> usize {
+    fn _probe_distance(&self, pos: usize) -> usize {
         self.tbl[pos].offset() as usize
     }
 
@@ -192,7 +190,7 @@ where
 
     /// Finds the index for a particular bdd, none if it is not found
     /// Does not invalidate references.
-    pub fn find(&self, elem: T) -> Option<BackingPtr> {
+    pub fn _find(&self, elem: T) -> Option<BackingPtr> {
         let mut hasher = FnvHasher::default();
         elem.hash(&mut hasher);
         let hash_v = hasher.finish();
@@ -234,7 +232,7 @@ where
         }
     }
 
-    pub fn capacity(&self) -> usize {
+    pub fn _capacity(&self) -> usize {
         self.elem.len()
     }
 
@@ -256,19 +254,24 @@ where
 
 ////////////////////////////////////////////////////////////////////////////////
 // tests
-use repr::bdd::{BddPtr, TableIndex, ToplessBdd};
-use repr::var_label::VarLabel;
-fn mk_ptr(idx: u64) -> BddPtr {
-    BddPtr::new(VarLabel::new(0), TableIndex::new(idx))
-}
+#[cfg(test)]
+mod tests {
+    use repr::bdd::{BddPtr, TableIndex, ToplessBdd};
+    use repr::var_label::VarLabel;
 
-#[test]
-fn rh_simple() {
-    let mut store: BackedRobinHoodTable<ToplessBdd> = BackedRobinHoodTable::new(5000);
-    for i in 0..1000000 {
-        let e = ToplessBdd::new(mk_ptr(i), mk_ptr(i));
-        let v = store.get_or_insert(&e);
-        let v_2 = store.get_or_insert(&e);
-        assert_eq!(store.deref(v), store.deref(v_2));
+    use super::BackedRobinHoodTable;
+    fn _mk_ptr(idx: u64) -> BddPtr {
+        BddPtr::new(VarLabel::new(0), TableIndex::new(idx))
+    }
+
+    #[test]
+    fn rh_simple() {
+        let mut store: BackedRobinHoodTable<ToplessBdd> = BackedRobinHoodTable::new(5000);
+        for i in 0..1000000 {
+            let e = ToplessBdd::new(_mk_ptr(i), _mk_ptr(i));
+            let v = store.get_or_insert(&e);
+            let v_2 = store.get_or_insert(&e);
+            assert_eq!(store.deref(v), store.deref(v_2));
+        }
     }
 }

@@ -6,13 +6,11 @@ extern crate maplit;
 extern crate num;
 extern crate pretty;
 extern crate rand;
-extern crate egg;
 #[macro_use]
 extern crate serde;
-extern crate twox_hash;
-extern crate time_test;
-#[macro_use]
 extern crate quickcheck;
+extern crate time_test;
+extern crate twox_hash;
 
 #[macro_use]
 mod util;
@@ -20,14 +18,13 @@ mod backing_store;
 pub mod manager;
 pub mod repr;
 
-
 use manager::rsbdd_manager::BddManager;
 use manager::sdd_manager::SddManager;
 use manager::*;
 use repr::bdd::BddPtr;
-use repr::sdd::{SddPtr, VTree};
-use repr::var_label::{VarLabel, Literal};
 use repr::bdd_plan::BddPlan;
+use repr::sdd::{SddPtr, VTree};
+use repr::var_label::VarLabel;
 
 /// Creates a vtree leaf
 #[no_mangle]
@@ -179,7 +176,7 @@ pub extern "C" fn rsdd_is_true(mgr: *mut BddManager, ptr: u64) -> bool {
 }
 
 #[no_mangle]
-pub extern "C" fn rsdd_is_var(mgr: *mut BddManager, ptr: u64) -> bool {
+pub extern "C" fn rsdd_is_var(_mgr: *mut BddManager, ptr: u64) -> bool {
     let ptr = BddPtr::from_raw(ptr);
     !ptr.is_const()
 }
@@ -298,7 +295,7 @@ pub extern "C" fn rsdd_plan_ite(f: *mut BddPlan, g: *mut BddPlan, h: *mut BddPla
 #[no_mangle]
 pub extern "C" fn rsdd_plan_free(a: *mut BddPlan) -> () {
     unsafe {
-        let a = Box::from_raw(a);
+        let _a = Box::from_raw(a);
     }
 }
 

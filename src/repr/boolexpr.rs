@@ -1,7 +1,7 @@
 use dimacs::*;
 use rand;
-use rand::Rng;
 use rand::rngs::ThreadRng;
+use rand::Rng;
 use repr::var_label::VarLabel;
 use std::collections::{HashMap, HashSet};
 

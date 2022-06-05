@@ -10,9 +10,9 @@ use util::btree::*;
 /// `vtree`: holds the index into a depth-first left-first traversal of the SDD vtree
 /// `is_bdd`: true if this SDD pointer points to a BDD
 /// `is_const`: true if this SDD pointer is a constant (true or false)
-/// 
+///
 /// There is some redundant information that occurs between SddPtr and BddPtr (for instance,
-/// whether or not an edge is complemented, or true or false); whenever possible, this 
+/// whether or not an edge is complemented, or true or false); whenever possible, this
 /// information is "pushed inside" the BddPtr
 #[repr(C)]
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Ord, PartialOrd, Copy)]

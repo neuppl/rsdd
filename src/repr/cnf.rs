@@ -1,16 +1,13 @@
 use manager::var_order::VarOrder;
 use rand;
-use rand::Rng;
 use rand::rngs::ThreadRng;
-use std::collections::HashMap;
+use rand::Rng;
 use repr::var_label::{Literal, VarLabel};
 use std::cmp::{max, min};
+use std::collections::HashMap;
 extern crate quickcheck;
 use self::quickcheck::{Arbitrary, Gen};
 use repr::model::PartialModel;
-#[macro_use]
-use maplit::*;
-
 
 /// A data-structure for manipulating unit propagation with CNFs
 #[derive(Debug, Clone)]
@@ -22,7 +19,7 @@ pub struct UnitPropagate<'a> {
     watch_list_neg: Vec<Vec<usize>>,
     // vector of assignments
     assignments: PartialModel,
-    cnf: &'a Cnf
+    cnf: &'a Cnf,
 }
 
 impl<'a> UnitPropagate<'a> {
@@ -30,16 +27,15 @@ impl<'a> UnitPropagate<'a> {
     pub fn new(cnf: &'a Cnf) -> Option<UnitPropagate<'a>> {
         let mut watch_list_pos: Vec<Vec<usize>> = Vec::new();
         let mut watch_list_neg: Vec<Vec<usize>> = Vec::new();
-        let mut assignments : Vec<Option<bool>> = Vec::new();
+        let mut assignments: Vec<Option<bool>> = Vec::new();
         for _ in 0..cnf.num_vars {
             watch_list_pos.push(Vec::new());
             watch_list_neg.push(Vec::new());
             assignments.push(None);
         }
 
-
         // do initial unit propagation
-        let mut implied : Vec<Literal> = Vec::new();
+        let mut implied: Vec<Literal> = Vec::new();
         for (idx, c) in cnf.clauses().iter().enumerate() {
             if c.len() == 0 {
                 return None;
@@ -60,40 +56,55 @@ impl<'a> UnitPropagate<'a> {
             }
         }
 
-        let mut cur = UnitPropagate { watch_list_pos, watch_list_neg, assignments: PartialModel::from_vec(assignments), cnf };
+        let mut cur = UnitPropagate {
+            watch_list_pos,
+            watch_list_neg,
+            assignments: PartialModel::from_vec(assignments),
+            cnf,
+        };
 
         for unit in implied {
             let r = cur.set(unit);
             if !r {
-                return None
+                return None;
             }
         }
 
-        return Some(cur)
+        return Some(cur);
     }
-    
+
     /// Set a variable to a particular value
     /// returns true if SAT, false if UNSAT
     pub fn set(&mut self, new_assignment: Literal) -> bool {
         match self.assignments.get(new_assignment.get_label()) {
             None => (),
-            Some(v) => if new_assignment.get_polarity() != v { return false } else { return true }
+            Some(v) => {
+                if new_assignment.get_polarity() != v {
+                    return false;
+                } else {
+                    return true;
+                }
+            }
         };
-        self.assignments.set(new_assignment.get_label(), new_assignment.get_polarity());
+        self.assignments
+            .set(new_assignment.get_label(), new_assignment.get_polarity());
 
         let loc = new_assignment.get_label().value() as usize;
 
-
-        let mut implied_lits : Vec<Literal> = Vec::new();
+        let mut implied_lits: Vec<Literal> = Vec::new();
         let mut i = 0;
         // some of the internal structure here is weird to accommodate the
         // borrow checker
         loop {
             // first check if there are any watchers; if no, break
             if new_assignment.get_polarity() {
-                if i >= self.watch_list_neg[loc].len() { break }
+                if i >= self.watch_list_neg[loc].len() {
+                    break;
+                }
             } else {
-                if i >= self.watch_list_pos[loc].len() { break }
+                if i >= self.watch_list_pos[loc].len() {
+                    break;
+                }
             }
 
             let clause = if new_assignment.get_polarity() {
@@ -106,25 +117,30 @@ impl<'a> UnitPropagate<'a> {
             let mut is_sat = false;
             for lit in clause.iter() {
                 match self.assignments.get(lit.get_label()) {
-                    Some(v) if lit.get_polarity() == v => { 
+                    Some(v) if lit.get_polarity() == v => {
                         i += 1;
                         is_sat = true;
                         break;
-                    },
-                    _ => ()
+                    }
+                    _ => (),
                 }
             }
             if is_sat {
                 continue;
             }
-            
-            let mut remaining_lits = clause.iter().enumerate().map(|(idx, x)| (idx, x)).filter(|(_, x)| {
-                // if it is assigned, check if it is consistent
-                match self.assignments.get(x.get_label()) {
-                    None => true,
-                    Some(v) => v == x.get_polarity()
-                }
-            });
+
+            let mut remaining_lits =
+                clause
+                    .iter()
+                    .enumerate()
+                    .map(|(idx, x)| (idx, x))
+                    .filter(|(_, x)| {
+                        // if it is assigned, check if it is consistent
+                        match self.assignments.get(x.get_label()) {
+                            None => true,
+                            Some(v) => v == x.get_polarity(),
+                        }
+                    });
             let num_remaining = remaining_lits.clone().count();
             if num_remaining == 0 {
                 return false;
@@ -174,13 +190,14 @@ pub struct Cnf {
 
 pub struct AssignmentIter {
     cur: Option<Vec<bool>>,
-    num_vars: usize
+    num_vars: usize,
 }
 
 impl AssignmentIter {
     pub fn new(num_vars: usize) -> AssignmentIter {
         AssignmentIter {
-            cur: None, num_vars
+            cur: None,
+            num_vars,
         }
     }
 }
@@ -190,24 +207,29 @@ impl Iterator for AssignmentIter {
     fn next(&mut self) -> Option<Self::Item> {
         if self.cur.is_none() {
             self.cur = Some((0..self.num_vars).map(|_| false).collect());
-            return self.cur.clone()
+            return self.cur.clone();
         } else {
             // attempt to do a binary increment of the current state
-            let (new_c, carry) = self.cur.as_ref().unwrap().iter().fold((Vec::new(), true), |(mut cur_l, carry), cur_assgn| {
-                // half-adder
-                let new_itm = cur_assgn ^ carry;
-                let new_carry = *cur_assgn && carry;
-                cur_l.push(new_itm);
-                (cur_l, new_carry)
-            });
-            
+            let (new_c, carry) = self.cur.as_ref().unwrap().iter().fold(
+                (Vec::new(), true),
+                |(mut cur_l, carry), cur_assgn| {
+                    // half-adder
+                    let new_itm = cur_assgn ^ carry;
+                    let new_carry = *cur_assgn && carry;
+                    cur_l.push(new_itm);
+                    (cur_l, new_carry)
+                },
+            );
+
             self.cur = Some(new_c);
-            if carry { None } else { self.cur.clone() }
+            if carry {
+                None
+            } else {
+                self.cur.clone()
+            }
         }
     }
 }
-
-
 
 impl Cnf {
     pub fn from_file(v: String) -> Cnf {
@@ -238,7 +260,6 @@ impl Cnf {
             num_vars: m,
         }
     }
-
 
     pub fn rand_cnf(rng: &mut ThreadRng, num_vars: usize, num_clauses: usize) -> Cnf {
         assert!(num_clauses > 2, "requires at least 2 clauses in CNF");
@@ -285,7 +306,9 @@ impl Cnf {
             let mut clause_sat = false;
             for lit in clause.iter() {
                 let assgn = assignment[lit.label() as usize];
-                if lit.get_polarity() == assgn { clause_sat = true; }
+                if lit.get_polarity() == assgn {
+                    clause_sat = true;
+                }
             }
             if !clause_sat {
                 return false;
@@ -309,7 +332,6 @@ impl Cnf {
             num_vars: m as usize,
         }
     }
-
 
     /// compute the average span of the clauses with the ordering given by
     /// `lbl_to_pos`, which is a mapping from variable labels to their position
@@ -345,7 +367,7 @@ impl Cnf {
 
     /// compute a weighted model count of a CNF
     /// Note: not efficient! this is exponential in #variables
-    /// mostly for internal testing purposes 
+    /// mostly for internal testing purposes
     pub fn wmc(&self, weights: &HashMap<VarLabel, (usize, usize)>) -> usize {
         let mut total = 0;
         let mut weight_vec = Vec::new();
@@ -353,7 +375,9 @@ impl Cnf {
             weight_vec.push(weights[&VarLabel::new(i as u64)]);
         }
         for assgn in AssignmentIter::new(self.num_vars()) {
-            if assgn.is_empty() { break };
+            if assgn.is_empty() {
+                break;
+            };
             if self.eval(&assgn) {
                 let assgn_w = assgn.iter().enumerate().fold(1, |v, (idx, &polarity)| {
                     let (loww, highw) = weight_vec[idx];
@@ -362,7 +386,7 @@ impl Cnf {
                 total += assgn_w;
             }
         }
-        return total
+        return total;
     }
 
     pub fn linear_order(&self) -> VarOrder {
@@ -382,8 +406,8 @@ impl Cnf {
         // let mut rng = thread_rng();
         // rng.shuffle(&mut lbl_to_pos);
         // perform 100 iterations of force-update
-        let mut cur_span : f64 = self.average_span(&lbl_to_pos);
-        let mut prev_span = 0.0;
+        let mut cur_span: f64 = self.average_span(&lbl_to_pos);
+        let mut prev_span;
         loop {
             prev_span = cur_span;
             let mut cog: Vec<f64> = Vec::with_capacity(self.clauses.len());
@@ -434,17 +458,34 @@ impl Cnf {
 
     /// Updates the CNF to a new CNF that results from conditioning on the supplied literal
     pub fn condition(&mut self, lit: Literal) -> Cnf {
-        let new_cnf : Vec<Vec<Literal>> = self.clauses().iter().filter_map(|clause| {
-            // first, check if there is a true literal -- if there is, filter out this clause
-            if clause.iter().find(|outer| outer.get_label() == lit.get_label() && outer.get_polarity() == lit.get_polarity()).is_some() {
-                None
-            } else {
-                // next, filter out clauses with false literals
-                let filtered : Vec<Literal> = clause.into_iter().filter(|outer| 
-                    !(lit.get_label() == outer.get_label() && lit.get_polarity() != outer.get_polarity())).map(|x| *x).collect();
-                Some(filtered)
-            }
-        }).collect();
+        let new_cnf: Vec<Vec<Literal>> = self
+            .clauses()
+            .iter()
+            .filter_map(|clause| {
+                // first, check if there is a true literal -- if there is, filter out this clause
+                if clause
+                    .iter()
+                    .find(|outer| {
+                        outer.get_label() == lit.get_label()
+                            && outer.get_polarity() == lit.get_polarity()
+                    })
+                    .is_some()
+                {
+                    None
+                } else {
+                    // next, filter out clauses with false literals
+                    let filtered: Vec<Literal> = clause
+                        .into_iter()
+                        .filter(|outer| {
+                            !(lit.get_label() == outer.get_label()
+                                && lit.get_polarity() != outer.get_polarity())
+                        })
+                        .map(|x| *x)
+                        .collect();
+                    Some(filtered)
+                }
+            })
+            .collect();
         return Cnf::new(new_cnf);
     }
 
@@ -453,9 +494,13 @@ impl Cnf {
         for clause in self.clauses.iter() {
             let mut clause_str = String::new();
             for lit in clause.iter() {
-                let lit_str = format!("{}{}", if lit.get_polarity() { "" } else { "!" }, lit.get_label().value());
+                let lit_str = format!(
+                    "{}{}",
+                    if lit.get_polarity() { "" } else { "!" },
+                    lit.get_label().value()
+                );
                 if clause_str.is_empty() {
-                    clause_str=lit_str;
+                    clause_str = lit_str;
                 } else {
                     clause_str = format!("{} || {}", clause_str, lit_str);
                 }
@@ -466,11 +511,9 @@ impl Cnf {
                 r = format!(" {} && ({})", r, clause_str);
             }
         }
-        return r
+        return r;
     }
-
 }
-
 
 impl Arbitrary for Cnf {
     fn arbitrary(g: &mut Gen) -> Cnf {
@@ -479,9 +522,12 @@ impl Arbitrary for Cnf {
         let mut clauses = Vec::new();
         for _ in 0..num_clauses {
             let clause_size = (usize::arbitrary(g) % 3) + 1;
-            let mut clause : Vec<Literal> = Vec::new();
+            let mut clause: Vec<Literal> = Vec::new();
             for _ in 0..clause_size {
-                clause.push(Literal::new(VarLabel::new(u64::arbitrary(g) % num_vars), bool::arbitrary(g)));
+                clause.push(Literal::new(
+                    VarLabel::new(u64::arbitrary(g) % num_vars),
+                    bool::arbitrary(g),
+                ));
             }
             clauses.push(clause);
         }
@@ -491,9 +537,17 @@ impl Arbitrary for Cnf {
 
 #[test]
 fn test_unit_propagate_1() {
-    let v = vec![vec![Literal::new(VarLabel::new(0), false)],
-                 vec![Literal::new(VarLabel::new(0), true), Literal::new(VarLabel::new(1), false)],
-                 vec![Literal::new(VarLabel::new(1), true), Literal::new(VarLabel::new(2), true)]];
+    let v = vec![
+        vec![Literal::new(VarLabel::new(0), false)],
+        vec![
+            Literal::new(VarLabel::new(0), true),
+            Literal::new(VarLabel::new(1), false),
+        ],
+        vec![
+            Literal::new(VarLabel::new(1), true),
+            Literal::new(VarLabel::new(2), true),
+        ],
+    ];
 
     let mut cnf = Cnf::new(v);
     let mut up = UnitPropagate::new(&cnf).unwrap();
@@ -505,8 +559,16 @@ fn test_unit_propagate_1() {
 
 #[test]
 fn test_unit_propagate_2() {
-    let v = vec![vec![Literal::new(VarLabel::new(0), true), Literal::new(VarLabel::new(1), false)],
-                 vec![Literal::new(VarLabel::new(1), true), Literal::new(VarLabel::new(2), true)]];
+    let v = vec![
+        vec![
+            Literal::new(VarLabel::new(0), true),
+            Literal::new(VarLabel::new(1), false),
+        ],
+        vec![
+            Literal::new(VarLabel::new(1), true),
+            Literal::new(VarLabel::new(2), true),
+        ],
+    ];
 
     let mut cnf = Cnf::new(v);
     let mut up = UnitPropagate::new(&cnf).unwrap();
@@ -518,10 +580,21 @@ fn test_unit_propagate_2() {
 
 #[test]
 fn test_unit_propagate_3() {
-    let v = vec![vec![Literal::new(VarLabel::new(0), false)],
-                 vec![Literal::new(VarLabel::new(0), false), Literal::new(VarLabel::new(1), false)],
-                 vec![Literal::new(VarLabel::new(0), false), Literal::new(VarLabel::new(1), true)],
-                 vec![Literal::new(VarLabel::new(1), true), Literal::new(VarLabel::new(2), true)]];
+    let v = vec![
+        vec![Literal::new(VarLabel::new(0), false)],
+        vec![
+            Literal::new(VarLabel::new(0), false),
+            Literal::new(VarLabel::new(1), false),
+        ],
+        vec![
+            Literal::new(VarLabel::new(0), false),
+            Literal::new(VarLabel::new(1), true),
+        ],
+        vec![
+            Literal::new(VarLabel::new(1), true),
+            Literal::new(VarLabel::new(2), true),
+        ],
+    ];
 
     let mut cnf = Cnf::new(v);
     let mut up = UnitPropagate::new(&cnf).unwrap();
@@ -531,49 +604,14 @@ fn test_unit_propagate_3() {
     assert_eq!(assgn[2], None);
 }
 
-
-#[cfg(test)]
-mod test_cnf {
-    use quickcheck::TestResult;
-    use repr::cnf::Cnf;
-    use manager::rsbdd_manager::{BddManager};
-    use crate::repr::{var_label::{Literal, VarLabel}, cnf::UnitPropagate};
-
-    // quickcheck! {
-    //     fn test_unit_propagate(c1: Cnf) -> TestResult {
-    //         if c1.num_vars() < 2 || c1.num_vars() > 8 { return TestResult::discard() }
-    //         let mut mgr = BddManager::new_default_order(16);
-    //         let mut bdd1 = mgr.from_cnf(&c1);
-    //         let bdd1 = mgr.condition(bdd1, VarLabel::new(0), true);
-    //         let bdd1 = mgr.condition(bdd1, VarLabel::new(1), true);
-            
-    //         // let mut assgn : Vec<Option<bool>> = vec![None; c1.num_vars()];
-    //         let mut up = match UnitPropagate::new(&c1) {
-    //             Some(v) => v,
-    //             None => return TestResult::from_bool(bdd1.is_false())
-    //         };
-    //         if !up.set(Literal::new(VarLabel::new(0), true)) {
-    //             assert!(bdd1.is_false())
-    //         }
-    //         if !up.set(Literal::new(VarLabel::new(1), true)) {
-    //             assert!(bdd1.is_false());
-    //         }
-
-    //         // check that all units are implied 
-    //         // assgn[0] = Some(true);
-    //         // assgn[1] = Some(true);
-    //         let bdd2 = mgr.from_cnf_with_assignments(&c1, &up.get_assgn());
-
-    //         println!("checked {:?}\n\tImplied literals: {:?}\n\tbdd1: {}\n\tbdd 2: {}", c1, up.get_assgn(), mgr.print_bdd(bdd1), mgr.print_bdd(bdd2));
-    //         TestResult::from_bool(bdd1 == bdd2)
-    //     }
-    // }
-}
-
-
 #[test]
 fn test_cnf_wmc() {
-    let v = vec![vec![Literal::new(VarLabel::new(0), true), Literal::new(VarLabel::new(1), false)]];
+    use maplit::*;
+
+    let v = vec![vec![
+        Literal::new(VarLabel::new(0), true),
+        Literal::new(VarLabel::new(1), false),
+    ]];
     let cnf = Cnf::new(v);
     let weights = hashmap! {
         VarLabel::new(0) => (1, 1),
@@ -581,4 +619,3 @@ fn test_cnf_wmc() {
     };
     assert_eq!(cnf.wmc(&weights), 3);
 }
-

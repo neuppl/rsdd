@@ -1,6 +1,6 @@
 //! Represents a deferred BDD computation
 
-use super::var_label::Literal;
+// use super::var_label::Literal;
 
 #[derive(Debug, Clone)]
 pub enum BddPlan {
@@ -11,5 +11,5 @@ pub enum BddPlan {
     Not(Box<BddPlan>),
     ConstTrue,
     ConstFalse,
-    Literal(u64, bool)
+    Literal(u64, bool),
 }

@@ -5,25 +5,19 @@
 use backing_store::bdd_table_robinhood::BddTable;
 use backing_store::BackingCacheStats;
 use manager::cache::bdd_app::*;
-use manager::cache::lru::ApplyCacheStats;
 use manager::var_order::VarOrder;
 use num::traits::Num;
+use rand::rngs::ThreadRng;
+use rand::Rng;
 use repr::bdd::*;
 use repr::boolexpr::BoolExpr;
 use repr::cnf::Cnf;
+use repr::model;
 use repr::var_label::VarLabel;
 use std::cmp::Ordering;
+use std::collections::BinaryHeap;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
-use std::collections::BinaryHeap;
-use rand::Rng;
-use rand::rngs::ThreadRng;
-use rand::*;
-use repr::model;
-
-
-#[macro_use]
-use maplit::*;
 
 use crate::repr::bdd_plan::BddPlan;
 use crate::repr::var_label::Literal;
@@ -32,7 +26,7 @@ use crate::repr::var_label::Literal;
 #[derive(Eq, PartialEq, Debug)]
 struct CompiledCNF {
     ptr: BddPtr,
-    sz: usize
+    sz: usize,
 }
 
 // The priority queue depends on `Ord`.
@@ -43,8 +37,10 @@ impl Ord for CompiledCNF {
         // Notice that the we flip the ordering on costs.
         // In case of a tie we compare positions - this step is necessary
         // to make implementations of `PartialEq` and `Ord` consistent.
-        other.sz.cmp(&self.sz)
-        .then_with(|| self.ptr.raw().cmp(&other.ptr.raw()))
+        other
+            .sz
+            .cmp(&self.sz)
+            .then_with(|| self.ptr.raw().cmp(&other.ptr.raw()))
     }
 }
 
@@ -55,10 +51,9 @@ impl PartialOrd for CompiledCNF {
     }
 }
 
-
 #[derive(Debug)]
 pub struct Model {
-    assignments: Vec<bool>
+    assignments: Vec<bool>,
 }
 
 impl Model {
@@ -67,7 +62,7 @@ impl Model {
     }
 
     pub fn get_assignment(&self, var: VarLabel) -> bool {
-        return self.assignments[var.value() as usize]
+        return self.assignments[var.value() as usize];
     }
 }
 
@@ -86,7 +81,7 @@ impl<T: Num + Clone + Debug + Copy> BddWmc<T> {
     /// Generates a new `BddWmc` with a default `var_to_val`; it is private because we
     /// do not want to expose the structure of the associative array
     pub fn new_with_default(zero: T, one: T, var_to_val: HashMap<VarLabel, (T, T)>) -> BddWmc<T> {
-        let mut var_to_val_vec : Vec<Option<(T,T)>> = vec![None; var_to_val.len()];
+        let mut var_to_val_vec: Vec<Option<(T, T)>> = vec![None; var_to_val.len()];
         for (key, value) in var_to_val.iter() {
             var_to_val_vec[key.value_usize()] = Some(*value);
         }
@@ -172,7 +167,7 @@ impl BddManager {
     }
 
     pub fn num_vars(&self) -> usize {
-        return self.get_order().len()
+        return self.get_order().len();
     }
 
     /// Generate a new variable which was not in the original order. Places the
@@ -233,6 +228,7 @@ impl BddManager {
         ptr.is_false()
     }
 
+    /// Retrieves the top variable of the BDD
     pub fn topvar(&self, ptr: BddPtr) -> VarLabel {
         let bdd = self.deref_bdd(ptr).into_node();
         bdd.var
@@ -249,7 +245,7 @@ impl BddManager {
         }
     }
 
-    pub fn print_bdd(&self, ptr: BddPtr) -> String {
+    pub fn to_string(&self, ptr: BddPtr) -> String {
         use repr::bdd::PointerType::*;
         fn print_bdd_helper(t: &BddManager, ptr: BddPtr) -> String {
             match ptr.ptr_type() {
@@ -549,51 +545,6 @@ impl BddManager {
         self.ite(f, g.neg(), g)
     }
 
-    /// An abstract transformation on a BDD which applies a transformation `f`
-    /// to all nodes for a particular variable
-    fn map_var(
-        &mut self,
-        bdd: BddPtr,
-        lbl: VarLabel,
-        seen: &mut HashSet<BddPtr>,
-        f: &dyn Fn(&mut BddManager, BddPtr) -> BddPtr,
-    ) -> BddPtr {
-        self.stats.num_recursive_calls += 1;
-        if seen.contains(&bdd) {
-            return bdd;
-        }
-        if self.get_order().lt(lbl, bdd.label()) || bdd.is_const() {
-            // we passed the variable in the order, we will never find it
-            bdd
-        } else if bdd.label() == lbl {
-            f(self, bdd)
-        } else {
-            // recurse on the children
-            let n = self.deref_bdd(bdd).into_node();
-            let l = self.map_var(n.low, lbl, seen, f);
-            let h = self.map_var(n.high, lbl, seen, f);
-            let res = if l != n.low || h != n.high {
-                // cache and return the new BDD
-                let new_bdd = BddNode {
-                    low: l,
-                    high: h,
-                    var: bdd.label(),
-                };
-                let r = self.get_or_insert(new_bdd);
-                if bdd.is_compl() {
-                    r.neg()
-                } else {
-                    r
-                }
-            } else {
-                // nothing changed
-                bdd
-            };
-            seen.insert(res);
-            res
-        }
-    }
-
     fn cond_helper(
         &mut self,
         bdd: BddPtr,
@@ -741,14 +692,14 @@ impl BddManager {
         tbl: &mut HashMap<BddPtr, T>,
     ) -> (T, Option<VarLabel>) {
         match ptr.ptr_type() {
-            PointerType::PtrTrue => { 
+            PointerType::PtrTrue => {
                 tbl.insert(ptr, wmc.one.clone());
                 (wmc.one.clone(), Some(self.get_order().last_var()))
-            },
-            PointerType::PtrFalse => { 
+            }
+            PointerType::PtrFalse => {
                 tbl.insert(ptr, wmc.zero.clone());
                 (wmc.zero.clone(), Some(self.get_order().last_var()))
-            },
+            }
             PointerType::PtrNode => {
                 let order = self.get_order();
                 let res = match tbl.get(&ptr) {
@@ -803,7 +754,12 @@ impl BddManager {
         self.cached_wmc(ptr, params, &mut HashMap::new())
     }
 
-    pub fn cached_wmc<T: Num + Clone + Debug + Copy>(&self, ptr: BddPtr, params: &BddWmc<T>, cache: &mut HashMap<BddPtr, T>) -> T {
+    pub fn cached_wmc<T: Num + Clone + Debug + Copy>(
+        &self,
+        ptr: BddPtr,
+        params: &BddWmc<T>,
+        cache: &mut HashMap<BddPtr, T>,
+    ) -> T {
         let (mut v, lvl_op) = self.wmc_helper(ptr, params, true, cache);
         if lvl_op.is_none() {
             // no smoothing required
@@ -820,8 +776,15 @@ impl BddManager {
         }
     }
 
-    fn sample_h(&self, ptr: BddPtr, rng: &mut ThreadRng, wmc: &BddWmc<f64>,
-            assgn: &mut Vec<bool>, cache: &HashMap<BddPtr, f64>, cur_level: usize) -> () {
+    fn sample_h(
+        &self,
+        ptr: BddPtr,
+        rng: &mut ThreadRng,
+        wmc: &BddWmc<f64>,
+        assgn: &mut Vec<bool>,
+        cache: &HashMap<BddPtr, f64>,
+        cur_level: usize,
+    ) -> () {
         // check for smoothing
         if ptr.is_const() {
             if cur_level == self.num_vars() {
@@ -830,35 +793,43 @@ impl BddManager {
             } else {
                 let expected = self.get_order().var_at_pos(cur_level);
                 let w = wmc.get_var_weight(expected);
-                let v : bool = rng.gen_bool(w.1 / (w.0 + w.1));
+                let v: bool = rng.gen_bool(w.1 / (w.0 + w.1));
                 assgn[expected.value_usize()] = v;
-                return self.sample_h(ptr, rng, wmc, assgn, cache, cur_level+1);
+                return self.sample_h(ptr, rng, wmc, assgn, cache, cur_level + 1);
             }
         }
-        
+
         // let mut rng = rand::thread_rng();
-        let topvar  : VarLabel = self.topvar(ptr);
+        let topvar: VarLabel = self.topvar(ptr);
         let expected = self.get_order().var_at_pos(cur_level);
         if topvar != expected {
             // smooth by sampling the expected variable
             let w = wmc.get_var_weight(expected);
-            let v : bool = rng.gen_bool(w.1 / (w.0 + w.1));
+            let v: bool = rng.gen_bool(w.1 / (w.0 + w.1));
             assgn[expected.value_usize()] = v;
-            self.sample_h(ptr, rng, wmc, assgn, cache, cur_level+1);
+            self.sample_h(ptr, rng, wmc, assgn, cache, cur_level + 1);
         } else {
             // sample the top variable
-            let low = if ptr.is_compl() { self.low(ptr).neg() } else { self.low(ptr) };
-            let high = if ptr.is_compl() { self.high(ptr).neg() } else { self.high(ptr) };
+            let low = if ptr.is_compl() {
+                self.low(ptr).neg()
+            } else {
+                self.low(ptr)
+            };
+            let high = if ptr.is_compl() {
+                self.high(ptr).neg()
+            } else {
+                self.high(ptr)
+            };
             let w = wmc.get_var_weight(topvar);
             let l_weight = cache.get(&low).unwrap();
             let h_weight = cache.get(&high).unwrap();
-            let v : bool = rng.gen_bool((w.1 * h_weight) / (w.0 * l_weight + w.1 * h_weight));
+            let v: bool = rng.gen_bool((w.1 * h_weight) / (w.0 * l_weight + w.1 * h_weight));
             // let v = if ptr.is_compl() {!v} else {v};
             assgn[topvar.value_usize()] = v;
             if v {
-                self.sample_h(high, rng, wmc, assgn, cache, cur_level+1);
-            } else { 
-                self.sample_h(low, rng, wmc, assgn, cache, cur_level+1);
+                self.sample_h(high, rng, wmc, assgn, cache, cur_level + 1);
+            } else {
+                self.sample_h(low, rng, wmc, assgn, cache, cur_level + 1);
             }
         }
     }
@@ -867,7 +838,7 @@ impl BddManager {
     pub fn sample(&self, ptr: BddPtr, wmc: &BddWmc<f64>) -> Model {
         let mut rng = rand::thread_rng();
         let mut r = vec![false; self.num_vars()];
-        let mut cache : HashMap<BddPtr, f64> = HashMap::new();
+        let mut cache: HashMap<BddPtr, f64> = HashMap::new();
         let _z = self.cached_wmc(ptr, &wmc, &mut cache);
         self.sample_h(ptr, &mut rng, wmc, &mut r, &cache, 0);
         return Model::new(r);
@@ -878,7 +849,7 @@ impl BddManager {
         if clauses.is_empty() {
             return self.true_ptr();
         }
-        let mut compiled_heap : BinaryHeap<CompiledCNF> = BinaryHeap::new();
+        let mut compiled_heap: BinaryHeap<CompiledCNF> = BinaryHeap::new();
         // push each clause onto the compiled_heap
         for clause in clauses.iter() {
             let mut cur_ptr = self.false_ptr();
@@ -887,11 +858,11 @@ impl BddManager {
                     None => {
                         let new_v = self.var(lit.get_label(), lit.get_polarity());
                         cur_ptr = self.or(new_v, cur_ptr);
-                    },
+                    }
                     Some(v) if v == lit.get_polarity() => {
                         cur_ptr = self.true_ptr();
                         break;
-                    },
+                    }
                     _ => {
                         continue;
                     }
@@ -900,7 +871,7 @@ impl BddManager {
             let sz = self.count_nodes(cur_ptr);
             compiled_heap.push(CompiledCNF { ptr: cur_ptr, sz });
         }
-    
+
         while compiled_heap.len() > 1 {
             let CompiledCNF { ptr: ptr1, sz: _sz } = compiled_heap.pop().unwrap();
             let CompiledCNF { ptr: ptr2, sz: _sz } = compiled_heap.pop().unwrap();
@@ -909,8 +880,8 @@ impl BddManager {
             let sz = self.count_nodes(ptr);
             compiled_heap.push(CompiledCNF { ptr, sz })
         }
-    
-        let CompiledCNF { ptr, sz } = compiled_heap.pop().unwrap();
+
+        let CompiledCNF { ptr, sz: _sz } = compiled_heap.pop().unwrap();
         return ptr;
     }
 
@@ -958,7 +929,6 @@ impl BddManager {
         });
 
         for lit_vec in cnf_sorted.iter() {
-
             let (vlabel, val) = (lit_vec[0].get_label(), lit_vec[0].get_polarity());
             let mut bdd = self.var(vlabel, val);
             for i in 1..lit_vec.len() {
@@ -996,7 +966,7 @@ impl BddManager {
     pub fn print_stats(&self) -> () {
         // let compute_stats = self.get_backing_store_stats();
         // let apply_stats = self.apply_table.get_stats();
-        // println!("BDD Manager Stats\nCompute hit count: {}\nCompute lookup count: {}\nCompute total elements: {}\nCompute average offset: {}\nApply lookup: {}\nApply miss: {}\nApply evictions: {}", 
+        // println!("BDD Manager Stats\nCompute hit count: {}\nCompute lookup count: {}\nCompute total elements: {}\nCompute average offset: {}\nApply lookup: {}\nApply miss: {}\nApply evictions: {}",
         // compute_stats.hit_count, compute_stats.lookup_count, compute_stats.num_elements, compute_stats.avg_offset, apply_stats.lookup_count, apply_stats.miss_count, apply_stats.conflict_count);
     }
 
@@ -1035,12 +1005,12 @@ impl BddManager {
                 let r2 = self.compile_plan(&*r);
                 self.iff(r1, r2)
             }
-            &BddPlan::Ite(ref f, ref g, ref h ) => {
+            &BddPlan::Ite(ref f, ref g, ref h) => {
                 let f = self.compile_plan(&*f);
                 let g = self.compile_plan(&*g);
                 let h = self.compile_plan(&*h);
                 self.ite(f, g, h)
-            },
+            }
             &BddPlan::Not(ref f) => {
                 let f = self.compile_plan(&*f);
                 self.negate(f)
@@ -1055,360 +1025,332 @@ impl BddManager {
     }
 }
 
-// check that (a \/ b) /\ a === a
-#[test]
-fn simple_equality() {
-    let mut man = BddManager::new_default_order(3);
-    let v1 = man.var(VarLabel::new(0), true);
-    let v2 = man.var(VarLabel::new(1), true);
-    let r1 = man.or(v1, v2);
-    let r2 = man.and(r1, v1);
-    assert!(
-        man.eq_bdd(v1, r2),
-        "Not eq:\n {}\n{}",
-        man.print_bdd(v1),
-        man.print_bdd(r2)
-    );
-}
+#[cfg(test)]
+mod tests {
 
-#[test]
-fn simple_ite1() {
-    let mut man = BddManager::new_default_order(3);
-    let v1 = man.var(VarLabel::new(0), true);
-    let v2 = man.var(VarLabel::new(1), true);
-    let r1 = man.or(v1, v2);
-    let r2 = man.ite(r1, v1, BddPtr::false_node());
-    assert!(
-        man.eq_bdd(v1, r2),
-        "Not eq:\n {}\n{}",
-        man.print_bdd(v1),
-        man.print_bdd(r2)
-    );
-}
+    use maplit::*;
 
-#[test]
-fn test_newvar() {
-    let mut man = BddManager::new_default_order(0);
-    let l1 = man.new_var();
-    let l2 = man.new_var();
-    let v1 = man.var(l1, true);
-    let v2 = man.var(l2, true);
-    let r1 = man.or(v1, v2);
-    let r2 = man.and(r1, v1);
-    assert!(
-        man.eq_bdd(v1, r2),
-        "Not eq:\n {}\n{}",
-        man.print_bdd(v1),
-        man.print_bdd(r2)
-    );
-}
+    use crate::{
+        manager::rsbdd_manager::{BddManager, BddWmc},
+        repr::{bdd::BddPtr, var_label::VarLabel},
+    };
 
-#[test]
-fn test_wmc() {
-    let mut man = BddManager::new_default_order(2);
-    let v1 = man.var(VarLabel::new(0), true);
-    let v2 = man.var(VarLabel::new(1), true);
-    let r1 = man.or(v1, v2);
-    let weights = hashmap! {VarLabel::new(0) => (2,3),
-    VarLabel::new(1) => (5,7)};
-    let params = BddWmc::new_with_default(0, 1, weights);
-    let wmc = man.wmc(r1, &params);
-    assert_eq!(wmc, 50);
-}
-
-#[test]
-fn test_wmc_smooth() {
-    let mut man = BddManager::new_default_order(3);
-    let v1 = man.var(VarLabel::new(0), true);
-    let v2 = man.var(VarLabel::new(2), true);
-    let r1 = man.or(v1, v2);
-    let weights = hashmap! {
-    VarLabel::new(0) => (2,3),
-    VarLabel::new(1) => (5,7),
-    VarLabel::new(2) => (11,13)};
-    let params = BddWmc::new_with_default(0, 1, weights);
-    let wmc = man.wmc(r1, &params);
-    assert_eq!(wmc, 1176);
-}
-
-#[test]
-fn test_wmc_smooth2() {
-    let man = BddManager::new_default_order(3);
-    let r1 = BddPtr::true_node();
-    let weights = hashmap! {
-    VarLabel::new(0) => (2,3),
-    VarLabel::new(1) => (5,7),
-    VarLabel::new(2) => (11,13)};
-    let params = BddWmc::new_with_default(0, 1, weights);
-    let wmc = man.wmc(r1, &params);
-    assert_eq!(wmc, 1440);
-}
-
-#[test]
-fn test_condition() {
-    let mut man = BddManager::new_default_order(3);
-    let v1 = man.var(VarLabel::new(0), true);
-    let v2 = man.var(VarLabel::new(1), true);
-    let r1 = man.or(v1, v2);
-    let r3 = man.condition(r1, VarLabel::new(1), false);
-    assert!(man.eq_bdd(r3, v1));
-}
-
-#[test]
-fn test_condition_compl() {
-    let mut man = BddManager::new_default_order(3);
-    let v1 = man.var(VarLabel::new(0), false);
-    let v2 = man.var(VarLabel::new(1), false);
-    let r1 = man.and(v1, v2);
-    let r3 = man.condition(r1, VarLabel::new(1), false);
-    assert!(
-        man.eq_bdd(r3, v1),
-        "Not eq:\nOne: {}\nTwo: {}",
-        man.print_bdd(r3),
-        man.print_bdd(v1)
-    );
-}
-
-#[test]
-fn test_exist() {
-    let mut man = BddManager::new_default_order(3);
-    // 1 /\ 2 /\ 3
-    let v1 = man.var(VarLabel::new(0), true);
-    let v2 = man.var(VarLabel::new(1), true);
-    let v3 = man.var(VarLabel::new(2), true);
-    let a1 = man.and(v1, v2);
-    let r1 = man.and(a1, v3);
-    let r_expected = man.and(v1, v3);
-    let res = man.exists(r1, VarLabel::new(1));
-    assert!(
-        man.eq_bdd(r_expected, res),
-        "Got:\nOne: {}\nExpected: {}",
-        man.print_bdd(res),
-        man.print_bdd(r_expected)
-    );
-}
-
-#[test]
-fn test_exist_compl() {
-    let mut man = BddManager::new_default_order(3);
-    // 1 /\ 2 /\ 3
-    let v1 = man.var(VarLabel::new(0), false);
-    let v2 = man.var(VarLabel::new(1), false);
-    let v3 = man.var(VarLabel::new(2), false);
-    let a1 = man.and(v1, v2);
-    let r1 = man.and(a1, v3);
-    let r_expected = man.and(v1, v3);
-    let res = man.exists(r1, VarLabel::new(1));
-    // let res = r1;
-    assert!(
-        man.eq_bdd(r_expected, res),
-        "Got:\n: {}\nExpected: {}",
-        man.print_bdd(res),
-        man.print_bdd(r_expected)
-    );
-}
-
-#[test]
-fn test_compose() {
-    let mut man = BddManager::new_default_order(3);
-    let v0 = man.var(VarLabel::new(0), true);
-    let v1 = man.var(VarLabel::new(1), true);
-    let v2 = man.var(VarLabel::new(2), true);
-    let v0_and_v1 = man.and(v0, v1);
-    let v0_and_v2 = man.and(v0, v2);
-    let res = man.compose(v0_and_v1, VarLabel::new(1), v2);
-    assert!(
-        man.eq_bdd(res, v0_and_v2),
-        "\nGot: {}\nExpected: {}",
-        man.print_bdd(res),
-        man.print_bdd(v0_and_v2)
-    );
-}
-
-#[test]
-fn test_compose_2() {
-    let mut man = BddManager::new_default_order(4);
-    let v0 = man.var(VarLabel::new(0), true);
-    let v1 = man.var(VarLabel::new(1), true);
-    let v2 = man.var(VarLabel::new(2), true);
-    let v3 = man.var(VarLabel::new(3), true);
-    let v0_and_v1 = man.and(v0, v1);
-    let v2_and_v3 = man.and(v2, v3);
-    let v0v2v3 = man.and(v0, v2_and_v3);
-    let res = man.compose(v0_and_v1, VarLabel::new(1), v2_and_v3);
-    assert!(
-        man.eq_bdd(res, v0v2v3),
-        "\nGot: {}\nExpected: {}",
-        man.print_bdd(res),
-        man.print_bdd(v0v2v3)
-    );
-}
-
-#[test]
-fn test_compose_3() {
-    let mut man = BddManager::new_default_order(4);
-    let v0 = man.var(VarLabel::new(0), true);
-    let v1 = man.var(VarLabel::new(1), true);
-    let v2 = man.var(VarLabel::new(2), true);
-    let f = man.ite(v0, man.false_ptr(), v1);
-    let res = man.compose(f, VarLabel::new(1), v2);
-    let expected = man.ite(v0, man.false_ptr(), v2);
-    assert!(
-        man.eq_bdd(res, expected),
-        "\nGot: {}\nExpected: {}",
-        man.print_bdd(res),
-        man.print_bdd(expected)
-    );
-}
-
-#[test]
-fn test_compose_4() {
-    let mut man = BddManager::new_default_order(20);
-    let v0 = man.var(VarLabel::new(4), true);
-    let v1 = man.var(VarLabel::new(5), true);
-    let v2 = man.var(VarLabel::new(6), true);
-    let f = man.ite(v1, man.false_ptr(), v2);
-    let res = man.compose(f, VarLabel::new(6), v0);
-    let expected = man.ite(v1, man.false_ptr(), v0);
-    assert!(
-        man.eq_bdd(res, expected),
-        "\nGot: {}\nExpected: {}",
-        man.print_bdd(res),
-        man.print_bdd(expected)
-    );
-}
-
-#[test]
-fn test_new_var() {
-    let mut man = BddManager::new_default_order(0);
-    let vlbl1 = man.new_var();
-    let vlbl2 = man.new_var();
-    let v1 = man.var(vlbl1, false);
-    let v2 = man.var(vlbl2, false);
-    let r1 = man.and(v1, v2);
-    let r3 = man.condition(r1, VarLabel::new(1), false);
-    assert!(
-        man.eq_bdd(r3, v1),
-        "Not eq:\nOne: {}\nTwo: {}",
-        man.print_bdd(r3),
-        man.print_bdd(v1)
-    );
-}
-
-#[test]
-fn circuit1() {
-    let mut man = BddManager::new_default_order(3);
-    let x = man.var(VarLabel::new(0), false);
-    let y = man.var(VarLabel::new(1), true);
-    let delta = man.and(x, y);
-    let yp = man.var(VarLabel::new(2), true);
-    let inner = man.iff(yp, y);
-    let conj = man.and(inner, delta);
-    let res = man.exists(conj, VarLabel::new(1));
-
-    let expected = man.and(x, yp);
-    assert!(
-        man.eq_bdd(res, expected),
-        "Not eq:\nGot: {}\nExpected: {}",
-        man.print_bdd(res),
-        man.print_bdd(expected)
-    );
-}
-
-#[test]
-fn simple_cond() {
-    let mut man = BddManager::new_default_order(3);
-    let x = man.var(VarLabel::new(0), true);
-    let y = man.var(VarLabel::new(1), false);
-    let z = man.var(VarLabel::new(2), false);
-    let r1 = man.and(x, y);
-    let r2 = man.and(r1, z);
-    // now r2 is x /\ !y /\ !z
-
-    let res = man.condition(r2, VarLabel::new(1), true);
-    let expected = BddPtr::false_node();
-    assert!(
-        man.eq_bdd(res, expected),
-        "\nOriginal BDD: {}\nNot eq:\nGot: {}\nExpected: {}",
-        man.print_bdd(r2),
-        man.print_bdd(res),
-        man.print_bdd(expected)
-    );
-}
-
-#[test]
-fn wmc_test_2() {
-    let mut man = BddManager::new_default_order(4);
-    let x = man.var(VarLabel::new(0), true);
-    let y = man.var(VarLabel::new(1), true);
-    let f1 = man.var(VarLabel::new(2), true);
-    let f2 = man.var(VarLabel::new(3), true);
-    let map = hashmap! { VarLabel::new(0) => (1.0, 1.0),
-    VarLabel::new(1) => (1.0, 1.0),
-    VarLabel::new(2) => (0.8, 0.2),
-    VarLabel::new(3) => (0.7, 0.3) };
-    let wmc = BddWmc::new_with_default(0.0, 1.0, map);
-    let iff1 = man.iff(x, f1);
-    let iff2 = man.iff(y, f2);
-    let obs = man.or(x, y);
-    let and1 = man.and(iff1, iff2);
-    let f = man.and(and1, obs);
-    assert_eq!(man.wmc(f, &wmc), 0.2 * 0.3 + 0.2 * 0.7 + 0.8 * 0.3);
-}
-
-// #[test]
-// fn test_sample() {
-//     let mut man = BddManager::new_default_order(5);
-//     let x = man.var(VarLabel::new(0), true);
-//     let y = man.var(VarLabel::new(1), true);
-//     let f1 = man.var(VarLabel::new(2), true);
-//     let f2 = man.var(VarLabel::new(3), true);
-//     let iff1 = man.iff(x, f1);
-//     let iff2 = man.iff(y, f2);
-//     let obs = man.or(x, y);
-//     let and1 = man.and(iff1, iff2);
-//     let r1 = man.and(and1, obs);
-//     let map = hashmap! { VarLabel::new(0) => (1.0, 1.0),
-//     VarLabel::new(1) => (1.0, 1.0),
-//     VarLabel::new(2) => (0.8, 0.2),
-//     VarLabel::new(4) => (0.8, 0.2),
-//     VarLabel::new(3) => (0.7, 0.3) };
-//     let params : BddWmc<f64> = BddWmc::new_with_default(0.0, 1.0, map);
-//     let mut c = 0;
-//     let query_var = VarLabel::new(4);
-//     let n = 100;
-//     for _ in 0..n {
-//         let s1 = man.sample(r1, &params);
-//         if s1.get_assignment(query_var) {
-//             c += 1
-//         }
-//     }
-//     let v = man.var(query_var, true);
-//     let query_bdd = man.and(v, r1);
-//     let z = man.wmc(r1, &params);
-//     let px = man.wmc(query_bdd, &params);
-
-//     println!("Got: {}, true: {}", c as f64 / n as f64, px / z);
-
-//     assert!(false);
-//     // assert_eq!(wmc, 50.0);
-// }
-
-#[test]
-fn iff_regression() {
-    let mut man = BddManager::new_default_order(0);
-    let mut ptrvec = Vec::new();
-    for i in 0..40 {
-        let vlab = man.new_var();
-        let flab = man.new_var();
-        let vptr = man.var(vlab, true);
-        let fptr = man.var(flab, true);
-        let sent = man.iff(vptr, fptr);
-        ptrvec.push(sent);
+    // check that (a \/ b) /\ a === a
+    #[test]
+    fn simple_equality() {
+        let mut man = BddManager::new_default_order(3);
+        let v1 = man.var(VarLabel::new(0), true);
+        let v2 = man.var(VarLabel::new(1), true);
+        let r1 = man.or(v1, v2);
+        let r2 = man.and(r1, v1);
+        assert!(
+            man.eq_bdd(v1, r2),
+            "Not eq:\n {}\n{}",
+            man.to_string(v1),
+            man.to_string(r2)
+        );
     }
-    let resptr = ptrvec
-        .iter()
-        .fold(man.true_ptr(), |acc, x| man.and(acc, *x));
-    assert!(true);
-}
 
+    #[test]
+    fn simple_ite1() {
+        let mut man = BddManager::new_default_order(3);
+        let v1 = man.var(VarLabel::new(0), true);
+        let v2 = man.var(VarLabel::new(1), true);
+        let r1 = man.or(v1, v2);
+        let r2 = man.ite(r1, v1, BddPtr::false_node());
+        assert!(
+            man.eq_bdd(v1, r2),
+            "Not eq:\n {}\n{}",
+            man.to_string(v1),
+            man.to_string(r2)
+        );
+    }
+
+    #[test]
+    fn test_newvar() {
+        let mut man = BddManager::new_default_order(0);
+        let l1 = man.new_var();
+        let l2 = man.new_var();
+        let v1 = man.var(l1, true);
+        let v2 = man.var(l2, true);
+        let r1 = man.or(v1, v2);
+        let r2 = man.and(r1, v1);
+        assert!(
+            man.eq_bdd(v1, r2),
+            "Not eq:\n {}\n{}",
+            man.to_string(v1),
+            man.to_string(r2)
+        );
+    }
+
+    #[test]
+    fn test_wmc() {
+        let mut man = BddManager::new_default_order(2);
+        let v1 = man.var(VarLabel::new(0), true);
+        let v2 = man.var(VarLabel::new(1), true);
+        let r1 = man.or(v1, v2);
+        let weights = hashmap! {VarLabel::new(0) => (2,3),
+        VarLabel::new(1) => (5,7)};
+        let params = BddWmc::new_with_default(0, 1, weights);
+        let wmc = man.wmc(r1, &params);
+        assert_eq!(wmc, 50);
+    }
+
+    #[test]
+    fn test_wmc_smooth() {
+        let mut man = BddManager::new_default_order(3);
+        let v1 = man.var(VarLabel::new(0), true);
+        let v2 = man.var(VarLabel::new(2), true);
+        let r1 = man.or(v1, v2);
+        let weights = hashmap! {
+        VarLabel::new(0) => (2,3),
+        VarLabel::new(1) => (5,7),
+        VarLabel::new(2) => (11,13)};
+        let params = BddWmc::new_with_default(0, 1, weights);
+        let wmc = man.wmc(r1, &params);
+        assert_eq!(wmc, 1176);
+    }
+
+    #[test]
+    fn test_wmc_smooth2() {
+        let man = BddManager::new_default_order(3);
+        let r1 = BddPtr::true_node();
+        let weights = hashmap! {
+        VarLabel::new(0) => (2,3),
+        VarLabel::new(1) => (5,7),
+        VarLabel::new(2) => (11,13)};
+        let params = BddWmc::new_with_default(0, 1, weights);
+        let wmc = man.wmc(r1, &params);
+        assert_eq!(wmc, 1440);
+    }
+
+    #[test]
+    fn test_condition() {
+        let mut man = BddManager::new_default_order(3);
+        let v1 = man.var(VarLabel::new(0), true);
+        let v2 = man.var(VarLabel::new(1), true);
+        let r1 = man.or(v1, v2);
+        let r3 = man.condition(r1, VarLabel::new(1), false);
+        assert!(man.eq_bdd(r3, v1));
+    }
+
+    #[test]
+    fn test_condition_compl() {
+        let mut man = BddManager::new_default_order(3);
+        let v1 = man.var(VarLabel::new(0), false);
+        let v2 = man.var(VarLabel::new(1), false);
+        let r1 = man.and(v1, v2);
+        let r3 = man.condition(r1, VarLabel::new(1), false);
+        assert!(
+            man.eq_bdd(r3, v1),
+            "Not eq:\nOne: {}\nTwo: {}",
+            man.to_string(r3),
+            man.to_string(v1)
+        );
+    }
+
+    #[test]
+    fn test_exist() {
+        let mut man = BddManager::new_default_order(3);
+        // 1 /\ 2 /\ 3
+        let v1 = man.var(VarLabel::new(0), true);
+        let v2 = man.var(VarLabel::new(1), true);
+        let v3 = man.var(VarLabel::new(2), true);
+        let a1 = man.and(v1, v2);
+        let r1 = man.and(a1, v3);
+        let r_expected = man.and(v1, v3);
+        let res = man.exists(r1, VarLabel::new(1));
+        assert!(
+            man.eq_bdd(r_expected, res),
+            "Got:\nOne: {}\nExpected: {}",
+            man.to_string(res),
+            man.to_string(r_expected)
+        );
+    }
+
+    #[test]
+    fn test_exist_compl() {
+        let mut man = BddManager::new_default_order(3);
+        // 1 /\ 2 /\ 3
+        let v1 = man.var(VarLabel::new(0), false);
+        let v2 = man.var(VarLabel::new(1), false);
+        let v3 = man.var(VarLabel::new(2), false);
+        let a1 = man.and(v1, v2);
+        let r1 = man.and(a1, v3);
+        let r_expected = man.and(v1, v3);
+        let res = man.exists(r1, VarLabel::new(1));
+        // let res = r1;
+        assert!(
+            man.eq_bdd(r_expected, res),
+            "Got:\n: {}\nExpected: {}",
+            man.to_string(res),
+            man.to_string(r_expected)
+        );
+    }
+
+    #[test]
+    fn test_compose() {
+        let mut man = BddManager::new_default_order(3);
+        let v0 = man.var(VarLabel::new(0), true);
+        let v1 = man.var(VarLabel::new(1), true);
+        let v2 = man.var(VarLabel::new(2), true);
+        let v0_and_v1 = man.and(v0, v1);
+        let v0_and_v2 = man.and(v0, v2);
+        let res = man.compose(v0_and_v1, VarLabel::new(1), v2);
+        assert!(
+            man.eq_bdd(res, v0_and_v2),
+            "\nGot: {}\nExpected: {}",
+            man.to_string(res),
+            man.to_string(v0_and_v2)
+        );
+    }
+
+    #[test]
+    fn test_compose_2() {
+        let mut man = BddManager::new_default_order(4);
+        let v0 = man.var(VarLabel::new(0), true);
+        let v1 = man.var(VarLabel::new(1), true);
+        let v2 = man.var(VarLabel::new(2), true);
+        let v3 = man.var(VarLabel::new(3), true);
+        let v0_and_v1 = man.and(v0, v1);
+        let v2_and_v3 = man.and(v2, v3);
+        let v0v2v3 = man.and(v0, v2_and_v3);
+        let res = man.compose(v0_and_v1, VarLabel::new(1), v2_and_v3);
+        assert!(
+            man.eq_bdd(res, v0v2v3),
+            "\nGot: {}\nExpected: {}",
+            man.to_string(res),
+            man.to_string(v0v2v3)
+        );
+    }
+
+    #[test]
+    fn test_compose_3() {
+        let mut man = BddManager::new_default_order(4);
+        let v0 = man.var(VarLabel::new(0), true);
+        let v1 = man.var(VarLabel::new(1), true);
+        let v2 = man.var(VarLabel::new(2), true);
+        let f = man.ite(v0, man.false_ptr(), v1);
+        let res = man.compose(f, VarLabel::new(1), v2);
+        let expected = man.ite(v0, man.false_ptr(), v2);
+        assert!(
+            man.eq_bdd(res, expected),
+            "\nGot: {}\nExpected: {}",
+            man.to_string(res),
+            man.to_string(expected)
+        );
+    }
+
+    #[test]
+    fn test_compose_4() {
+        let mut man = BddManager::new_default_order(20);
+        let v0 = man.var(VarLabel::new(4), true);
+        let v1 = man.var(VarLabel::new(5), true);
+        let v2 = man.var(VarLabel::new(6), true);
+        let f = man.ite(v1, man.false_ptr(), v2);
+        let res = man.compose(f, VarLabel::new(6), v0);
+        let expected = man.ite(v1, man.false_ptr(), v0);
+        assert!(
+            man.eq_bdd(res, expected),
+            "\nGot: {}\nExpected: {}",
+            man.to_string(res),
+            man.to_string(expected)
+        );
+    }
+
+    #[test]
+    fn test_new_var() {
+        let mut man = BddManager::new_default_order(0);
+        let vlbl1 = man.new_var();
+        let vlbl2 = man.new_var();
+        let v1 = man.var(vlbl1, false);
+        let v2 = man.var(vlbl2, false);
+        let r1 = man.and(v1, v2);
+        let r3 = man.condition(r1, VarLabel::new(1), false);
+        assert!(
+            man.eq_bdd(r3, v1),
+            "Not eq:\nOne: {}\nTwo: {}",
+            man.to_string(r3),
+            man.to_string(v1)
+        );
+    }
+
+    #[test]
+    fn circuit1() {
+        let mut man = BddManager::new_default_order(3);
+        let x = man.var(VarLabel::new(0), false);
+        let y = man.var(VarLabel::new(1), true);
+        let delta = man.and(x, y);
+        let yp = man.var(VarLabel::new(2), true);
+        let inner = man.iff(yp, y);
+        let conj = man.and(inner, delta);
+        let res = man.exists(conj, VarLabel::new(1));
+
+        let expected = man.and(x, yp);
+        assert!(
+            man.eq_bdd(res, expected),
+            "Not eq:\nGot: {}\nExpected: {}",
+            man.to_string(res),
+            man.to_string(expected)
+        );
+    }
+
+    #[test]
+    fn simple_cond() {
+        let mut man = BddManager::new_default_order(3);
+        let x = man.var(VarLabel::new(0), true);
+        let y = man.var(VarLabel::new(1), false);
+        let z = man.var(VarLabel::new(2), false);
+        let r1 = man.and(x, y);
+        let r2 = man.and(r1, z);
+        // now r2 is x /\ !y /\ !z
+
+        let res = man.condition(r2, VarLabel::new(1), true);
+        let expected = BddPtr::false_node();
+        assert!(
+            man.eq_bdd(res, expected),
+            "\nOriginal BDD: {}\nNot eq:\nGot: {}\nExpected: {}",
+            man.to_string(r2),
+            man.to_string(res),
+            man.to_string(expected)
+        );
+    }
+
+    #[test]
+    fn wmc_test_2() {
+        let mut man = BddManager::new_default_order(4);
+        let x = man.var(VarLabel::new(0), true);
+        let y = man.var(VarLabel::new(1), true);
+        let f1 = man.var(VarLabel::new(2), true);
+        let f2 = man.var(VarLabel::new(3), true);
+        let map = hashmap! { VarLabel::new(0) => (1.0, 1.0),
+        VarLabel::new(1) => (1.0, 1.0),
+        VarLabel::new(2) => (0.8, 0.2),
+        VarLabel::new(3) => (0.7, 0.3) };
+        let wmc = BddWmc::new_with_default(0.0, 1.0, map);
+        let iff1 = man.iff(x, f1);
+        let iff2 = man.iff(y, f2);
+        let obs = man.or(x, y);
+        let and1 = man.and(iff1, iff2);
+        let f = man.and(and1, obs);
+        assert_eq!(man.wmc(f, &wmc), 0.2 * 0.3 + 0.2 * 0.7 + 0.8 * 0.3);
+    }
+
+    #[test]
+    fn iff_regression() {
+        let mut man = BddManager::new_default_order(0);
+        let mut ptrvec = Vec::new();
+        for i in 0..40 {
+            let vlab = man.new_var();
+            let flab = man.new_var();
+            let vptr = man.var(vlab, true);
+            let fptr = man.var(flab, true);
+            let sent = man.iff(vptr, fptr);
+            ptrvec.push(sent);
+        }
+        let resptr = ptrvec
+            .iter()
+            .fold(man.true_ptr(), |acc, x| man.and(acc, *x));
+        assert!(true);
+    }
+}
