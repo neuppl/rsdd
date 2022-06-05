@@ -734,7 +734,7 @@ impl<'a> SddManager {
 
     pub fn from_boolexpr(&mut self, expr: &BoolExpr) -> SddPtr {
         match expr {
-            &BoolExpr::Var(lbl, polarity) => self.var(VarLabel::new(lbl as u64), polarity),
+            &BoolExpr::Literal(lbl, polarity) => self.var(VarLabel::new(lbl as u64), polarity),
             &BoolExpr::And(ref l, ref r) => {
                 let r1 = self.from_boolexpr(l);
                 let r2 = self.from_boolexpr(r);

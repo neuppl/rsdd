@@ -15,8 +15,8 @@ pub struct BddTable {
 
 impl BddTable {
     pub fn new(order: VarOrder) -> BddTable {
-        let mut v = Vec::with_capacity(order.len());
-        for _ in 0..order.len() {
+        let mut v = Vec::with_capacity(order.num_vars());
+        for _ in 0..order.num_vars() {
             v.push(BackedRobinHoodTable::new(DEFAULT_SUBTABLE_SZ));
         }
 

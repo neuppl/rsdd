@@ -7,7 +7,7 @@ use std::collections::{HashMap, HashSet};
 
 #[derive(Debug, Clone)]
 pub enum BoolExpr {
-    Var(usize, bool),
+    Literal(usize, bool),
     And(Box<BoolExpr>, Box<BoolExpr>),
     Or(Box<BoolExpr>, Box<BoolExpr>),
 }
@@ -35,7 +35,7 @@ impl BoolExpr {
                     Sign::Neg => false,
                     Sign::Pos => true,
                 };
-                lit_vec.push(BoolExpr::Var(l.var().to_u64() as usize, b));
+                lit_vec.push(BoolExpr::Literal(l.var().to_u64() as usize, b));
             }
             if lit_vec.len() == 1 {
                 clause_vec.push(lit_vec.pop().unwrap());
@@ -62,7 +62,7 @@ impl BoolExpr {
     pub fn rand_cnf(rng: &mut ThreadRng, num_vars: usize, num_clauses: usize) -> BoolExpr {
         assert!(num_clauses > 2, "requires at least 2 clauses in CNF");
         let vars: Vec<BoolExpr> = (1..num_vars)
-            .map(|x| BoolExpr::Var(x, rand::random()))
+            .map(|x| BoolExpr::Literal(x, rand::random()))
             .collect();
         // let range = rand::distributions::Range::new(0, vars.len());
         let clause_size = 3;
@@ -101,7 +101,7 @@ impl BoolExpr {
     /// Evaluates a boolean expression
     pub fn eval(&self, values: &HashMap<VarLabel, bool>) -> bool {
         match self {
-            &BoolExpr::Var(lbl, polarity) => {
+            &BoolExpr::Literal(lbl, polarity) => {
                 let v = match values.get(&(VarLabel::new(lbl as u64))) {
                     None => panic!("Variable {} not found in varset", lbl),
                     Some(a) => a,
@@ -128,7 +128,7 @@ impl BoolExpr {
     pub fn varset(&self) -> HashSet<usize> {
         fn traverse(b: &BoolExpr, cur_set: &mut HashSet<usize>) -> () {
             match b {
-                &BoolExpr::Var(lbl, _) => {
+                &BoolExpr::Literal(lbl, _) => {
                     cur_set.insert(lbl);
                 }
                 &BoolExpr::And(ref l, ref r) | &BoolExpr::Or(ref l, ref r) => {

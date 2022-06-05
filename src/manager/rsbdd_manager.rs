@@ -157,8 +157,9 @@ impl BddManager {
         BddManager::new(default_order)
     }
 
+    /// Creates a new variable manager with the specified order
     pub fn new(order: VarOrder) -> BddManager {
-        let l = order.len();
+        let l = order.num_vars();
         BddManager {
             compute_table: BddTable::new(order),
             apply_table: BddApplyTable::new(l),
@@ -166,30 +167,33 @@ impl BddManager {
         }
     }
 
+    /// Returns the number of variables in the manager
     pub fn num_vars(&self) -> usize {
-        return self.get_order().len();
+        return self.get_order().num_vars();
     }
 
     /// Generate a new variable which was not in the original order. Places the
     /// new variable at the end of the current order. Returns the label of the
-    /// new variable
+    /// new variable.
     pub fn new_var(&mut self) -> VarLabel {
         self.apply_table.push_table();
         self.compute_table.new_last()
     }
 
+    /// Get the current variable order
     pub fn get_order(&self) -> &VarOrder {
         self.compute_table.order()
     }
 
+    /// Dereference a BddPtr into a Bdd
     fn deref_bdd(&self, ptr: BddPtr) -> Bdd {
         self.compute_table.deref(ptr)
     }
 
-    /// Fetch the BDD pointed to by the low-node of `ptr`, panics on constant
-    // BDDs
+    /// Fetch the BDD pointed to by the low-node of `ptr`
+    /// panics on constant BDDs
     pub fn low(&self, ptr: BddPtr) -> BddPtr {
-        assert!(!ptr.is_const());
+        assert!(!ptr.is_const(), "Attempting to get low pointer of constant BDD");
         let b = self.deref_bdd(ptr).into_node();
         b.low
     }
@@ -197,15 +201,16 @@ impl BddManager {
     /// Fetch the BDD pointed to by the high-node of `ptr`, panics on constant
     /// BDDs
     pub fn high(&self, ptr: BddPtr) -> BddPtr {
-        assert!(!ptr.is_const());
+        assert!(!ptr.is_const(), "Attempting to get high pointer of constant BDD");
         let b = self.deref_bdd(ptr).into_node();
         b.high
     }
 
-    pub fn var(&mut self, lbl: VarLabel, is_true: bool) -> BddPtr {
+    /// Get a pointer to the variable with label `lbl` and polarity `polarity`
+    pub fn var(&mut self, lbl: VarLabel, polarity: bool) -> BddPtr {
         let bdd = BddNode::new(BddPtr::false_node(), BddPtr::true_node(), lbl);
         let r = self.get_or_insert(bdd);
-        if is_true {
+        if polarity {
             r
         } else {
             r.neg()
@@ -220,6 +225,7 @@ impl BddManager {
         BddPtr::false_node()
     }
 
+    /// True if the BddPtr is true
     pub fn is_true(&self, ptr: BddPtr) -> bool {
         ptr.is_true()
     }
@@ -415,6 +421,16 @@ impl BddManager {
         r
     }
 
+    /// Produce a new BDD that is the result of conjoining `f` and `g`
+    /// ```
+    /// # use rsdd::manager::rsbdd_manager::BddManager;
+    /// # use rsdd::repr::var_label::VarLabel;
+    /// let mut mgr = BddManager::new_default_order(10);
+    /// let lbl_a = mgr.new_var();
+    /// let a = mgr.var(lbl_a, true);
+    /// let a_and_not_a = mgr.and(a, a.neg());
+    /// assert!(mgr.is_false(a_and_not_a));
+    /// ```
     pub fn and(&mut self, f: BddPtr, g: BddPtr) -> BddPtr {
         self.stats.num_recursive_calls += 1;
         // base case
@@ -972,7 +988,7 @@ impl BddManager {
 
     pub fn from_boolexpr(&mut self, expr: &BoolExpr) -> BddPtr {
         match expr {
-            &BoolExpr::Var(lbl, polarity) => self.var(VarLabel::new(lbl as u64), polarity),
+            &BoolExpr::Literal(lbl, polarity) => self.var(VarLabel::new(lbl as u64), polarity),
             &BoolExpr::And(ref l, ref r) => {
                 let r1 = self.from_boolexpr(l);
                 let r2 = self.from_boolexpr(r);
@@ -1020,6 +1036,8 @@ impl BddManager {
         }
     }
 
+    /// Prints the total number of recursive calls executed so far by the BddManager
+    /// This is a stable way to track performance 
     pub fn num_recursive_calls(&self) -> usize {
         return self.stats.num_recursive_calls;
     }

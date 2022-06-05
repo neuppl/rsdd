@@ -17,6 +17,8 @@ pub struct VarOrder {
 }
 
 impl VarOrder {
+    /// Creates a new variable order (elements that occur first in the vector
+    /// occur first in the order)
     pub fn new(order: Vec<VarLabel>) -> VarOrder {
         let mut v = util::malloc_vec(order.len());
         let mut pos_to_var = Vec::new();
@@ -30,7 +32,7 @@ impl VarOrder {
         }
     }
 
-    /// Generate a linear variable ordering
+    /// Generate a linear variable ordering of size `num_var_to_pos`
     pub fn linear_order(num_var_to_pos: usize) -> VarOrder {
         let mut v = Vec::new();
         for i in 0..num_var_to_pos {
@@ -39,30 +41,50 @@ impl VarOrder {
         VarOrder::new(v)
     }
 
-    pub fn len(&self) -> usize {
+    /// Gives the number of variables in the order
+    /// ```
+    /// # use rsdd::manager::var_order::VarOrder;
+    /// let o = VarOrder::linear_order(10);
+    /// assert_eq!(o.num_vars(), 10);
+    /// ```
+    pub fn num_vars(&self) -> usize {
         self.var_to_pos.len()
     }
 
-    /// get the position of `var` in the order
+    /// Get the position of `var` in the order
     pub fn get(&self, var: VarLabel) -> usize {
         self.var_to_pos[var.value() as usize]
     }
 
+    /// Fetches the variable that it as the specified position in the order
+    /// ```
+    /// # use rsdd::manager::var_order::VarOrder;
+    /// # use rsdd::repr::var_label::VarLabel;
+    /// let o = VarOrder::linear_order(10);
+    /// assert_eq!(o.var_at_pos(4), VarLabel::new(4));
+    /// ```
     pub fn var_at_pos(&self, pos: usize) -> VarLabel {
         VarLabel::new(self.pos_to_var[pos].clone() as u64)
     }
 
-    /// true if `a` is before `b` in this ordering
+    /// True if `a` is before `b` in this ordering
+    /// ```
+    /// # use rsdd::manager::var_order::VarOrder;
+    /// # use rsdd::repr::var_label::VarLabel;
+    /// let o = VarOrder::linear_order(10);
+    /// assert!(o.lt(VarLabel::new(3), VarLabel::new(4)));
+    /// ```
     pub fn lt(&self, a: VarLabel, b: VarLabel) -> bool {
         self.var_to_pos[a.value() as usize] < self.var_to_pos[b.value() as usize]
     }
 
-    /// true if `a` is before or equal to `b` in the ordering
+    /// True if `a` is before or equal to `b` in the ordering
     pub fn lte(&self, a: VarLabel, b: VarLabel) -> bool {
         self.var_to_pos[a.value() as usize] <= self.var_to_pos[b.value() as usize]
     }
 
-    /// returns whichever BddPtr occurs first in a given ordering
+    /// Returns the BddPtr whose top variable occurs first in a given
+    /// ordering (ties broken by returning `a`)
     pub fn first(&self, a: BddPtr, b: BddPtr) -> BddPtr {
         if a.is_const() {
             b
@@ -79,13 +101,21 @@ impl VarOrder {
         }
     }
 
+    /// Returns a sorted pair where the BddPtr whose top variable is first
+    /// occurs first in the pair.
     pub fn sort(&self, a: BddPtr, b: BddPtr) -> (BddPtr, BddPtr) {
-        let pa = self.get(VarLabel::new(a.var()));
-        let pb = self.get(VarLabel::new(b.var()));
-        if pa < pb {
+        if a.is_const() {
+            (b, a)
+        } else if b.is_const() {
             (a, b)
         } else {
-            (b, a)
+            let pa = self.get(VarLabel::new(a.var()));
+            let pb = self.get(VarLabel::new(b.var()));
+            if pa < pb {
+                (a, b)
+            } else {
+                (b, a)
+            }
         }
     }
 
@@ -100,7 +130,8 @@ impl VarOrder {
         self.pos_to_var.iter().map(|x| VarLabel::new_usize(*x))
     }
 
-    /// Iterate through the variables in the the reverse order in which they appear in the order
+    /// Iterate through the variables in the the reverse order in which they
+    /// appear in the order
     pub fn reverse_in_order_iter<'a>(&'a self) -> impl Iterator<Item = VarLabel> + 'a {
         self.pos_to_var
             .iter()
@@ -127,15 +158,17 @@ impl VarOrder {
         f2.label()
     }
 
-    pub fn get_vec(&self) -> Vec<usize> {
+    /// Produces a vector of variable positions indexed by 
+    pub fn get_var_to_pos_vec(&self) -> Vec<usize> {
         self.var_to_pos.clone()
     }
 
+    /// Gets the variable that occurs last in the order
     pub fn last_var(&self) -> VarLabel {
         VarLabel::new(*self.pos_to_var.last().unwrap() as u64)
     }
 
-    /// Generate a new variable at the end of the order
+    /// Push a new variable to the end of the order
     pub fn new_last(&mut self) -> VarLabel {
         let pos = self.pos_to_var.len();
         self.var_to_pos.push(pos);
