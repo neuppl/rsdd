@@ -11,6 +11,7 @@ extern crate serde;
 extern crate quickcheck;
 extern crate time_test;
 extern crate twox_hash;
+extern crate typed_arena;
 
 #[macro_use]
 mod util;

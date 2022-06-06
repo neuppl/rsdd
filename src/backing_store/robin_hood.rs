@@ -219,6 +219,11 @@ where
         &self.elem[ptr.0 as usize].elem
     }
 
+    /// Dereferences a BDD pointer that lives in this table
+    pub fn deref_mut(&mut self, ptr: BackingPtr) -> &mut T {
+        &mut self.elem[ptr.0 as usize].elem
+    }
+
     /// Expands the capacity of the hash table
     pub fn grow(&mut self) -> () {
         let new_sz = (self.cap + 1).next_power_of_two();

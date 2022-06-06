@@ -1,3 +1,5 @@
+//! The internal representation of a Bdd used by the BddBuilder
+
 use crate::repr::var_label::*;
 use std::fmt;
 use std::hash::{Hash, Hasher};
@@ -216,16 +218,25 @@ impl Bdd {
 /// The primary BDD storage object
 /// Called 'Topless' because it does not keep keep track of the top variable (as
 /// this is implicit in the storage table)
-#[derive(Debug, Clone, PartialEq, Eq, Copy)]
+#[derive(Debug, Clone, Copy, Eq)]
 pub struct ToplessBdd {
     pub low: BddPtr,
     pub high: BddPtr,
+    pub scratch: Option<usize>
 }
 
 impl Hash for ToplessBdd {
     fn hash<H: Hasher>(&self, state: &mut H) {
+        // ignore the scratch space when hashing
         self.low.hash(state);
         self.high.hash(state);
+    }
+}
+
+impl PartialEq for ToplessBdd {
+    fn eq(&self, other: &ToplessBdd) -> bool {
+        // Ignore the scratch space when checking equality
+        self.low == other.low && self.high == other.high
     }
 }
 
@@ -234,6 +245,7 @@ impl ToplessBdd {
         ToplessBdd {
             low: low,
             high: high,
+            scratch: None
         }
     }
 }

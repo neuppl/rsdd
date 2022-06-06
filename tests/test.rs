@@ -421,30 +421,30 @@ mod test_sdd_manager {
         }
     }
 
-    quickcheck! {
-        fn sdd_wmc_eq(clauses: Vec<Vec<Literal>>) -> TestResult {
+    // quickcheck! {
+    //     fn sdd_wmc_eq(clauses: Vec<Vec<Literal>>) -> TestResult {
 
-            let cnf = Cnf::new(clauses);
-            if cnf.num_vars() < 9 || cnf.num_vars() > 16 { return TestResult::discard() }
-            if cnf.clauses().len() > 16 { return TestResult::discard() }
+    //         let cnf = Cnf::new(clauses);
+    //         if cnf.num_vars() < 9 || cnf.num_vars() > 16 { return TestResult::discard() }
+    //         if cnf.clauses().len() > 16 { return TestResult::discard() }
 
-           let weight_map : HashMap<VarLabel, (f64, f64)> = HashMap::from_iter(
-                (0..cnf.num_vars()).map(|x| (VarLabel::new(x as u64), (0.5, 0.5))));
+    //        let weight_map : HashMap<VarLabel, (f64, f64)> = HashMap::from_iter(
+    //             (0..cnf.num_vars()).map(|x| (VarLabel::new(x as u64), (0.5, 0.5))));
 
-            let order : Vec<VarLabel> = (0..cnf.num_vars()).map(|x| VarLabel::new(x as u64)).collect();
-            let mut mgr = super::SddManager::new(super::even_split(&order, 3));
-            let cnf_sdd = mgr.from_cnf(&cnf);
-            let sdd_wmc = super::SddWmc::new_with_default(0.0, 1.0, &mut mgr, &weight_map);
-            let sdd_res = mgr.unsmoothed_wmc(cnf_sdd, &sdd_wmc);
+    //         let order : Vec<VarLabel> = (0..cnf.num_vars()).map(|x| VarLabel::new(x as u64)).collect();
+    //         let mut mgr = super::SddManager::new(super::even_split(&order, 3));
+    //         let cnf_sdd = mgr.from_cnf(&cnf);
+    //         let sdd_wmc = super::SddWmc::new_with_default(0.0, 1.0, &mut mgr, &weight_map);
+    //         let sdd_res = mgr.unsmoothed_wmc(cnf_sdd, &sdd_wmc);
 
 
-            let mut bddmgr = BddManager::new_default_order(cnf.num_vars());
-            let cnf_bdd = bddmgr.from_cnf(&cnf);
-            let bdd_res = bddmgr.wmc(cnf_bdd, &BddWmc::new_with_default(0.0, 1.0, weight_map));
+    //         let mut bddmgr = BddManager::new_default_order(cnf.num_vars());
+    //         let cnf_bdd = bddmgr.from_cnf(&cnf);
+    //         let bdd_res = bddmgr.wmc(cnf_bdd, &BddWmc::new_with_default(0.0, 1.0, weight_map));
 
-            TestResult::from_bool(sdd_res == bdd_res)
-        }
-    }
+    //         TestResult::from_bool(sdd_res == bdd_res)
+    //     }
+    // }
 }
 
 // #[test]

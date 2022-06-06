@@ -33,6 +33,7 @@ quickcheck = "1.0.3"
 time-test = "0.2.2"
 serde = { version = "1.0", features = ["derive"] }
 clap = "3.1.6"
+typed-arena = "2.0.1"
 
 [profile.release]
 debug = true

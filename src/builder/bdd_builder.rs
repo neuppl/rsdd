@@ -2,6 +2,7 @@
 //! manager, which manages the global state necessary for constructing canonical
 //! binary decision diagrams.
 
+use crate::repr;
 use crate::{
     backing_store::bdd_table_robinhood::BddTable,
     backing_store::BackingCacheStats,
@@ -24,8 +25,6 @@ use std::fmt::Debug;
 use num::traits::Num;
 use rand::rngs::ThreadRng;
 use rand::Rng;
-
-// use time_test::time_test;
 
 #[derive(Eq, PartialEq, Debug)]
 struct CompiledCNF {
@@ -159,6 +158,83 @@ impl BddManager {
     pub fn new_default_order(num_vars: usize) -> BddManager {
         let default_order = VarOrder::linear_order(num_vars);
         BddManager::new(default_order)
+    }
+
+    /// Clear the internal scratch space for a BddPtr
+    fn clear_scratch(&mut self, ptr: BddPtr) -> () {
+        if ptr.is_const() {
+            return;
+        } else {
+            if self.compute_table.get_scratch(ptr).is_none() {
+                return;
+            } else {
+                self.compute_table.set_scratch(ptr, None);
+                self.clear_scratch(self.low(ptr));
+                self.clear_scratch(self.high(ptr));
+            }
+        }
+    }
+
+    /// Fill the scratch space of each node with a counter that 
+    /// indexes an in-order left-first depth-first traversal
+    /// returns the new count (will be #nodes in the BDD at the end)
+    /// 
+    /// Pre-condition: cleared scratch 
+    fn unique_label_nodes(&mut self, ptr: BddPtr, count: usize) -> usize {
+        if ptr.is_const() {
+            return count;
+        } else {
+            if self.compute_table.get_scratch(ptr).is_some() {
+                return count;
+            } else {
+                self.compute_table.set_scratch(ptr, Some(count));
+                let new_count = self.unique_label_nodes(self.low(ptr), count+1);
+                self.unique_label_nodes(self.high(ptr), new_count)
+            }
+        }
+    }
+
+    /// Walks `ptr`, pushes the nodes onto `v` and constructs a new finalized BDD
+    /// Returns the so far (current index )
+    /// 
+    /// Pre-condition: cleared scratch 
+    fn finalize_h(&mut self, v: &mut Vec<repr::bdd::Bdd>, ptr: BddPtr) -> repr::bdd::BddPtr {
+        if ptr.is_true() {
+            return repr::bdd::BddPtr::new(0);
+        } else if ptr.is_false() {
+            return repr::bdd::BddPtr::new(1);
+        } 
+
+        let idx = match self.compute_table.get_scratch(ptr) {
+            Some(v) => v,
+            None => {
+                let (l, h) = if ptr.is_compl() {
+                    (self.low(ptr).neg(), self.high(ptr).neg())
+                } else {
+                    (self.low(ptr), self.high(ptr))
+                };
+                let l = self.finalize_h(v, l);
+                let h = self.finalize_h(v, h);
+                let new_n = repr::bdd::Bdd::Node { low: l, high: h };
+                v.push(new_n);
+                let new_idx = v.len() - 1;
+                self.compute_table.set_scratch(ptr, Some(new_idx));
+                new_idx
+            }
+        };
+        repr::bdd::BddPtr::new(idx)
+    }
+
+    /// Generate the finalized output BDD
+    pub fn finalize(&mut self, ptr: BddPtr) -> repr::bdd::FinalizedBDD {
+        use repr::bdd::*;
+        let sz = self.unique_label_nodes(ptr, 0);
+        let mut v = Vec::with_capacity(sz);
+        v.push(Bdd::True);
+        v.push(Bdd::False);
+        let bdd = self.finalize_h(&mut v, ptr);
+        self.clear_scratch(ptr);
+        repr::bdd::FinalizedBDD::new(bdd, v, self.get_order().clone())
     }
 
     /// Creates a new variable manager with the specified order
@@ -427,7 +503,7 @@ impl BddManager {
 
     /// Produce a new BDD that is the result of conjoining `f` and `g`
     /// ```
-    /// # use rsdd::manager::rsbdd_manager::BddManager;
+    /// # use rsdd::builder::bdd_builder::BddManager;
     /// # use rsdd::repr::var_label::VarLabel;
     /// let mut mgr = BddManager::new_default_order(10);
     /// let lbl_a = mgr.new_var();
@@ -678,25 +754,23 @@ impl BddManager {
         self.compute_table.get_stats().clone()
     }
 
-    fn count_nodes_h(&self, ptr: BddPtr, set: &mut HashSet<BddPtr>) -> usize {
-        if set.contains(&ptr) {
-            return 0;
-        }
-        set.insert(ptr);
-        match ptr.ptr_type() {
-            PointerType::PtrFalse => 1,
-            PointerType::PtrTrue => 1,
-            PointerType::PtrNode => {
-                let n = self.deref_bdd(ptr).into_node();
-                let c_l = self.count_nodes_h(n.low, set);
-                let c_r = self.count_nodes_h(n.high, set);
-                return c_l + c_r + 1;
-            }
-        }
-    }
-
-    pub fn count_nodes(&self, ptr: BddPtr) -> usize {
-        self.count_nodes_h(ptr, &mut HashSet::new())
+    /// Counts the number of nodes present in the BDD (not including constant nodes)
+    /// ```
+    /// # use rsdd::builder::bdd_builder::BddManager;
+    /// # use rsdd::repr::var_label::VarLabel;
+    /// let mut mgr = BddManager::new_default_order(10);
+    /// let lbl_a = mgr.new_var();
+    /// let lbl_b = mgr.new_var();
+    /// let a = mgr.var(lbl_a, true);
+    /// let b = mgr.var(lbl_b, true);
+    /// let a_and_b = mgr.and(a, b);
+    /// // This BDD has size 2, as it looks like (if a then b else false)
+    /// assert_eq!(mgr.count_nodes(a_and_b), 2);
+    /// ```
+    pub fn count_nodes(&mut self, ptr: BddPtr) -> usize {
+        let s = self.unique_label_nodes(ptr, 0);
+        self.clear_scratch(ptr);
+        s
     }
 
     /// The total number of nodes allocated by the manager
@@ -704,27 +778,28 @@ impl BddManager {
         self.compute_table.num_nodes()
     }
 
+    /// Pre-condition: Nodes are unique numbered
     fn wmc_helper<T: Num + Clone + Debug + Copy>(
-        &self,
+        &mut self,
         ptr: BddPtr,
         wmc: &BddWmc<T>,
         smooth: bool,
-        tbl: &mut HashMap<BddPtr, T>,
+        tbl: &mut Vec<(Option<T>, Option<T>)>, // (non-compl, compl)
     ) -> (T, Option<VarLabel>) {
         match ptr.ptr_type() {
             PointerType::PtrTrue => {
-                tbl.insert(ptr, wmc.one.clone());
                 (wmc.one.clone(), Some(self.get_order().last_var()))
             }
             PointerType::PtrFalse => {
-                tbl.insert(ptr, wmc.zero.clone());
                 (wmc.zero.clone(), Some(self.get_order().last_var()))
             }
             PointerType::PtrNode => {
-                let order = self.get_order();
-                let res = match tbl.get(&ptr) {
-                    Some(v) => *v,
-                    None => {
+                let idx = self.compute_table.get_scratch(ptr).unwrap();
+                // let order = self.get_order();
+                let res = match tbl[idx] {
+                    (_, Some(v)) if ptr.is_compl() => v,
+                    (Some(v), _) if !ptr.is_compl() => v,
+                    (cur_reg, cur_compl) => {
                         let bdd = self.deref_bdd(ptr).into_node();
                         let (low, high) = if ptr.is_compl() {
                             (bdd.low.neg(), bdd.high.neg())
@@ -737,51 +812,47 @@ impl BddManager {
                         let mut high_lvl = high_lvl_op.unwrap();
                         if smooth {
                             // smooth low
-                            while order.lt(ptr.label(), low_lvl) {
+                            while self.get_order().lt(ptr.label(), low_lvl) {
                                 let (low_factor, high_factor) = wmc.get_var_weight(low_lvl);
                                 low_v = (low_v.clone() * (*low_factor)) + (low_v * (*high_factor));
-                                low_lvl = order.above(low_lvl).unwrap();
+                                low_lvl = self.get_order().above(low_lvl).unwrap();
                             }
                             // smooth high
-                            while order.lt(ptr.label(), high_lvl) {
+                            while self.get_order().lt(ptr.label(), high_lvl) {
                                 let (low_factor, high_factor) = wmc.get_var_weight(high_lvl);
                                 high_v =
                                     (high_v.clone() * (*low_factor)) + (high_v * (*high_factor));
-                                high_lvl = order.above(high_lvl).unwrap();
+                                high_lvl = self.get_order().above(high_lvl).unwrap();
                             }
                         }
                         // compute new
                         let (low_factor, high_factor) = wmc.get_var_weight(bdd.var);
-                        (low_v * low_factor.clone()) + (high_v * high_factor.clone())
+                        let res = (low_v * low_factor.clone()) + (high_v * high_factor.clone());
+                        tbl[idx] = if ptr.is_compl() {
+                            (cur_reg, Some(res))
+                        } else {
+                            (Some(res), cur_compl)
+                        };
+                        res
                     }
                 };
-                tbl.insert(ptr, res);
-                if order.get(ptr.label()) == 0 {
+
+                if self.get_order().get(ptr.label()) == 0 {
                     (res, None)
                 } else {
-                    (res, Some(order.above(ptr.label()).unwrap()))
+                    (res, Some(self.get_order().above(ptr.label()).unwrap()))
                 }
             }
         }
     }
 
-    /// Weighted-model count.
-    /// if `smooth` is true, then the BDD is smoothed in real time as the WMC is
-    /// performed. This can actually be skipped for certain classes of WMC
-    /// problems, and is a huge savings if it can be. By default, it should be
-    /// `true`.
-    pub fn wmc<T: Num + Clone + Debug + Copy>(&self, ptr: BddPtr, params: &BddWmc<T>) -> T {
-        self.cached_wmc(ptr, params, &mut HashMap::new())
-    }
+    /// Weighted-model count
+    pub fn wmc<T: Num + Clone + Debug + Copy>(&mut self, ptr: BddPtr, params: &BddWmc<T>) -> T {
+        let n = self.unique_label_nodes(ptr, 0);
+        let mut v = vec![(None, None); n];
 
-    pub fn cached_wmc<T: Num + Clone + Debug + Copy>(
-        &self,
-        ptr: BddPtr,
-        params: &BddWmc<T>,
-        cache: &mut HashMap<BddPtr, T>,
-    ) -> T {
-        let (mut v, lvl_op) = self.wmc_helper(ptr, params, true, cache);
-        if lvl_op.is_none() {
+        let (mut v, lvl_op) = self.wmc_helper(ptr, params, true, &mut v);
+        let r = if lvl_op.is_none() {
             // no smoothing required
             v
         } else {
@@ -793,7 +864,9 @@ impl BddManager {
                 lvl = order.above(lvl.unwrap());
             }
             v
-        }
+        };
+        self.clear_scratch(ptr);
+        r
     }
 
     fn sample_h(
@@ -856,12 +929,13 @@ impl BddManager {
 
     /// Draws a sample from the models of the BDD according to the distribution specified by `wmc`
     pub fn sample(&self, ptr: BddPtr, wmc: &BddWmc<f64>) -> Assignment {
-        let mut rng = rand::thread_rng();
-        let mut r = vec![false; self.num_vars()];
-        let mut cache: HashMap<BddPtr, f64> = HashMap::new();
-        let _z = self.cached_wmc(ptr, &wmc, &mut cache);
-        self.sample_h(ptr, &mut rng, wmc, &mut r, &cache, 0);
-        return Assignment::new(r);
+        todo!()
+        // let mut rng = rand::thread_rng();
+        // let mut r = vec![false; self.num_vars()];
+        // let mut cache: HashMap<BddPtr, f64> = HashMap::new();
+        // let _z = self.cached_wmc(ptr, &wmc, &mut cache);
+        // self.sample_h(ptr, &mut rng, wmc, &mut r, &cache, 0);
+        // return Assignment::new(r);
     }
 
     pub fn from_cnf_with_assignments(&mut self, cnf: &Cnf, assgn: &model::PartialModel) -> BddPtr {
@@ -1136,7 +1210,7 @@ mod tests {
 
     #[test]
     fn test_wmc_smooth2() {
-        let man = BddManager::new_default_order(3);
+        let mut man = BddManager::new_default_order(3);
         let r1 = BddPtr::true_node();
         let weights = hashmap! {
         VarLabel::new(0) => (2,3),

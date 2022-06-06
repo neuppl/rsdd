@@ -65,6 +65,16 @@ impl BddTable {
         }
     }
 
+    /// Set the scratch value for a BddPtr
+    pub fn set_scratch(&mut self, ptr: BddPtr, v: Option<usize>) -> () {
+        self.subtables[ptr.var() as usize].deref_mut(BackingPtr(ptr.idx() as u32)).scratch = v;
+    }
+
+    /// Set the scratch value for a BddPtr
+    pub fn get_scratch(&mut self, ptr: BddPtr) -> Option<usize> {
+        self.subtables[ptr.var() as usize].deref_mut(BackingPtr(ptr.idx() as u32)).scratch
+    }
+
     pub fn num_nodes(&self) -> usize {
         let mut cnt = 0;
         for tbl in self.subtables.iter() {

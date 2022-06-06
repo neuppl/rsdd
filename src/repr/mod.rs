@@ -6,3 +6,4 @@ pub mod boolexpr;
 pub mod cnf;
 pub mod model;
 pub mod var_label;
+pub mod bdd;
