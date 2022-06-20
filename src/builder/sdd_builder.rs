@@ -4,7 +4,7 @@
 use crate::{
     backing_store::sdd_table::*,
     builder::cache::lru::*,
-    repr::boolexpr::BoolExpr,
+    repr::logical_expr::LogicalExpr,
     repr::cnf::Cnf,
     builder::repr::builder_sdd::*,
     repr::var_label::VarLabel,
@@ -744,18 +744,38 @@ impl<'a> SddManager {
         helper(&cvec, self).unwrap()
     }
 
-    pub fn from_boolexpr(&mut self, expr: &BoolExpr) -> SddPtr {
+    pub fn from_logical_expr(&mut self, expr: &LogicalExpr) -> SddPtr {
         match expr {
-            &BoolExpr::Literal(lbl, polarity) => self.var(VarLabel::new(lbl as u64), polarity),
-            &BoolExpr::And(ref l, ref r) => {
-                let r1 = self.from_boolexpr(l);
-                let r2 = self.from_boolexpr(r);
+            &LogicalExpr::Literal(lbl, polarity) => self.var(VarLabel::new(lbl as u64), polarity),
+            &LogicalExpr::Not(ref e) => {
+                let e = self.from_logical_expr(e);
+                e.neg()
+            }
+            &LogicalExpr::And(ref l, ref r) => {
+                let r1 = self.from_logical_expr(l);
+                let r2 = self.from_logical_expr(r);
                 self.and(r1, r2)
             }
-            &BoolExpr::Or(ref l, ref r) => {
-                let r1 = self.from_boolexpr(l);
-                let r2 = self.from_boolexpr(r);
+            &LogicalExpr::Or(ref l, ref r) => {
+                let r1 = self.from_logical_expr(l);
+                let r2 = self.from_logical_expr(r);
                 self.or(r1, r2)
+            }
+            &LogicalExpr::Xor(ref l, ref r) => {
+                let r1 = self.from_logical_expr(l);
+                let r2 = self.from_logical_expr(r);
+                self.xor(r1, r2)
+            }
+            &LogicalExpr::Iff(ref l, ref r) => {
+                let r1 = self.from_logical_expr(l);
+                let r2 = self.from_logical_expr(r);
+                self.iff(r1, r2)
+            }
+            &LogicalExpr::Ite { ref guard, ref thn, ref els } => {
+                let g = self.from_logical_expr(guard);
+                let thn = self.from_logical_expr(thn);
+                let els = self.from_logical_expr(els);
+                self.ite(g, thn, els)
             }
         }
     }

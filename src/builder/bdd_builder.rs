@@ -2,14 +2,14 @@
 //! manager, which manages the global state necessary for constructing canonical
 //! binary decision diagrams.
 
-use crate::repr;
 use crate::{
+    repr,
     backing_store::bdd_table_robinhood::BddTable,
     backing_store::BackingCacheStats,
     builder::cache::bdd_app::*,
     builder::var_order::VarOrder,
     builder::repr::builder_bdd::*,
-    repr::boolexpr::BoolExpr,
+    repr::logical_expr::LogicalExpr,
     repr::cnf::Cnf,
     repr::model,
     repr::var_label::VarLabel,
@@ -20,7 +20,7 @@ use crate::{
 
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::fmt::Debug;
 use num::traits::Num;
 use rand::rngs::ThreadRng;
@@ -1064,19 +1064,38 @@ impl BddManager {
         // compute_stats.hit_count, compute_stats.lookup_count, compute_stats.num_elements, compute_stats.avg_offset, apply_stats.lookup_count, apply_stats.miss_count, apply_stats.conflict_count);
     }
 
-    pub fn from_boolexpr(&mut self, expr: &BoolExpr) -> BddPtr {
+    pub fn from_boolexpr(&mut self, expr: &LogicalExpr) -> BddPtr {
         match expr {
-            &BoolExpr::Literal(lbl, polarity) => self.var(VarLabel::new(lbl as u64), polarity),
-            &BoolExpr::And(ref l, ref r) => {
+            &LogicalExpr::Literal(lbl, polarity) => self.var(VarLabel::new(lbl as u64), polarity),
+            &LogicalExpr::And(ref l, ref r) => {
                 let r1 = self.from_boolexpr(l);
                 let r2 = self.from_boolexpr(r);
                 self.and(r1, r2)
             }
-            &BoolExpr::Or(ref l, ref r) => {
+            &LogicalExpr::Or(ref l, ref r) => {
                 let r1 = self.from_boolexpr(l);
                 let r2 = self.from_boolexpr(r);
                 self.or(r1, r2)
             }
+            &LogicalExpr::Not(ref e) => {
+                self.from_boolexpr(e).neg()
+            },
+            &LogicalExpr::Iff(ref l, ref r) => {
+                let r1 = self.from_boolexpr(l);
+                let r2 = self.from_boolexpr(r);
+                self.iff(r1, r2)
+            },
+            &LogicalExpr::Xor(ref l, ref r) => {
+                let r1 = self.from_boolexpr(l);
+                let r2 = self.from_boolexpr(r);
+                self.xor(r1, r2)
+            },
+            &LogicalExpr::Ite { ref guard, ref thn, ref els } => {
+                let g = self.from_boolexpr(guard);
+                let t = self.from_boolexpr(thn);
+                let e = self.from_boolexpr(els);
+                self.ite(g, t, e)
+            },
         }
     }
 

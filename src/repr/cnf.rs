@@ -570,8 +570,8 @@ fn test_unit_propagate_2() {
         ],
     ];
 
-    let mut cnf = Cnf::new(v);
-    let mut up = UnitPropagate::new(&cnf).unwrap();
+    let cnf = Cnf::new(v);
+    let up = UnitPropagate::new(&cnf).unwrap();
     let assgn = up.get_assgn().get_vec();
     assert_eq!(assgn[0], None);
     assert_eq!(assgn[1], None);
@@ -596,8 +596,8 @@ fn test_unit_propagate_3() {
         ],
     ];
 
-    let mut cnf = Cnf::new(v);
-    let mut up = UnitPropagate::new(&cnf).unwrap();
+    let cnf = Cnf::new(v);
+    let up = UnitPropagate::new(&cnf).unwrap();
     let assgn = up.get_assgn().get_vec();
     assert_eq!(assgn[0], Some(false));
     assert_eq!(assgn[1], None);

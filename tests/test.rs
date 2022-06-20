@@ -7,7 +7,7 @@ extern crate quickcheck;
 use crate::builder::bdd_builder::{BddManager, BddWmc};
 use crate::builder::sdd_builder::{even_split, SddManager, SddWmc};
 use crate::builder::var_order::VarOrder;
-use crate::repr::boolexpr::BoolExpr;
+use crate::repr::logical_expr::LogicalExpr;
 use crate::repr::cnf::Cnf;
 use crate::repr::var_label::VarLabel;
 use rsdd::*;
