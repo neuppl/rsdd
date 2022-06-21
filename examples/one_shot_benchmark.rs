@@ -1,9 +1,23 @@
 extern crate criterion;
+extern crate rayon;
 extern crate rsdd;
 
+use clap::Parser;
 use criterion::black_box;
+use rayon::prelude::*;
 use rsdd::{builder::bdd_builder::BddManager, repr::cnf::Cnf};
 use std::time::{Duration, Instant};
+
+/// Test driver for one-shot benchmark
+#[derive(Parser, Debug)]
+#[clap(author, version, about, long_about = None)]
+struct Args {
+    /// Number of threads to subdivide benchmarks into;
+    /// if this is larger than the number of logical threads,
+    /// the benchmark will likely be degraded
+    #[clap(short, long, value_parser, default_value_t = 1)]
+    threads: usize,
+}
 
 fn compile_bdd(str: String) -> () {
     let cnf = Cnf::from_file(str);
@@ -19,6 +33,10 @@ fn bench_cnf_bdd(cnf_str: String) -> Duration {
 }
 
 fn main() {
+    let args = Args::parse();
+
+    rayon::ThreadPoolBuilder::new().num_threads(args.threads).build_global().unwrap();
+
     let cnf_strs = vec![
         (
             "bench-01",
@@ -114,9 +132,14 @@ fn main() {
         // ("unsat-1", String::from(include_str!("../cnf/unsat-1.cnf"))),
     ];
 
-    for (cnf_name, cnf_str) in cnf_strs {
+    println!("Benchmarking {} CNFs with {} thread{}", cnf_strs.len(), args.threads, if args.threads > 1 {"s"} else {""});
+
+    let cnf_results: Vec<(&str, f64)> = cnf_strs.into_par_iter().map(|(cnf_name, cnf_str)| {
         let d = bench_cnf_bdd(cnf_str);
-        let c8_time = d.as_secs_f64();
-        println!("one-shot compile_bdd time for {}: {}s", cnf_name, c8_time);
+        (cnf_name, d.as_secs_f64())
+    }).collect();
+
+    for (cnf_name, cnf_time) in cnf_results {
+        println!("one-shot compile_bdd time for {}: {}s", cnf_name, cnf_time);
     }
 }
