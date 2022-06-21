@@ -1,17 +1,30 @@
 extern crate criterion;
 extern crate rayon;
 extern crate rsdd;
+extern crate serde_json;
 
 use clap::Parser;
 use criterion::black_box;
 use rayon::prelude::*;
 use rsdd::{builder::bdd_builder::BddManager, repr::cnf::Cnf};
-use std::time::{Duration, Instant};
+use serde::{Deserialize, Serialize};
+use serde_json::json;
+use std::collections::HashMap;
+use std::fs;
+use std::{time::{Duration, Instant}};
 
 /// Test driver for one-shot benchmark
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
 struct Args {
+    /// Print debug messages to console
+    #[clap(short, long, value_parser, default_value_t = false)]
+    debug: bool,
+
+    /// File to output JSON to, if any
+    #[clap(short, long, value_parser, default_value = "")]
+    output: String,
+
     /// Number of threads to subdivide benchmarks into;
     /// if this is larger than the number of logical threads,
     /// the benchmark will likely be degraded
@@ -19,16 +32,30 @@ struct Args {
     threads: usize,
 }
 
-fn compile_bdd(str: String) -> () {
+#[derive(Serialize, Deserialize)]
+struct BenchmarkLog {
+    git_hash: String,
+    threads: usize,
+    benchmarks: HashMap<String, BenchmarkEntry>,
+}
+
+#[derive(Serialize, Deserialize)]
+struct BenchmarkEntry {
+    time_in_secs: f64,
+}
+
+fn compile_bdd(str: String, debug: bool) -> () {
     let cnf = Cnf::from_file(str);
     let mut man = BddManager::new_default_order(cnf.num_vars());
     man.from_cnf(&cnf);
-    println!("# recursive calls: {}", man.num_recursive_calls());
+    if debug {
+        println!("# recursive calls: {}", man.num_recursive_calls());
+    }
 }
 
-fn bench_cnf_bdd(cnf_str: String) -> Duration {
+fn bench_cnf_bdd(cnf_str: String, debug: bool) -> Duration {
     let start = Instant::now();
-    compile_bdd(black_box(cnf_str));
+    compile_bdd(black_box(cnf_str), debug);
     start.elapsed()
 }
 
@@ -122,6 +149,7 @@ fn main() {
             "c8-very-easy",
             String::from(include_str!("../cnf/c8-very-easy.cnf")),
         ),
+
         // ("c8", String::from(include_str!("../cnf/c8.cnf"))),
         // ("count", String::from(include_str!("../cnf/count.cnf"))),
         ("s298", String::from(include_str!("../cnf/s298.cnf"))),
@@ -135,11 +163,35 @@ fn main() {
     println!("Benchmarking {} CNFs with {} thread{}", cnf_strs.len(), args.threads, if args.threads > 1 {"s"} else {""});
 
     let cnf_results: Vec<(&str, f64)> = cnf_strs.into_par_iter().map(|(cnf_name, cnf_str)| {
-        let d = bench_cnf_bdd(cnf_str);
+        let d = bench_cnf_bdd(cnf_str, args.debug);
         (cnf_name, d.as_secs_f64())
     }).collect();
 
-    for (cnf_name, cnf_time) in cnf_results {
-        println!("one-shot compile_bdd time for {}: {}s", cnf_name, cnf_time);
+    let benchmarks: HashMap<String, BenchmarkEntry> = cnf_results.into_iter().map(|(cnf_name, cnf_time)| {
+        (cnf_name.to_string(), BenchmarkEntry {
+            time_in_secs: cnf_time
+        })
+    }).into_iter().collect();
+
+    // borrowed from: https://stackoverflow.com/questions/43753491/include-git-commit-hash-as-string-into-rust-program
+    // and strips whitespace
+    let git_output = std::process::Command::new("git").args(&["rev-parse", "HEAD"]).output().unwrap();
+    let git_hash = String::from_utf8(git_output.stdout).unwrap().split_whitespace().collect();
+
+    let benchmark_log = BenchmarkLog {
+        git_hash,
+        threads: args.threads,
+        benchmarks,
+    };
+
+    let obj = json!(benchmark_log);
+    let pretty_str = serde_json::to_string_pretty(&obj).unwrap();
+    println!("{}", pretty_str);
+
+    if !args.output.is_empty() {
+        fs::write(&args.output, pretty_str).expect("Error writing to file");
+        if args.debug {
+            println!("Outputted to {}", args.output);
+        }
     }
 }

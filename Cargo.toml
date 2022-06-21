@@ -15,6 +15,7 @@ rustflags = ["-C", "link-args=-Wl,-undefined,dynamic_lookup,-export-dynamic"]
 [dev-dependencies]
 criterion = "0.3"
 rayon = "1.5.3"
+serde_json = "1.0.81"
 
 [[bench]]
 name = "rsdd_benchmark"
