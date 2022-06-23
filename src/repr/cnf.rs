@@ -1,3 +1,5 @@
+//! A representation of a conjunctive normal form (CNF)
+
 use crate::builder::var_order::VarOrder;
 use rand;
 use rand::rngs::ThreadRng;
@@ -9,21 +11,54 @@ extern crate quickcheck;
 use self::quickcheck::{Arbitrary, Gen};
 use crate::repr::model::PartialModel;
 
-/// A data-structure for manipulating unit propagation with CNFs
+type clause_idx = usize;
+type lit_idx = usize;
+
+/// A data-structure for efficient implementation of unit propagation with CNFs.
+/// It implements a two-literal watching scheme.
+/// For instance, for the CNF:
+///     c0             c1
+/// (A \/ !B) /\ (C \/ !A \/ B)
+///  ^     ^      ^    ^
+/// The literals A and !B are watched in c0, and C and !A  are watched in c1
+/// This is stored in the watch lists as:
+/// watch_list_pos:
+///    A: [c0]
+///    B: []
+///    C: [c1]
+/// watch_list_neg:
+///    A: [c1]
+///    B: [c0] 
+///    C: []
+/// Every clause (except for unit clauses) watch exactly 2 unique literals at all times.
+/// When a variable is decided, we decide how to update the watched literals according 
+/// to the following cases
+/// Case 1. We decide C=False. In this case, we deduce no units, and update the literal watches 
+/// as:
+///     c0             c1
+/// (A \/ !B) /\ (C \/ !A \/ B)
+///  ^     ^            ^    ^
+/// I.e., we pick a new literal to watch in c1
+/// Case 2. Decide C=True, In this case, the clause c1 is satisfied, so  we do not make 
+/// any changes to its watched literals.
+/// Case 3. Decide A=False. In this case there are no remaining literals to
+/// watch in c0, so we deduce a unit !B and propagate. The resulting watcher
+/// state unchanged in this case.
 #[derive(Debug, Clone)]
 pub struct UnitPropagate<'a> {
     // watch_list_pos[i] is a list of the clauses that are watching the positive
     // literal of varlabel i
-    watch_list_pos: Vec<Vec<usize>>,
+    watch_list_pos: Vec<Vec<clause_idx>>,
     // similar to the above, but for negative label
-    watch_list_neg: Vec<Vec<usize>>,
-    // vector of assignments
-    assignments: PartialModel,
+    watch_list_neg: Vec<Vec<clause_idx>>,
+    // stack of assignment states (all implied and decided literals)
+    state: Vec<PartialModel>,
     cnf: &'a Cnf,
 }
 
+
 impl<'a> UnitPropagate<'a> {
-    /// Returns None if UNSAT discovered during unit propagation
+    /// Returns None if UNSAT discovered during initial unit propagation
     pub fn new(cnf: &'a Cnf) -> Option<UnitPropagate<'a>> {
         let mut watch_list_pos: Vec<Vec<usize>> = Vec::new();
         let mut watch_list_neg: Vec<Vec<usize>> = Vec::new();
@@ -59,7 +94,7 @@ impl<'a> UnitPropagate<'a> {
         let mut cur = UnitPropagate {
             watch_list_pos,
             watch_list_neg,
-            assignments: PartialModel::from_vec(assignments),
+            state: vec![PartialModel::from_vec(assignments)],
             cnf,
         };
 
@@ -69,14 +104,44 @@ impl<'a> UnitPropagate<'a> {
                 return None;
             }
         }
-
         return Some(cur);
     }
+    
+    fn cur_state(&self) -> &PartialModel {
+        &self.state.last().unwrap()
+    }
 
-    /// Set a variable to a particular value
-    /// returns true if SAT, false if UNSAT
-    pub fn set(&mut self, new_assignment: Literal) -> bool {
-        match self.assignments.get(new_assignment.get_label()) {
+    fn cur_state_mut(&mut self) -> &mut PartialModel {
+        let n = self.state.len();
+        &mut self.state[n - 1]
+    }
+
+    /// Sets a variable to a particular value
+    /// Returns true if successfully set (i.e., the CNF is not rendered UNSAT);
+    /// false if the CNF is rendered UNSAT
+    pub fn decide(&mut self, new_assignment: Literal) -> bool {
+        // push a fresh state onto the stack and propagate
+        self.state.push(self.cur_state().clone());
+        let r  = self.set(new_assignment);
+        r
+    }
+
+    /// Backtracks to the previous decision
+    pub fn backtrack(&mut self) -> () {
+        self.state.pop();
+    }
+
+    pub fn is_sat(&self) -> bool {
+        todo!()
+    }
+
+    /// Set a variable to a particular value and propagates
+    /// returns true if success, false if UNSAT
+    fn set(&mut self, new_assignment: Literal) -> bool {
+        println!("setting {:?}, state: {:?}", new_assignment, self);
+        // this code is really a mess... need to rework it
+        // if already assigned, check if consistent -- if not, return unsat
+        match self.cur_state().get(new_assignment.get_label()) {
             None => (),
             Some(v) => {
                 if new_assignment.get_polarity() != v {
@@ -86,39 +151,44 @@ impl<'a> UnitPropagate<'a> {
                 }
             }
         };
-        self.assignments
+
+        // update the value of the decided variable in the partial model
+        self.cur_state_mut()
             .set(new_assignment.get_label(), new_assignment.get_polarity());
 
-        let loc = new_assignment.get_label().value() as usize;
+        let var_idx = new_assignment.get_label().value() as usize;
 
+        // track a list of all discovered implications
         let mut implied_lits: Vec<Literal> = Vec::new();
-        let mut i = 0;
+        // i indexes over the watchers for the current literal
+        let mut watcher_idx = 0;
         // some of the internal structure here is weird to accommodate the
         // borrow checker
         loop {
-            // first check if there are any watchers; if no, break
+            // first check if there are any watchers; if no watchers left, break 
+
             if new_assignment.get_polarity() {
-                if i >= self.watch_list_neg[loc].len() {
+                if watcher_idx >= self.watch_list_neg[var_idx].len() {
                     break;
                 }
             } else {
-                if i >= self.watch_list_pos[loc].len() {
+                if watcher_idx >= self.watch_list_pos[var_idx].len() {
                     break;
                 }
             }
-
             let clause = if new_assignment.get_polarity() {
-                &self.cnf.clauses()[self.watch_list_neg[loc][i]]
+                &self.cnf.clauses()[self.watch_list_neg[var_idx][watcher_idx]]
             } else {
-                &self.cnf.clauses()[self.watch_list_pos[loc][i]]
+                &self.cnf.clauses()[self.watch_list_pos[var_idx][watcher_idx]]
             };
 
-            // if clause is satisfied, do not change its watched literals (increment i)
+            // if clause is satisfied, do not change its watched literals and
+            // move onto the next watcher
             let mut is_sat = false;
             for lit in clause.iter() {
-                match self.assignments.get(lit.get_label()) {
+                match self.cur_state().get(lit.get_label()) {
                     Some(v) if lit.get_polarity() == v => {
-                        i += 1;
+                        watcher_idx += 1;
                         is_sat = true;
                         break;
                     }
@@ -129,43 +199,69 @@ impl<'a> UnitPropagate<'a> {
                 continue;
             }
 
+            // gather a list of all remaining unassigned literals in the current clause
             let mut remaining_lits =
                 clause
                     .iter()
-                    .enumerate()
-                    .map(|(idx, x)| (idx, x))
-                    .filter(|(_, x)| {
-                        // if it is assigned, check if it is consistent
-                        match self.assignments.get(x.get_label()) {
+                    .filter(|x| {
+                        match self.cur_state().get(x.get_label()) {
                             None => true,
-                            Some(v) => v == x.get_polarity(),
+                            Some(_) => false,
                         }
                     });
+
+            println!("remaining lits {:?}", remaining_lits);
             let num_remaining = remaining_lits.clone().count();
             if num_remaining == 0 {
+                // UNSAT -- need to move a watcher and there are no remaining
+                // unassigned literals to watch
                 return false;
             } else if num_remaining == 1 {
-                // unit propagate
-                let (_, new_unit) = remaining_lits.nth(0).unwrap();
-                // self.assignments[new_unit.get_label().value() as usize] = Some(new_unit.get_polarity());
+                // unit propagate and move onto the next watcher
+                let new_unit = remaining_lits.nth(0).unwrap();
                 implied_lits.push(*new_unit);
-                i += 1;
+                watcher_idx += 1;
             } else {
-                // find a new literal to watch
-                // first, remove the current watch
-                let (idx, new_lit) = remaining_lits.nth(0).unwrap();
-                let new_loc = new_lit.get_label().value() as usize;
-                if new_assignment.get_polarity() {
-                    self.watch_list_neg[loc].swap_remove(i);
+                // num_remaining > 1, find a new literal to watch
+                // first, find a new literal to watch
+                let candidate_unwatched : lit_idx = remaining_lits.clone().nth(0).unwrap().get_label().value_usize();
+                // check if candidate_unwatched is already being watched; if it
+                // is, pick another literal to watch
+                let prev_watcher : clause_idx = if new_assignment.get_polarity() {
+                    self.watch_list_neg[var_idx][watcher_idx]
                 } else {
-                    self.watch_list_pos[loc].swap_remove(i);
+                    self.watch_list_pos[var_idx][watcher_idx]
                 };
+
+                let new_lit : &Literal = if new_assignment.get_polarity() {
+                    if self.watch_list_pos[candidate_unwatched].contains(&prev_watcher) {
+                        remaining_lits.nth(1).unwrap()
+                    } else {
+                        remaining_lits.nth(0).unwrap()
+                    }
+                } else {
+                    if self.watch_list_neg[candidate_unwatched].contains(&prev_watcher) {
+                        remaining_lits.nth(1).unwrap()
+                    } else {
+                        remaining_lits.nth(0).unwrap()
+                    }
+                };
+
+                let new_loc = new_lit.get_label().value_usize();
+
+                if new_assignment.get_polarity() {
+                    self.watch_list_neg[var_idx].swap_remove(watcher_idx);
+                } else {
+                    self.watch_list_pos[var_idx].swap_remove(watcher_idx);
+                };
+
                 // now add the new one
                 if new_lit.get_polarity() {
-                    self.watch_list_neg[new_loc].push(idx);
+                    self.watch_list_pos[new_loc].push(prev_watcher);
                 } else {
-                    self.watch_list_pos[new_loc].push(idx);
+                    self.watch_list_neg[new_loc].push(prev_watcher);
                 }
+                // do not increment watcher_idx (since we decreased the total number of watchers, we have made progress)
             }
         }
         for l in implied_lits {
@@ -178,7 +274,7 @@ impl<'a> UnitPropagate<'a> {
     }
 
     pub fn get_assgn(&self) -> &PartialModel {
-        &self.assignments
+        &self.cur_state()
     }
 }
 
@@ -255,10 +351,7 @@ impl Cnf {
             }
             clause_vec.push(lit_vec);
         }
-        Cnf {
-            clauses: clause_vec,
-            num_vars: m,
-        }
+        Cnf::new(clause_vec)
     }
 
     pub fn rand_cnf(rng: &mut ThreadRng, num_vars: usize, num_clauses: usize) -> Cnf {
@@ -284,10 +377,7 @@ impl Cnf {
                 clause_vec.push(vec![var]);
             }
         }
-        Cnf {
-            clauses: clause_vec,
-            num_vars: num_vars,
-        }
+        Cnf::new(clause_vec)
     }
 
     pub fn num_vars(&self) -> usize {
@@ -320,13 +410,16 @@ impl Cnf {
 
     pub fn new(mut clauses: Vec<Vec<Literal>>) -> Cnf {
         let mut m = 0;
+        // filter out empty clauses
         clauses.retain(|x| x.len() > 0);
-        for clause in clauses.iter() {
+        for clause in clauses.iter_mut() {
             for lit in clause.iter() {
                 m = max(lit.get_label().value() + 1, m);
             }
+            // remove duplicate literals
+            clause.sort_by(|a, b| a.get_label().value().cmp(&b.get_label().value()));
+            clause.dedup();
         }
-        // filter out empty clauses
         Cnf {
             clauses: clauses,
             num_vars: m as usize,
@@ -602,6 +695,38 @@ fn test_unit_propagate_3() {
     assert_eq!(assgn[0], Some(false));
     assert_eq!(assgn[1], None);
     assert_eq!(assgn[2], None);
+}
+
+#[test]
+fn test_unit_propagate_4() {
+    let v = vec![
+        vec![
+            Literal::new(VarLabel::new(0), false),
+            Literal::new(VarLabel::new(1), false),
+        ],
+    ];
+
+    let cnf = Cnf::new(v);
+    let mut up = UnitPropagate::new(&cnf).unwrap();
+    let v1 = up.decide(Literal::new(VarLabel::new(0), false));
+    assert!(v1);
+    let v = up.decide(Literal::new(VarLabel::new(1), true));
+    assert_eq!(v, true);
+    up.backtrack();
+    let v = up.decide(Literal::new(VarLabel::new(1), false));
+    assert_eq!(v, true);
+}
+
+#[test]
+fn test_unit_propagate_5() {
+    let v = vec![vec![Literal::new(VarLabel::new(1), true), Literal::new(VarLabel::new(3), true)],
+                 vec![Literal::new(VarLabel::new(3), false), Literal::new(VarLabel::new(2), true), Literal::new(VarLabel::new(4), true)]];
+    let cnf = Cnf::new(v);
+    let mut up = UnitPropagate::new(&cnf).unwrap();
+    let v1 = up.decide(Literal::new(VarLabel::new(3), true));
+    assert!(v1);
+    println!("{:?}", up);
+    // assert!(false)
 }
 
 #[test]

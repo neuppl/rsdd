@@ -2,6 +2,7 @@
 //! manager, which manages the global state necessary for constructing canonical
 //! binary decision diagrams.
 
+use crate::repr::cnf::UnitPropagate;
 use crate::{
     repr,
     backing_store::bdd_table_robinhood::BddTable,
@@ -13,7 +14,6 @@ use crate::{
     repr::cnf::Cnf,
     repr::model,
     repr::var_label::VarLabel,
-    repr::bdd_plan::BddPlan,
     repr::var_label::Literal,
 };
 
@@ -25,6 +25,8 @@ use std::fmt::Debug;
 use num::traits::Num;
 use rand::rngs::ThreadRng;
 use rand::Rng;
+
+use super::bdd_plan::BddPlan;
 
 #[derive(Eq, PartialEq, Debug)]
 struct CompiledCNF {
@@ -215,7 +217,7 @@ impl BddManager {
                 };
                 let l = self.finalize_h(v, l);
                 let h = self.finalize_h(v, h);
-                let new_n = repr::bdd::Bdd::Node { low: l, high: h };
+                let new_n = repr::bdd::Bdd::Node { var: ptr.label(), low: l, high: h };
                 v.push(new_n);
                 let new_idx = v.len() - 1;
                 self.compute_table.set_scratch(ptr, Some(new_idx));
@@ -334,9 +336,9 @@ impl BddManager {
     pub fn to_string_debug(&self, ptr: BddPtr) -> String {
         fn print_bdd_helper(t: &BddManager, ptr: BddPtr) -> String {
             match ptr.ptr_type() {
-                PtrTrue => String::from("T"),
-                PtrFalse => String::from("F"),
-                PtrNode => {
+                PointerType::PtrTrue => String::from("T"),
+                PointerType::PtrFalse => String::from("F"),
+                PointerType::PtrNode => {
                     let l_p = if ptr.is_compl() {
                         t.low(ptr).neg()
                     } else {
@@ -1133,6 +1135,63 @@ impl BddManager {
         }
     }
 
+    fn topdown_h(&mut self, cnf: &Cnf, up: &mut UnitPropagate, level: usize) -> BddPtr {
+        // check for base case
+        // println!("recursion -- level: {level}, up: {:?} ", up.get_assgn());
+        if level >= cnf.num_vars() {
+            return self.true_ptr();
+        }
+
+        let cur_v = self.get_order().var_at_pos(level);
+        // check if this clause is currently set in unit propagation
+        match up.get_assgn().get(cur_v) {
+            Some(v) => {
+                // recurse and uniqify
+                let sub = self.topdown_h(cnf, up, level+1);
+                if sub == self.false_ptr() {
+                    return self.false_ptr();
+                }
+                let bdd = if v { 
+                    BddNode::new(self.false_ptr(), sub, cur_v) 
+                } else {
+                    BddNode::new(sub, self.false_ptr(), cur_v) 
+                };
+                self.get_or_insert(bdd)
+            },
+            None => {
+                // recurse on both values of cur_v
+                let success = up.decide(Literal::new(cur_v, true));
+                let high_bdd = if success {
+                    self.topdown_h(cnf, up, level+1)
+                } else {
+                    self.false_ptr()
+                };
+                up.backtrack();
+                let success = up.decide(Literal::new(cur_v, false));
+                let low_bdd = if success {
+                    self.topdown_h(cnf, up, level+1)
+                } else {
+                    self.false_ptr()
+                };
+                up.backtrack();
+                if high_bdd == low_bdd {
+                    return high_bdd;
+                } else {
+                    let bdd = BddNode::new(low_bdd, high_bdd, cur_v);
+                    return self.get_or_insert(bdd);
+                }
+            }
+        }
+    }
+
+    pub fn from_cnf_topdown(&mut self, cnf: &Cnf) -> BddPtr {
+        let mut up = match UnitPropagate::new(cnf) {
+            Some(v) => v,
+            None => return self.false_ptr()
+        };
+        self.topdown_h(cnf, &mut up, 0)
+    }
+
     /// Prints the total number of recursive calls executed so far by the BddManager
     /// This is a stable way to track performance 
     pub fn num_recursive_calls(&self) -> usize {
@@ -1148,7 +1207,7 @@ mod tests {
     use crate::{
         builder::bdd_builder::{BddManager, BddWmc},
         builder::repr::{builder_bdd::BddPtr}, 
-        repr::var_label::VarLabel,
+        repr::{var_label::{VarLabel, Literal}, cnf::{Cnf, UnitPropagate}},
     };
 
     // check that (a \/ b) /\ a === a
@@ -1469,4 +1528,36 @@ mod tests {
             .fold(man.true_ptr(), |acc, x| man.and(acc, *x));
         assert!(true);
     }
+
+    #[test]
+    fn test_topdown_1() {
+        let clauses = vec![vec![Literal::new(VarLabel::new(0), true), Literal::new(VarLabel::new(1), true)]];
+        let cnf = Cnf::new(clauses);
+        let mut mgr = BddManager::new_default_order(2);
+        let c1 = mgr.from_cnf(&cnf);
+        let c2 = mgr.from_cnf_topdown(&cnf);
+        assert_eq!(c1, c2);
+    }
+
+    #[test]
+    fn test_topdown_2() {
+        let clauses = vec![vec![Literal::new(VarLabel::new(0), false), Literal::new(VarLabel::new(1), false)]];
+        let cnf = Cnf::new(clauses);
+        let mut mgr = BddManager::new_default_order(2);
+        let c1 = mgr.from_cnf(&cnf);
+        let c2 = mgr.from_cnf_topdown(&cnf);
+        assert_eq!(c1, c2, "BDD not equal: got {}, expected {}", mgr.to_string_debug(c2), mgr.to_string_debug(c1));
+    }
+
+    #[test]
+    fn test_topdown_3() {
+        let clauses = vec![vec![Literal::new(VarLabel::new(1), true), Literal::new(VarLabel::new(3), true)],
+                           vec![Literal::new(VarLabel::new(3), false), Literal::new(VarLabel::new(2), true), Literal::new(VarLabel::new(4), true)]];
+        let cnf = Cnf::new(clauses);
+        let mut mgr = BddManager::new_default_order(cnf.num_vars());
+        let c1 = mgr.from_cnf(&cnf);
+        let c2 = mgr.from_cnf_topdown(&cnf);
+        assert_eq!(c1, c2, "BDD not equal: got {}, expected {}", mgr.to_string_debug(c2), mgr.to_string_debug(c1));
+    }
+
 }

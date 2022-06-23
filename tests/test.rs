@@ -361,6 +361,20 @@ mod test_bdd_manager {
     }
 
     quickcheck! {
+        fn bdd_topdown(c1: Cnf) -> TestResult {
+            if c1.num_vars() == 0 || c1.num_vars() > 8 { return TestResult::discard() }
+            if c1.clauses().len() > 12 { return TestResult::discard() }
+            let mut mgr = super::BddManager::new_default_order(c1.num_vars());
+            let cnf1 = mgr.from_cnf(&c1);
+            let cnf2 = mgr.from_cnf_topdown(&c1);
+            println!("bdd 1: {}, bdd 2: {}", mgr.to_string_debug(cnf1), mgr.to_string_debug(cnf2));
+            assert_eq!(cnf1, cnf2);
+            TestResult::from_bool(cnf1 == cnf2)
+        }
+    }
+
+
+    quickcheck! {
         fn wmc_eq(c1: Cnf) -> TestResult {
             // constrain the size
             if c1.num_vars() == 0 || c1.num_vars() > 8 { return TestResult::discard() }
