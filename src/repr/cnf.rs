@@ -30,9 +30,15 @@ type lit_idx = usize;
 ///    A: [c1]
 ///    B: [c0] 
 ///    C: []
+/// 
+/// The invariant maintained by the watched literals is that, for a given
+/// partial model state, the watched literal is either (1) satisfied by the
+/// model; or (2) unset in the model.
+/// 
 /// Every clause (except for unit clauses) watch exactly 2 unique literals at all times.
 /// When a variable is decided, we decide how to update the watched literals according 
 /// to the following cases
+/// 
 /// Case 1. We decide C=False. In this case, we deduce no units, and update the literal watches 
 /// as:
 ///     c0             c1
@@ -56,6 +62,13 @@ pub struct UnitPropagate<'a> {
     cnf: &'a Cnf,
 }
 
+/// The result of making a decision in unit propagation
+enum DecisionResult<'a> {
+    UNSAT,
+    /// An iterator that yields all new assignments created during unit propagation
+    /// (including the decision variable)
+    Success { literals: std::slice::Iter<'a, Literal> } 
+}
 
 impl<'a> UnitPropagate<'a> {
     /// Returns None if UNSAT discovered during initial unit propagation
@@ -117,29 +130,41 @@ impl<'a> UnitPropagate<'a> {
     }
 
     /// Sets a variable to a particular value
-    /// Returns true if successfully set (i.e., the CNF is not rendered UNSAT);
-    /// false if the CNF is rendered UNSAT
     pub fn decide(&mut self, new_assignment: Literal) -> bool {
         // push a fresh state onto the stack and propagate
+        // TODO to get more completeness, we can should run `set` until it reaches a fixed point  
+        // of implied literals
         self.state.push(self.cur_state().clone());
         let r  = self.set(new_assignment);
-        r
+        return r;
+    }
+
+    /// Returns an iterator over the literals that were decided at the previous decision step
+    /// Panics if no previous decision step was made
+    pub fn get_decided_literals(&self) -> impl Iterator<Item=Literal> + '_ {
+        // the most recently decided literals is the diff between the new
+        let n = self.state.len();
+        let cur_state_i = self.state[n-1].get_vec().iter();
+        let prev_state_i = self.state[n-2].get_vec().iter();
+        let iter = cur_state_i.zip(prev_state_i).enumerate().filter_map(|(idx, (cur, prev))| {
+            if *cur == *prev {
+                None
+            } else {
+                Some(Literal::new(VarLabel::new_usize(idx), cur.unwrap()))
+            }
+        });
+        iter
     }
 
     /// Backtracks to the previous decision
     pub fn backtrack(&mut self) -> () {
+        assert!(self.state.len() > 1, "Unit Propagate cannot backtrack past first decision");
         self.state.pop();
-    }
-
-    pub fn is_sat(&self) -> bool {
-        todo!()
     }
 
     /// Set a variable to a particular value and propagates
     /// returns true if success, false if UNSAT
     fn set(&mut self, new_assignment: Literal) -> bool {
-        println!("setting {:?}, state: {:?}", new_assignment, self);
-        // this code is really a mess... need to rework it
         // if already assigned, check if consistent -- if not, return unsat
         match self.cur_state().get(new_assignment.get_label()) {
             None => (),
@@ -159,11 +184,10 @@ impl<'a> UnitPropagate<'a> {
         let var_idx = new_assignment.get_label().value() as usize;
 
         // track a list of all discovered implications
-        let mut implied_lits: Vec<Literal> = Vec::new();
-        // i indexes over the watchers for the current literal
+        // indexes over the watchers for the current literal
         let mut watcher_idx = 0;
         // some of the internal structure here is weird to accommodate the
-        // borrow checker
+        // borrow checker.
         loop {
             // first check if there are any watchers; if no watchers left, break 
 
@@ -210,7 +234,6 @@ impl<'a> UnitPropagate<'a> {
                         }
                     });
 
-            println!("remaining lits {:?}", remaining_lits);
             let num_remaining = remaining_lits.clone().count();
             if num_remaining == 0 {
                 // UNSAT -- need to move a watcher and there are no remaining
@@ -219,7 +242,9 @@ impl<'a> UnitPropagate<'a> {
             } else if num_remaining == 1 {
                 // unit propagate and move onto the next watcher
                 let new_unit = remaining_lits.nth(0).unwrap();
-                implied_lits.push(*new_unit);
+                if !self.set(*new_unit) {
+                    return false;
+                }
                 watcher_idx += 1;
             } else {
                 // num_remaining > 1, find a new literal to watch
@@ -262,12 +287,6 @@ impl<'a> UnitPropagate<'a> {
                     self.watch_list_neg[new_loc].push(prev_watcher);
                 }
                 // do not increment watcher_idx (since we decreased the total number of watchers, we have made progress)
-            }
-        }
-        for l in implied_lits {
-            let r = self.set(l);
-            if !r {
-                return false;
             }
         }
         return true;
@@ -408,6 +427,29 @@ impl Cnf {
         return true;
     }
 
+    /// true if the partial model implies the CNF
+    pub fn is_sat_partial(&self, partial_assignment: &PartialModel) -> bool {
+        println!("partial eval for {:?} on {:?}", partial_assignment, self);
+        for clause in self.clauses.iter() {
+            let mut clause_sat = false;
+            for lit in clause.iter() {
+                match partial_assignment.get(lit.get_label()) {
+                    Some(assgn) => {
+                        if lit.get_polarity() == assgn {
+                            clause_sat = true;
+                        }
+                    },
+                    None => ()
+                };
+            }
+            if !clause_sat {
+                return false;
+            }
+        }
+        println!("returned true");
+        return true;
+    }
+
     pub fn new(mut clauses: Vec<Vec<Literal>>) -> Cnf {
         let mut m = 0;
         // filter out empty clauses
@@ -526,7 +568,6 @@ impl Cnf {
                 .map(|(total, cnt)| if cnt == 0 { 0.0 } else { total / (cnt as f64) })
                 .collect();
 
-            // println!("  avg cog: {:?}", avg_cog);
             let l = avg_cog.len();
             let mut avg_cog: Vec<(f64, usize)> = avg_cog.into_iter().zip(0..l).collect();
             // now sort avg_cog on the centers of gravity
@@ -725,8 +766,6 @@ fn test_unit_propagate_5() {
     let mut up = UnitPropagate::new(&cnf).unwrap();
     let v1 = up.decide(Literal::new(VarLabel::new(3), true));
     assert!(v1);
-    println!("{:?}", up);
-    // assert!(false)
 }
 
 #[test]

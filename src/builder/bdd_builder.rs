@@ -1137,13 +1137,12 @@ impl BddManager {
 
     fn topdown_h(&mut self, cnf: &Cnf, up: &mut UnitPropagate, level: usize) -> BddPtr {
         // check for base case
-        // println!("recursion -- level: {level}, up: {:?} ", up.get_assgn());
-        if level >= cnf.num_vars() {
+        if level >= cnf.num_vars() || cnf.is_sat_partial(up.get_assgn()) {
             return self.true_ptr();
         }
 
         let cur_v = self.get_order().var_at_pos(level);
-        // check if this clause is currently set in unit propagation
+        // check if this literal is currently set in unit propagation
         match up.get_assgn().get(cur_v) {
             Some(v) => {
                 // recurse and uniqify
@@ -1536,7 +1535,7 @@ mod tests {
         let mut mgr = BddManager::new_default_order(2);
         let c1 = mgr.from_cnf(&cnf);
         let c2 = mgr.from_cnf_topdown(&cnf);
-        assert_eq!(c1, c2);
+        assert_eq!(c1, c2, "BDD not equal: got {}, expected {}", mgr.to_string_debug(c2), mgr.to_string_debug(c1));
     }
 
     #[test]
