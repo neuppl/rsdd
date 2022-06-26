@@ -1,6 +1,7 @@
 //! A representation of a conjunctive normal form (CNF)
 
 use crate::builder::var_order::VarOrder;
+use im::Vector;
 use rand;
 use rand::rngs::ThreadRng;
 use rand::Rng;
@@ -60,14 +61,6 @@ pub struct UnitPropagate<'a> {
     // stack of assignment states (all implied and decided literals)
     state: Vec<PartialModel>,
     cnf: &'a Cnf,
-}
-
-/// The result of making a decision in unit propagation
-enum DecisionResult<'a> {
-    UNSAT,
-    /// An iterator that yields all new assignments created during unit propagation
-    /// (including the decision variable)
-    Success { literals: std::slice::Iter<'a, Literal> } 
 }
 
 impl<'a> UnitPropagate<'a> {
@@ -132,11 +125,20 @@ impl<'a> UnitPropagate<'a> {
     /// Sets a variable to a particular value
     pub fn decide(&mut self, new_assignment: Literal) -> bool {
         // push a fresh state onto the stack and propagate
-        // TODO to get more completeness, we can should run `set` until it reaches a fixed point  
-        // of implied literals
         self.state.push(self.cur_state().clone());
-        let r  = self.set(new_assignment);
-        return r;
+        // run until no new discovered units
+        // let mut prev_num_assigned = self.cur_state().assignment_iter().count();
+        // loop {
+            if !self.set(new_assignment) {
+                return false;
+            }
+            // let new_num_assigned = self.cur_state().assignment_iter().count();
+            // if new_num_assigned == prev_num_assigned {
+            //     return true;
+            // }
+            // prev_num_assigned = new_num_assigned;
+        // }
+        return true
     }
 
     /// Returns an iterator over the literals that were decided at the previous decision step
@@ -297,9 +299,55 @@ impl<'a> UnitPropagate<'a> {
     }
 }
 
+#[derive(Debug, Hash, Eq, PartialEq, Clone)]
+pub struct HashedCNF {
+    v: u128
+}
+
+pub struct CnfHasher {
+    weighted_cnf: Vec<Vec<(usize, Literal)>>
+}
+
+impl CnfHasher {
+    pub fn new(cnf: &Cnf) -> CnfHasher {
+        let mut primes = primal::Primes::all();
+        CnfHasher { weighted_cnf: cnf.clauses.iter().map({|clause|
+            clause.iter().map(|lit| {
+                (primes.next().unwrap(), *lit)
+            }).collect()
+        }).collect()}
+    }
+
+    pub fn hash(&self, m: &PartialModel) -> HashedCNF {
+        let mut v : u128 = 1;
+        'outer: for clause in self.weighted_cnf.iter() {
+            let mut cur_clause_v : u128 = 1;
+            for (ref weight, ref lit) in clause.iter() {
+                if m.lit_implied(*lit) {
+                    // move onto the next clause without updating the
+                    // accumulator
+                    continue 'outer;
+                } else if m.lit_neg_implied(*lit) {
+                    // skip this literal and move onto the next one
+                    continue; 
+                } else {
+                    cur_clause_v = cur_clause_v.wrapping_mul(*weight as u128);
+                    // cur_clause_v = cur_clause_v * (*weight as u128);
+                }
+            }
+            v = v.wrapping_mul(cur_clause_v);
+            // v = v * (cur_clause_v);
+        }
+        // println!("hashed model {:?} to value {v}", m);
+        HashedCNF { v }
+    }
+}
+
+
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct Cnf {
     clauses: Vec<Vec<Literal>>,
+    imm_clauses: Vector<Vector<Literal>>,
     num_vars: usize,
 }
 
@@ -429,7 +477,6 @@ impl Cnf {
 
     /// true if the partial model implies the CNF
     pub fn is_sat_partial(&self, partial_assignment: &PartialModel) -> bool {
-        println!("partial eval for {:?} on {:?}", partial_assignment, self);
         for clause in self.clauses.iter() {
             let mut clause_sat = false;
             for lit in clause.iter() {
@@ -446,7 +493,6 @@ impl Cnf {
                 return false;
             }
         }
-        println!("returned true");
         return true;
     }
 
@@ -462,9 +508,11 @@ impl Cnf {
             clause.sort_by(|a, b| a.get_label().value().cmp(&b.get_label().value()));
             clause.dedup();
         }
+
         Cnf {
-            clauses: clauses,
+            clauses: clauses.clone(),
             num_vars: m as usize,
+            imm_clauses: clauses.iter().map(|x| Vector::from(x)).collect()
         }
     }
 
@@ -647,6 +695,20 @@ impl Cnf {
         }
         return r;
     }
+
+    /// Generates the sub-cnf that is the result of subsuming all assigned literals in `m`
+    pub fn sub_cnf(&self, m: &PartialModel) -> Vector<Vector<Literal>> {
+        self.imm_clauses.clone().into_iter().filter_map(|clause| {
+            // first filter out all satisfied clauses
+            for lit in clause.iter() {
+                if m.lit_implied(*lit) {
+                    return None
+                }
+            }
+            // then filter out unsat literals in this clause
+            Some(clause.into_iter().filter(|lit| !m.lit_neg_implied(*lit)).collect())
+        }).collect()
+    }
 }
 
 impl Arbitrary for Cnf {
@@ -668,6 +730,7 @@ impl Arbitrary for Cnf {
         Cnf::new(clauses)
     }
 }
+
 
 #[test]
 fn test_unit_propagate_1() {

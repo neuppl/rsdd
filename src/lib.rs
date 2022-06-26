@@ -3,6 +3,8 @@ extern crate dimacs;
 extern crate fnv;
 extern crate libc;
 extern crate maplit;
+extern crate im;
+extern crate primal;
 extern crate num;
 extern crate pretty;
 extern crate rand;

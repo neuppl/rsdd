@@ -3,28 +3,23 @@
 //! binary decision diagrams.
 
 use crate::repr::cnf::UnitPropagate;
+use crate::repr::model::PartialModel;
 use crate::{
-    repr,
-    backing_store::bdd_table_robinhood::BddTable,
-    backing_store::BackingCacheStats,
-    builder::cache::bdd_app::*,
-    builder::var_order::VarOrder,
-    builder::repr::builder_bdd::*,
-    repr::logical_expr::LogicalExpr,
-    repr::cnf::Cnf,
-    repr::model,
+    backing_store::bdd_table_robinhood::BddTable, backing_store::BackingCacheStats,
+    builder::cache::bdd_app::*, builder::repr::builder_bdd::*, builder::var_order::VarOrder, repr,
+    repr::logical_expr::LogicalExpr, repr::model, repr::var_label::Literal,
+    repr::cnf::*,
     repr::var_label::VarLabel,
-    repr::var_label::Literal,
 };
 
-
+use im::Vector;
+use num::traits::Num;
+use rand::rngs::ThreadRng;
+use rand::Rng;
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
 use std::collections::HashMap;
 use std::fmt::Debug;
-use num::traits::Num;
-use rand::rngs::ThreadRng;
-use rand::Rng;
 
 use super::bdd_plan::BddPlan;
 
@@ -177,11 +172,11 @@ impl BddManager {
         }
     }
 
-    /// Fill the scratch space of each node with a counter that 
+    /// Fill the scratch space of each node with a counter that
     /// indexes an in-order left-first depth-first traversal
     /// returns the new count (will be #nodes in the BDD at the end)
-    /// 
-    /// Pre-condition: cleared scratch 
+    ///
+    /// Pre-condition: cleared scratch
     fn unique_label_nodes(&mut self, ptr: BddPtr, count: usize) -> usize {
         if ptr.is_const() {
             return count;
@@ -190,7 +185,7 @@ impl BddManager {
                 return count;
             } else {
                 self.compute_table.set_scratch(ptr, Some(count));
-                let new_count = self.unique_label_nodes(self.low(ptr), count+1);
+                let new_count = self.unique_label_nodes(self.low(ptr), count + 1);
                 self.unique_label_nodes(self.high(ptr), new_count)
             }
         }
@@ -198,14 +193,14 @@ impl BddManager {
 
     /// Walks `ptr`, pushes the nodes onto `v` and constructs a new finalized BDD
     /// Returns the so far (current index )
-    /// 
-    /// Pre-condition: cleared scratch 
+    ///
+    /// Pre-condition: cleared scratch
     fn finalize_h(&mut self, v: &mut Vec<repr::bdd::Bdd>, ptr: BddPtr) -> repr::bdd::BddPtr {
         if ptr.is_true() {
             return repr::bdd::BddPtr::new(0);
         } else if ptr.is_false() {
             return repr::bdd::BddPtr::new(1);
-        } 
+        }
 
         let idx = match self.compute_table.get_scratch(ptr) {
             Some(v) => v,
@@ -217,7 +212,11 @@ impl BddManager {
                 };
                 let l = self.finalize_h(v, l);
                 let h = self.finalize_h(v, h);
-                let new_n = repr::bdd::Bdd::Node { var: ptr.label(), low: l, high: h };
+                let new_n = repr::bdd::Bdd::Node {
+                    var: ptr.label(),
+                    low: l,
+                    high: h,
+                };
                 v.push(new_n);
                 let new_idx = v.len() - 1;
                 self.compute_table.set_scratch(ptr, Some(new_idx));
@@ -275,7 +274,10 @@ impl BddManager {
     /// Fetch the BDD pointed to by the low-node of `ptr`
     /// panics on constant BDDs
     pub fn low(&self, ptr: BddPtr) -> BddPtr {
-        assert!(!ptr.is_const(), "Attempting to get low pointer of constant BDD");
+        assert!(
+            !ptr.is_const(),
+            "Attempting to get low pointer of constant BDD"
+        );
         let b = self.deref_bdd(ptr).into_node();
         b.low
     }
@@ -283,7 +285,10 @@ impl BddManager {
     /// Fetch the BDD pointed to by the high-node of `ptr`, panics on constant
     /// BDDs
     pub fn high(&self, ptr: BddPtr) -> BddPtr {
-        assert!(!ptr.is_const(), "Attempting to get high pointer of constant BDD");
+        assert!(
+            !ptr.is_const(),
+            "Attempting to get high pointer of constant BDD"
+        );
         let b = self.deref_bdd(ptr).into_node();
         b.high
     }
@@ -648,7 +653,7 @@ impl BddManager {
         bdd: BddPtr,
         lbl: VarLabel,
         value: bool,
-        cache: &mut HashMap<BddPtr, BddPtr>,
+        cache: &mut Vec<Option<BddPtr>>,
     ) -> BddPtr {
         self.stats.num_recursive_calls += 1;
         if self.get_order().lt(lbl, bdd.label()) || bdd.is_const() {
@@ -664,9 +669,10 @@ impl BddManager {
             }
         } else {
             // check cache
-            match cache.get(&bdd) {
+            let idx = self.compute_table.get_scratch(bdd).unwrap();
+            match cache[idx] {
                 None => (),
-                Some(v) => return *v,
+                Some(v) => return if bdd.is_compl() { v.neg() } else { v },
             };
 
             // recurse on the children
@@ -697,14 +703,92 @@ impl BddManager {
                 // nothing changed
                 bdd
             };
-            cache.insert(bdd, res);
+            cache[idx] = Some(if bdd.is_compl() { res.neg() } else { res });
             res
         }
     }
 
     /// Compute the Boolean function `f | var = value`
     pub fn condition(&mut self, bdd: BddPtr, lbl: VarLabel, value: bool) -> BddPtr {
-        self.cond_helper(bdd, lbl, value, &mut HashMap::new())
+        let n = self.unique_label_nodes(bdd, 0);
+        let r = self.cond_helper(bdd, lbl, value, &mut vec![None; n]);
+        self.clear_scratch(bdd);
+        r
+    }
+
+    fn cond_model_h(
+        &mut self,
+        bdd: BddPtr,
+        m: &PartialModel,
+        cache: &mut Vec<Option<BddPtr>>,
+    ) -> BddPtr {
+        self.stats.num_recursive_calls += 1;
+        if bdd.is_const() {
+            return bdd;
+        }
+        match m.get(bdd.label()) {
+            Some(value) => {
+                let node = self.deref_bdd(bdd).into_node();
+                let r = if value { 
+                    self.cond_model_h(node.high, m, cache) 
+                } else { 
+                    self.cond_model_h(node.low, m, cache) 
+                };
+                if bdd.is_compl() {
+                    r.neg()
+                } else {
+                    r
+                }
+            }, 
+            None => {
+                // check cache
+                let idx = self.compute_table.get_scratch(bdd).unwrap();
+                match cache[idx] {
+                    None => (),
+                    Some(v) => return if bdd.is_compl() { v.neg() } else { v },
+                };
+
+                // recurse on the children
+                let n = self.deref_bdd(bdd).into_node();
+                let l = self.cond_model_h(n.low, m, cache);
+                let h = self.cond_model_h(n.high, m, cache);
+                if l == h {
+                    if bdd.is_compl() {
+                        return l.neg();
+                    } else {
+                        return l;
+                    };
+                };
+                let res = if l != n.low || h != n.high {
+                    // cache and return the new BDD
+                    let new_bdd = BddNode {
+                        low: l,
+                        high: h,
+                        var: bdd.label(),
+                    };
+                    let r = self.get_or_insert(new_bdd);
+                    if bdd.is_compl() {
+                        r.neg()
+                    } else {
+                        r
+                    }
+                } else {
+                    // nothing changed
+                    bdd
+                };
+                cache[idx] = Some(if bdd.is_compl() { res.neg() } else { res });
+                res
+            }
+        }
+    }
+
+    /// Compute the Boolean function `f | var = value` for every set value in
+    /// the partial model `m`
+    pub fn condition_model(&mut self, bdd: BddPtr, m: &PartialModel) -> BddPtr {
+        let n = self.unique_label_nodes(bdd, 0);
+        let r = self.cond_model_h(bdd, m, &mut vec![None; n]);
+        self.clear_scratch(bdd);
+        r
     }
 
     /// Existentially quantifies out the variable `lbl` from `f`
@@ -789,12 +873,8 @@ impl BddManager {
         tbl: &mut Vec<(Option<T>, Option<T>)>, // (non-compl, compl)
     ) -> (T, Option<VarLabel>) {
         match ptr.ptr_type() {
-            PointerType::PtrTrue => {
-                (wmc.one.clone(), Some(self.get_order().last_var()))
-            }
-            PointerType::PtrFalse => {
-                (wmc.zero.clone(), Some(self.get_order().last_var()))
-            }
+            PointerType::PtrTrue => (wmc.one.clone(), Some(self.get_order().last_var())),
+            PointerType::PtrFalse => (wmc.zero.clone(), Some(self.get_order().last_var())),
             PointerType::PtrNode => {
                 let idx = self.compute_table.get_scratch(ptr).unwrap();
                 // let order = self.get_order();
@@ -1079,25 +1159,27 @@ impl BddManager {
                 let r2 = self.from_boolexpr(r);
                 self.or(r1, r2)
             }
-            &LogicalExpr::Not(ref e) => {
-                self.from_boolexpr(e).neg()
-            },
+            &LogicalExpr::Not(ref e) => self.from_boolexpr(e).neg(),
             &LogicalExpr::Iff(ref l, ref r) => {
                 let r1 = self.from_boolexpr(l);
                 let r2 = self.from_boolexpr(r);
                 self.iff(r1, r2)
-            },
+            }
             &LogicalExpr::Xor(ref l, ref r) => {
                 let r1 = self.from_boolexpr(l);
                 let r2 = self.from_boolexpr(r);
                 self.xor(r1, r2)
-            },
-            &LogicalExpr::Ite { ref guard, ref thn, ref els } => {
+            }
+            &LogicalExpr::Ite {
+                ref guard,
+                ref thn,
+                ref els,
+            } => {
                 let g = self.from_boolexpr(guard);
                 let t = self.from_boolexpr(thn);
                 let e = self.from_boolexpr(els);
                 self.ite(g, t, e)
-            },
+            }
         }
     }
 
@@ -1135,64 +1217,129 @@ impl BddManager {
         }
     }
 
-    fn topdown_h(&mut self, cnf: &Cnf, up: &mut UnitPropagate, level: usize) -> BddPtr {
+    fn topdown_h(
+        &mut self,
+        cnf: &Cnf,
+        up: &mut UnitPropagate,
+        level: usize,
+        hasher: &CnfHasher,
+        cache: &mut HashMap<HashedCNF, BddPtr>,
+    ) -> BddPtr {
         // check for base case
-        if level >= cnf.num_vars() || cnf.is_sat_partial(up.get_assgn()) {
+        if level >= cnf.num_vars() {
             return self.true_ptr();
+        }
+        if cnf.is_sat_partial(up.get_assgn()) {
+            // finalize by building BDD for all implied literals that are not
+            // compiled yet
+            let mut cur_bdd = self.true_ptr();
+            for cur_level in (level..(cnf.num_vars())).rev() {
+                let cur_v = self.get_order().var_at_pos(cur_level);
+                match up.get_assgn().get(cur_v) {
+                    None => (),
+                    Some(v) => {
+                        let bdd = if v {
+                            BddNode::new(self.false_ptr(), cur_bdd, cur_v)
+                        } else {
+                            BddNode::new(cur_bdd, self.false_ptr(), cur_v)
+                        };
+                        cur_bdd = self.get_or_insert(bdd);
+                    }
+                }
+            }
+            return cur_bdd;
         }
 
         let cur_v = self.get_order().var_at_pos(level);
+
+        // println!("---Level {level}, checking cache");
+        // check cache
         // check if this literal is currently set in unit propagation
-        match up.get_assgn().get(cur_v) {
+
+        let r = match up.get_assgn().get(cur_v) {
             Some(v) => {
                 // recurse and uniqify
-                let sub = self.topdown_h(cnf, up, level+1);
+                let sub = self.topdown_h(cnf, up, level + 1, hasher, cache);
                 if sub == self.false_ptr() {
                     return self.false_ptr();
                 }
-                let bdd = if v { 
-                    BddNode::new(self.false_ptr(), sub, cur_v) 
+                let bdd = if v {
+                    BddNode::new(self.false_ptr(), sub, cur_v)
                 } else {
-                    BddNode::new(sub, self.false_ptr(), cur_v) 
+                    BddNode::new(sub, self.false_ptr(), cur_v)
                 };
                 self.get_or_insert(bdd)
-            },
+            }
             None => {
+                let hashed = hasher.hash(up.get_assgn());
+                match cache.get(&hashed.clone()) {
+                    None => (),
+                    Some(v) => {
+                        // conjoin in all implied literals
+                        // construct implied lits cube
+                        let mut lit_cube = self.true_ptr();
+                        for l in up.get_assgn().assignment_iter() {
+                            if self.get_order().lt(cur_v, l.get_label()) {
+                                let v = self.var(l.get_label(), l.get_polarity());
+                                lit_cube = self.and(lit_cube, v);
+                            }
+                        }
+                        // println!("Found {:?} in cache for cnf {:?}", self.to_string_debug(*v), hashed);
+                        return self.and(*v, lit_cube)
+                    }
+                }
+                // println!("CNF not found in cache");
+
+
                 // recurse on both values of cur_v
                 let success = up.decide(Literal::new(cur_v, true));
                 let high_bdd = if success {
-                    self.topdown_h(cnf, up, level+1)
+                    self.topdown_h(cnf, up, level + 1, hasher, cache)
                 } else {
                     self.false_ptr()
                 };
                 up.backtrack();
                 let success = up.decide(Literal::new(cur_v, false));
                 let low_bdd = if success {
-                    self.topdown_h(cnf, up, level+1)
+                    self.topdown_h(cnf, up, level + 1, hasher, cache)
                 } else {
                     self.false_ptr()
                 };
                 up.backtrack();
-                if high_bdd == low_bdd {
-                    return high_bdd;
+                let r = if high_bdd == low_bdd {
+                    high_bdd
                 } else {
                     let bdd = BddNode::new(low_bdd, high_bdd, cur_v);
-                    return self.get_or_insert(bdd);
+                    self.get_or_insert(bdd)
+                };
+                // println!("Inserting {:?} in cache with bdd {:?}", hashed, self.to_string_debug(r));
+                
+                // build partial model that conditions all literals before the current level
+                let mut m_after_level = up.get_assgn().clone();
+                for l in up.get_assgn().assignment_iter() {
+                    if !self.get_order().lt(cur_v, l.get_label()) {
+                        m_after_level.unset(l.get_label());
+                    }
                 }
+                let cached_bdd = self.condition_model(r, &m_after_level);
+                cache.insert(hashed, cached_bdd);
+                r
             }
-        }
+        };
+
+        return r;
     }
 
     pub fn from_cnf_topdown(&mut self, cnf: &Cnf) -> BddPtr {
         let mut up = match UnitPropagate::new(cnf) {
             Some(v) => v,
-            None => return self.false_ptr()
+            None => return self.false_ptr(),
         };
-        self.topdown_h(cnf, &mut up, 0)
+        self.topdown_h(cnf, &mut up, 0, &CnfHasher::new(cnf), &mut HashMap::new())
     }
 
     /// Prints the total number of recursive calls executed so far by the BddManager
-    /// This is a stable way to track performance 
+    /// This is a stable way to track performance
     pub fn num_recursive_calls(&self) -> usize {
         return self.stats.num_recursive_calls;
     }
@@ -1205,8 +1352,11 @@ mod tests {
 
     use crate::{
         builder::bdd_builder::{BddManager, BddWmc},
-        builder::repr::{builder_bdd::BddPtr}, 
-        repr::{var_label::{VarLabel, Literal}, cnf::{Cnf, UnitPropagate}},
+        builder::repr::builder_bdd::BddPtr,
+        repr::{
+            cnf::{Cnf, UnitPropagate},
+            var_label::{Literal, VarLabel},
+        },
     };
 
     // check that (a \/ b) /\ a === a
@@ -1530,33 +1680,65 @@ mod tests {
 
     #[test]
     fn test_topdown_1() {
-        let clauses = vec![vec![Literal::new(VarLabel::new(0), true), Literal::new(VarLabel::new(1), true)]];
+        let clauses = vec![vec![
+            Literal::new(VarLabel::new(0), true),
+            Literal::new(VarLabel::new(1), true),
+        ]];
         let cnf = Cnf::new(clauses);
         let mut mgr = BddManager::new_default_order(2);
         let c1 = mgr.from_cnf(&cnf);
         let c2 = mgr.from_cnf_topdown(&cnf);
-        assert_eq!(c1, c2, "BDD not equal: got {}, expected {}", mgr.to_string_debug(c2), mgr.to_string_debug(c1));
+        assert_eq!(
+            c1,
+            c2,
+            "BDD not equal: got {}, expected {}",
+            mgr.to_string_debug(c2),
+            mgr.to_string_debug(c1)
+        );
     }
 
     #[test]
     fn test_topdown_2() {
-        let clauses = vec![vec![Literal::new(VarLabel::new(0), false), Literal::new(VarLabel::new(1), false)]];
+        let clauses = vec![vec![
+            Literal::new(VarLabel::new(0), false),
+            Literal::new(VarLabel::new(1), false),
+        ]];
         let cnf = Cnf::new(clauses);
         let mut mgr = BddManager::new_default_order(2);
         let c1 = mgr.from_cnf(&cnf);
         let c2 = mgr.from_cnf_topdown(&cnf);
-        assert_eq!(c1, c2, "BDD not equal: got {}, expected {}", mgr.to_string_debug(c2), mgr.to_string_debug(c1));
+        assert_eq!(
+            c1,
+            c2,
+            "BDD not equal: got {}, expected {}",
+            mgr.to_string_debug(c2),
+            mgr.to_string_debug(c1)
+        );
     }
 
     #[test]
     fn test_topdown_3() {
-        let clauses = vec![vec![Literal::new(VarLabel::new(1), true), Literal::new(VarLabel::new(3), true)],
-                           vec![Literal::new(VarLabel::new(3), false), Literal::new(VarLabel::new(2), true), Literal::new(VarLabel::new(4), true)]];
+        let clauses = vec![
+            vec![
+                Literal::new(VarLabel::new(1), true),
+                Literal::new(VarLabel::new(3), true),
+            ],
+            vec![
+                Literal::new(VarLabel::new(3), false),
+                Literal::new(VarLabel::new(2), true),
+                Literal::new(VarLabel::new(4), true),
+            ],
+        ];
         let cnf = Cnf::new(clauses);
         let mut mgr = BddManager::new_default_order(cnf.num_vars());
         let c1 = mgr.from_cnf(&cnf);
         let c2 = mgr.from_cnf_topdown(&cnf);
-        assert_eq!(c1, c2, "BDD not equal: got {}, expected {}", mgr.to_string_debug(c2), mgr.to_string_debug(c1));
+        assert_eq!(
+            c1,
+            c2,
+            "BDD not equal: got {}, expected {}",
+            mgr.to_string_debug(c2),
+            mgr.to_string_debug(c1)
+        );
     }
-
 }
