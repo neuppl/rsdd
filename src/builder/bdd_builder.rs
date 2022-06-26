@@ -1217,6 +1217,10 @@ impl BddManager {
         }
     }
 
+    /// Returns A BDD that represents `cnf` conditioned on all 
+    ///     variables set in the current top model
+    /// We need both of these BDDs for sound CNF caching
+    /// `cache`: a map from hashed CNFs to their compiled BDDs
     fn topdown_h(
         &mut self,
         cnf: &Cnf,
@@ -1226,108 +1230,68 @@ impl BddManager {
         cache: &mut HashMap<HashedCNF, BddPtr>,
     ) -> BddPtr {
         // check for base case
-        if level >= cnf.num_vars() {
+        if level >= cnf.num_vars() || cnf.is_sat_partial(up.get_assgn()) {
             return self.true_ptr();
-        }
-        if cnf.is_sat_partial(up.get_assgn()) {
-            // finalize by building BDD for all implied literals that are not
-            // compiled yet
-            let mut cur_bdd = self.true_ptr();
-            for cur_level in (level..(cnf.num_vars())).rev() {
-                let cur_v = self.get_order().var_at_pos(cur_level);
-                match up.get_assgn().get(cur_v) {
-                    None => (),
-                    Some(v) => {
-                        let bdd = if v {
-                            BddNode::new(self.false_ptr(), cur_bdd, cur_v)
-                        } else {
-                            BddNode::new(cur_bdd, self.false_ptr(), cur_v)
-                        };
-                        cur_bdd = self.get_or_insert(bdd);
-                    }
-                }
-            }
-            return cur_bdd;
         }
 
         let cur_v = self.get_order().var_at_pos(level);
 
-        // println!("---Level {level}, checking cache");
+        // check if this literal is currently set in unit propagation; if 
+        // it is, skip it
+        if up.get_assgn().is_set(cur_v) {
+            return self.topdown_h(cnf, up, level+1, hasher, cache);
+        }
+
         // check cache
-        // check if this literal is currently set in unit propagation
-
-        let r = match up.get_assgn().get(cur_v) {
+        let hashed = hasher.hash(up.get_assgn());
+        match cache.get(&hashed.clone()) {
+            None => (),
             Some(v) => {
-                // recurse and uniqify
-                let sub = self.topdown_h(cnf, up, level + 1, hasher, cache);
-                if sub == self.false_ptr() {
-                    return self.false_ptr();
-                }
-                let bdd = if v {
-                    BddNode::new(self.false_ptr(), sub, cur_v)
-                } else {
-                    BddNode::new(sub, self.false_ptr(), cur_v)
-                };
-                self.get_or_insert(bdd)
+                return *v;
             }
-            None => {
-                let hashed = hasher.hash(up.get_assgn());
-                match cache.get(&hashed.clone()) {
-                    None => (),
-                    Some(v) => {
-                        // conjoin in all implied literals
-                        // construct implied lits cube
-                        let mut lit_cube = self.true_ptr();
-                        for l in up.get_assgn().assignment_iter() {
-                            if self.get_order().lt(cur_v, l.get_label()) {
-                                let v = self.var(l.get_label(), l.get_polarity());
-                                lit_cube = self.and(lit_cube, v);
-                            }
-                        }
-                        // println!("Found {:?} in cache for cnf {:?}", self.to_string_debug(*v), hashed);
-                        return self.and(*v, lit_cube)
-                    }
-                }
-                // println!("CNF not found in cache");
+        }
 
-
-                // recurse on both values of cur_v
-                let success = up.decide(Literal::new(cur_v, true));
-                let high_bdd = if success {
-                    self.topdown_h(cnf, up, level + 1, hasher, cache)
-                } else {
-                    self.false_ptr()
-                };
-                up.backtrack();
-                let success = up.decide(Literal::new(cur_v, false));
-                let low_bdd = if success {
-                    self.topdown_h(cnf, up, level + 1, hasher, cache)
-                } else {
-                    self.false_ptr()
-                };
-                up.backtrack();
-                let r = if high_bdd == low_bdd {
-                    high_bdd
-                } else {
-                    let bdd = BddNode::new(low_bdd, high_bdd, cur_v);
-                    self.get_or_insert(bdd)
-                };
-                // println!("Inserting {:?} in cache with bdd {:?}", hashed, self.to_string_debug(r));
-                
-                // build partial model that conditions all literals before the current level
-                let mut m_after_level = up.get_assgn().clone();
-                for l in up.get_assgn().assignment_iter() {
-                    if !self.get_order().lt(cur_v, l.get_label()) {
-                        m_after_level.unset(l.get_label());
-                    }
+        // recurse on both values of cur_v
+        let success = up.decide(Literal::new(cur_v, true));
+        let high_bdd = if success {
+            let mut lit_cube = self.true_ptr();
+            for l in up.get_decided_literals() {
+                if l.get_label() == cur_v {
+                    continue;
                 }
-                let cached_bdd = self.condition_model(r, &m_after_level);
-                cache.insert(hashed, cached_bdd);
-                r
+                let v = self.var(l.get_label(), l.get_polarity());
+                lit_cube = self.and(lit_cube, v);
             }
+            let sub = self.topdown_h(cnf, up, level + 1, hasher, cache);
+            self.and(sub, lit_cube)
+        } else {
+            self.false_ptr()
         };
-
-        return r;
+        up.backtrack();
+        let success = up.decide(Literal::new(cur_v, false));
+        let low_bdd = if success {
+            let mut lit_cube = self.true_ptr();
+            for l in up.get_decided_literals() {
+                if l.get_label() == cur_v {
+                    continue;
+                }
+                let v = self.var(l.get_label(), l.get_polarity());
+                lit_cube = self.and(lit_cube, v);
+            }
+            let sub = self.topdown_h(cnf, up, level + 1, hasher, cache);
+            self.and(sub, lit_cube)
+        } else {
+            self.false_ptr()
+        };
+        up.backtrack();
+        let r = if high_bdd == low_bdd {
+            high_bdd
+        } else {
+            let bdd = BddNode::new(low_bdd, high_bdd, cur_v);
+            self.get_or_insert(bdd)
+        };
+        cache.insert(hashed, r);
+        r
     }
 
     pub fn from_cnf_topdown(&mut self, cnf: &Cnf) -> BddPtr {
@@ -1335,7 +1299,16 @@ impl BddManager {
             Some(v) => v,
             None => return self.false_ptr(),
         };
-        self.topdown_h(cnf, &mut up, 0, &CnfHasher::new(cnf), &mut HashMap::new())
+        let r = self.topdown_h(cnf, &mut up, 0, &CnfHasher::new(cnf), &mut HashMap::new());
+
+        // conjoin in any initially implied literals
+
+        let mut lit_cube = self.true_ptr();
+        for lit in up.get_assgn().assignment_iter() {
+            let v = self.var(lit.get_label(), lit.get_polarity());
+            lit_cube = self.and(v, lit_cube);
+        }
+        self.and(r, lit_cube)
     }
 
     /// Prints the total number of recursive calls executed so far by the BddManager
@@ -1727,6 +1700,29 @@ mod tests {
                 Literal::new(VarLabel::new(3), false),
                 Literal::new(VarLabel::new(2), true),
                 Literal::new(VarLabel::new(4), true),
+            ],
+        ];
+        let cnf = Cnf::new(clauses);
+        let mut mgr = BddManager::new_default_order(cnf.num_vars());
+        let c1 = mgr.from_cnf(&cnf);
+        let c2 = mgr.from_cnf_topdown(&cnf);
+        assert_eq!(
+            c1,
+            c2,
+            "BDD not equal: got {}, expected {}",
+            mgr.to_string_debug(c2),
+            mgr.to_string_debug(c1)
+        );
+    }
+
+    #[test]
+    fn test_topdown_4() {
+        let clauses = vec![
+            vec![
+                Literal::new(VarLabel::new(0), true),
+            ],
+            vec![
+                Literal::new(VarLabel::new(0), true),
             ],
         ];
         let cnf = Cnf::new(clauses);
