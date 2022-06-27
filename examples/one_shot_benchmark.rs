@@ -108,6 +108,7 @@ fn main() {
         ("c8-easier", String::from(include_str!("../cnf/c8-easier.cnf"))),
         ("s444", String::from(include_str!("../cnf/s444.cnf"))),
         ("s510", String::from(include_str!("../cnf/s510.cnf"))),
+        // ("log1", String::from(include_str!("../cnf/log1.cnf"))),
         ("count", String::from(include_str!("../cnf/count.cnf"))),
         (
             "c8-very-easy",

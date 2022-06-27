@@ -12,7 +12,6 @@ use crate::{
     repr::var_label::VarLabel,
 };
 
-use im::Vector;
 use num::traits::Num;
 use rand::rngs::ThreadRng;
 use rand::Rng;
@@ -148,6 +147,7 @@ pub struct BddManager {
     compute_table: BddTable,
     apply_table: BddApplyTable,
     stats: BddManagerStats,
+    order: VarOrder
 }
 
 impl BddManager {
@@ -192,7 +192,7 @@ impl BddManager {
     }
 
     /// Walks `ptr`, pushes the nodes onto `v` and constructs a new finalized BDD
-    /// Returns the so far (current index )
+    /// Returns the so far (current index)
     ///
     /// Pre-condition: cleared scratch
     fn finalize_h(&mut self, v: &mut Vec<repr::bdd::Bdd>, ptr: BddPtr) -> repr::bdd::BddPtr {
@@ -242,7 +242,8 @@ impl BddManager {
     pub fn new(order: VarOrder) -> BddManager {
         let l = order.num_vars();
         BddManager {
-            compute_table: BddTable::new(order),
+            compute_table: BddTable::new(order.num_vars()),
+            order,
             apply_table: BddApplyTable::new(l),
             stats: BddManagerStats::new(),
         }
@@ -258,12 +259,13 @@ impl BddManager {
     /// new variable.
     pub fn new_var(&mut self) -> VarLabel {
         self.apply_table.push_table();
-        self.compute_table.new_last()
+        self.compute_table.new_last();
+        self.order.new_last()
     }
 
     /// Get the current variable order
     pub fn get_order(&self) -> &VarOrder {
-        self.compute_table.order()
+        &self.order
     }
 
     /// Dereference a BddPtr into a Bdd

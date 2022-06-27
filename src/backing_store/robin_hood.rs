@@ -87,6 +87,7 @@ fn propagate(v: &mut [HashTableElement], cap: usize, itm: HashTableElement, pos:
     }
 }
 
+#[derive(Clone)]
 /// Implements a mutable vector-backed robin-hood linear probing hash table,
 /// whose keys are given by BDD pointers.
 pub struct BackedRobinHoodTable<T>
