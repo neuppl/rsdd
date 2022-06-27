@@ -284,6 +284,12 @@ impl DecisionNNFBuilder {
         }
     }
 
+    pub fn count_nodes(&mut self, ptr: BddPtr) -> usize {
+        let s = self.unique_label_nodes(ptr, 0);
+        self.clear_scratch(ptr);
+        s
+    }
+
     /// Weighted-model count
     pub fn unsmsoothed_wmc<T: Num + Clone + core::fmt::Debug + Copy>(&mut self, ptr: BddPtr, params: &BddWmc<T>) -> T {
         let n = self.unique_label_nodes(ptr, 0);

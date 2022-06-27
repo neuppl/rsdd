@@ -15,6 +15,13 @@ use crate::repr::model::PartialModel;
 type clause_idx = usize;
 type lit_idx = usize;
 
+static PRIMES: [u128; 6] = [232013001714829759185289990985465319691, 
+                            333137558950085144382304432995343556989, 
+                            316319869697248684341211015143689017453, 
+                            324167418430705647122534085039661688929, 
+                            329367681630224674729296290250973223983, 
+                            238174019593728996209712393113822161931];
+
 /// A data-structure for efficient implementation of unit propagation with CNFs.
 /// It implements a two-literal watching scheme.
 /// For instance, for the CNF:
@@ -301,7 +308,7 @@ impl<'a> UnitPropagate<'a> {
 
 #[derive(Debug, Hash, Eq, PartialEq, Clone)]
 pub struct HashedCNF {
-    v: u128
+    v: [u128; 2]
 }
 
 pub struct CnfHasher {
@@ -319,7 +326,8 @@ impl CnfHasher {
     }
 
     pub fn hash(&self, m: &PartialModel) -> HashedCNF {
-        let mut v : u128 = 1;
+        let mut v0 : u128 = 1;
+        let mut v1 : u128 = 1;
         'outer: for clause in self.weighted_cnf.iter() {
             let mut cur_clause_v : u128 = 1;
             for (ref weight, ref lit) in clause.iter() {
@@ -335,11 +343,11 @@ impl CnfHasher {
                     // cur_clause_v = cur_clause_v * (*weight as u128);
                 }
             }
-            v = v.wrapping_mul(cur_clause_v);
+            v0 = v0.wrapping_mul(cur_clause_v) % PRIMES[0];
+            v1 = v0.wrapping_mul(cur_clause_v) % PRIMES[1];
             // v = v * (cur_clause_v);
         }
-        // println!("hashed model {:?} to value {v}", m);
-        HashedCNF { v }
+        HashedCNF { v: [v0, v1] }
     }
 }
 

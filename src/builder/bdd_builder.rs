@@ -1304,7 +1304,6 @@ impl BddManager {
         let r = self.topdown_h(cnf, &mut up, 0, &CnfHasher::new(cnf), &mut HashMap::new());
 
         // conjoin in any initially implied literals
-
         let mut lit_cube = self.true_ptr();
         for lit in up.get_assgn().assignment_iter() {
             let v = self.var(lit.get_label(), lit.get_polarity());
