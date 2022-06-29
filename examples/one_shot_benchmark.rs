@@ -48,7 +48,6 @@ fn compile_bdd(str: String, debug: bool) -> () {
     let cnf = Cnf::from_file(str);
     let mut man = rsdd::builder::decision_nnf_builder::DecisionNNFBuilder::new(cnf.num_vars());
     let ddnnf = man.from_cnf_topdown(&VarOrder::linear_order(cnf.num_vars()), &cnf);
-    println!("# nodes: {}", man.count_nodes(ddnnf));
 
     // let mut man = BddManager::new_default_order(cnf.num_vars());
     // let b2 = man.from_cnf(&cnf);
@@ -57,7 +56,7 @@ fn compile_bdd(str: String, debug: bool) -> () {
     // println!("# recursive calls: {}, size: {}", man.num_recursive_calls(), man.count_nodes(b1));
     if debug {
         println!("# nodes: {}", man.count_nodes(ddnnf));
-        println!("# recursive calls: {}", man.num_recursive_calls());
+        // println!("# recursive calls: {}", man.num_recursive_calls());
     }
 }
 
