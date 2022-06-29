@@ -1,7 +1,6 @@
 //! Contains the core data-structures for representing formulae
 //! (i.e., conjunctive normal forms, arbitrary logical formulae, etc.)
 
-pub mod bdd_plan;
 pub mod logical_expr;
 pub mod cnf;
 pub mod model;

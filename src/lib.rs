@@ -3,6 +3,8 @@ extern crate dimacs;
 extern crate fnv;
 extern crate libc;
 extern crate maplit;
+extern crate im;
+extern crate primal;
 extern crate num;
 extern crate pretty;
 extern crate rand;
@@ -18,12 +20,13 @@ mod util;
 mod backing_store;
 pub mod builder;
 pub mod repr;
+pub mod topdown;
 
 use crate::builder::bdd_builder::BddManager;
 use crate::builder::sdd_builder::SddManager;
 use crate::builder::*;
 use crate::builder::repr::builder_bdd::BddPtr;
-use crate::repr::bdd_plan::BddPlan;
+use crate::builder::bdd_plan::BddPlan;
 use crate::builder::repr::builder_sdd::{SddPtr, VTree};
 use crate::repr::var_label::VarLabel;
 

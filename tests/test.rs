@@ -6,8 +6,6 @@ extern crate rsdd;
 extern crate quickcheck;
 use crate::builder::bdd_builder::{BddManager, BddWmc};
 use crate::builder::sdd_builder::{even_split, SddManager, SddWmc};
-use crate::builder::var_order::VarOrder;
-use crate::repr::logical_expr::LogicalExpr;
 use crate::repr::cnf::Cnf;
 use crate::repr::var_label::VarLabel;
 use rsdd::*;
@@ -310,7 +308,9 @@ fn test_sdd_canonicity() -> () {
 #[cfg(test)]
 mod test_bdd_manager {
     use quickcheck::TestResult;
+    use rsdd::builder::var_order::VarOrder;
     use crate::repr::cnf::Cnf;
+    use crate::builder::decision_nnf_builder::DecisionNNFBuilder;
     use crate::repr::var_label::VarLabel;
     use std::collections::HashMap;
     use std::iter::FromIterator;
@@ -361,6 +361,20 @@ mod test_bdd_manager {
     }
 
     quickcheck! {
+        fn bdd_topdown(c1: Cnf) -> TestResult {
+            if c1.num_vars() == 0 || c1.num_vars() > 8 { return TestResult::discard() }
+            if c1.clauses().len() > 12 { return TestResult::discard() }
+            let mut mgr = super::BddManager::new_default_order(c1.num_vars());
+            let cnf1 = mgr.from_cnf(&c1);
+            let cnf2 = mgr.from_cnf_topdown(&c1);
+            println!("bdd 1: {}, bdd 2: {}", mgr.to_string_debug(cnf1), mgr.to_string_debug(cnf2));
+            assert_eq!(cnf1, cnf2);
+            TestResult::from_bool(cnf1 == cnf2)
+        }
+    }
+
+
+    quickcheck! {
         fn wmc_eq(c1: Cnf) -> TestResult {
             // constrain the size
             if c1.num_vars() == 0 || c1.num_vars() > 8 { return TestResult::discard() }
@@ -377,6 +391,31 @@ mod test_bdd_manager {
               println!("error on input {}: bddres {}, cnfres {}", c1.to_string(), bddres, cnfres);
             }
             TestResult::from_bool(bddres == cnfres)
+        }
+    }
+
+    quickcheck! {
+        fn wmc_bdd_dnnf_eq(c1: Cnf) -> TestResult {
+            // constrain the size
+            if c1.num_vars() == 0 || c1.num_vars() > 8 { return TestResult::discard() }
+            if c1.clauses().len() > 16 { return TestResult::discard() }
+
+            let mut mgr = super::BddManager::new_default_order(c1.num_vars());
+            let weight_map : HashMap<VarLabel, (f64, f64)> = HashMap::from_iter(
+                (0..16).map(|x| (VarLabel::new(x as u64), (0.3, 0.7))));
+            let cnf1 = mgr.from_cnf(&c1);
+
+            let mut mgr2 = DecisionNNFBuilder::new(c1.num_vars());
+            let dnnf = mgr2.from_cnf_topdown(&VarOrder::linear_order(c1.num_vars()), &c1);
+
+            let bddwmc = super::BddWmc::new_with_default(0.0, 1.0, weight_map.clone());
+            let bddres = mgr.wmc(cnf1, &bddwmc);
+            let dnnfres = mgr2.unsmsoothed_wmc(dnnf, &bddwmc);
+            let eps = f64::abs(bddres - dnnfres) < 0.0001;
+            if !eps {
+              println!("error on input {}: bddres {}, cnfres {}", c1.to_string(), bddres, dnnfres);
+            }
+            TestResult::from_bool(eps)
         }
     }
 }

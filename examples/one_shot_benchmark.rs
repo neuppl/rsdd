@@ -6,7 +6,7 @@ extern crate serde_json;
 use clap::Parser;
 use criterion::black_box;
 use rayon::prelude::*;
-use rsdd::{builder::bdd_builder::BddManager, repr::cnf::Cnf};
+use rsdd::{builder::{bdd_builder::BddManager, var_order::VarOrder}, repr::cnf::Cnf};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::collections::HashMap;
@@ -46,9 +46,17 @@ struct BenchmarkEntry {
 
 fn compile_bdd(str: String, debug: bool) -> () {
     let cnf = Cnf::from_file(str);
-    let mut man = BddManager::new_default_order(cnf.num_vars());
-    man.from_cnf(&cnf);
+    let mut man = rsdd::builder::decision_nnf_builder::DecisionNNFBuilder::new(cnf.num_vars());
+    let ddnnf = man.from_cnf_topdown(&VarOrder::linear_order(cnf.num_vars()), &cnf);
+    println!("# nodes: {}", man.count_nodes(ddnnf));
+
+    // let mut man = BddManager::new_default_order(cnf.num_vars());
+    // let b2 = man.from_cnf(&cnf);
+    // let b1 = man.from_cnf_topdown(&cnf);
+    // assert_eq!(b1, b2);
+    // println!("# recursive calls: {}, size: {}", man.num_recursive_calls(), man.count_nodes(b1));
     if debug {
+        println!("# nodes: {}", man.count_nodes(ddnnf));
         println!("# recursive calls: {}", man.num_recursive_calls());
     }
 }
@@ -65,6 +73,7 @@ fn main() {
     rayon::ThreadPoolBuilder::new().num_threads(args.threads).build_global().unwrap();
 
     let cnf_strs = vec![
+        ("grid-50-10-1-q", String::from(include_str!("../cnf/50-10-1-q.cnf"))),
         (
             "bench-01",
             String::from(include_str!("../cnf/bench-01.cnf")),
@@ -77,7 +86,6 @@ fn main() {
             "bench-03",
             String::from(include_str!("../cnf/bench-03.cnf")),
         ),
-        // ("c8-easier", String::from(include_str!("../cnf/c8-easier.cnf"))),
         ("php-4-6", String::from(include_str!("../cnf/php-4-6.cnf"))),
         ("php-5-4", String::from(include_str!("../cnf/php-5-4.cnf"))),
         // ("php-12-14", String::from(include_str!("../cnf/php-12-14.cnf"))),
@@ -145,19 +153,20 @@ fn main() {
             "rand-3-100-400-1",
             String::from(include_str!("../cnf/rand-3-100-400-1.cnf")),
         ),
+        ("s298", String::from(include_str!("../cnf/s298.cnf"))),
+        ("s344", String::from(include_str!("../cnf/s344.cnf"))),
+        ("grid-75-16-2-q", String::from(include_str!("../cnf/75-16-2-q.cnf"))),
+        ("c8-easier", String::from(include_str!("../cnf/c8-easier.cnf"))),
+        ("s444", String::from(include_str!("../cnf/s444.cnf"))),
+        ("s510", String::from(include_str!("../cnf/s510.cnf"))),
+        ("s641", String::from(include_str!("../cnf/s641.cnf"))),
+        ("count", String::from(include_str!("../cnf/count.cnf"))),
         (
             "c8-very-easy",
             String::from(include_str!("../cnf/c8-very-easy.cnf")),
         ),
-
+        ("log1", String::from(include_str!("../cnf/log1.cnf"))),
         // ("c8", String::from(include_str!("../cnf/c8.cnf"))),
-        // ("count", String::from(include_str!("../cnf/count.cnf"))),
-        ("s298", String::from(include_str!("../cnf/s298.cnf"))),
-        // ("s344", String::from(include_str!("../cnf/s344.cnf"))),
-        // ("s444", String::from(include_str!("../cnf/s444.cnf"))),
-        // ("s510", String::from(include_str!("../cnf/s510.cnf"))),
-        // ("s641", String::from(include_str!("../cnf/s641.cnf"))),
-        // ("unsat-1", String::from(include_str!("../cnf/unsat-1.cnf"))),
     ];
 
     println!("Benchmarking {} CNFs with {} thread{}", cnf_strs.len(), args.threads, if args.threads > 1 {"s"} else {""});

@@ -29,7 +29,7 @@ impl PartialModel {
             assignments: init_assgn,
         }
     }
-
+    
     /// Unsets a variable's value in the model
     pub fn unset(&mut self, label: VarLabel) -> () {
         self.assignments[label.value_usize()] = None;
@@ -43,6 +43,21 @@ impl PartialModel {
     pub fn get(&self, label: VarLabel) -> Option<bool> {
         self.assignments[label.value_usize()]
     }
+
+    pub fn lit_implied(&self, lit: Literal) -> bool {
+        match self.get(lit.get_label()) {
+            Some(v) => v == lit.get_polarity(),
+            None => false
+        }
+    }
+
+    pub fn lit_neg_implied(&self, lit: Literal) -> bool {
+        match self.get(lit.get_label()) {
+            Some(v) => v != lit.get_polarity(),
+            None => false
+        }
+    }
+
 
     pub fn get_vec(&self) -> &[Option<bool>] {
         &self.assignments
