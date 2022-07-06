@@ -1,25 +1,78 @@
 extern crate criterion;
+extern crate rayon;
 extern crate rsdd;
+extern crate serde_json;
 
+use clap::Parser;
 use criterion::black_box;
-use rsdd::{builder::bdd_builder::BddManager, repr::cnf::Cnf};
-use std::time::{Duration, Instant};
+use rayon::prelude::*;
+use rsdd::{builder::{bdd_builder::BddManager, var_order::VarOrder}, repr::cnf::Cnf};
+use serde::{Deserialize, Serialize};
+use serde_json::json;
+use std::collections::HashMap;
+use std::fs;
+use std::{time::{Duration, Instant}};
 
-fn compile_bdd(str: String) -> () {
-    let cnf = Cnf::from_file(str);
-    let mut man = BddManager::new_default_order(cnf.num_vars());
-    man.from_cnf(&cnf);
-    println!("# recursive calls: {}", man.num_recursive_calls());
+/// Test driver for one-shot benchmark
+#[derive(Parser, Debug)]
+#[clap(author, version, about, long_about = None)]
+struct Args {
+    /// Print debug messages to console
+    #[clap(short, long, value_parser, default_value_t = false)]
+    debug: bool,
+
+    /// File to output JSON to, if any
+    #[clap(short, long, value_parser, default_value = "")]
+    output: String,
+
+    /// Number of threads to subdivide benchmarks into;
+    /// if this is larger than the number of logical threads,
+    /// the benchmark will likely be degraded
+    #[clap(short, long, value_parser, default_value_t = 1)]
+    threads: usize,
 }
 
-fn bench_cnf_bdd(cnf_str: String) -> Duration {
+#[derive(Serialize, Deserialize)]
+struct BenchmarkLog {
+    git_hash: String,
+    threads: usize,
+    benchmarks: HashMap<String, BenchmarkEntry>,
+}
+
+#[derive(Serialize, Deserialize)]
+struct BenchmarkEntry {
+    time_in_secs: f64,
+}
+
+fn compile_bdd(str: String, debug: bool) -> () {
+    let cnf = Cnf::from_file(str);
+    let mut man = rsdd::builder::decision_nnf_builder::DecisionNNFBuilder::new(cnf.num_vars());
+    let ddnnf = man.from_cnf_topdown(&VarOrder::linear_order(cnf.num_vars()), &cnf);
+
+    // let mut man = BddManager::new_default_order(cnf.num_vars());
+    // let b2 = man.from_cnf(&cnf);
+    // let b1 = man.from_cnf_topdown(&cnf);
+    // assert_eq!(b1, b2);
+    // println!("# recursive calls: {}, size: {}", man.num_recursive_calls(), man.count_nodes(b1));
+    if debug {
+        println!("# nodes: {}", man.count_nodes(ddnnf));
+        // println!("# recursive calls: {}", man.num_recursive_calls());
+    }
+}
+
+fn bench_cnf_bdd(cnf_str: String, debug: bool) -> Duration {
     let start = Instant::now();
-    compile_bdd(black_box(cnf_str));
+    compile_bdd(black_box(cnf_str), debug);
     start.elapsed()
 }
 
 fn main() {
+    let args = Args::parse();
+
+    rayon::ThreadPoolBuilder::new().num_threads(args.threads).build_global().unwrap();
+
     let cnf_strs = vec![
+        ("grid-50-10-1-q", String::from(include_str!("../cnf/50-10-1-q.cnf"))),
         (
             "bench-01",
             String::from(include_str!("../cnf/bench-01.cnf")),
@@ -32,7 +85,6 @@ fn main() {
             "bench-03",
             String::from(include_str!("../cnf/bench-03.cnf")),
         ),
-        // ("c8-easier", String::from(include_str!("../cnf/c8-easier.cnf"))),
         ("php-4-6", String::from(include_str!("../cnf/php-4-6.cnf"))),
         ("php-5-4", String::from(include_str!("../cnf/php-5-4.cnf"))),
         // ("php-12-14", String::from(include_str!("../cnf/php-12-14.cnf"))),
@@ -100,23 +152,54 @@ fn main() {
             "rand-3-100-400-1",
             String::from(include_str!("../cnf/rand-3-100-400-1.cnf")),
         ),
+        ("s298", String::from(include_str!("../cnf/s298.cnf"))),
+        ("s344", String::from(include_str!("../cnf/s344.cnf"))),
+        ("grid-75-16-2-q", String::from(include_str!("../cnf/75-16-2-q.cnf"))),
+        ("c8-easier", String::from(include_str!("../cnf/c8-easier.cnf"))),
+        ("s444", String::from(include_str!("../cnf/s444.cnf"))),
+        ("s510", String::from(include_str!("../cnf/s510.cnf"))),
+        ("s641", String::from(include_str!("../cnf/s641.cnf"))),
+        ("count", String::from(include_str!("../cnf/count.cnf"))),
         (
             "c8-very-easy",
             String::from(include_str!("../cnf/c8-very-easy.cnf")),
         ),
+        ("log1", String::from(include_str!("../cnf/log1.cnf"))),
         // ("c8", String::from(include_str!("../cnf/c8.cnf"))),
-        // ("count", String::from(include_str!("../cnf/count.cnf"))),
-        ("s298", String::from(include_str!("../cnf/s298.cnf"))),
-        // ("s344", String::from(include_str!("../cnf/s344.cnf"))),
-        // ("s444", String::from(include_str!("../cnf/s444.cnf"))),
-        // ("s510", String::from(include_str!("../cnf/s510.cnf"))),
-        // ("s641", String::from(include_str!("../cnf/s641.cnf"))),
-        // ("unsat-1", String::from(include_str!("../cnf/unsat-1.cnf"))),
     ];
 
-    for (cnf_name, cnf_str) in cnf_strs {
-        let d = bench_cnf_bdd(cnf_str);
-        let c8_time = d.as_secs_f64();
-        println!("one-shot compile_bdd time for {}: {}s", cnf_name, c8_time);
+    println!("Benchmarking {} CNFs with {} thread{}", cnf_strs.len(), args.threads, if args.threads > 1 {"s"} else {""});
+
+    let cnf_results: Vec<(&str, f64)> = cnf_strs.into_par_iter().map(|(cnf_name, cnf_str)| {
+        let d = bench_cnf_bdd(cnf_str, args.debug);
+        (cnf_name, d.as_secs_f64())
+    }).collect();
+
+    let benchmarks: HashMap<String, BenchmarkEntry> = cnf_results.into_iter().map(|(cnf_name, cnf_time)| {
+        (cnf_name.to_string(), BenchmarkEntry {
+            time_in_secs: cnf_time
+        })
+    }).into_iter().collect();
+
+    // borrowed from: https://stackoverflow.com/questions/43753491/include-git-commit-hash-as-string-into-rust-program
+    // and strips whitespace
+    let git_output = std::process::Command::new("git").args(&["rev-parse", "HEAD"]).output().unwrap();
+    let git_hash = String::from_utf8(git_output.stdout).unwrap().split_whitespace().collect();
+
+    let benchmark_log = BenchmarkLog {
+        git_hash,
+        threads: args.threads,
+        benchmarks,
+    };
+
+    let obj = json!(benchmark_log);
+    let pretty_str = serde_json::to_string_pretty(&obj).unwrap();
+    println!("{}", pretty_str);
+
+    if !args.output.is_empty() {
+        fs::write(&args.output, pretty_str).expect("Error writing to file");
+        if args.debug {
+            println!("Outputted to {}", args.output);
+        }
     }
 }

@@ -6,38 +6,33 @@ use crate::repr::var_label::VarLabel;
 
 const DEFAULT_SUBTABLE_SZ: usize = 16384;
 
+
+#[derive(Clone)]
 /// The primary storage unit for binary decision diagram nodes
 /// Each variable is associated with an individual subtable
 pub struct BddTable {
     subtables: Vec<BackedRobinHoodTable<ToplessBdd>>,
-    order: VarOrder,
 }
 
 impl BddTable {
-    pub fn new(order: VarOrder) -> BddTable {
-        let mut v = Vec::with_capacity(order.num_vars());
-        for _ in 0..order.num_vars() {
+    pub fn new(num_vars: usize) -> BddTable {
+        let mut v = Vec::with_capacity(num_vars);
+        for _ in 0..num_vars {
             v.push(BackedRobinHoodTable::new(DEFAULT_SUBTABLE_SZ));
         }
 
         BddTable {
             subtables: v,
-            order: order,
         }
-    }
-
-    pub fn order(&self) -> &VarOrder {
-        &self.order
     }
 
     /// Generate a new variable which was not in the original order. Places the
     /// new variable at the end of the current order. Returns the label of the
     /// new variable
     pub fn new_last(&mut self) -> VarLabel {
-        let newlbl = self.order.new_last();
         self.subtables
             .push(BackedRobinHoodTable::new(DEFAULT_SUBTABLE_SZ));
-        newlbl
+        VarLabel::new_usize(self.subtables.len() - 1)
     }
 
     pub fn get_or_insert(&mut self, bdd: Bdd) -> BddPtr {
@@ -99,7 +94,7 @@ impl BddTable {
 
 #[test]
 fn test_insertion() {
-    let mut tbl = BddTable::new(VarOrder::linear_order(100));
+    let mut tbl = BddTable::new(100);
     for var in 0..50 {
         let bdd = Bdd::new_node(
             BddPtr::true_node(),

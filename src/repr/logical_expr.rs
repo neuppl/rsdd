@@ -5,7 +5,7 @@ use rand;
 use rand::rngs::ThreadRng;
 use rand::Rng;
 use crate::repr::var_label::VarLabel;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum LogicalExpr {

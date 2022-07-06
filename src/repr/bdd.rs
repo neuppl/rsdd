@@ -1,7 +1,7 @@
-//! Primary binary decision diagram representation
-use std::marker::PhantomData;
-
+//! Public-facing binary decision diagram representation
 use crate::builder::var_order::VarOrder;
+
+use super::var_label::VarLabel;
 
 #[derive(Debug, Clone)]
 pub struct BddPtr {
@@ -18,7 +18,7 @@ impl BddPtr {
 pub enum Bdd {
     True,
     False,
-    Node { low: BddPtr, high: BddPtr }
+    Node { var: VarLabel, low: BddPtr, high: BddPtr }
 }
 
 pub struct FinalizedBDD {
