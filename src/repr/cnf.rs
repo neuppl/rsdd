@@ -15,12 +15,9 @@ use crate::repr::model::PartialModel;
 type clause_idx = usize;
 type lit_idx = usize;
 
-static PRIMES: [u128; 6] = [232013001714829759185289990985465319691, 
-                            333137558950085144382304432995343556989, 
-                            316319869697248684341211015143689017453, 
-                            324167418430705647122534085039661688929, 
-                            329367681630224674729296290250973223983, 
-                            238174019593728996209712393113822161931];
+const PRIMES: [u128; 4] = [64733603481794218985640164159, 79016979402926483817096290621, 46084029846212370199652019757, 49703069216273825773136967137];
+// number of primes to consider during CNF hashing
+const NUM_PRIMES : usize = 2;
 
 /// A data-structure for efficient implementation of unit propagation with CNFs.
 /// It implements a two-literal watching scheme.
@@ -301,6 +298,8 @@ impl<'a> UnitPropagate<'a> {
         return true;
     }
 
+    // pub fn assume(&mut self, )
+
     pub fn get_assgn(&self) -> &PartialModel {
         &self.cur_state()
     }
@@ -308,7 +307,7 @@ impl<'a> UnitPropagate<'a> {
 
 #[derive(Debug, Hash, Eq, PartialEq, Clone)]
 pub struct HashedCNF {
-    v: [u128; 2]
+    v: [u128; NUM_PRIMES]
 }
 
 pub struct CnfHasher {
@@ -326,8 +325,7 @@ impl CnfHasher {
     }
 
     pub fn hash(&self, m: &PartialModel) -> HashedCNF {
-        let mut v0 : u128 = 1;
-        let mut v1 : u128 = 1;
+        let mut v : [u128; NUM_PRIMES] = [1; NUM_PRIMES];
         'outer: for clause in self.weighted_cnf.iter() {
             let mut cur_clause_v : u128 = 1;
             for (ref weight, ref lit) in clause.iter() {
@@ -339,15 +337,15 @@ impl CnfHasher {
                     // skip this literal and move onto the next one
                     continue; 
                 } else {
-                    cur_clause_v = cur_clause_v.wrapping_mul(*weight as u128);
-                    // cur_clause_v = cur_clause_v * (*weight as u128);
+                    cur_clause_v = cur_clause_v * (*weight as u128);
                 }
             }
-            v0 = v0.wrapping_mul(cur_clause_v) % PRIMES[0];
-            v1 = v0.wrapping_mul(cur_clause_v) % PRIMES[1];
-            // v = v * (cur_clause_v);
+            for i in 0..NUM_PRIMES {
+                // v[i] = (v[i]* (cur_clause_v)) % PRIMES[i];
+                v[i] = v[i].wrapping_mul(cur_clause_v);
+            }
         }
-        HashedCNF { v: [v0, v1] }
+        HashedCNF { v }
     }
 }
 

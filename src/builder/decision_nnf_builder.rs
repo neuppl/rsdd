@@ -1,9 +1,11 @@
 use std::collections::HashMap;
 use num::Num;
 
-use crate::{repr::{var_label::{VarLabel, Literal}, cnf::*}, backing_store::{bdd_table_robinhood::BddTable}, builder::repr::builder_bdd::PointerType};
+use crate::{repr::{var_label::{VarLabel, Literal}, cnf::*, model::PartialModel}, backing_store::{bdd_table_robinhood::BddTable}, builder::repr::builder_bdd::PointerType};
 
 use super::{repr::builder_bdd::{BddPtr, BddNode, Bdd}, var_order::VarOrder, bdd_builder::BddWmc};
+
+use picorust::picosat;
 
 #[derive(Clone)]
 pub struct DecisionNNFBuilder {
@@ -119,6 +121,21 @@ impl DecisionNNFBuilder {
         }
     }
 
+    fn conjoin_implied(&mut self, literals: impl Iterator<Item = Literal>, nnf: BddPtr) -> BddPtr {
+        if nnf.is_false() {
+            return self.false_ptr();
+        }
+        let mut sub = nnf;
+        for l in literals {
+           let node = if l.get_polarity() { 
+               BddNode::new(self.false_ptr(), sub, l.get_label())
+           } else {
+               BddNode::new(sub, self.false_ptr(), l.get_label())
+           };
+           sub = self.get_or_insert(node);
+        }
+        sub
+    }
 
     /// Returns A BDD that represents `cnf` conditioned on all 
     ///     variables set in the current top model
@@ -157,19 +174,9 @@ impl DecisionNNFBuilder {
         // recurse on both values of cur_v
         let success = up.decide(Literal::new(cur_v, true));
         let high_bdd = if success {
-            let mut sub = self.topdown_h(cnf, up, level + 1, order, hasher, cache);
-            for l in up.get_decided_literals() {
-                if l.get_label() == cur_v {
-                    continue;
-                }
-                let node = if l.get_polarity() { 
-                    BddNode::new(self.false_ptr(), sub, l.get_label())
-                } else {
-                    BddNode::new(sub, self.false_ptr(), l.get_label())
-                };
-                sub = self.get_or_insert(node);
-            }
-            sub
+            let sub = self.topdown_h(cnf, up, level + 1, order, hasher, cache);
+            let lits = up.get_decided_literals().filter(|l| l.get_label() != cur_v);
+            self.conjoin_implied(lits, sub)
         } else {
             self.false_ptr()
         };
@@ -177,22 +184,14 @@ impl DecisionNNFBuilder {
         up.backtrack();
         let success = up.decide(Literal::new(cur_v, false));
         let low_bdd = if success {
-            let mut sub = self.topdown_h(cnf, up, level + 1, order, hasher, cache);
-            for l in up.get_decided_literals() {
-                if l.get_label() == cur_v {
-                    continue;
-                }
-                let node = if l.get_polarity() { 
-                    BddNode::new(self.false_ptr(), sub, l.get_label())
-                } else {
-                    BddNode::new(sub, self.false_ptr(), l.get_label())
-                };
-                sub = self.get_or_insert(node);
-            }
-            sub
+            let sub = self.topdown_h(cnf, up, level + 1, order, hasher, cache);
+            let lits = up.get_decided_literals().filter(|l| l.get_label() != cur_v);
+            self.conjoin_implied(lits, sub)
         } else {
             self.false_ptr()
         };
+
+
         up.backtrack();
         let r = if high_bdd == low_bdd {
             high_bdd
@@ -203,6 +202,109 @@ impl DecisionNNFBuilder {
         cache.insert(hashed, r);
         r
     }
+
+    pub fn from_cnf_topdown(&mut self, order: &VarOrder, cnf: &Cnf) -> BddPtr {
+        let mut up = match UnitPropagate::new(cnf) {
+            Some(v) => v,
+            None => return self.false_ptr(),
+        };
+        let mut r = self.topdown_h(cnf, &mut up, 0, order, &CnfHasher::new(cnf), &mut HashMap::new());
+
+        // conjoin in any initially implied literals
+        for l in up.get_assgn().assignment_iter() {
+            let node = if l.get_polarity() { 
+                BddNode::new(self.false_ptr(), r, l.get_label())
+            } else {
+                BddNode::new(r, self.false_ptr(), l.get_label())
+            };
+            r = self.get_or_insert(node);
+        }
+        r
+    }
+
+    fn topdown_sample_h(
+        &mut self,
+        cnf: &Cnf,
+        up: &mut UnitPropagate,
+        level: usize,
+        order: &VarOrder,
+        hasher: &CnfHasher,
+        sampled_vars: &mut PartialModel,
+        cache: &mut HashMap<HashedCNF, BddPtr>,
+    ) -> BddPtr {
+        // check for base case
+        if level >= cnf.num_vars() || cnf.is_sat_partial(up.get_assgn()) {
+            return self.true_ptr();
+        }
+        let cur_v = order.var_at_pos(level);
+
+        // check if this literal is currently set in unit propagation; if 
+        // it is, skip it
+        if up.get_assgn().is_set(cur_v) {
+            return self.topdown_h(cnf, up, level+1, order, hasher, cache);
+        }
+
+        // check cache
+        let hashed = hasher.hash(up.get_assgn());
+        match cache.get(&hashed.clone()) {
+            None => (),
+            Some(v) => {
+                return *v;
+            }
+        }
+
+        // recurse on both values of cur_v
+        let success = up.decide(Literal::new(cur_v, true));
+        let high_bdd = if success {
+            let sub = self.topdown_h(cnf, up, level + 1, order, hasher, cache);
+            let lits = up.get_decided_literals().filter(|l| l.get_label() != cur_v);
+            self.conjoin_implied(lits, sub)
+        } else {
+            self.false_ptr()
+        };
+
+        up.backtrack();
+        let success = up.decide(Literal::new(cur_v, false));
+        let low_bdd = if success {
+            let sub = self.topdown_h(cnf, up, level + 1, order, hasher, cache);
+            let lits = up.get_decided_literals().filter(|l| l.get_label() != cur_v);
+            self.conjoin_implied(lits, sub)
+        } else {
+            self.false_ptr()
+        };
+
+
+        up.backtrack();
+        let r = if high_bdd == low_bdd {
+            high_bdd
+        } else {
+            let bdd = BddNode::new(low_bdd, high_bdd, cur_v);
+            self.get_or_insert(bdd)
+        };
+        cache.insert(hashed, r);
+        r
+    }
+
+    pub fn from_cnf_topdown_sample(&mut self, order: &VarOrder, cnf: &Cnf) -> BddPtr {
+        let mut up = match UnitPropagate::new(cnf) {
+            Some(v) => v,
+            None => return self.false_ptr(),
+        };
+        let mut r = self.topdown_h(cnf, &mut up, 0, order, &CnfHasher::new(cnf), &mut HashMap::new());
+
+        // conjoin in any initially implied literals
+        for l in up.get_assgn().assignment_iter() {
+            let node = if l.get_polarity() { 
+                BddNode::new(self.false_ptr(), r, l.get_label())
+            } else {
+                BddNode::new(r, self.false_ptr(), l.get_label())
+            };
+            r = self.get_or_insert(node);
+        }
+        r
+    }
+
+
 
     /// Fill the scratch space of each node with a counter that
     /// indexes an in-order left-first depth-first traversal
@@ -224,24 +326,7 @@ impl DecisionNNFBuilder {
     }
 
 
-    pub fn from_cnf_topdown(&mut self, order: &VarOrder, cnf: &Cnf) -> BddPtr {
-        let mut up = match UnitPropagate::new(cnf) {
-            Some(v) => v,
-            None => return self.false_ptr(),
-        };
-        let mut r = self.topdown_h(cnf, &mut up, 0, order, &CnfHasher::new(cnf), &mut HashMap::new());
 
-        // conjoin in any initially implied literals
-        for l in up.get_assgn().assignment_iter() {
-            let node = if l.get_polarity() { 
-                BddNode::new(self.false_ptr(), r, l.get_label())
-            } else {
-                BddNode::new(r, self.false_ptr(), l.get_label())
-            };
-            r = self.get_or_insert(node);
-        }
-        r
-    }
 
     /// Pre-condition: Nodes are unique numbered
     fn wmc_helper<T: Num + Clone + core::fmt::Debug + Copy>(
