@@ -413,7 +413,7 @@ mod test_bdd_manager {
             let dnnfres = mgr2.unsmsoothed_wmc(dnnf, &bddwmc);
             let eps = f64::abs(bddres - dnnfres) < 0.0001;
             if !eps {
-              println!("error on input {}: bddres {}, cnfres {}", c1.to_string(), bddres, dnnfres);
+              println!("error on input {}: bddres {}, cnfres {}\n topdown bdd: {}\nbottom-up bdd: {}", c1.to_string(), bddres, dnnfres, mgr2.to_string_debug(dnnf), mgr.to_string_debug(cnf1));
             }
             TestResult::from_bool(eps)
         }

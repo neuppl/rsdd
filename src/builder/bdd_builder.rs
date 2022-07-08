@@ -1297,10 +1297,11 @@ impl BddManager {
     }
 
     pub fn from_cnf_topdown(&mut self, cnf: &Cnf) -> BddPtr {
-        let mut up = match UnitPropagate::new(cnf) {
-            Some(v) => v,
-            None => return self.false_ptr(),
-        };
+        // let mut up = match UnitPropagate::new(cnf) {
+        //     Some(v) => v,
+        //     None => return self.false_ptr(),
+        // };
+        let mut up = UnitPropagate::new(cnf);
         let r = self.topdown_h(cnf, &mut up, 0, &CnfHasher::new(cnf), &mut HashMap::new());
 
         // conjoin in any initially implied literals
