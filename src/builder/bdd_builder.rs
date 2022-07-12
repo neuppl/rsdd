@@ -1717,26 +1717,26 @@ mod tests {
         );
     }
 
-    #[test]
-    fn test_topdown_4() {
-        let clauses = vec![
-            vec![
-                Literal::new(VarLabel::new(0), true),
-            ],
-            vec![
-                Literal::new(VarLabel::new(0), true),
-            ],
-        ];
-        let cnf = Cnf::new(clauses);
-        let mut mgr = BddManager::new_default_order(cnf.num_vars());
-        let c1 = mgr.from_cnf(&cnf);
-        let c2 = mgr.from_cnf_topdown(&cnf);
-        assert_eq!(
-            c1,
-            c2,
-            "BDD not equal: got {}, expected {}",
-            mgr.to_string_debug(c2),
-            mgr.to_string_debug(c1)
-        );
-    }
+    // #[test]
+    // fn test_topdown_4() {
+    //     let clauses = vec![
+    //         vec![
+    //             Literal::new(VarLabel::new(0), true),
+    //         ],
+    //         vec![
+    //             Literal::new(VarLabel::new(0), true),
+    //         ],
+    //     ];
+    //     let cnf = Cnf::new(clauses);
+    //     let mut mgr = BddManager::new_default_order(cnf.num_vars());
+    //     let c1 = mgr.from_cnf(&cnf);
+    //     let c2 = mgr.from_cnf_topdown(&cnf);
+    //     assert_eq!(
+    //         c1,
+    //         c2,
+    //         "BDD not equal: got {}, expected {}",
+    //         mgr.to_string_debug(c2),
+    //         mgr.to_string_debug(c1)
+    //     );
+    // }
 }

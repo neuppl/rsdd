@@ -424,5 +424,4 @@ fn test_dnnf() {
         let mut mgr = DecisionNNFBuilder::new(cnf.num_vars());
         let c2 = mgr.from_cnf_topdown(&VarOrder::linear_order(cnf.num_vars()), &cnf);
         println!("c2: {}", mgr.to_string_debug(c2));
-        assert!(false)
 }
