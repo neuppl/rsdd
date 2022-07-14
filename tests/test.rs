@@ -11,20 +11,7 @@ use crate::repr::var_label::VarLabel;
 use rsdd::*;
 use std::collections::HashMap;
 extern crate rand;
-use rand::SeedableRng;
 
-/// A convenient wrapper for generating maps
-macro_rules! map(
-    { $($key:expr => $value:expr),+ } => {
-        {
-            let mut m = ::std::collections::HashMap::new();
-            $(
-                m.insert($key, $value);
-            )+
-                m
-        }
-    };
-);
 
 /// A list of canonical forms in DIMACS form. The goal of these tests is to ensure that caching
 /// and application are working as intended
@@ -413,7 +400,7 @@ mod test_bdd_manager {
             let dnnfres = mgr2.unsmsoothed_wmc(dnnf, &bddwmc);
             let eps = f64::abs(bddres - dnnfres) < 0.0001;
             if !eps {
-              println!("error on input {}: bddres {}, cnfres {}", c1.to_string(), bddres, dnnfres);
+              println!("error on input {}: bddres {}, cnfres {}\n topdown bdd: {}\nbottom-up bdd: {}", c1.to_string(), bddres, dnnfres, mgr2.to_string_debug(dnnf), mgr.to_string_debug(cnf1));
             }
             TestResult::from_bool(eps)
         }
@@ -460,42 +447,28 @@ mod test_sdd_manager {
         }
     }
 
-    // quickcheck! {
-    //     fn sdd_wmc_eq(clauses: Vec<Vec<Literal>>) -> TestResult {
+    quickcheck! {
+        fn sdd_wmc_eq(clauses: Vec<Vec<Literal>>) -> TestResult {
 
-    //         let cnf = Cnf::new(clauses);
-    //         if cnf.num_vars() < 9 || cnf.num_vars() > 16 { return TestResult::discard() }
-    //         if cnf.clauses().len() > 16 { return TestResult::discard() }
+            let cnf = Cnf::new(clauses);
+            if cnf.num_vars() < 9 || cnf.num_vars() > 16 { return TestResult::discard() }
+            if cnf.clauses().len() > 16 { return TestResult::discard() }
 
-    //        let weight_map : HashMap<VarLabel, (f64, f64)> = HashMap::from_iter(
-    //             (0..cnf.num_vars()).map(|x| (VarLabel::new(x as u64), (0.5, 0.5))));
+           let weight_map : HashMap<VarLabel, (f64, f64)> = HashMap::from_iter(
+                (0..cnf.num_vars()).map(|x| (VarLabel::new(x as u64), (0.5, 0.5))));
 
-    //         let order : Vec<VarLabel> = (0..cnf.num_vars()).map(|x| VarLabel::new(x as u64)).collect();
-    //         let mut mgr = super::SddManager::new(super::even_split(&order, 3));
-    //         let cnf_sdd = mgr.from_cnf(&cnf);
-    //         let sdd_wmc = super::SddWmc::new_with_default(0.0, 1.0, &mut mgr, &weight_map);
-    //         let sdd_res = mgr.unsmoothed_wmc(cnf_sdd, &sdd_wmc);
+            let order : Vec<VarLabel> = (0..cnf.num_vars()).map(|x| VarLabel::new(x as u64)).collect();
+            let mut mgr = super::SddManager::new(super::even_split(&order, 3));
+            let cnf_sdd = mgr.from_cnf(&cnf);
+            let sdd_wmc = super::SddWmc::new_with_default(0.0, 1.0, &mut mgr, &weight_map);
+            let sdd_res = mgr.unsmoothed_wmc(cnf_sdd, &sdd_wmc);
 
 
-    //         let mut bddmgr = BddManager::new_default_order(cnf.num_vars());
-    //         let cnf_bdd = bddmgr.from_cnf(&cnf);
-    //         let bdd_res = bddmgr.wmc(cnf_bdd, &BddWmc::new_with_default(0.0, 1.0, weight_map));
+            let mut bddmgr = BddManager::new_default_order(cnf.num_vars());
+            let cnf_bdd = bddmgr.from_cnf(&cnf);
+            let bdd_res = bddmgr.wmc(cnf_bdd, &BddWmc::new_with_default(0.0, 1.0, weight_map));
 
-    //         TestResult::from_bool(sdd_res == bdd_res)
-    //     }
-    // }
+            TestResult::from_bool(sdd_res == bdd_res)
+        }
+    }
 }
-
-// #[test]
-// pub fn big_sdd() -> () {
-//     // let file_contents = File::open("/Users/sholtzen/Downloads/sdd-1.1.1/cnf/c8-easier.cnf");
-//     let file_contents = include_str!("../cnf/c8-very-easy.cnf");
-//     let cnf = Cnf::from_file(String::from(file_contents));
-//     let v: Vec<usize> = cnf.force_order().get_vec();
-//     let var_vec: Vec<VarLabel> = v.into_iter().map(|v| VarLabel::new(v as u64)).collect();
-//     let vtree = even_split(&var_vec, 4);
-//     let mut man = SddManager::new(vtree);
-//     let r = man.from_cnf(&cnf);
-//     man.print_stats();
-//     println!("num nodes: {}", man.count_nodes(r));
-// }

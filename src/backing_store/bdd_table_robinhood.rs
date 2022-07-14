@@ -1,6 +1,5 @@
 use crate::backing_store::robin_hood::*;
 use crate::backing_store::{BackingCacheStats, BackingPtr};
-use crate::builder::var_order::VarOrder;
 use crate::builder::repr::builder_bdd::*;
 use crate::repr::var_label::VarLabel;
 

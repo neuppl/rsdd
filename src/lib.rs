@@ -14,13 +14,13 @@ extern crate quickcheck;
 extern crate time_test;
 extern crate twox_hash;
 extern crate typed_arena;
+extern crate picorust;
 
 #[macro_use]
 mod util;
 mod backing_store;
 pub mod builder;
 pub mod repr;
-pub mod topdown;
 
 use crate::builder::bdd_builder::BddManager;
 use crate::builder::sdd_builder::SddManager;

@@ -6,3 +6,4 @@ pub mod cnf;
 pub mod model;
 pub mod var_label;
 pub mod bdd;
+pub mod sat_solver;
