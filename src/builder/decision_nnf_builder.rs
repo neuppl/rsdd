@@ -151,7 +151,7 @@ impl DecisionNNFBuilder {
         cache: &mut HashMap<HashedCNF, BddPtr>,
     ) -> BddPtr {
         // check for base case
-        let assgn = sat.get_partial_model();
+        let assgn = sat.get_implied_units();
         if level >= cnf.num_vars() || cnf.is_sat_partial(&assgn) {
             return self.true_ptr();
         }
@@ -177,7 +177,7 @@ impl DecisionNNFBuilder {
         sat.decide(Literal::new(cur_v, true));
         let unsat = sat.unsat();
         let high_bdd = if !unsat {
-            let new_assgn = sat.get_partial_model();
+            let new_assgn = sat.get_implied_units();
 
             let sub = self.topdown_h(cnf, sat, level + 1, order, hasher, cache);
             let implied_lits = new_assgn.get_vec().iter().enumerate().zip(assgn.get_vec()).filter_map(|((idx, new), prev)| {
@@ -197,7 +197,7 @@ impl DecisionNNFBuilder {
         sat.decide(Literal::new(cur_v, false));
         let unsat = sat.unsat();
         let low_bdd = if !unsat {
-            let new_assgn = sat.get_partial_model();
+            let new_assgn = sat.get_implied_units();
 
             let sub = self.topdown_h(cnf, sat, level + 1, order, hasher, cache);
             let implied_lits = new_assgn.get_vec().iter().enumerate().zip(assgn.get_vec()).filter_map(|((idx, new), prev)| {
@@ -233,7 +233,7 @@ impl DecisionNNFBuilder {
         let mut r = self.topdown_h(cnf, &mut sat, 0, order, &CnfHasher::new(cnf), &mut HashMap::new());
 
         // conjoin in any initially implied literals
-        for l in sat.get_partial_model().assignment_iter() {
+        for l in sat.get_implied_units().assignment_iter() {
             let node = if l.get_polarity() { 
                 BddNode::new(self.false_ptr(), r, l.get_label())
             } else {

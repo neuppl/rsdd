@@ -2,7 +2,6 @@
 //! manager, which manages the global state necessary for constructing canonical
 //! binary decision diagrams.
 
-use crate::repr::cnf::UnitPropagate;
 use crate::repr::model::PartialModel;
 use crate::repr::sat_solver::SATSolver;
 use crate::{
@@ -1233,7 +1232,7 @@ impl BddManager {
         cache: &mut HashMap<HashedCNF, BddPtr>,
     ) -> BddPtr {
         // check for base case
-        let assgn = sat.get_partial_model();
+        let assgn = sat.get_implied_units();
         if level >= cnf.num_vars() || cnf.is_sat_partial(&assgn) {
             return self.true_ptr();
         }
@@ -1260,7 +1259,7 @@ impl BddManager {
         sat.decide(Literal::new(cur_v, true));
         let unsat = sat.unsat();
         let high_bdd = if !unsat {
-            let new_assgn = sat.get_partial_model();
+            let new_assgn = sat.get_implied_units();
             let mut lit_cube = self.true_ptr();
             let implied_lits = new_assgn.get_vec().iter().enumerate().zip(assgn.get_vec()).filter_map(|((idx, new), prev)| {
                 if new != prev && idx != cur_v.value_usize() {
@@ -1288,7 +1287,7 @@ impl BddManager {
         sat.decide(Literal::new(cur_v, false));
         let unsat = sat.unsat();
         let low_bdd = if !unsat {
-            let new_assgn = sat.get_partial_model();
+            let new_assgn = sat.get_implied_units();
             let implied_lits = new_assgn.get_vec().iter().enumerate().zip(assgn.get_vec()).filter_map(|((idx, new), prev)| {
                 if new != prev && idx != cur_v.value_usize() {
                     Some(Literal::new(VarLabel::new_usize(idx), new.unwrap()))
@@ -1335,7 +1334,7 @@ impl BddManager {
 
         // conjoin in any initially implied literals
         let mut lit_cube = self.true_ptr();
-        for lit in sat.get_partial_model().assignment_iter() {
+        for lit in sat.get_implied_units().assignment_iter() {
             let v = self.var(lit.get_label(), lit.get_polarity());
             lit_cube = self.and(v, lit_cube);
         }
@@ -1358,7 +1357,7 @@ mod tests {
         builder::bdd_builder::{BddManager, BddWmc},
         builder::repr::builder_bdd::BddPtr,
         repr::{
-            cnf::{Cnf, UnitPropagate},
+            cnf::{Cnf},
             var_label::{Literal, VarLabel},
         },
     };
