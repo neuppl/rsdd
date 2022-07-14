@@ -21,7 +21,6 @@ mod util;
 mod backing_store;
 pub mod builder;
 pub mod repr;
-pub mod topdown;
 
 use crate::builder::bdd_builder::BddManager;
 use crate::builder::sdd_builder::SddManager;

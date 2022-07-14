@@ -11,20 +11,7 @@ use crate::repr::var_label::VarLabel;
 use rsdd::*;
 use std::collections::HashMap;
 extern crate rand;
-use rand::SeedableRng;
 
-/// A convenient wrapper for generating maps
-macro_rules! map(
-    { $($key:expr => $value:expr),+ } => {
-        {
-            let mut m = ::std::collections::HashMap::new();
-            $(
-                m.insert($key, $value);
-            )+
-                m
-        }
-    };
-);
 
 /// A list of canonical forms in DIMACS form. The goal of these tests is to ensure that caching
 /// and application are working as intended
@@ -485,17 +472,3 @@ mod test_sdd_manager {
         }
     }
 }
-
-// #[test]
-// pub fn big_sdd() -> () {
-//     // let file_contents = File::open("/Users/sholtzen/Downloads/sdd-1.1.1/cnf/c8-easier.cnf");
-//     let file_contents = include_str!("../cnf/c8-very-easy.cnf");
-//     let cnf = Cnf::from_file(String::from(file_contents));
-//     let v: Vec<usize> = cnf.force_order().get_vec();
-//     let var_vec: Vec<VarLabel> = v.into_iter().map(|v| VarLabel::new(v as u64)).collect();
-//     let vtree = even_split(&var_vec, 4);
-//     let mut man = SddManager::new(vtree);
-//     let r = man.from_cnf(&cnf);
-//     man.print_stats();
-//     println!("num nodes: {}", man.count_nodes(r));
-// }
