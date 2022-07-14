@@ -4,6 +4,7 @@
 
 use crate::repr::cnf::UnitPropagate;
 use crate::repr::model::PartialModel;
+use crate::repr::sat_solver::SATSolver;
 use crate::{
     backing_store::bdd_table_robinhood::BddTable, backing_store::BackingCacheStats,
     builder::cache::bdd_app::*, builder::repr::builder_bdd::*, builder::var_order::VarOrder, repr,
@@ -1226,13 +1227,14 @@ impl BddManager {
     fn topdown_h(
         &mut self,
         cnf: &Cnf,
-        up: &mut UnitPropagate,
+        sat: &mut SATSolver,
         level: usize,
         hasher: &CnfHasher,
         cache: &mut HashMap<HashedCNF, BddPtr>,
     ) -> BddPtr {
         // check for base case
-        if level >= cnf.num_vars() || cnf.is_sat_partial(up.get_assgn()) {
+        let assgn = sat.get_partial_model();
+        if level >= cnf.num_vars() || cnf.is_sat_partial(&assgn) {
             return self.true_ptr();
         }
 
@@ -1240,12 +1242,12 @@ impl BddManager {
 
         // check if this literal is currently set in unit propagation; if 
         // it is, skip it
-        if up.get_assgn().is_set(cur_v) {
-            return self.topdown_h(cnf, up, level+1, hasher, cache);
+        if assgn.is_set(cur_v) {
+            return self.topdown_h(cnf, sat, level+1, hasher, cache);
         }
 
         // check cache
-        let hashed = hasher.hash(up.get_assgn());
+        let hashed = hasher.hash(&assgn);
         match cache.get(&hashed.clone()) {
             None => (),
             Some(v) => {
@@ -1254,38 +1256,61 @@ impl BddManager {
         }
 
         // recurse on both values of cur_v
-        let success = up.decide(Literal::new(cur_v, true));
-        let high_bdd = if success {
+        sat.push();
+        sat.decide(Literal::new(cur_v, true));
+        let unsat = sat.unsat();
+        let high_bdd = if !unsat {
+            let new_assgn = sat.get_partial_model();
             let mut lit_cube = self.true_ptr();
-            for l in up.get_decided_literals() {
+            let implied_lits = new_assgn.get_vec().iter().enumerate().zip(assgn.get_vec()).filter_map(|((idx, new), prev)| {
+                if new != prev && idx != cur_v.value_usize() {
+                    Some(Literal::new(VarLabel::new_usize(idx), new.unwrap()))
+                } else {
+                    None
+                }
+            });
+
+            for l in implied_lits {
                 if l.get_label() == cur_v {
                     continue;
                 }
                 let v = self.var(l.get_label(), l.get_polarity());
                 lit_cube = self.and(lit_cube, v);
             }
-            let sub = self.topdown_h(cnf, up, level + 1, hasher, cache);
+            let sub = self.topdown_h(cnf, sat, level + 1, hasher, cache);
             self.and(sub, lit_cube)
         } else {
             self.false_ptr()
         };
-        up.backtrack();
-        let success = up.decide(Literal::new(cur_v, false));
-        let low_bdd = if success {
+
+        sat.pop();
+        sat.push();
+        sat.decide(Literal::new(cur_v, false));
+        let unsat = sat.unsat();
+        let low_bdd = if !unsat {
+            let new_assgn = sat.get_partial_model();
+            let implied_lits = new_assgn.get_vec().iter().enumerate().zip(assgn.get_vec()).filter_map(|((idx, new), prev)| {
+                if new != prev && idx != cur_v.value_usize() {
+                    Some(Literal::new(VarLabel::new_usize(idx), new.unwrap()))
+                } else {
+                    None
+                }
+            });
             let mut lit_cube = self.true_ptr();
-            for l in up.get_decided_literals() {
+            for l in implied_lits {
                 if l.get_label() == cur_v {
                     continue;
                 }
                 let v = self.var(l.get_label(), l.get_polarity());
                 lit_cube = self.and(lit_cube, v);
             }
-            let sub = self.topdown_h(cnf, up, level + 1, hasher, cache);
+            let sub = self.topdown_h(cnf, sat, level + 1, hasher, cache);
             self.and(sub, lit_cube)
         } else {
             self.false_ptr()
         };
-        up.backtrack();
+
+        sat.pop();
         let r = if high_bdd == low_bdd {
             high_bdd
         } else {
@@ -1297,15 +1322,20 @@ impl BddManager {
     }
 
     pub fn from_cnf_topdown(&mut self, cnf: &Cnf) -> BddPtr {
-        let mut up = match UnitPropagate::new(cnf) {
-            Some(v) => v,
-            None => return self.false_ptr(),
-        };
-        let r = self.topdown_h(cnf, &mut up, 0, &CnfHasher::new(cnf), &mut HashMap::new());
+        // let mut up = match UnitPropagate::new(cnf) {
+        //     Some(v) => v,
+        //     None => return self.false_ptr(),
+        // };
+        let mut sat = SATSolver::new(&cnf);
+        if sat.unsat() {
+            return self.false_ptr()
+        }
+
+        let r = self.topdown_h(cnf, &mut sat, 0, &CnfHasher::new(cnf), &mut HashMap::new());
 
         // conjoin in any initially implied literals
         let mut lit_cube = self.true_ptr();
-        for lit in up.get_assgn().assignment_iter() {
+        for lit in sat.get_partial_model().assignment_iter() {
             let v = self.var(lit.get_label(), lit.get_polarity());
             lit_cube = self.and(v, lit_cube);
         }
@@ -1638,7 +1668,7 @@ mod tests {
     fn iff_regression() {
         let mut man = BddManager::new_default_order(0);
         let mut ptrvec = Vec::new();
-        for i in 0..40 {
+        for _ in 0..40 {
             let vlab = man.new_var();
             let flab = man.new_var();
             let vptr = man.var(vlab, true);
