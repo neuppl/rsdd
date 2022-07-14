@@ -74,7 +74,7 @@ fn main() {
     rayon::ThreadPoolBuilder::new().num_threads(args.threads).build_global().unwrap();
 
     let cnf_strs = vec![
-        // ("grid-50-10-1-q", String::from(include_str!("../cnf/50-10-1-q.cnf"))),
+        ("grid-50-10-1-q", String::from(include_str!("../cnf/50-10-1-q.cnf"))),
         (
             "bench-01",
             String::from(include_str!("../cnf/bench-01.cnf")),

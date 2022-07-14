@@ -360,8 +360,6 @@ impl<'a> SddManager {
             _ => (),
         };
 
-        // normalize the pointers to increase cache hit rate
-        let (a, b) = if a < b { (a, b) } else { (b, a) };
         // check if both are BDDs; if they are, just invoke their apply
         // functions
         if a.is_bdd() && b.is_bdd() && a.vtree() == b.vtree() {
@@ -402,8 +400,7 @@ impl<'a> SddManager {
         //   2. The lca is the prime `a`
         //   3. The lca is the sub `b`
         //   4. The lca is a shared parent equal to neither
-        // these pointers are necessary to ensure that the vectors live
-        // long enough
+        // TODO this to_vec is probably very bad for perf
         let (outer_v, inner_v) = if av == bv {
             let outer = self.tbl.sdd_get_or(a).to_vec();
             let inner = self.tbl.sdd_get_or(b).to_vec();
@@ -696,6 +693,7 @@ impl<'a> SddManager {
         }
         helper(self, ptr, assgn)
     }
+
 
     pub fn sdd_eq(&self, a: SddPtr, b: SddPtr) -> bool {
         a == b
