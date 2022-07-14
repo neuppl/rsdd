@@ -22,6 +22,28 @@ pub struct HashedCNF {
     v: [u128; NUM_PRIMES]
 }
 
+/// Probabilistically hashes a partially instantiated CNF, used primarily for 
+/// component caching during bottom-up compilation (a component is a partially 
+/// instantiated CNF).
+/// 
+/// The hash function satisfies the invariant that, with (arbitrarily) high
+/// probability, two components are syntactically equal if and only if they have
+/// the same hash.
+/// 
+/// It works by associating each literal in the CNF with a distinct prime
+/// number. To compute the hash function, one takes the product (modulo a prime
+/// field, the base of which is specified in PRIMES) of all unset literals in
+/// clauses that are not satisfied.
+/// 
+/// Example: Assume we have the following CNF, with its literals annotated with
+/// distinct primes:
+/// ```
+/// // `(a \/ b) /\ (!a \/ c)`
+/// //   ^    ^      ^     ^
+/// //   2    3      5     7
+/// ```
+/// Then, if we were to hash this CNF with the partial model (a = T), would 
+/// get the value 5*7 = 35
 pub struct CnfHasher {
     weighted_cnf: Vec<Vec<(usize, Literal)>>
 }
