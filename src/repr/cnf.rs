@@ -43,7 +43,7 @@ pub struct HashedCNF {
 /// //   2    3      5     7
 /// ```
 /// Then, if we were to hash this CNF with the partial model (a = T), would 
-/// get the value 5*7 = 35
+/// get the value 7
 pub struct CnfHasher {
     weighted_cnf: Vec<Vec<(usize, Literal)>>
 }
