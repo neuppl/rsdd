@@ -56,9 +56,18 @@ fn compile_topdown_nnf_sample(str: String, debug: bool) -> () {
     let weight_map : HashMap<VarLabel, (f64, f64)> = HashMap::from_iter(
         (0..cnf.num_vars()).map(|x| (VarLabel::new(x as u64), (0.5, 0.5))));
     let wmc : BddWmc<f64> = BddWmc::new_with_default(0.0, 1.0, weight_map);
+    let order = &VarOrder::linear_order(cnf.num_vars());
+    let query_var = VarLabel::new_usize(0);
 
-    let ddnnf = man.from_cnf_topdown_sample(&VarOrder::linear_order(cnf.num_vars()), &cnf, &wmc, 10);
-    println!("result: {:?}", ddnnf);
+    // let ddnnf = man.from_cnf_topdown_sample(&VarOrder::linear_order(cnf.num_vars()), &cnf, &wmc, 10);
+    let r = man.estimate_marginal(1000, order, query_var, &wmc, &cnf);
+
+    let exact_ddnnf = man.from_cnf_topdown(order, &cnf);
+    let z = man.unsmsoothed_wmc(exact_ddnnf, &wmc);
+    let cond = man.condition(exact_ddnnf, query_var, true);
+    let p = man.unsmsoothed_wmc(cond, &wmc) * 0.5;
+
+    println!("result: {:?}, exact: {}, p: {p}, z: {z}", r, p / z);
 }
 
 fn compile_sdd(str: String, debug: bool) -> () {
@@ -100,10 +109,10 @@ fn main() {
         //     "bench-02",
         //     String::from(include_str!("../cnf/bench-02.cnf")),
         // ),
-        // (
-        //     "bench-03",
-        //     String::from(include_str!("../cnf/bench-03.cnf")),
-        // ),
+        (
+            "bench-03",
+            String::from(include_str!("../cnf/bench-03.cnf")),
+        ),
         // ("php-4-6", String::from(include_str!("../cnf/php-4-6.cnf"))),
         // ("php-5-4", String::from(include_str!("../cnf/php-5-4.cnf"))),
         // ("php-12-14", String::from(include_str!("../cnf/php-12-14.cnf"))),
@@ -164,7 +173,7 @@ fn main() {
         //     String::from(include_str!("../cnf/rand-3-50-200-2.cnf")),
         // ),
 
-        ("grid-75-16-2-q", String::from(include_str!("../cnf/75-16-2-q.cnf"))),
+        // ("grid-75-16-2-q", String::from(include_str!("../cnf/75-16-2-q.cnf"))),
         // (
         //     "rand-3-50-200-3",
         //     String::from(include_str!("../cnf/rand-3-50-200-3.cnf")),

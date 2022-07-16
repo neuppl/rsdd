@@ -101,13 +101,6 @@ impl<'a> UnitPropagate<'a> {
             state: vec![PartialModel::from_vec(assignments)],
             cnf,
         };
-
-        // for unit in implied {
-        //     let r = cur.set(unit);
-        //     if !r {
-        //         return None;
-        //     }
-        // }
         return cur;
     }
     

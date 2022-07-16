@@ -9,7 +9,7 @@ use super::{repr::builder_bdd::{BddPtr, BddNode, Bdd}, var_order::VarOrder, bdd_
 
 use crate::repr::sat_solver::SATSolver;
 
-const THRESHOLD: usize = 10000;
+const THRESHOLD: usize = 10;
 
 #[derive(Copy, Clone, Debug)]
 enum SampledResult {
@@ -367,7 +367,7 @@ impl DecisionNNFBuilder {
                         let topvar = mgr.topvar(sub);
                         let p = mgr.prob_true(wmc, topvar, sub);
                         let v = rand::Rng::gen_bool(&mut rand, p);
-                        println!("sampled value {:?} = {v}", topvar);
+                        println!("sampled value {:?} = {v} with probability {p}", topvar);
                         return SampledLit(Literal::new(topvar, v), if v { p } else {1.0 - p });
                     }
 
@@ -592,7 +592,20 @@ impl DecisionNNFBuilder {
         }
     }
 
+    pub fn estimate_marginal(&mut self, n: usize, order: &VarOrder, query_var: VarLabel, wmc: &BddWmc<f64>, cnf: &Cnf) -> f64 {
+        let c2 = self.from_cnf_topdown_sample(order, &cnf, &wmc, n);
 
+        let z = c2.iter().fold(0.0, |acc, (_, w)| {
+            acc + w
+        });
+
+        let p = c2.iter().fold(0.0, |acc, (bdd, w)| {
+            let p_bdd = self.prob_true(&wmc, query_var, *bdd);
+            acc + (w * p_bdd)
+        });
+
+        return p / z;
+    }
 }
 
 
@@ -641,21 +654,11 @@ fn test_dnnf_sample() {
     let weight_map : HashMap<VarLabel, (f64, f64)> = HashMap::from_iter(
         (0..cnf.num_vars()).map(|x| (VarLabel::new(x as u64), (0.2, 0.8))));
     let wmc : BddWmc<f64> = BddWmc::new_with_default(0.0, 1.0, weight_map);
+    let order = VarOrder::linear_order(cnf.num_vars());
 
-    let query_var = VarLabel::new_usize(0);
+    let p = mgr.estimate_marginal(100, &order, VarLabel::new_usize(0), &wmc, &cnf);
 
-    let c2 = mgr.from_cnf_topdown_sample(&VarOrder::linear_order(cnf.num_vars()), &cnf, &wmc, 20000);
-
-    let z = c2.iter().fold(0.0, |acc, (_, w)| {
-        acc + w
-    });
-
-    let p = c2.iter().fold(0.0, |acc, (bdd, w)| {
-        let p_bdd = mgr.prob_true(&wmc, query_var, *bdd);
-        acc + (w * p_bdd)
-    });
-
-    println!("sample prob result: {}, p: {p}, z: {z}", p / z);
+    println!("sample prob result: {p}");
     assert!(false);
 
     // let p = c2.iter().fold(0.0, |((_, w), acc)| {
