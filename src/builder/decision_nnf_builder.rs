@@ -9,7 +9,7 @@ use super::{repr::builder_bdd::{BddPtr, BddNode, Bdd}, var_order::VarOrder, bdd_
 
 use crate::repr::sat_solver::SATSolver;
 
-const THRESHOLD: usize = 10;
+const THRESHOLD: usize = 1000;
 
 #[derive(Copy, Clone, Debug)]
 enum SampledResult {
@@ -367,7 +367,7 @@ impl DecisionNNFBuilder {
                         let topvar = mgr.topvar(sub);
                         let p = mgr.prob_true(wmc, topvar, sub);
                         let v = rand::Rng::gen_bool(&mut rand, p);
-                        println!("sampled value {:?} = {v} with probability {p}", topvar);
+                        // println!("sampled value {:?} = {v} with probability {p}", topvar);
                         return SampledLit(Literal::new(topvar, v), if v { p } else {1.0 - p });
                     }
 
@@ -656,7 +656,7 @@ fn test_dnnf_sample() {
     let wmc : BddWmc<f64> = BddWmc::new_with_default(0.0, 1.0, weight_map);
     let order = VarOrder::linear_order(cnf.num_vars());
 
-    let p = mgr.estimate_marginal(100, &order, VarLabel::new_usize(0), &wmc, &cnf);
+    let p = mgr.estimate_marginal(1000, &order, VarLabel::new_usize(0), &wmc, &cnf);
 
     println!("sample prob result: {p}");
     assert!(false);
