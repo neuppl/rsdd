@@ -62,7 +62,7 @@ pub struct UnitPropagate<'a> {
 
 impl<'a> UnitPropagate<'a> {
     /// Returns None if UNSAT discovered during initial unit propagation
-    pub fn new(cnf: &'a Cnf) -> UnitPropagate<'a> {
+    pub fn new(cnf: &'a Cnf) -> Option<UnitPropagate<'a>> {
         let mut watch_list_pos: Vec<Vec<usize>> = Vec::new();
         let mut watch_list_neg: Vec<Vec<usize>> = Vec::new();
         let mut assignments: Vec<Option<bool>> = Vec::new();
@@ -76,8 +76,7 @@ impl<'a> UnitPropagate<'a> {
         let mut implied: Vec<Literal> = Vec::new();
         for (idx, c) in cnf.clauses().iter().enumerate() {
             if c.len() == 0 {
-                continue;
-                // return None;
+                return None;
             }
             if c.len() == 1 {
                 implied.push(c[0]);
@@ -95,6 +94,8 @@ impl<'a> UnitPropagate<'a> {
             }
         }
 
+        
+
         let mut cur = UnitPropagate {
             watch_list_pos,
             watch_list_neg,
@@ -102,13 +103,13 @@ impl<'a> UnitPropagate<'a> {
             cnf,
         };
 
-        // for unit in implied {
-        //     let r = cur.set(unit);
-        //     if !r {
-        //         return None;
-        //     }
-        // }
-        return cur;
+        for i in implied {
+            if !cur.decide(i) {
+                return None
+            }
+        }
+
+        return Some(cur);
     }
     
     fn cur_state(&self) -> &PartialModel {
@@ -121,22 +122,9 @@ impl<'a> UnitPropagate<'a> {
     }
 
     /// Sets a variable to a particular value
+    /// Returns true if successful and false if this resulted in an UNSAT assignment
     pub fn decide(&mut self, new_assignment: Literal) -> bool {
-        // push a fresh state onto the stack and propagate
-        self.state.push(self.cur_state().clone());
-        // run until no new discovered units
-        // let mut prev_num_assigned = self.cur_state().assignment_iter().count();
-        // loop {
-            if !self.set(new_assignment) {
-                return false;
-            }
-            // let new_num_assigned = self.cur_state().assignment_iter().count();
-            // if new_num_assigned == prev_num_assigned {
-            //     return true;
-            // }
-            // prev_num_assigned = new_num_assigned;
-        // }
-        return true
+        self.set(new_assignment)
     }
 
     /// Returns an iterator over the literals that were decided at the previous decision step
@@ -157,7 +145,7 @@ impl<'a> UnitPropagate<'a> {
     }
 
     /// Backtracks to the previous decision
-    pub fn backtrack(&mut self) -> () {
+    pub fn pop(&mut self) -> () {
         assert!(self.state.len() > 1, "Unit Propagate cannot backtrack past first decision");
         self.state.pop();
     }
@@ -292,51 +280,60 @@ impl<'a> UnitPropagate<'a> {
         return true;
     }
 
-    // pub fn assume(&mut self, )
-
     pub fn get_assgn(&self) -> &PartialModel {
         &self.cur_state()
     }
+
+    pub fn push(&mut self) -> () {
+        self.state.push(self.cur_state().clone());
+    }
 }
 
+
+#[derive(Copy, Clone)]
+enum SATState {
+    UNSAT, // the state is currently unsatisfied according to the units in the CNF
+    SAT,   // the state is satisfied according to the units in the CNF
+    Unknown
+}
 
 pub struct SATSolver<'a> {
-    sat_state: PicoSAT,
-    num_vars: usize,
-    up: UnitPropagate<'a>
-}
-
-/// Converts a literal into the representation picosat expects
-fn lit_to_pico(lit: Literal) -> i32 {
-    if lit.get_polarity() {
-        (lit.get_label().value() + 1) as i32
-    } else {
-        -((lit.get_label().value() + 1) as i32)
-    }
+    up: Option<UnitPropagate<'a>>,
+    cur_state: Vec<SATState>
 }
 
 
 impl<'a> SATSolver<'a> {
     pub fn new(cnf: &'a Cnf) -> SATSolver<'a> {
-        let mut state = picosat::init();
-        for _ in 0..cnf.num_vars() {
-            picosat::inc_max_var(&mut state);
-        }
-        
-
-        let mut r = SATSolver { sat_state: state, num_vars: cnf.num_vars(), up: UnitPropagate::new(cnf) };
-        // add all initial clauses to the SAT state
-        for c in cnf.clauses() {
-            r.add_clause(c)
-        }
-        r
+        let up = UnitPropagate::new(cnf);
+        let state = if up.is_some() { 
+            // if cnf.is_sat_partial(up.unwrap().get_assgn()) {
+                // SATState::SAT
+            // } else {
+                SATState::Unknown
+            // }
+        } else { SATState::UNSAT };
+        SATSolver { up, cur_state: vec![state] }
     }
+
+    fn top_state(&self) -> SATState {
+        *self.cur_state.last().unwrap()
+    }
+
 
     /// Pushes the SAT context 
     /// 
     /// Saves all current clauses and decisions
     pub fn push(&mut self) -> () {
-        picosat::push(&mut self.sat_state);
+        match &mut self.up {
+            Some(up) => { 
+                up.push();
+                self.cur_state.push(self.top_state());
+            }
+            None => { 
+                self.cur_state.push(self.top_state());
+            }
+        }
     }
 
     /// Pops the SAT state
@@ -344,33 +341,50 @@ impl<'a> SATSolver<'a> {
     /// Restores the set of clause and decisions to the point at which it was previously pushed
     /// Panics if there is no prior pushed state.
     pub fn pop(&mut self) -> () {
-        self.up.backtrack();
-        picosat::pop(&mut self.sat_state);
-    }
-
-    /// Adds a clause to the current SAT state
-    pub fn add_clause(&mut self, clause: &[Literal]) -> () {
-        for lit in clause.iter() {
-            picosat::add(&mut self.sat_state, lit_to_pico(*lit));
+        match &mut self.up {
+            Some(up) => { 
+                up.pop();
+                self.cur_state.pop();
+            }
+            None => { 
+                self.cur_state.pop();
+            }
         }
-        picosat::add(&mut self.sat_state, 0);
     }
 
     /// Sets a literal in the SAT context
     pub fn decide(&mut self, lit: Literal) -> () {
-        self.up.decide(lit);
-        self.add_clause(&[lit])
+        match &mut self.up {
+            Some(up) => {
+                let res = up.decide(lit);
+                if res { 
+                    // TODO should check if the state is now satisfied
+                    let l = self.cur_state.len() - 1;
+                    self.cur_state[l] = SATState::Unknown;
+                } else {
+                    let l = self.cur_state.len() - 1;
+                    self.cur_state[l] = SATState::UNSAT;
+                }
+            },
+            None => {
+            }
+        }
     }
 
     /// True if the formula is UNSAT
     pub fn unsat(&mut self) -> bool {
-        let res = picosat::sat(&mut self.sat_state, 10);
-        return res == 20;
+        match self.top_state() {
+            SATState::UNSAT => true,
+            _ => false
+        }
     }
 
     /// Get the set of currently implied units
     pub fn get_implied_units(&mut self) -> PartialModel {
-        self.up.get_assgn().clone()
+        match self.up {
+            Some(ref up) => up.get_assgn().clone(),
+            None => panic!("")
+        }
     }
 }
 
@@ -458,7 +472,7 @@ impl<'a> SATSolver<'a> {
 //     assert!(v1);
 //     let v = up.decide(Literal::new(VarLabel::new(1), true));
 //     assert_eq!(v, true);
-//     up.backtrack();
+//     up.pop();
 //     let v = up.decide(Literal::new(VarLabel::new(1), false));
 //     assert_eq!(v, true);
 // }

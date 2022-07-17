@@ -324,7 +324,6 @@ mod test_bdd_manager {
 
             let itebdd = mgr.ite(cnf1, cnf2, mgr.false_ptr());
             let andbdd = mgr.and(cnf1, cnf2);
-            println!("bdd and: {}\nbdd ite: {}\n", mgr.to_string_debug(andbdd), mgr.to_string_debug(itebdd));
 
             andbdd == itebdd
         }
@@ -354,7 +353,7 @@ mod test_bdd_manager {
             let mut mgr = super::BddManager::new_default_order(c1.num_vars());
             let cnf1 = mgr.from_cnf(&c1);
             let cnf2 = mgr.from_cnf_topdown(&c1);
-            println!("bdd 1: {}, bdd 2: {}", mgr.to_string_debug(cnf1), mgr.to_string_debug(cnf2));
+            // println!("bdd 1: {}, bdd 2: {}", mgr.to_string_debug(cnf1), mgr.to_string_debug(cnf2));
             assert_eq!(cnf1, cnf2);
             TestResult::from_bool(cnf1 == cnf2)
         }

@@ -6,10 +6,10 @@ extern crate serde_json;
 use clap::Parser;
 use criterion::black_box;
 use rayon::prelude::*;
-use rsdd::{builder::{bdd_builder::BddManager, var_order::VarOrder, repr::builder_sdd::VTree}, repr::{cnf::Cnf, var_label::VarLabel}};
+use rsdd::{builder::{bdd_builder::{BddManager, BddWmc}, var_order::VarOrder, repr::builder_sdd::VTree}, repr::{cnf::Cnf, var_label::VarLabel}};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use std::collections::HashMap;
+use std::{collections::HashMap, iter::FromIterator};
 use std::fs;
 use std::{time::{Duration, Instant}};
 
@@ -44,10 +44,31 @@ struct BenchmarkEntry {
     time_in_secs: f64,
 }
 
-fn compile_topdown_nnnf(str: String, debug: bool) -> () {
+fn compile_topdown_nnf(str: String, debug: bool) -> () {
     let cnf = Cnf::from_file(str);
     let mut man = rsdd::builder::decision_nnf_builder::DecisionNNFBuilder::new(cnf.num_vars());
     let ddnnf = man.from_cnf_topdown(&VarOrder::linear_order(cnf.num_vars()), &cnf);
+}
+
+fn compile_topdown_nnf_sample(str: String, debug: bool) -> () {
+    let cnf = Cnf::from_file(str);
+    let mut man = rsdd::builder::decision_nnf_builder::DecisionNNFBuilder::new(cnf.num_vars());
+    let weight_map : HashMap<VarLabel, (f64, f64)> = HashMap::from_iter(
+        (0..cnf.num_vars()).map(|x| (VarLabel::new(x as u64), (0.5, 0.5))));
+    let wmc : BddWmc<f64> = BddWmc::new_with_default(0.0, 1.0, weight_map);
+    let order = &VarOrder::linear_order(cnf.num_vars());
+    let query_var = VarLabel::new_usize(10);
+
+    // let ddnnf = man.from_cnf_topdown_sample(&VarOrder::linear_order(cnf.num_vars()), &cnf, &wmc, 10);
+    let r = man.estimate_marginal(10, order, query_var, &wmc, &cnf);
+
+    let exact_ddnnf = man.from_cnf_topdown(order, &cnf);
+    let z = man.unsmsoothed_wmc(exact_ddnnf, &wmc);
+    let cond = man.condition(exact_ddnnf, query_var, true);
+    let p = man.unsmsoothed_wmc(cond, &wmc) * 0.5;
+
+    println!("result: {:?}, exact: {}, p: {p}, z: {z}", r, p / z);
+    // println!("result: {:?}", r, );
 }
 
 fn compile_sdd(str: String, debug: bool) -> () {
@@ -59,12 +80,16 @@ fn compile_sdd(str: String, debug: bool) -> () {
 }
 
 fn compile_bdd(str: String, debug: bool) -> () {
-    compile_sdd(str, debug);
+    use rsdd::builder::bdd_builder::*;
+    let cnf = Cnf::from_file(str);
+    let order : Vec<VarLabel> = (0..cnf.num_vars()).map(|x| VarLabel::new(x as u64)).collect();
+    let mut man = BddManager::new(VarOrder::linear_order(cnf.num_vars()));
+    let bdd = man.from_cnf(&cnf);
 }
 
 fn bench_cnf_bdd(cnf_str: String, debug: bool) -> Duration {
     let start = Instant::now();
-    compile_bdd(black_box(cnf_str), debug);
+    compile_topdown_nnf_sample(black_box(cnf_str), debug);
     start.elapsed()
 }
 
@@ -74,38 +99,40 @@ fn main() {
     rayon::ThreadPoolBuilder::new().num_threads(args.threads).build_global().unwrap();
 
     let cnf_strs = vec![
-        ("grid-50-10-1-q", String::from(include_str!("../cnf/50-10-1-q.cnf"))),
-        (
-            "bench-01",
-            String::from(include_str!("../cnf/bench-01.cnf")),
-        ),
-        (
-            "bench-02",
-            String::from(include_str!("../cnf/bench-02.cnf")),
-        ),
-        (
-            "bench-03",
-            String::from(include_str!("../cnf/bench-03.cnf")),
-        ),
+        // ("grid-50-10-1-q", String::from(include_str!("../cnf/50-10-1-q.cnf"))),
+        // ("tiny1", String::from(include_str!("../cnf/tiny1.cnf"))),
+        // ("tiny2", String::from(include_str!("../cnf/tiny2.cnf"))),
+        // (
+        //     "bench-01",
+        //     String::from(include_str!("../cnf/bench-01.cnf")),
+        // ),
+        // (
+        //     "bench-02",
+        //     String::from(include_str!("../cnf/bench-02.cnf")),
+        // ),
+        // (
+        //     "bench-03",
+        //     String::from(include_str!("../cnf/bench-03.cnf")),
+        // ),
         // ("php-4-6", String::from(include_str!("../cnf/php-4-6.cnf"))),
         // ("php-5-4", String::from(include_str!("../cnf/php-5-4.cnf"))),
         // ("php-12-14", String::from(include_str!("../cnf/php-12-14.cnf"))),
-        (
-            "rand-3-25-75-1",
-            String::from(include_str!("../cnf/rand-3-25-75-1.cnf")),
-        ),
-        (
-            "rand-3-25-100-1",
-            String::from(include_str!("../cnf/rand-3-25-100-1.cnf")),
-        ),
-        (
-            "rand-3-25-100-2",
-            String::from(include_str!("../cnf/rand-3-25-100-2.cnf")),
-        ),
-        (
-            "rand-3-25-100-3",
-            String::from(include_str!("../cnf/rand-3-25-100-3.cnf")),
-        ),
+        // (
+        //     "rand-3-25-75-1",
+        //     String::from(include_str!("../cnf/rand-3-25-75-1.cnf")),
+        // ),
+        // (
+        //     "rand-3-25-100-1",
+        //     String::from(include_str!("../cnf/rand-3-25-100-1.cnf")),
+        // ),
+        // (
+        //     "rand-3-25-100-2",
+        //     String::from(include_str!("../cnf/rand-3-25-100-2.cnf")),
+        // ),
+        // (
+        //     "rand-3-25-100-3",
+        //     String::from(include_str!("../cnf/rand-3-25-100-3.cnf")),
+        // ),
         // (
         //     "rand-3-37-75-1",
         //     String::from(include_str!("../cnf/rand-3-37-75-1.cnf")),
@@ -157,8 +184,9 @@ fn main() {
         //     String::from(include_str!("../cnf/rand-3-100-400-1.cnf")),
         // ),
         // ("s298", String::from(include_str!("../cnf/s298.cnf"))),
-        // ("grid-75-18-6-q", String::from(include_str!("../cnf/75-18-6-q.cnf"))),
+        ("grid-75-18-6-q", String::from(include_str!("../cnf/75-18-6-q.cnf"))),
         // ("grid-90-42-1-q", String::from(include_str!("../cnf/90-42-1-q.cnf"))),
+        // ("grid-90-16-2-q", String::from(include_str!("../cnf/90-16-2-q.cnf"))),
         // ("s344", String::from(include_str!("../cnf/s344.cnf"))),
         // ("c8-easier", String::from(include_str!("../cnf/c8-easier.cnf"))),
         // ("s444", String::from(include_str!("../cnf/s444.cnf"))),
