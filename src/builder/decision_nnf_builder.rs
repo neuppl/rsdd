@@ -627,43 +627,43 @@ fn test_dnnf() {
         println!("c2: {}", mgr.to_string_debug(c2));
 }
 
-#[test]
-fn test_dnnf_sample() {
-    let clauses = vec![
-        vec![
-            Literal::new(VarLabel::new(0), true),
-            Literal::new(VarLabel::new(1), true),
-            Literal::new(VarLabel::new(2), true),
-        ],
-        vec![
-            Literal::new(VarLabel::new(0), false),
-            Literal::new(VarLabel::new(1), true),
-            Literal::new(VarLabel::new(3), true),
-            Literal::new(VarLabel::new(6), false),
-        ],
-        vec![
-            Literal::new(VarLabel::new(1), false),
-            Literal::new(VarLabel::new(3), true),
-            Literal::new(VarLabel::new(4), false),
-            Literal::new(VarLabel::new(5), false),
-            Literal::new(VarLabel::new(6), false),
-        ]
-    ];
-    let cnf = Cnf::new(clauses);
-    let mut mgr = DecisionNNFBuilder::new(cnf.num_vars());
-    let weight_map : HashMap<VarLabel, (f64, f64)> = HashMap::from_iter(
-        (0..cnf.num_vars()).map(|x| (VarLabel::new(x as u64), (0.2, 0.8))));
-    let wmc : BddWmc<f64> = BddWmc::new_with_default(0.0, 1.0, weight_map);
-    let order = VarOrder::linear_order(cnf.num_vars());
+// #[test]
+// fn test_dnnf_sample() {
+//     let clauses = vec![
+//         vec![
+//             Literal::new(VarLabel::new(0), true),
+//             Literal::new(VarLabel::new(1), true),
+//             Literal::new(VarLabel::new(2), true),
+//         ],
+//         vec![
+//             Literal::new(VarLabel::new(0), false),
+//             Literal::new(VarLabel::new(1), true),
+//             Literal::new(VarLabel::new(3), true),
+//             Literal::new(VarLabel::new(6), false),
+//         ],
+//         vec![
+//             Literal::new(VarLabel::new(1), false),
+//             Literal::new(VarLabel::new(3), true),
+//             Literal::new(VarLabel::new(4), false),
+//             Literal::new(VarLabel::new(5), false),
+//             Literal::new(VarLabel::new(6), false),
+//         ]
+//     ];
+//     let cnf = Cnf::new(clauses);
+//     let mut mgr = DecisionNNFBuilder::new(cnf.num_vars());
+//     let weight_map : HashMap<VarLabel, (f64, f64)> = HashMap::from_iter(
+//         (0..cnf.num_vars()).map(|x| (VarLabel::new(x as u64), (0.2, 0.8))));
+//     let wmc : BddWmc<f64> = BddWmc::new_with_default(0.0, 1.0, weight_map);
+//     let order = VarOrder::linear_order(cnf.num_vars());
 
-    let p = mgr.estimate_marginal(1000, &order, VarLabel::new_usize(0), &wmc, &cnf);
+//     let p = mgr.estimate_marginal(1000, &order, VarLabel::new_usize(0), &wmc, &cnf);
 
-    println!("sample prob result: {p}");
-    assert!(false);
+//     println!("sample prob result: {p}");
+//     assert!(false);
 
     // let p = c2.iter().fold(0.0, |((_, w), acc)| {
     //     acc + w
     // });
 
     // println!("c2: {}", mgr.to_string_debug(c2));
-}
+// }
