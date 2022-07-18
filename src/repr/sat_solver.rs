@@ -2,9 +2,6 @@
 //! This SAT solver supports incremental solving via a push/pop interface
 
 
-use picorust::picosat;
-use picosat::PicoSAT;
-
 use super::{var_label::{Literal, VarLabel}, model::PartialModel, cnf::Cnf};
 
 type clause_idx = usize;

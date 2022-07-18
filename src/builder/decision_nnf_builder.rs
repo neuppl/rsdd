@@ -290,8 +290,6 @@ impl DecisionNNFBuilder {
         let cond = self.condition(bdd, lbl, true);
         let pos_weight = wmc.get_var_weight(lbl).1;
         let p = self.unsmsoothed_wmc(cond, wmc) * pos_weight;
-        // println!("ddnnf: {}", self.to_string_debug(bdd));
-        // println!("sampling var {:?}, p: {p}, z: {z}", lbl);
         if z > 0.0 {
             p / z
         } else {
@@ -441,7 +439,6 @@ impl DecisionNNFBuilder {
             }
             res.push((bdd, prob_p / prob_q));
         }
-
         res
     }
 

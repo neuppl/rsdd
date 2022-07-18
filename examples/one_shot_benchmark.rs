@@ -47,7 +47,11 @@ struct BenchmarkEntry {
 fn compile_topdown_nnf(str: String, debug: bool) -> () {
     let cnf = Cnf::from_file(str);
     let mut man = rsdd::builder::decision_nnf_builder::DecisionNNFBuilder::new(cnf.num_vars());
-    let ddnnf = man.from_cnf_topdown(&VarOrder::linear_order(cnf.num_vars()), &cnf);
+    let order = VarOrder::linear_order(cnf.num_vars());
+    // let order = cnf.force_order();
+    let ddnnf = man.from_cnf_topdown(&order, &cnf);
+
+    println!("size: {:?}", man.count_nodes(ddnnf));
 }
 
 fn compile_topdown_nnf_sample(str: String, debug: bool) -> () {
@@ -89,7 +93,8 @@ fn compile_bdd(str: String, debug: bool) -> () {
 
 fn bench_cnf_bdd(cnf_str: String, debug: bool) -> Duration {
     let start = Instant::now();
-    compile_topdown_nnf_sample(black_box(cnf_str), debug);
+    // compile_topdown_nnf_sample(black_box(cnf_str), debug);
+    compile_topdown_nnf(black_box(cnf_str), debug);
     start.elapsed()
 }
 
@@ -184,7 +189,7 @@ fn main() {
         //     String::from(include_str!("../cnf/rand-3-100-400-1.cnf")),
         // ),
         // ("s298", String::from(include_str!("../cnf/s298.cnf"))),
-        ("grid-75-18-6-q", String::from(include_str!("../cnf/75-18-6-q.cnf"))),
+        // ("grid-75-18-6-q", String::from(include_str!("../cnf/75-18-6-q.cnf"))),
         // ("grid-90-42-1-q", String::from(include_str!("../cnf/90-42-1-q.cnf"))),
         // ("grid-90-16-2-q", String::from(include_str!("../cnf/90-16-2-q.cnf"))),
         // ("s344", String::from(include_str!("../cnf/s344.cnf"))),
@@ -197,7 +202,7 @@ fn main() {
         //     "c8-very-easy",
         //     String::from(include_str!("../cnf/c8-very-easy.cnf")),
         // ),
-        // ("log1", String::from(include_str!("../cnf/log1.cnf"))),
+        ("log1", String::from(include_str!("../cnf/log1.cnf"))),
         // ("c8", String::from(include_str!("../cnf/c8.cnf"))),
     ];
 

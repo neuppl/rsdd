@@ -37,8 +37,6 @@ quickcheck = "1.0.3"
 time-test = "0.2.2"
 serde = { version = "1.0", features = ["derive"] }
 clap = { version = "3.2.5", features = ["derive"] }
-typed-arena = "2.0.1"
-picorust = { git = "https://github.com/lambdaxymox/picorust" }
 
 [profile.release]
 debug = true

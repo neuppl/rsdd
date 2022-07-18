@@ -3,6 +3,7 @@
 use crate::builder::var_order::VarOrder;
 use im::Vector;
 use rand;
+use rand::prelude::SliceRandom;
 use rand::rngs::ThreadRng;
 use rand::Rng;
 use crate::repr::var_label::{Literal, VarLabel};
@@ -329,8 +330,8 @@ impl Cnf {
         // map from position -> label (i.e., first element is the first in the
         // order)
         let mut lbl_to_pos: Vec<usize> = (0..(self.num_vars)).collect();
-        // let mut rng = thread_rng();
-        // rng.shuffle(&mut lbl_to_pos);
+        // let mut rng = rand::thread_rng();
+        // lbl_to_pos.shuffle(&mut rng);
         // perform 100 iterations of force-update
         let mut cur_span: f64 = self.average_span(&lbl_to_pos);
         let mut prev_span;
