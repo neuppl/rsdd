@@ -1,45 +1,14 @@
 //! Top-down decision DNNF compiler and manipulator
 
-use std::{collections::HashMap, iter::FromIterator};
+use std::collections::HashMap;
 use num::Num;
+use rand::Rng;
 
-use crate::{repr::{var_label::{VarLabel, Literal}, cnf::*, model::PartialModel}, backing_store::{bdd_table_robinhood::BddTable}, builder::repr::builder_bdd::PointerType};
+use crate::{repr::{var_label::{VarLabel, Literal}, cnf::*}, backing_store::{bdd_table_robinhood::BddTable}, builder::repr::builder_bdd::PointerType};
 
 use super::{repr::builder_bdd::{BddPtr, BddNode, Bdd}, var_order::VarOrder, bdd_builder::BddWmc};
 
 use crate::repr::sat_solver::SATSolver;
-
-const THRESHOLD: usize = 1000;
-
-#[derive(Copy, Clone, Debug)]
-enum SampledResult {
-    Bdd(BddPtr),
-    SampledLit(Literal, f64) // the sampled value and the probability of that sample
-}
-
-impl SampledResult {
-    fn is_sampled(&self) -> bool {
-        match self {
-            &SampledResult::SampledLit(_, _) => true,
-            _ => false
-        }
-    }
-
-    fn unwrap_sample(&self) -> (Literal, f64) {
-        match self {
-            &SampledResult::SampledLit(l, p) => (l, p),
-            _ => panic!()
-        }
-    }
-
-
-    fn unwrap_bdd(&self) -> BddPtr {
-        match self {
-            &SampledResult::Bdd(b) => b,
-            _ => panic!()
-        }
-    }
-}
 
 #[derive(Clone)]
 pub struct DecisionNNFBuilder {
@@ -181,7 +150,7 @@ impl DecisionNNFBuilder {
         sat: &mut SATSolver,
         level: usize,
         order: &VarOrder,
-        hasher: &CnfHasher,
+        hasher: &mut CnfHasher,
         cache: &mut HashMap<HashedCNF, BddPtr>,
     ) -> BddPtr {
         // check for base case
@@ -207,9 +176,11 @@ impl DecisionNNFBuilder {
         }
 
         // recurse on both values of cur_v
-        sat.push();
+        sat.push(); 
+        hasher.push();
         sat.decide(Literal::new(cur_v, true));
-        let unsat = sat.unsat();
+        hasher.decide(Literal::new(cur_v, true));
+        let unsat = sat.unsat_unit();
         let high_bdd = if !unsat {
             let new_assgn = sat.get_implied_units();
 
@@ -226,10 +197,13 @@ impl DecisionNNFBuilder {
             self.false_ptr()
         };
         sat.pop();
+        hasher.pop();
 
-        sat.push();
+        sat.push(); 
+        hasher.push();
         sat.decide(Literal::new(cur_v, false));
-        let unsat = sat.unsat();
+        hasher.decide(Literal::new(cur_v, false));
+        let unsat = sat.unsat_unit();
         let low_bdd = if !unsat {
             let new_assgn = sat.get_implied_units();
 
@@ -245,7 +219,8 @@ impl DecisionNNFBuilder {
         } else {
             self.false_ptr()
         };
-        sat.pop();
+        sat.pop(); 
+        hasher.pop();
 
 
         let r = if high_bdd == low_bdd {
@@ -258,13 +233,15 @@ impl DecisionNNFBuilder {
         r
     }
 
+    /// compile a decision DNNF top-down from a CNF with the searching order
+    /// specified by `order`
     pub fn from_cnf_topdown(&mut self, order: &VarOrder, cnf: &Cnf) -> BddPtr {
         let mut sat = SATSolver::new(&cnf);
-        if sat.unsat() {
+        if sat.unsat_unit() {
             return self.false_ptr()
         }
 
-        let mut r = self.topdown_h(cnf, &mut sat, 0, order, &CnfHasher::new(cnf), &mut HashMap::new());
+        let mut r = self.topdown_h(cnf, &mut sat, 0, order, &mut CnfHasher::new(cnf), &mut HashMap::new());
 
         // conjoin in any initially implied literals
         for l in sat.get_implied_units().assignment_iter() {
@@ -278,6 +255,7 @@ impl DecisionNNFBuilder {
         r
     }
 
+    /// get the top variable in a ptr
     pub fn topvar(&self, ptr: BddPtr) -> VarLabel {
         self.deref_bdd(ptr).into_node().var
     }
@@ -297,147 +275,22 @@ impl DecisionNNFBuilder {
         }
     }
 
-    /// Returns A BDD that represents `cnf` conditioned on all 
-    ///     variables set in the current top model
-    /// We need both of these BDDs for sound CNF caching
-    /// `cache`: a map from hashed CNFs to their compiled BDDs
-    fn topdown_sample_h(
-        &mut self,
-        cnf: &Cnf,
-        sat: &mut SATSolver,
-        level: usize,
-        order: &VarOrder,
-        hasher: &CnfHasher,
-        wmc: &BddWmc<f64>,
-        cache: &mut HashMap<HashedCNF, BddPtr>,
-    ) -> SampledResult {
-        use SampledResult::*;
-        // check for base case
-        let assgn = sat.get_implied_units();
-        if level >= cnf.num_vars() || cnf.is_sat_partial(&assgn) {
-            return SampledResult::Bdd(self.true_ptr());
-        }
-        let cur_v = order.var_at_pos(level);
-
-        // check if this literal is currently set in unit propagation; if 
-        // it is, skip it
-        if assgn.is_set(cur_v) {
-            return self.topdown_sample_h(cnf, sat, level+1, order, hasher, wmc, cache);
-        }
-
-        // check cache
-        let hashed = hasher.hash(&assgn);
-        match cache.get(&hashed.clone()) {
-            None => (),
-            Some(v) => {
-                return Bdd(*v);
-            }
-        }
-
-        fn decide(mgr: &mut DecisionNNFBuilder, 
-                 cnf: &Cnf,
-                 sat: &mut SATSolver,
-                 level: usize,
-                 order: &VarOrder,
-                 hasher: &CnfHasher,
-                 cur_v: VarLabel,
-                 assgn: &PartialModel,
-                 wmc: &BddWmc<f64>,
-                 cache: &mut HashMap<HashedCNF, BddPtr>,
-                 polarity: bool) -> SampledResult {
-            // recurse on both values of cur_v
-            sat.push();
-            sat.decide(Literal::new(cur_v, polarity));
-            let unsat = sat.unsat();
-            if unsat {
-                sat.pop();
-                return SampledResult::Bdd(mgr.false_ptr());
-            } 
-
-            let new_assgn = sat.get_implied_units();
-            let r = mgr.topdown_sample_h(cnf, sat, level + 1, order, hasher, wmc, cache);
-            sat.pop();
-            match r {
-                Bdd(sub) => {
-                    // check if size threshold exceeded; if so, sample
-                    if mgr.count_nodes(sub) > THRESHOLD {
-                        let mut rand = rand::thread_rng();
-                        let topvar = mgr.topvar(sub);
-                        let p = mgr.prob_true(wmc, topvar, sub);
-                        let v = rand::Rng::gen_bool(&mut rand, p);
-                        // println!("sampled value {:?} = {v} with probability {p}", topvar);
-                        return SampledLit(Literal::new(topvar, v), if v { p } else {1.0 - p });
-                    }
-
-                    let implied_lits = new_assgn.get_vec().iter().enumerate().zip(assgn.get_vec()).filter_map(|((idx, new), prev)| {
-                    if new != prev && idx != cur_v.value_usize() {
-                        Some(Literal::new(VarLabel::new_usize(idx), new.unwrap()))
-                    } else {
-                        None
-                    }});
-                    Bdd(mgr.conjoin_implied(implied_lits, sub))
-                }, 
-                SampledLit(_, _) => r
-            }
-        }
-
-        let high_r = decide(self, cnf, sat, level, order, hasher, cur_v, &assgn, wmc, cache, true);
-        let high_bdd = match high_r {
-            Bdd(b) => b,
-            _ => return high_r 
-        };
-        let low_r = decide(self, cnf, sat, level, order, hasher, cur_v, &assgn, wmc, cache, false);
-        let low_bdd = match low_r {
-            Bdd(b) => b,
-            _ => return low_r 
-        };
-
-        let r = if high_bdd == low_bdd {
-            high_bdd
-        } else {
-            let bdd = BddNode::new(low_bdd, high_bdd, cur_v);
-            self.get_or_insert(bdd)
-        };
-        cache.insert(hashed, r);
-        Bdd(r)
-    }
-
     /// Generates `n` top-down samples
     /// Returns a vector of results that are pairs (BddPtr, importance weight)
     pub fn from_cnf_topdown_sample(&mut self, order: &VarOrder, cnf: &Cnf, wmc: &BddWmc<f64>, n: usize) -> Vec<(BddPtr, f64)> {
         let cache = &mut HashMap::new();
-        let hasher = CnfHasher::new(cnf);
+        let mut hasher = CnfHasher::new(cnf);
         let mut res = Vec::new();
+        let mut rng = rand::thread_rng();
+        let num_samples = 25;
 
         for _ in 0..n {
             let mut sat = SATSolver::new(&cnf);
-            // let cache = &mut HashMap::new();
-            let mut r = self.topdown_sample_h(cnf, &mut sat, 0, order, &hasher, wmc, cache);
-            let mut prob_q = 1.0; // proposal probability
-            let mut prob_p = 1.0; // unnormalized probability
-            let mut n = 1;
-            while r.is_sampled() {
-                n = n + 1;
-                // let cache = &mut HashMap::new();
-                let (sampled_lit, prob) = r.unwrap_sample();
-                prob_q = prob_q * prob;
-                prob_p = prob_p * (if sampled_lit.get_polarity() { wmc.get_var_weight(sampled_lit.get_label()).1 } else { wmc.get_var_weight(sampled_lit.get_label()).0 });
-                sat.decide(sampled_lit);
-                r = self.topdown_sample_h(cnf, &mut sat, 0, order, &hasher, wmc, cache);
+            for i in 100..num_samples {
+                sat.decide(Literal::new(VarLabel::new_usize(i), rng.gen_bool(0.5)));
             }
-            let mut bdd = r.unwrap_bdd();
-            // println!("prob p: {}, prob q: {}, # samples: {n}, bdd: {}",  prob_p, prob_q, self.to_string_debug(bdd));
-
-            // conjoin in any initially implied literals
-            for l in sat.get_implied_units().assignment_iter() {
-                let node = if l.get_polarity() { 
-                    BddNode::new(self.false_ptr(), bdd, l.get_label())
-                } else {
-                    BddNode::new(bdd, self.false_ptr(), l.get_label())
-                };
-                bdd = self.get_or_insert(node);
-            }
-            res.push((bdd, prob_p / prob_q));
+            let mut r = self.topdown_h(cnf, &mut sat, 0, order, &mut hasher, cache);
+            res.push((r, 0.5));
         }
         res
     }
@@ -507,6 +360,7 @@ impl DecisionNNFBuilder {
         }
     }
 
+    /// count the number of nodes in the decision DNNF
     pub fn count_nodes(&mut self, ptr: BddPtr) -> usize {
         let s = self.unique_label_nodes(ptr, 0);
         self.clear_scratch(ptr);
@@ -588,21 +442,6 @@ impl DecisionNNFBuilder {
             res
         }
     }
-
-    pub fn estimate_marginal(&mut self, n: usize, order: &VarOrder, query_var: VarLabel, wmc: &BddWmc<f64>, cnf: &Cnf) -> f64 {
-        let c2 = self.from_cnf_topdown_sample(order, &cnf, &wmc, n);
-
-        let z = c2.iter().fold(0.0, |acc, (_, w)| {
-            acc + w
-        });
-
-        let p = c2.iter().fold(0.0, |acc, (bdd, w)| {
-            let p_bdd = self.prob_true(&wmc, query_var, *bdd);
-            acc + (w * p_bdd)
-        });
-
-        return p / z;
-    }
 }
 
 
@@ -623,44 +462,3 @@ fn test_dnnf() {
         let c2 = mgr.from_cnf_topdown(&VarOrder::linear_order(cnf.num_vars()), &cnf);
         println!("c2: {}", mgr.to_string_debug(c2));
 }
-
-// #[test]
-// fn test_dnnf_sample() {
-//     let clauses = vec![
-//         vec![
-//             Literal::new(VarLabel::new(0), true),
-//             Literal::new(VarLabel::new(1), true),
-//             Literal::new(VarLabel::new(2), true),
-//         ],
-//         vec![
-//             Literal::new(VarLabel::new(0), false),
-//             Literal::new(VarLabel::new(1), true),
-//             Literal::new(VarLabel::new(3), true),
-//             Literal::new(VarLabel::new(6), false),
-//         ],
-//         vec![
-//             Literal::new(VarLabel::new(1), false),
-//             Literal::new(VarLabel::new(3), true),
-//             Literal::new(VarLabel::new(4), false),
-//             Literal::new(VarLabel::new(5), false),
-//             Literal::new(VarLabel::new(6), false),
-//         ]
-//     ];
-//     let cnf = Cnf::new(clauses);
-//     let mut mgr = DecisionNNFBuilder::new(cnf.num_vars());
-//     let weight_map : HashMap<VarLabel, (f64, f64)> = HashMap::from_iter(
-//         (0..cnf.num_vars()).map(|x| (VarLabel::new(x as u64), (0.2, 0.8))));
-//     let wmc : BddWmc<f64> = BddWmc::new_with_default(0.0, 1.0, weight_map);
-//     let order = VarOrder::linear_order(cnf.num_vars());
-
-//     let p = mgr.estimate_marginal(1000, &order, VarLabel::new_usize(0), &wmc, &cnf);
-
-//     println!("sample prob result: {p}");
-//     assert!(false);
-
-    // let p = c2.iter().fold(0.0, |((_, w), acc)| {
-    //     acc + w
-    // });
-
-    // println!("c2: {}", mgr.to_string_debug(c2));
-// }

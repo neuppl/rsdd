@@ -1257,7 +1257,7 @@ impl BddManager {
         // recurse on both values of cur_v
         sat.push();
         sat.decide(Literal::new(cur_v, true));
-        let unsat = sat.unsat();
+        let unsat = sat.unsat_unit();
         let high_bdd = if !unsat {
             let new_assgn = sat.get_implied_units();
             let mut lit_cube = self.true_ptr();
@@ -1285,7 +1285,7 @@ impl BddManager {
         sat.pop();
         sat.push();
         sat.decide(Literal::new(cur_v, false));
-        let unsat = sat.unsat();
+        let unsat = sat.unsat_unit();
         let low_bdd = if !unsat {
             let new_assgn = sat.get_implied_units();
             let implied_lits = new_assgn.get_vec().iter().enumerate().zip(assgn.get_vec()).filter_map(|((idx, new), prev)| {
@@ -1326,7 +1326,7 @@ impl BddManager {
         //     None => return self.false_ptr(),
         // };
         let mut sat = SATSolver::new(&cnf);
-        if sat.unsat() {
+        if sat.unsat_unit() {
             return self.false_ptr()
         }
 

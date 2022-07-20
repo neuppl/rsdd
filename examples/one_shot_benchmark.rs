@@ -54,27 +54,6 @@ fn compile_topdown_nnf(str: String, debug: bool) -> () {
     println!("size: {:?}", man.count_nodes(ddnnf));
 }
 
-fn compile_topdown_nnf_sample(str: String, debug: bool) -> () {
-    let cnf = Cnf::from_file(str);
-    let mut man = rsdd::builder::decision_nnf_builder::DecisionNNFBuilder::new(cnf.num_vars());
-    let weight_map : HashMap<VarLabel, (f64, f64)> = HashMap::from_iter(
-        (0..cnf.num_vars()).map(|x| (VarLabel::new(x as u64), (0.5, 0.5))));
-    let wmc : BddWmc<f64> = BddWmc::new_with_default(0.0, 1.0, weight_map);
-    let order = &VarOrder::linear_order(cnf.num_vars());
-    let query_var = VarLabel::new_usize(10);
-
-    // let ddnnf = man.from_cnf_topdown_sample(&VarOrder::linear_order(cnf.num_vars()), &cnf, &wmc, 10);
-    let r = man.estimate_marginal(10, order, query_var, &wmc, &cnf);
-
-    let exact_ddnnf = man.from_cnf_topdown(order, &cnf);
-    let z = man.unsmsoothed_wmc(exact_ddnnf, &wmc);
-    let cond = man.condition(exact_ddnnf, query_var, true);
-    let p = man.unsmsoothed_wmc(cond, &wmc) * 0.5;
-
-    println!("result: {:?}, exact: {}, p: {p}, z: {z}", r, p / z);
-    // println!("result: {:?}", r, );
-}
-
 fn compile_sdd(str: String, debug: bool) -> () {
     use rsdd::builder::sdd_builder::*;
     let cnf = Cnf::from_file(str);
@@ -93,8 +72,8 @@ fn compile_bdd(str: String, debug: bool) -> () {
 
 fn bench_cnf_bdd(cnf_str: String, debug: bool) -> Duration {
     let start = Instant::now();
-    // compile_topdown_nnf_sample(black_box(cnf_str), debug);
     compile_topdown_nnf(black_box(cnf_str), debug);
+    // compile_topdown_nnf_sample(black_box(cnf_str), debug);
     start.elapsed()
 }
 

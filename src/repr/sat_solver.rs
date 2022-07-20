@@ -304,11 +304,11 @@ impl<'a> SATSolver<'a> {
     pub fn new(cnf: &'a Cnf) -> SATSolver<'a> {
         let up = UnitPropagate::new(cnf);
         let state = if up.is_some() { 
-            // if cnf.is_sat_partial(up.unwrap().get_assgn()) {
-                // SATState::SAT
-            // } else {
+            if cnf.is_sat_partial(up.as_ref().unwrap().get_assgn()) {
+                SATState::SAT
+            } else {
                 SATState::Unknown
-            // }
+            }
         } else { SATState::UNSAT };
         SATSolver { up, cur_state: vec![state] }
     }
@@ -368,8 +368,9 @@ impl<'a> SATSolver<'a> {
         }
     }
 
-    /// True if the formula is UNSAT
-    pub fn unsat(&mut self) -> bool {
+    /// True if the formula is UNSAT according to the current state of the
+    /// decided units
+    pub fn unsat_unit(&mut self) -> bool {
         match self.top_state() {
             SATState::UNSAT => true,
             _ => false

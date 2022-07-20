@@ -8,7 +8,7 @@ use rand::rngs::ThreadRng;
 use rand::Rng;
 use crate::repr::var_label::{Literal, VarLabel};
 use std::cmp::{max, min};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 extern crate quickcheck;
 use self::quickcheck::{Arbitrary, Gen};
 use crate::repr::model::PartialModel;
@@ -46,24 +46,69 @@ pub struct HashedCNF {
 /// Then, if we were to hash this CNF with the partial model (a = T), would 
 /// get the value 7
 pub struct CnfHasher {
-    weighted_cnf: Vec<Vec<(usize, Literal)>>
+    weighted_cnf: Vec<Vec<(usize, Literal)>>,
+    /// state[x] contains a list of unsatisfied clauses in the CNF (indexed into weighted_cnf)
+    state: Vec<HashSet<usize>>,
+    /// pos_lits[l] contains the list of indexes of clauses that contain the positive literal l
+    pos_lits: Vec<Vec<usize>>, 
+    /// neg_lits[l] contains the list of indexes of clauses that contain the negative literal l
+    neg_lits: Vec<Vec<usize>>, 
 }
 
 impl CnfHasher {
     pub fn new(cnf: &Cnf) -> CnfHasher {
         let mut primes = primal::Primes::all();
-        CnfHasher { weighted_cnf: cnf.clauses.iter().map({|clause|
+        let weighted_cnf = cnf.clauses.iter().map({|clause|
             clause.iter().map(|lit| {
                 (primes.next().unwrap(), *lit)
+            }).collect()}).collect();
+
+        let sat_clauses : HashSet<usize> = cnf.clauses.iter().enumerate().filter_map({|(clause_idx, clause)| 
+            if clause.len() > 1 { Some(clause_idx) } else { None } // ignore units
+        }).collect();
+
+        let pos_lits : Vec<Vec<usize>> = (0..cnf.num_vars()).map(|lit_idx| {
+            cnf.clauses.iter().enumerate().filter_map(|(clause_idx, clause)| {
+                if clause.contains(&Literal::new(VarLabel::new_usize(lit_idx), true)) { Some(clause_idx) } else { None } 
             }).collect()
-        }).collect()}
+        }).collect();
+
+        let neg_lits : Vec<Vec<usize>> = (0..cnf.num_vars()).map(|lit_idx| {
+            cnf.clauses.iter().enumerate().filter_map(|(clause_idx, clause)| {
+                if clause.contains(&Literal::new(VarLabel::new_usize(lit_idx), false)) { Some(clause_idx) } else { None } 
+            }).collect()
+        }).collect();
+
+        CnfHasher { weighted_cnf, state: vec![sat_clauses], pos_lits, neg_lits } 
+    }
+
+    pub fn decide(&mut self, lit: Literal) -> () {
+        if lit.get_polarity() {
+            for clause_idx in self.pos_lits[lit.get_label().value_usize()].iter() {
+                self.state.last_mut().unwrap().remove(clause_idx);
+            }
+        } else {
+            for clause_idx in self.neg_lits[lit.get_label().value_usize()].iter() {
+                self.state.last_mut().unwrap().remove(clause_idx);
+            }
+        }
+    }
+
+    pub fn push(&mut self) -> () {
+        let n = self.state.last().unwrap().clone();
+        self.state.push(n);
+    }
+
+    pub fn pop(&mut self) -> () {
+        self.state.pop();
     }
 
     pub fn hash(&self, m: &PartialModel) -> HashedCNF {
         let mut v : [u128; NUM_PRIMES] = [1; NUM_PRIMES];
-        'outer: for clause in self.weighted_cnf.iter() {
+        'outer: for clause_idx in self.state.last().unwrap().iter() {
             let mut cur_clause_v : u128 = 1;
-            for (ref weight, ref lit) in clause.iter() {
+            let cur_clause = &self.weighted_cnf[*clause_idx];
+            for (ref weight, ref lit) in cur_clause.iter() {
                 if m.lit_implied(*lit) {
                     // move onto the next clause without updating the
                     // accumulator
