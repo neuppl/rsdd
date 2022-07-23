@@ -44,8 +44,8 @@ impl<T: Num + Clone + Debug + Copy> SddWmc<T> {
     // Set up the store of BddWmc structs given the vtree
     pub fn new(zero: T, one: T, vtree: VTree) -> SddWmc<T> {
         let mut wmc = SddWmc {
-            zero: zero,
-            one: one,
+            zero,
+            one,
             wmc_structs: Vec::new(),
         };
 
@@ -184,8 +184,8 @@ impl<'a> SddManager {
             tbl: SddTable::new(&vtree),
             stats: SddStats::new(),
             parent_ptr: into_parent_ptr_vec(&vtree),
-            vtree: vtree,
-            app_cache: app_cache,
+            vtree,
+            app_cache,
         };
 
         return m;
@@ -450,22 +450,6 @@ impl<'a> SddManager {
                 r.push((*p1, self.and_rec(s1, s2)));
                 continue;
             }
-
-            // check for a negated equal prime
-            // let eq_neg = inner_v.iter().find(|(ref p2, ref _s2)| self.sdd_eq(*p1, p2.neg()));
-            // if eq_neg.is_some() {
-            //     // iterate but skip prime conjunction
-            //     for &(ref p2, ref s2) in inner_v.iter() {
-            //         if self.sdd_eq(*p1, p2.neg()) {
-            //             // skip this one; we know these primes are false when conjoined
-            //             continue;
-            //         }
-            //         let s2 = if b.is_compl() { s2.neg() } else { *s2 };
-            //         let s = self.and_rec(s1, s2);
-            //         r.push((*p1, s));
-            //     }
-            //     continue;
-            // }
 
             // no special case
             for &(ref p2, ref s2) in inner_v.iter() {

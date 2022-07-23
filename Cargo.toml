@@ -4,23 +4,6 @@ version = "0.1.0"
 edition = "2018"
 authors = ["Steven Holtzen <sholtzen@gmail.com>"]
 
-[lib]
-name = "rsdd"
-path = "src/lib.rs"
-crate-type = ["staticlib", "rlib", "dylib"]
-
-[build]
-rustflags = ["-C", "link-args=-Wl,-undefined,dynamic_lookup,-export-dynamic"]
-
-[dev-dependencies]
-criterion = "0.3"
-rayon = "1.5.3"
-serde_json = "1.0.81"
-
-[[bench]]
-name = "rsdd_benchmark"
-harness = false
-
 
 [dependencies]
 fnv = "1.0.3"
@@ -36,7 +19,35 @@ libc = "0.2"
 quickcheck = "1.0.3"
 time-test = "0.2.2"
 serde = { version = "1.0", features = ["derive"] }
-clap = { version = "3.2.5", features = ["derive"] }
+clap = { version = "3.2.14", features = ["derive"] }
+criterion = "0.3"
+rayon = "1.5.3"
+serde_json = "1.0.81"
+rsgm = { git = "https://github.com/SHoltzen/rsgm" }
+
+
+[lib]
+name = "rsdd"
+path = "src/lib.rs"
+crate-type = ["staticlib", "rlib", "dylib"]
+
+
+[build]
+rustflags = ["-C", "link-args=-Wl,-undefined,dynamic_lookup,-export-dynamic"]
+
+
+[[bench]]
+name = "rsdd_benchmark"
+harness = false
 
 [profile.release]
 debug = true
+
+[[bin]]
+name = "one_shot_benchmark"
+path = "bin/one_shot_benchmark.rs"
+
+[[bin]]
+name = "bayesian_network_compiler"
+path = "bin/bayesian_network_compiler.rs"
+

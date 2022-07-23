@@ -68,6 +68,10 @@ impl Literal {
     pub fn implies_false(&self, other: &Literal) -> bool {
         self.get_label() == other.get_label() && self.get_polarity() != other.get_polarity()
     }
+
+    pub fn negated(&self) -> Literal {
+        Literal::new(self.get_label(), !self.get_polarity())
+    }
 }
 
 impl fmt::Debug for Literal {

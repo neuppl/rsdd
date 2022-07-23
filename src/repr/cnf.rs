@@ -117,7 +117,8 @@ impl CnfHasher {
                     // skip this literal and move onto the next one
                     continue; 
                 } else {
-                    cur_clause_v = cur_clause_v * (*weight as u128);
+                    // cur_clause_v = cur_clause_v * (*weight as u128);
+                    cur_clause_v = cur_clause_v.wrapping_mul(*weight as u128);
                 }
             }
             for i in 0..NUM_PRIMES {
