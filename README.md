@@ -13,7 +13,7 @@ data structures.
 
 To add this in your rust project, use:
 
-```
+```toml
 [dependencies]
 rsdd = { git = "https://github.com/SHoltzen/rsdd" }
 ```
@@ -37,7 +37,7 @@ project. The goal is to prove that, for the logical variables `v1`, `v2`, and
 `v3`, it holds that `exists v2. v1 && v2 && v3 == v1 && v3`. We can prove this
 using BDDs in the following way:
 
-```
+```rust
 let mut man = BddManager::new_default_order(3); // create a new manager
 let v1 = man.var(VarLabel::new(0), true);       // initialize v0 to be true
 let v2 = man.var(VarLabel::new(1), true);
