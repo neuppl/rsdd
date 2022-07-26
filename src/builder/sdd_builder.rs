@@ -1,6 +1,7 @@
 //! The main implementation of the SDD manager, the primary way of interacting
 //! with SDDs.
 
+use crate::builder::var_order::VarOrder;
 use crate::{
     backing_store::sdd_table::*,
     builder::cache::lru::*,
@@ -693,6 +694,8 @@ impl<'a> SddManager {
 
     pub fn from_cnf(&mut self, cnf: &Cnf) -> SddPtr {
         let mut cvec: Vec<SddPtr> = Vec::with_capacity(cnf.clauses().len());
+        // let o : Vec<VarLabel> = self.vtree.iter in_order_iter().collect();
+        // let order = VarOrder::new(o);
         for lit_vec in cnf.clauses().iter() {
             assert!(lit_vec.len() > 0, "empty cnf");
             let (vlabel, val) = (lit_vec[0].get_label(), lit_vec[0].get_polarity());

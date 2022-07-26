@@ -7,6 +7,7 @@ use crate::repr::sat_solver::SATSolver;
 use crate::{
     backing_store::bdd_table_robinhood::BddTable, backing_store::BackingCacheStats,
     builder::cache::bdd_app::*, builder::repr::builder_bdd::*, builder::var_order::VarOrder, repr,
+    builder::dtree,
     repr::logical_expr::LogicalExpr, repr::model, repr::var_label::Literal,
     repr::cnf::*,
     repr::var_label::VarLabel,
@@ -1011,17 +1012,6 @@ impl BddManager {
         }
     }
 
-    /// Draws a sample from the models of the BDD according to the distribution specified by `wmc`
-    pub fn sample(&self, ptr: BddPtr, wmc: &BddWmc<f64>) -> Assignment {
-        todo!()
-        // let mut rng = rand::thread_rng();
-        // let mut r = vec![false; self.num_vars()];
-        // let mut cache: HashMap<BddPtr, f64> = HashMap::new();
-        // let _z = self.cached_wmc(ptr, &wmc, &mut cache);
-        // self.sample_h(ptr, &mut rng, wmc, &mut r, &cache, 0);
-        // return Assignment::new(r);
-    }
-
     pub fn from_cnf_with_assignments(&mut self, cnf: &Cnf, assgn: &model::PartialModel) -> BddPtr {
         let clauses = cnf.clauses();
         if clauses.is_empty() {
@@ -1063,8 +1053,28 @@ impl BddManager {
         return ptr;
     }
 
+    pub fn from_dtree(&mut self, dtree: &dtree::DTree) -> BddPtr {
+        use dtree::DTree;
+        match &dtree { 
+            &DTree::Leaf{ v: c, cutset } => {
+                // compile the clause
+                c.iter().fold(self.false_ptr(), |acc, i| { 
+                    let v = self.var(i.get_label(), i.get_polarity());
+                    self.or(acc, v) 
+                })
+            },
+            &DTree::Node{ ref l, ref r, cutset } => {
+                let l = self.from_dtree(l);
+                let r = self.from_dtree(r);
+                self.and(l, r)
+            }
+        }
+    }
+
     /// Compile a BDD from a CNF
     pub fn from_cnf(&mut self, cnf: &Cnf) -> BddPtr {
+        let dtree = dtree::DTree::from_cnf(cnf, &self.order);
+        return self.from_dtree(&dtree);
         let mut cvec: Vec<BddPtr> = Vec::with_capacity(cnf.clauses().len());
         if cnf.clauses().is_empty() {
             return BddPtr::true_node();
@@ -1139,6 +1149,7 @@ impl BddManager {
         } else {
             return r.unwrap();
         }
+   
     }
 
     pub fn print_stats(&self) -> () {

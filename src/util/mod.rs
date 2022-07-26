@@ -1,6 +1,7 @@
 //! Useful utilities and generic data structures used throughout the library
 
 pub mod btree;
+pub mod hypergraph;
 
 use std::ptr;
 

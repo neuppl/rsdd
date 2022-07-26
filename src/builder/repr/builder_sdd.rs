@@ -179,3 +179,12 @@ pub enum Sdd {
 }
 
 pub type VTree = BTree<(), Vec<VarLabel>>;
+
+impl VTree {
+    pub fn new_node(l: Box<VTree>, r: Box<VTree>) -> VTree {
+        VTree::Node((), l, r)
+    }
+    pub fn new_leaf(v: Vec<VarLabel>) -> VTree {
+        VTree::Leaf(v)
+    }
+}

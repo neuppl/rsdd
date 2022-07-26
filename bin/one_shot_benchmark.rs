@@ -6,7 +6,7 @@ extern crate serde_json;
 use clap::Parser;
 use criterion::black_box;
 use rayon::prelude::*;
-use rsdd::{builder::{bdd_builder::{BddManager, BddWmc}, var_order::VarOrder, repr::builder_sdd::VTree}, repr::{cnf::Cnf, var_label::VarLabel}};
+use rsdd::{builder::{bdd_builder::{BddManager, BddWmc}, var_order::VarOrder, repr::builder_sdd::VTree, dtree::DTree}, repr::{cnf::Cnf, var_label::VarLabel}};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::{collections::HashMap, iter::FromIterator};
@@ -58,22 +58,26 @@ fn compile_sdd(str: String, debug: bool) -> () {
     use rsdd::builder::sdd_builder::*;
     let cnf = Cnf::from_file(str);
     let order : Vec<VarLabel> = (0..cnf.num_vars()).map(|x| VarLabel::new(x as u64)).collect();
-    let mut man = SddManager::new(even_split(&order, 3));
-    let ddnnf = man.from_cnf(&cnf);
+    let dtree = DTree::from_cnf(&cnf, &VarOrder::linear_order(cnf.num_vars()));
+    let mut man = SddManager::new(dtree.to_vtree().unwrap());
+    let sdd = man.from_cnf(&cnf);
 }
 
 fn compile_bdd(str: String, debug: bool) -> () {
     use rsdd::builder::bdd_builder::*;
     let cnf = Cnf::from_file(str);
-    let order : Vec<VarLabel> = (0..cnf.num_vars()).map(|x| VarLabel::new(x as u64)).collect();
+    // let order : VarOrder = cnf.force_order();
     let mut man = BddManager::new(VarOrder::linear_order(cnf.num_vars()));
+    // let mut man = BddManager::new(order);
     let bdd = man.from_cnf(&cnf);
 }
 
 fn bench_cnf_bdd(cnf_str: String, debug: bool) -> Duration {
     let start = Instant::now();
-    compile_topdown_nnf(black_box(cnf_str), debug);
+    // compile_topdown_nnf(black_box(cnf_str), debug);
     // compile_topdown_nnf_sample(black_box(cnf_str), debug);
+    // compile_bdd(cnf_str, debug);
+    compile_sdd(cnf_str, debug);
     start.elapsed()
 }
 
@@ -167,7 +171,7 @@ fn main() {
         //     "rand-3-100-400-1",
         //     String::from(include_str!("../cnf/rand-3-100-400-1.cnf")),
         // ),
-        // ("s298", String::from(include_str!("../cnf/s298.cnf"))),
+        ("s298", String::from(include_str!("../cnf/s298.cnf"))),
         // ("grid-75-18-6-q", String::from(include_str!("../cnf/75-18-6-q.cnf"))),
         // ("grid-90-42-1-q", String::from(include_str!("../cnf/90-42-1-q.cnf"))),
         // ("grid-90-16-2-q", String::from(include_str!("../cnf/90-16-2-q.cnf"))),
@@ -181,7 +185,7 @@ fn main() {
         //     "c8-very-easy",
         //     String::from(include_str!("../cnf/c8-very-easy.cnf")),
         // ),
-        ("log1", String::from(include_str!("../cnf/log1.cnf"))),
+        // ("log1", String::from(include_str!("../cnf/log1.cnf"))),
         // ("c8", String::from(include_str!("../cnf/c8.cnf"))),
     ];
 

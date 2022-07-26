@@ -4,7 +4,7 @@ extern crate rsgm;
 use std::collections::HashMap;
 
 use rsdd::{
-    repr::{cnf::Cnf, var_label::{Literal, VarLabel}}, builder::{decision_nnf_builder, var_order::VarOrder, bdd_builder::BddManager}, 
+    repr::{cnf::Cnf, var_label::{Literal, VarLabel}}, builder::{decision_nnf_builder, var_order::VarOrder, bdd_builder::BddManager, sdd_builder, dtree::DTree}, 
 };
 use rsgm::bayesian_network::BayesianNetwork;
 
@@ -79,11 +79,17 @@ fn bn_to_cnf(network: &BayesianNetwork) -> Cnf {
 }
 
 fn main() {
-    let bn = BayesianNetwork::from_string(&include_str!("../bayesian_networks/water.json"));
+    let bn = BayesianNetwork::from_string(&include_str!("../bayesian_networks/sachs.json"));
     let cnf = bn_to_cnf(&bn);
     println!("# clauses: {}", cnf.clauses().len());
     // let mut compiler = decision_nnf_builder::DecisionNNFBuilder::new(cnf.num_vars());
     // compiler.from_cnf_topdown(&VarOrder::linear_order(cnf.num_vars()), &cnf);
-    let mut compiler = BddManager::new(VarOrder::linear_order(cnf.num_vars()));
-    compiler.from_cnf(&cnf);
+    let order = VarOrder::linear_order(cnf.num_vars());
+    // let mut compiler = BddManager::new();
+    // compiler.from_cnf(&cnf);
+    let dtree = DTree::from_cnf(&cnf, &order);
+    let mut compiler = sdd_builder::SddManager::new(dtree.to_vtree().unwrap());
+    let r = compiler.from_cnf(&cnf);
+    println!("computing size");
+    println!("size: {}", compiler.count_nodes(r));
 }
