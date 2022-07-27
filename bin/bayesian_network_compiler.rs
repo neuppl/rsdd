@@ -1,13 +1,34 @@
 extern crate rsdd;
 extern crate rsgm;
 
+use clap::Parser;
+
 use std::collections::HashMap;
+use std::time::{Duration, Instant};
+
 
 use rsdd::{
     repr::{cnf::Cnf, var_label::{Literal, VarLabel}}, builder::{decision_nnf_builder, var_order::VarOrder, bdd_builder::BddManager, sdd_builder, dtree::DTree}, 
 };
 use rsgm::bayesian_network::BayesianNetwork;
 
+
+
+#[derive(Parser, Debug)]
+#[clap(author, version, about, long_about = None)]
+struct Args {
+   /// An input Bayesian network file in JSON format
+   #[clap(short, long, value_parser)]
+   file: String,
+
+   /// The compile mode (either 'bdd' or 'sdd')
+   #[clap(short, long, value_parser)]
+   mode: String,
+
+   /// The elimination order (either 'topological' or 'force')
+   #[clap(short, long, value_parser, default_value="topological")]
+   elim: String,
+}
 
 /// construct a CNF for the two TERMS (i.e., conjunctions of literals) t1 => t2
 fn implies(t1: &Vec<Literal>, t2: &Vec<Literal>) -> Vec<Vec<Literal>> {
@@ -78,18 +99,42 @@ fn bn_to_cnf(network: &BayesianNetwork) -> Cnf {
     Cnf::new(clauses)
 }
 
-fn main() {
-    let bn = BayesianNetwork::from_string(&include_str!("../bayesian_networks/sachs.json"));
-    let cnf = bn_to_cnf(&bn);
-    println!("# clauses: {}", cnf.clauses().len());
-    // let mut compiler = decision_nnf_builder::DecisionNNFBuilder::new(cnf.num_vars());
-    // compiler.from_cnf_topdown(&VarOrder::linear_order(cnf.num_vars()), &cnf);
-    let order = VarOrder::linear_order(cnf.num_vars());
-    // let mut compiler = BddManager::new();
-    // compiler.from_cnf(&cnf);
-    let dtree = DTree::from_cnf(&cnf, &order);
-    let mut compiler = sdd_builder::SddManager::new(dtree.to_vtree().unwrap());
+fn compile_bdd(network: BayesianNetwork) -> () {
+    let cnf = bn_to_cnf(&network);
+    let mut compiler = BddManager::new(VarOrder::linear_order(cnf.num_vars()));
+
+    println!("Compiling...");
+    let start = Instant::now();
     let r = compiler.from_cnf(&cnf);
-    println!("computing size");
-    println!("size: {}", compiler.count_nodes(r));
+    let duration = start.elapsed();
+    let sz = compiler.count_nodes(r);
+    println!("Compiled\n\tTime: {:?}\n\tSize: {sz}", duration);
+}
+
+fn compile_sdd(network: BayesianNetwork) -> () {
+    println!("############################\n\tCompiling in SDD mode\n############################");
+    let cnf = bn_to_cnf(&network);
+    println!("Building dtree");
+    let start = Instant::now();
+    let dtree = DTree::from_cnf(&cnf, &VarOrder::linear_order(cnf.num_vars()));
+    let mut compiler = sdd_builder::SddManager::new(dtree.to_vtree().unwrap());
+    let duration = start.elapsed();
+    println!("Dtree built\n\tWidth: {}\n\tElapsed dtree time: {:?}", dtree.width(), duration);
+
+    println!("Compiling");
+    let start = Instant::now();
+    let r = compiler.from_cnf(&cnf);
+    let duration = start.elapsed();
+    let sz = compiler.count_nodes(r);
+    println!("Compiled\n\tCompile time: {:?}\n\tSize: {sz}", duration);
+}
+
+fn main() {
+    let args = Args::parse();
+    let bn = BayesianNetwork::from_string(std::fs::read_to_string(args.file).unwrap().as_str());
+    match args.mode.as_str() {
+        "sdd" => compile_sdd(bn),
+        "bdd" => compile_bdd(bn),
+        _ => panic!("unrecognized mode")
+    }
 }

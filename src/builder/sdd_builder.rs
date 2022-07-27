@@ -595,6 +595,18 @@ impl<'a> SddManager {
         self.count_nodes_h(f, &mut HashSet::new())
     }
 
+    fn is_canonical_h(&self, f: SddPtr, cache: &mut HashMap<Sdd, SddPtr>) -> bool {
+        todo!()
+    }
+
+    pub fn is_canonical(&self, f: SddPtr) -> bool {
+        self.is_canonical_h(f, &mut HashMap::new())
+    }
+
+    pub fn is_trimmed(&self, f: SddPtr) -> bool {
+        todo!()
+    }
+
     fn print_sdd_internal(&self, ptr: SddPtr) -> String {
         use pretty::*;
         fn helper(man: &SddManager, ptr: SddPtr) -> Doc<BoxDoc> {

@@ -1056,14 +1056,14 @@ impl BddManager {
     pub fn from_dtree(&mut self, dtree: &dtree::DTree) -> BddPtr {
         use dtree::DTree;
         match &dtree { 
-            &DTree::Leaf{ v: c, cutset } => {
+            &DTree::Leaf{ v: c, cutset: _, vars: _ } => {
                 // compile the clause
                 c.iter().fold(self.false_ptr(), |acc, i| { 
                     let v = self.var(i.get_label(), i.get_polarity());
                     self.or(acc, v) 
                 })
             },
-            &DTree::Node{ ref l, ref r, cutset } => {
+            &DTree::Node{ ref l, ref r, cutset: _, vars: _ } => {
                 let l = self.from_dtree(l);
                 let r = self.from_dtree(r);
                 self.and(l, r)
@@ -1073,8 +1073,8 @@ impl BddManager {
 
     /// Compile a BDD from a CNF
     pub fn from_cnf(&mut self, cnf: &Cnf) -> BddPtr {
-        let dtree = dtree::DTree::from_cnf(cnf, &self.order);
-        return self.from_dtree(&dtree);
+        // let dtree = dtree::DTree::from_cnf(cnf, &self.order);
+        // return self.from_dtree(&dtree);
         let mut cvec: Vec<BddPtr> = Vec::with_capacity(cnf.clauses().len());
         if cnf.clauses().is_empty() {
             return BddPtr::true_node();
