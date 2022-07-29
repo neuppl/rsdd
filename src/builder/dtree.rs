@@ -4,22 +4,15 @@
 //! 
 
 use std::{iter::FromIterator};
+use bit_set::BitSet;
 use im::HashSet;
 
 use crate::repr::{var_label::{Literal, VarLabel}, cnf::Cnf};
 
 use super::{var_order::VarOrder, repr::builder_sdd::VTree};
 
-type VarSet = HashSet<VarLabel>;
-
-// #[derive(Clone, Debug)]
-// struct VarSet {
-//     data: bit_set::BitSet
-// }
-
-// impl VarSet {
-
-// }
+// type VarSet = HashSet<VarLabel>;
+type VarSet = BitSet;
 
 #[derive(Clone, Debug)]
 pub enum DTree {
@@ -38,14 +31,14 @@ impl DTree {
     fn init_vars(&mut self) -> VarSet {
         match self {
             Self::Leaf { v, cutset: _ , ref mut vars} => {
-                let r = im::HashSet::from_iter(v.iter().map(|x| x.get_label()));
+                let r = BitSet::from_iter(v.iter().map(|x| x.get_label().value_usize()));
                 *vars = Some(r.clone());
                 r
             }, 
             Self::Node { l, r, cutset: _, ref mut vars } if vars.is_none() => {
                 let l_vars = l.init_vars().clone();
                 let r_vars = r.init_vars().clone();
-                let r = l_vars.union(r_vars);
+                let r : BitSet = l_vars.union(&r_vars).collect();
                 *vars = Some(r.clone());
                 r
             }
@@ -54,31 +47,23 @@ impl DTree {
         }
     }
 
-    fn gen_cutset(&mut self, parent_vars: im::HashSet<VarLabel>) -> () {
+    fn gen_cutset(&mut self, parent_vars: &BitSet) -> () {
         match self { 
             Self::Leaf{v, cutset, vars} => {
-                // cutset of a leaf is all variables not mentioned in any ancestor
-                // let c : im::HashSet<VarLabel> = v.iter().filter_map(|cur_lit| {
-                //     if !parent_vars.contains(&cur_lit.get_label()) {
-                //         Some(cur_lit.get_label())
-                //     } else {
-                //         None
-                //     }
-                // }).collect();
-                let c = vars.as_ref().unwrap().clone().relative_complement(parent_vars);
+                // cutset of leaf is all vars mentioned in leaf not mentioned in parent
+                let c : BitSet = vars.as_ref().unwrap().difference(&parent_vars).collect();
                 *cutset = Some(c.clone());
             },
             Self::Node { l, r, cutset, vars } => {
                 // cutset of a node is (vars(l) ∩ vars(r)) \ cutset(ancestor)
                 let l_cuts = l.get_vars().clone();
                 let r_cuts = r.get_vars().clone();
-                let mut intersection = l_cuts.intersection(r_cuts);
-                // subtract off parents
-                intersection.retain(|x| !parent_vars.contains(x));
+                let mut intersection : BitSet = l_cuts.intersection(&r_cuts).collect();
+                intersection.difference_with(parent_vars);
 
-                let all_parents = intersection.clone().union(parent_vars);
-                l.gen_cutset(all_parents.clone());
-                r.gen_cutset(all_parents.clone());
+                let all_parents : BitSet = intersection.clone().union(parent_vars).collect();
+                l.gen_cutset(&all_parents);
+                r.gen_cutset(&all_parents);
                 *cutset = Some(intersection);
             }
         }
@@ -117,7 +102,7 @@ impl DTree {
         println!("init vars");
         r.init_vars();
         println!("init vars done");
-        r.gen_cutset(im::HashSet::new());
+        r.gen_cutset(&BitSet::new());
         r
     }
 
@@ -145,7 +130,9 @@ impl DTree {
     pub fn to_vtree(&self) -> Option<VTree> {
         match &self {
             &Self::Leaf { v: _v, cutset, vars } => {
-                let cutset_v : Vec<VarLabel> = cutset.clone().unwrap().into_iter().collect();
+                let cutset_v : Vec<VarLabel> = cutset.clone().unwrap().into_iter().map(|x| {
+                    VarLabel::new(x as u64)
+                }).collect();
                 if cutset_v.is_empty() { 
                     None
                 } else {
@@ -153,7 +140,9 @@ impl DTree {
                 }
             }, 
             &Self::Node { l, r, cutset, vars } => {
-                let cutset_v : Vec<VarLabel> = cutset.clone().unwrap().into_iter().collect();
+                let cutset_v : Vec<VarLabel> = cutset.clone().unwrap().into_iter().map(|x| {
+                    VarLabel::new(x as u64)
+                }).collect();
                 let l_vtree = l.to_vtree();
                 let r_vtree = r.to_vtree();
                 match (l_vtree, r_vtree) {

@@ -290,20 +290,17 @@ impl<'a> SddManager {
     /// `node`: a list of (prime, sub) pairs
     fn compress(&mut self, node: &mut Vec<(SddPtr, SddPtr)>) -> () {
         let mut i = 0;
-        while i < node.len() {
+        for i in 0..node.len() {
             // see if we can compress i
-            let mut compressed = false;
-            for j in (i + 1)..node.len() {
+            let mut j = i+1;
+            while j < node.len() {
                 if self.sdd_eq(node[i].1, node[j].1) {
                     // compress j into i and remove j from the node list
                     node[i].0 = self.or(node[i].0, node[j].0);
-                    node.remove(j);
-                    compressed = true;
-                    break;
+                    node.swap_remove(j);
+                } else {
+                    j = j + 1;
                 }
-            }
-            if !compressed {
-                i = i + 1;
             }
         }
     }

@@ -517,6 +517,27 @@ impl Cnf {
         return r;
     }
 
+    pub fn to_dimacs(&self) -> String {
+        let mut r = String::new();
+        for clause in self.clauses.iter() {
+            let mut clause_str = String::new();
+            for lit in clause.iter() {
+                let lit_str = format!(
+                    "{}{}",
+                    if lit.get_polarity() { "" } else { "-" },
+                    lit.get_label().value_usize() + 1
+                );
+                if clause_str.is_empty() {
+                    clause_str = lit_str;
+                } else {
+                    clause_str = format!("{} {}", clause_str, lit_str);
+                }
+            }
+            r = format!("{}\n{} 0", r, clause_str);
+        }
+        return r;
+    }
+
     /// Generates the sub-cnf that is the result of subsuming all assigned literals in `m`
     pub fn sub_cnf(&self, m: &PartialModel) -> Vector<Vector<Literal>> {
         self.imm_clauses.clone().into_iter().filter_map(|clause| {

@@ -114,6 +114,7 @@ fn compile_bdd(network: BayesianNetwork) -> () {
 fn compile_sdd(network: BayesianNetwork) -> () {
     println!("############################\n\tCompiling in SDD mode\n############################");
     let cnf = bn_to_cnf(&network);
+    // println!("{}", cnf.to_dimacs());
     println!("Building dtree");
     let start = Instant::now();
     let dtree = DTree::from_cnf(&cnf, &VarOrder::linear_order(cnf.num_vars()));
