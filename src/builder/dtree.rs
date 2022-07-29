@@ -49,22 +49,25 @@ impl DTree {
 
     fn gen_cutset(&mut self, parent_vars: &BitSet) -> () {
         match self { 
-            Self::Leaf{v, cutset, vars} => {
+            Self::Leaf{v: _, cutset, vars} => {
                 // cutset of leaf is all vars mentioned in leaf not mentioned in parent
-                let c : BitSet = vars.as_ref().unwrap().difference(&parent_vars).collect();
-                *cutset = Some(c.clone());
+                let mut c = vars.as_ref().unwrap().clone();
+                c.difference_with(&parent_vars);
+                *cutset = Some(c);
             },
-            Self::Node { l, r, cutset, vars } => {
+            Self::Node { l, r, cutset, vars: _ } => {
                 // cutset of a node is (vars(l) ∩ vars(r)) \ cutset(ancestor)
-                let l_cuts = l.get_vars().clone();
+                let mut cuts = l.get_vars().clone();
                 let r_cuts = r.get_vars().clone();
-                let mut intersection : BitSet = l_cuts.intersection(&r_cuts).collect();
-                intersection.difference_with(parent_vars);
+                cuts.union_with(&r_cuts);
+                cuts.difference_with(parent_vars);
 
-                let all_parents : BitSet = intersection.clone().union(parent_vars).collect();
+                let mut all_parents = cuts.clone();
+                all_parents.union_with(parent_vars);
+
                 l.gen_cutset(&all_parents);
                 r.gen_cutset(&all_parents);
-                *cutset = Some(intersection);
+                *cutset = Some(cuts);
             }
         }
     }
@@ -154,7 +157,6 @@ impl DTree {
                         let subtree = VTree::new_node(Box::new(l), Box::new(r));
                         Some(DTree::right_linear(cutset_v.as_slice(), &Some(subtree)))
                     }
-                    _ => { todo!() }
                 }
             }
         }

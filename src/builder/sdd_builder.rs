@@ -109,6 +109,8 @@ pub struct SddManager {
     parent_ptr: Vec<(Option<usize>, usize)>,
     /// the apply cache
     app_cache: Vec<Lru<(SddPtr, SddPtr), SddPtr>>,
+    /// maps an Sdd VarLabel into its vtree index in the depth-first order
+    vtree_idx: Vec<usize>,
 }
 
 /// produces a vector of pointers to vtrees such that (i) the order is given by
@@ -181,12 +183,22 @@ impl<'a> SddManager {
             app_cache.push(Lru::new(17));
         }
 
+        let mut vtree_lookup = vec![0; vtree.num_vars()];
+        for (idx, v) in vtree.in_order_iter().enumerate() {
+            if v.is_leaf() {
+                for label in v.extract_leaf().iter() {
+                    vtree_lookup[label.value_usize()] = idx;
+                }
+            }
+        }
+
         let m = SddManager {
             tbl: SddTable::new(&vtree),
             stats: SddStats::new(),
             parent_ptr: into_parent_ptr_vec(&vtree),
             vtree,
             app_cache,
+            vtree_idx: vtree_lookup
         };
 
         return m;
@@ -242,10 +254,11 @@ impl<'a> SddManager {
     /// Find the index into self.vtree that contains the label `lbl`
     /// panics if this does not exist.
     fn get_vtree_idx(&self, lbl: VarLabel) -> usize {
-        match self.vtree.find_leaf_idx(&|ref l| l.contains(&lbl)) {
-            None => panic!("var {:?} not found", lbl),
-            Some(a) => a,
-        }
+        self.vtree_idx[lbl.value_usize()]
+        // match self.vtree.find_leaf_idx(&|ref l| l.contains(&lbl)) {
+        //     None => panic!("var {:?} not found", lbl),
+        //     Some(a) => a,
+        // }
     }
 
     /// Generate a new variable of label `lbl` with truth value `is_true`

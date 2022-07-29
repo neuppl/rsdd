@@ -118,9 +118,11 @@ fn compile_sdd(network: BayesianNetwork) -> () {
     println!("Building dtree");
     let start = Instant::now();
     let dtree = DTree::from_cnf(&cnf, &VarOrder::linear_order(cnf.num_vars()));
-    let mut compiler = sdd_builder::SddManager::new(dtree.to_vtree().unwrap());
     let duration = start.elapsed();
     println!("Dtree built\n\tWidth: {}\n\tElapsed dtree time: {:?}", dtree.width(), duration);
+
+
+    let mut compiler = sdd_builder::SddManager::new(dtree.to_vtree().unwrap());
 
     println!("Compiling");
     let start = Instant::now();

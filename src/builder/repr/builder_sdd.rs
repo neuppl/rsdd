@@ -187,4 +187,11 @@ impl VTree {
     pub fn new_leaf(v: Vec<VarLabel>) -> VTree {
         VTree::Leaf(v)
     }
+
+    pub fn num_vars(&self) -> usize {
+        match self {
+            BTree::Leaf(v) => v.len(),
+            BTree::Node((), l, r) => l.num_vars() + r.num_vars(),
+        }
+    }
 }

@@ -134,6 +134,13 @@ where
         }
     }
 
+    pub fn is_leaf(&self) -> bool {
+        match self {
+            Self::Leaf(_) => true,
+            _ => false
+        }
+    }
+
     /// Flatten a BTree into a depth-first iteration
     pub fn flatten(&self) -> Vec<&BTree<N, L>> {
         let mut v = Vec::new();
