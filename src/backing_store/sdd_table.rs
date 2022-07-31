@@ -41,7 +41,7 @@ impl SddTable {
             sdd_to_bdd: HashMap::new(),
         };
 
-        for v in vtree.in_order_iter() {
+        for v in vtree.dfs_iter() {
             match v {
                 &BTree::Leaf(ref o) => {
                     let mut new_order = Vec::new();
@@ -67,7 +67,7 @@ impl SddTable {
     }
 
     pub fn _is_sdd(&self, ptr: SddPtr) -> bool {
-        match self.tables[ptr.vtree() as usize] {
+        match self.tables[ptr.vtree().value() as usize] {
             SubTable::SddSubTable { tbl: _ } => true,
             _ => false,
         }
@@ -79,7 +79,7 @@ impl SddTable {
     }
 
     pub fn _is_bdd(&self, ptr: SddPtr) -> bool {
-        match self.tables[ptr.vtree() as usize] {
+        match self.tables[ptr.vtree().value() as usize] {
             SubTable::BddSubTable { man: _, conv: _ } => true,
             _ => false,
         }
@@ -98,7 +98,7 @@ impl SddTable {
 
     /// Fetch the slice for a set of or-nodes; panics if this is not an SDD node
     pub fn sdd_get_or(&self, ptr: SddPtr) -> &[(SddPtr, SddPtr)] {
-        match &self.tables[ptr.vtree() as usize] {
+        match &self.tables[ptr.vtree().value() as usize] {
             &SubTable::SddSubTable { ref tbl } => &tbl.deref(BackingPtr(ptr.idx() as u32)),
             _ => panic!("dereferencing BDD into SDD"),
         }

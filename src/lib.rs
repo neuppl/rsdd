@@ -14,6 +14,7 @@ extern crate quickcheck;
 extern crate time_test;
 extern crate twox_hash;
 extern crate bit_set;
+extern crate segment_tree;
 
 #[macro_use]
 mod util;
