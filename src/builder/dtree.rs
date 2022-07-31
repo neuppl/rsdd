@@ -87,7 +87,6 @@ impl DTree {
     pub fn from_cnf(cnf: &Cnf, elim_order: &VarOrder) -> DTree {
         let mut root : Option<DTree> = None;
         let mut clauses : Vec<Vec<Literal>> = cnf.clauses().to_vec();
-        println!("#clauses: {}", clauses.len());
         for var in elim_order.in_order_iter() {
             let all_mentioned : Vec<&Vec<Literal>> = clauses.iter().filter(|x| x.iter().find(|v| v.get_label() == var).is_some()).collect();
             if all_mentioned.len() == 0 {
@@ -102,9 +101,7 @@ impl DTree {
             clauses.retain(|x| x.iter().find(|v| v.get_label() == var).is_none());
         }
         let mut r = root.unwrap();
-        println!("init vars");
         r.init_vars();
-        println!("init vars done");
         r.gen_cutset(&BitSet::new());
         r
     }
