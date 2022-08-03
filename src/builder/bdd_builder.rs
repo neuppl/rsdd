@@ -68,7 +68,7 @@ impl Assignment {
 
 /// Weighted model counting parameters for a BDD. It primarily is a storage for
 /// the weight on each variable.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct BddWmc<T: Num + Clone + Debug + Copy> {
     pub zero: T,
     pub one: T,
