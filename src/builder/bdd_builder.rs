@@ -68,7 +68,7 @@ impl Assignment {
 
 /// Weighted model counting parameters for a BDD. It primarily is a storage for
 /// the weight on each variable.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct BddWmc<T: Num + Clone + Debug + Copy> {
     pub zero: T,
     pub one: T,
@@ -833,6 +833,14 @@ impl BddManager {
         eval_bdd_helper(self, bdd, assgn)
     }
 
+    /// Computes the marginal MAP over `vars` of the distribution encoded by
+    /// `bdd` with evidence `evidence`
+    /// 
+    /// Returns a vector of the most likely assignments to each var label in `vars`
+    pub fn marginal_map(&self, bdd: BddPtr, evidence: BddPtr, vars: &[VarLabel], wmc: &BddWmc<f64>) -> Vec<Literal> {
+        todo!()
+    }
+
     /// Returns true if `a` == `b`
     pub fn eq_bdd(&self, a: BddPtr, b: BddPtr) -> bool {
         // the magic of BDDs!
@@ -952,6 +960,11 @@ impl BddManager {
         };
         self.clear_scratch(ptr);
         r
+    }
+
+    /// Perform a weighted model count with a vector or BddWmc parameters
+    pub fn vec_wmc<T: Num + Clone + Debug + Copy>(&mut self, ptr: BddPtr, params: &Vec<BddWmc<T>>) -> Vec<T> {
+
     }
 
     fn sample_h(
