@@ -106,6 +106,8 @@ pub struct SddManager {
     stats: SddStats,
     /// the apply cache
     app_cache: Vec<Lru<(SddPtr, SddPtr), SddPtr>>,
+    // experimenting with different canonicalize options
+    modified_canonicalize: bool,
 }
 
 impl<'a> SddManager {
@@ -120,9 +122,14 @@ impl<'a> SddManager {
             stats: SddStats::new(),
             vtree: VTreeManager::new(vtree),
             app_cache,
+            modified_canonicalize: false,
         };
 
         return m;
+    }
+
+    pub fn set_canonicalize(&mut self, b: bool) -> () {
+        self.modified_canonicalize = b
     }
 
     // Walks the Sdd, caching results of previously computed values
@@ -237,8 +244,10 @@ impl<'a> SddManager {
 
     /// Returns a canonicalized SDD pointer from a list of (prime, sub) pairs
     fn canonicalize(&mut self, mut node: Vec<(SddPtr, SddPtr)>, table: VTreeIndex) -> SddPtr {
-        // first compress
-        self.compress(&mut node);
+        if !self.modified_canonicalize {
+            // first compress
+            self.compress(&mut node);
+        }
         // check for a base case
         if node.len() == 0 {
             return SddPtr::new_const(true);
