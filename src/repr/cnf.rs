@@ -1,6 +1,7 @@
 //! A representation of a conjunctive normal form (CNF)
 
 use crate::builder::var_order::VarOrder;
+use dimacs::Lit;
 use im::Vector;
 use rand;
 use rand::prelude::SliceRandom;
@@ -93,6 +94,7 @@ impl CnfHasher {
             }
         }
     }
+
 
     pub fn push(&mut self) -> () {
         let n = self.state.last().unwrap().clone();
@@ -210,6 +212,35 @@ impl Cnf {
         }
         Cnf::new(clause_vec)
     }
+
+    /// Parses a CNF string into a CNF
+    /// 
+    /// Format: (-1 || 0 || 2) && (1)
+    /// - Each clause in its own parenthesis and separated by &&
+    /// - Each literal separated by ||
+    /// - Literal negation implied by "-"
+    pub fn from_string(s: String) -> Cnf {
+        let clauses = s.split("&&");
+        let mut clause_vec : Vec<Vec<Literal>> = Vec::new();
+        for clause in clauses {
+            let mut c : Vec<Literal> = Vec::new();
+            // filter the parens off
+            let mut chars = clause.trim().chars();
+            chars.next(); 
+            chars.next_back();
+            for lit in chars.as_str().split("||") {
+                if lit.trim().is_empty() {
+                    continue;
+                }
+                let parsed : i64 = lit.trim().parse().unwrap_or_else(|_| panic!("failed to parse literal {}", lit));
+                let neg = parsed <= 0;
+                c.push(Literal::new(VarLabel::new_usize(i64::abs(parsed) as usize), !neg));
+            }
+            clause_vec.push(c);
+        }
+        Cnf::new(clause_vec) 
+    }
+
 
     pub fn rand_cnf(rng: &mut ThreadRng, num_vars: usize, num_clauses: usize) -> Cnf {
         assert!(num_clauses > 2, "requires at least 2 clauses in CNF");
@@ -482,6 +513,27 @@ impl Cnf {
             } else {
                 r = format!(" {} && ({})", r, clause_str);
             }
+        }
+        return r;
+    }
+
+    pub fn to_dimacs(&self) -> String {
+        let mut r = String::new();
+        for clause in self.clauses.iter() {
+            let mut clause_str = String::new();
+            for lit in clause.iter() {
+                let lit_str = format!(
+                    "{}{}",
+                    if lit.get_polarity() { "" } else { "-" },
+                    lit.get_label().value_usize() + 1
+                );
+                if clause_str.is_empty() {
+                    clause_str = lit_str;
+                } else {
+                    clause_str = format!("{} {}", clause_str, lit_str);
+                }
+            }
+            r = format!("{}\n{} 0", r, clause_str);
         }
         return r;
     }
