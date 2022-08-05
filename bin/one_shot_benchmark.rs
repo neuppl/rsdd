@@ -57,7 +57,6 @@ fn compile_topdown_nnf(str: String, debug: bool) -> () {
 fn compile_sdd(str: String, debug: bool) -> () {
     use rsdd::builder::sdd_builder::*;
     let cnf = Cnf::from_file(str);
-    let order : Vec<VarLabel> = (0..cnf.num_vars()).map(|x| VarLabel::new(x as u64)).collect();
     let dtree = DTree::from_cnf(&cnf, &VarOrder::linear_order(cnf.num_vars()));
     let mut man = SddManager::new(dtree.to_vtree().unwrap());
     let sdd = man.from_cnf(&cnf);
@@ -87,7 +86,7 @@ fn main() {
     rayon::ThreadPoolBuilder::new().num_threads(args.threads).build_global().unwrap();
 
     let cnf_strs = vec![
-        // ("grid-50-10-1-q", String::from(include_str!("../cnf/50-10-1-q.cnf"))),
+        ("grid-50-10-1-q", String::from(include_str!("../cnf/50-10-1-q.cnf"))),
         // ("tiny1", String::from(include_str!("../cnf/tiny1.cnf"))),
         // ("tiny2", String::from(include_str!("../cnf/tiny2.cnf"))),
         // (
@@ -171,7 +170,7 @@ fn main() {
         //     "rand-3-100-400-1",
         //     String::from(include_str!("../cnf/rand-3-100-400-1.cnf")),
         // ),
-        ("s298", String::from(include_str!("../cnf/s298.cnf"))),
+        // ("s298", String::from(include_str!("../cnf/s298.cnf"))),
         // ("grid-75-18-6-q", String::from(include_str!("../cnf/75-18-6-q.cnf"))),
         // ("grid-90-42-1-q", String::from(include_str!("../cnf/90-42-1-q.cnf"))),
         // ("grid-90-16-2-q", String::from(include_str!("../cnf/90-16-2-q.cnf"))),

@@ -158,7 +158,7 @@ impl DecisionNNFBuilder {
         if level >= cnf.num_vars() || cnf.is_sat_partial(&assgn) {
             return self.true_ptr();
         }
-        let cur_v = order.var_at_pos(level);
+        let cur_v = order.var_at_level(level);
 
         // check if this literal is currently set in unit propagation; if 
         // it is, skip it

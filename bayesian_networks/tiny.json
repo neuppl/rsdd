@@ -1,0 +1,1 @@
+{"network": "unknown", "variables": ["Pollution"], "cpts": {"Pollution": [[0.9], [0.1]]}, "states": {"Pollution": ["low", "high"]}, "parents": {"Pollution": []}}

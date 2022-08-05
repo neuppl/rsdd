@@ -13,6 +13,7 @@ use crate::{
     repr::var_label::VarLabel,
 };
 
+use bit_set::BitSet;
 use num::traits::Num;
 use rand::rngs::ThreadRng;
 use rand::Rng;
@@ -20,6 +21,7 @@ use std::cmp::Ordering;
 use std::collections::BinaryHeap;
 use std::collections::HashMap;
 use std::fmt::Debug;
+use std::iter::FromIterator;
 
 use super::bdd_plan::BddPlan;
 
@@ -867,23 +869,29 @@ impl BddManager {
         self.compute_table.num_nodes()
     }
 
-    /// Pre-condition: Nodes are unique numbered
-    fn wmc_helper<T: Num + Clone + Debug + Copy>(
-        &mut self,
-        ptr: BddPtr,
-        wmc: &BddWmc<T>,
-        smooth: bool,
-        tbl: &mut Vec<(Option<T>, Option<T>)>, // (non-compl, compl)
-    ) -> (T, Option<VarLabel>) {
-        match ptr.ptr_type() {
-            PointerType::PtrTrue => (wmc.one.clone(), Some(self.get_order().last_var())),
-            PointerType::PtrFalse => (wmc.zero.clone(), Some(self.get_order().last_var())),
+    fn smoothed_bottomup_pass_h<T: Clone + Copy + Debug, F: Fn(VarLabel, T, T) -> T>(&mut self, 
+        ptr: BddPtr, 
+        f: &F, 
+        low_v: T,
+        high_v: T,
+        expected_level: usize,
+        tbl: &mut Vec<(Option<T>, Option<T>)>) -> T {
+            let mut r = match ptr.ptr_type() {
+            PointerType::PtrTrue => {
+                high_v
+            },
+            PointerType::PtrFalse => {
+                low_v
+            },
             PointerType::PtrNode => {
                 let idx = self.compute_table.get_scratch(ptr).unwrap();
-                // let order = self.get_order();
-                let res = match tbl[idx] {
-                    (_, Some(v)) if ptr.is_compl() => v,
-                    (Some(v), _) if !ptr.is_compl() => v,
+                match tbl[idx] {
+                    (_, Some(v)) if ptr.is_compl() => {
+                        v
+                    },
+                    (Some(v), _) if !ptr.is_compl() => {
+                        v
+                    },
                     (cur_reg, cur_compl) => {
                         let bdd = self.deref_bdd(ptr).into_node();
                         let (low, high) = if ptr.is_compl() {
@@ -891,28 +899,13 @@ impl BddManager {
                         } else {
                             (bdd.low, bdd.high)
                         };
-                        let (mut low_v, low_lvl_op) = self.wmc_helper(low, wmc, smooth, tbl);
-                        let (mut high_v, high_lvl_op) = self.wmc_helper(high, wmc, smooth, tbl);
-                        let mut low_lvl = low_lvl_op.unwrap();
-                        let mut high_lvl = high_lvl_op.unwrap();
-                        if smooth {
-                            // smooth low
-                            while self.get_order().lt(ptr.label(), low_lvl) {
-                                let (low_factor, high_factor) = wmc.get_var_weight(low_lvl);
-                                low_v = (low_v.clone() * (*low_factor)) + (low_v * (*high_factor));
-                                low_lvl = self.get_order().above(low_lvl).unwrap();
-                            }
-                            // smooth high
-                            while self.get_order().lt(ptr.label(), high_lvl) {
-                                let (low_factor, high_factor) = wmc.get_var_weight(high_lvl);
-                                high_v =
-                                    (high_v.clone() * (*low_factor)) + (high_v * (*high_factor));
-                                high_lvl = self.get_order().above(high_lvl).unwrap();
-                            }
-                        }
-                        // compute new
-                        let (low_factor, high_factor) = wmc.get_var_weight(bdd.var);
-                        let res = (low_v * low_factor.clone()) + (high_v * high_factor.clone());
+                        let cur_level = self.get_order().get(bdd.var);
+                        let low_val = self.smoothed_bottomup_pass_h(low, f, low_v, high_v, cur_level+1, tbl);
+                        let high_val = self.smoothed_bottomup_pass_h(high, f, low_v, high_v, cur_level+1, tbl);
+
+                        let res = f(bdd.var, low_val, high_val);
+
+                        // cache result and return
                         tbl[idx] = if ptr.is_compl() {
                             (cur_reg, Some(res))
                         } else {
@@ -920,38 +913,131 @@ impl BddManager {
                         };
                         res
                     }
-                };
-
-                if self.get_order().get(ptr.label()) == 0 {
-                    (res, None)
-                } else {
-                    (res, Some(self.get_order().above(ptr.label()).unwrap()))
                 }
             }
+        };
+
+        // smoothing
+        if expected_level >= self.get_order().num_vars() {
+            return r;
+        } 
+        let smoothing_depth = match ptr.ptr_type() {
+            PointerType::PtrFalse | PointerType::PtrTrue => self.get_order().num_vars(),
+            PointerType::PtrNode => {
+                let toplabel = self.deref_bdd(ptr).into_node().var;
+                self.get_order().get(toplabel)
+            }
+        };
+        for v in self.get_order().between_iter(expected_level, smoothing_depth) {
+            r = f(v, r, r);
         }
+        r
+
+    }
+
+    /// performs an amortized bottom-up smoothed pass with aggregating function `f`
+    /// calls `f` on every (smoothed) BDD node and caches and reuses the results
+    /// `f` has type `cur_label -> low_value -> high_value -> aggregated_value`
+    fn smoothed_bottomup_pass<T: Clone + Copy + Debug, F: Fn(VarLabel, T, T) -> T>(&mut self, bdd: BddPtr, f: F, low_v: T, high_v: T) -> T {
+        let n = self.unique_label_nodes(bdd, 0);
+        let mut cache : Vec<(Option<T>, Option<T>)> = vec![(None, None); n];
+        let res = self.smoothed_bottomup_pass_h(bdd, &f, low_v, high_v, 0, &mut cache);
+        self.clear_scratch(bdd);
+        res
     }
 
     /// Weighted-model count
     pub fn wmc<T: Num + Clone + Debug + Copy>(&mut self, ptr: BddPtr, params: &BddWmc<T>) -> T {
-        let n = self.unique_label_nodes(ptr, 0);
-        let mut v = vec![(None, None); n];
+        self.smoothed_bottomup_pass(ptr, |varlabel, low, high| {
+            let (low_w, high_w) = params.get_var_weight(varlabel);
+            (*low_w * low) + (*high_w * high)
+        }, params.zero, params.one)
+    }
 
-        let (mut v, lvl_op) = self.wmc_helper(ptr, params, true, &mut v);
-        let r = if lvl_op.is_none() {
-            // no smoothing required
-            v
-        } else {
-            let mut lvl = lvl_op;
-            let order = self.get_order();
-            while lvl.is_some() {
-                let (low_factor, high_factor) = params.get_var_weight(lvl.unwrap());
-                v = (v.clone() * (*low_factor)) + (v * (*high_factor));
-                lvl = order.above(lvl.unwrap());
+    /// evaluates a circuit on a partial marginal MAP assignment to get an upper-bound on the wmc
+    /// maxes over the `map_vars`, applies the `partial_map_assgn`
+    fn marginal_map_eval(&mut self, ptr: BddPtr, partial_map_assgn: &PartialModel, map_vars: &BitSet, wmc: &BddWmc<f64>) -> f64 {
+        self.smoothed_bottomup_pass(ptr, |varlabel, low, high| {
+            let (low_w, high_w) = wmc.get_var_weight(varlabel);
+            match partial_map_assgn.get(varlabel) {
+                None => {
+                    if map_vars.contains(varlabel.value_usize()) {
+                        f64::max(*low_w * low, *high_w * high)
+                    } else {
+                        (*low_w * low) + (*high_w * high)
+                    }
+                },
+                Some(true) => *high_w * high,
+                Some(false) => *low_w * low,
             }
-            v
-        };
-        self.clear_scratch(ptr);
-        r
+        }, wmc.zero, wmc.one)
+    }
+
+    fn marginal_map_h(&mut self, ptr: BddPtr, cur_lb: f64, cur_best: PartialModel,
+        margvars: &[VarLabel], wmc: &BddWmc<f64>, cur_assgn: PartialModel) -> (f64, PartialModel) {
+            match margvars {
+                [] => { 
+                    let margvar_bits = BitSet::new();
+                    let possible_best = self.marginal_map_eval(ptr, &cur_assgn, &margvar_bits, wmc);
+                    println!("eval on assignment {:?}, got {possible_best}", cur_assgn);
+                    if possible_best > cur_lb {
+                        println!("new best found");
+                        (possible_best, cur_assgn)
+                    } else {
+                        println!("old best kept");
+                        (cur_lb, cur_best)
+                    }
+                }, 
+                [x, end @ ..] => {
+                    let mut best_model = cur_best;
+                    let mut best_lb = cur_lb;
+                    let margvar_bits = BitSet::from_iter(end.iter().map(|x| x.value_usize()));
+                    for assgn in [true, false] {
+                        let mut partialmodel = cur_assgn.clone();
+                        partialmodel.set(*x, assgn);
+                        let upper_bound = self.marginal_map_eval(ptr, &partialmodel, &margvar_bits, wmc);
+                        // println!("upper bound for {:?}, {upper_bound}, marg bits: {:?}, bdd: {}", partialmodel, margvar_bits, self.to_string_debug(ptr));
+                        // branch + bound
+                        if upper_bound > best_lb {
+                            (best_lb, best_model) = self.marginal_map_h(ptr, best_lb, best_model, end, wmc, partialmodel.clone());
+                        }
+                    }
+                    (best_lb, best_model)
+            }
+        }
+    }
+
+    /// Computes the marginal map over variables `vars` of `ptr` with evidence `evidence`
+    /// I.e., computes argmax_{v in vars} \sum_{v not in vars} w(ptr /\ evidence)
+    /// ```
+    /// use rsdd::builder::bdd_builder::{BddManager, BddWmc};
+    /// use rsdd::repr::var_label::{VarLabel, Literal};
+    /// use rsdd::repr::model::PartialModel;
+    /// use std::collections::HashMap;
+    /// use rsdd::repr::cnf::Cnf;
+    /// let cnf = Cnf::from_string(String::from("(1 || 2 || 3 || 4)"));
+    /// let mut mgr = BddManager::new_default_order(cnf.num_vars());
+    /// let w : HashMap<VarLabel, (f64, f64)> = (0..5).map(|x| (VarLabel::new(x), (0.3, 0.7))).collect();
+    /// let wmc = BddWmc::new_with_default(0.0, 1.0, w);
+    /// let evidence = mgr.true_ptr();
+    /// let bdd = mgr.from_cnf(&cnf);
+    /// let (p, marg_map) = mgr.marginal_map(bdd, evidence, &vec![VarLabel::new(0), VarLabel::new(1)], &wmc);
+    /// let expected_model = PartialModel::from_litvec(&vec![Literal::new(VarLabel::new(0), true), Literal::new(VarLabel::new(1), true)], cnf.num_vars());
+    /// let expected_prob = 0.49;
+    /// assert_eq!(marg_map, expected_model);
+    /// ```
+    pub fn marginal_map(&mut self, ptr: BddPtr, evidence: BddPtr, vars: &[VarLabel], wmc: &BddWmc<f64>) -> (f64, PartialModel) {
+        let mut marg_vars = BitSet::new();
+        for v in vars {
+            marg_vars.insert(v.value_usize());
+        }
+
+        let ptr = self.and(ptr, evidence);
+        let all_true : Vec<Literal> = vars.iter().map(|x| Literal::new(*x, true)).collect();
+        let cur_assgn = PartialModel::from_litvec(&all_true, self.num_vars());
+        let lower_bound = self.marginal_map_eval(ptr, &cur_assgn, &BitSet::new(), wmc);
+
+        self.marginal_map_h(ptr, lower_bound, cur_assgn, vars, wmc, PartialModel::from_litvec(&vec![], self.num_vars()))
     }
 
     fn sample_h(
@@ -969,7 +1055,7 @@ impl BddManager {
                 // base case, return
                 return;
             } else {
-                let expected = self.get_order().var_at_pos(cur_level);
+                let expected = self.get_order().var_at_level(cur_level);
                 let w = wmc.get_var_weight(expected);
                 let v: bool = rng.gen_bool(w.1 / (w.0 + w.1));
                 assgn[expected.value_usize()] = v;
@@ -979,7 +1065,7 @@ impl BddManager {
 
         // let mut rng = rand::thread_rng();
         let topvar: VarLabel = self.topvar(ptr);
-        let expected = self.get_order().var_at_pos(cur_level);
+        let expected = self.get_order().var_at_level(cur_level);
         if topvar != expected {
             // smooth by sampling the expected variable
             let w = wmc.get_var_weight(expected);
@@ -1248,7 +1334,7 @@ impl BddManager {
             return self.true_ptr();
         }
 
-        let cur_v = self.get_order().var_at_pos(level);
+        let cur_v = self.get_order().var_at_level(level);
 
         // check if this literal is currently set in unit propagation; if 
         // it is, skip it
