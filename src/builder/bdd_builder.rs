@@ -904,7 +904,6 @@ impl BddManager {
                         let high_val = self.smoothed_bottomup_pass_h(high, f, low_v, high_v, cur_level+1, tbl);
 
                         let res = f(bdd.var, low_val, high_val);
-                        // println!("f({:?}, {:?}, {:?}) = {:?}", bdd.var, low_val, high_val, res);
 
                         // cache result and return
                         tbl[idx] = if ptr.is_compl() {
@@ -932,7 +931,6 @@ impl BddManager {
         for v in self.get_order().between_iter(expected_level, smoothing_depth) {
             r = f(v, r, r);
         }
-        // println!("bdd: {}, wmc = {:?}", self.to_string_debug(ptr), r);
         r
 
     }
@@ -961,7 +959,6 @@ impl BddManager {
     fn marginal_map_eval(&mut self, ptr: BddPtr, partial_map_assgn: &PartialModel, map_vars: &BitSet, wmc: &BddWmc<f64>) -> f64 {
         self.smoothed_bottomup_pass(ptr, |varlabel, low, high| {
             let (low_w, high_w) = wmc.get_var_weight(varlabel);
-            println!("var: {:?}, high weight: {high_w}, low weight: {low_w}", varlabel);
             match partial_map_assgn.get(varlabel) {
                 None => {
                     if map_vars.contains(varlabel.value_usize()) {
@@ -976,7 +973,7 @@ impl BddManager {
         }, wmc.zero, wmc.one)
     }
 
-    pub fn marginal_map_h(&mut self, ptr: BddPtr, cur_lb: f64, cur_best: PartialModel,
+    fn marginal_map_h(&mut self, ptr: BddPtr, cur_lb: f64, cur_best: PartialModel,
         margvars: &[VarLabel], wmc: &BddWmc<f64>, cur_assgn: PartialModel) -> (f64, PartialModel) {
             match margvars {
                 [] => { 
@@ -987,6 +984,7 @@ impl BddManager {
                         println!("new best found");
                         (possible_best, cur_assgn)
                     } else {
+                        println!("old best kept");
                         (cur_lb, cur_best)
                     }
                 }, 
@@ -998,7 +996,7 @@ impl BddManager {
                         let mut partialmodel = cur_assgn.clone();
                         partialmodel.set(*x, assgn);
                         let upper_bound = self.marginal_map_eval(ptr, &partialmodel, &margvar_bits, wmc);
-                        println!("upper bound for {:?}, {upper_bound}, marg bits: {:?}, bdd: {}", partialmodel, margvar_bits, self.to_string_debug(ptr));
+                        // println!("upper bound for {:?}, {upper_bound}, marg bits: {:?}, bdd: {}", partialmodel, margvar_bits, self.to_string_debug(ptr));
                         // branch + bound
                         if upper_bound > best_lb {
                             (best_lb, best_model) = self.marginal_map_h(ptr, best_lb, best_model, end, wmc, partialmodel.clone());
