@@ -13,6 +13,7 @@ use crate::{
     repr::var_label::VarLabel,
 };
 
+use bit_set::BitSet;
 use num::traits::Num;
 use rand::rngs::ThreadRng;
 use rand::Rng;
@@ -20,6 +21,7 @@ use std::cmp::Ordering;
 use std::collections::BinaryHeap;
 use std::collections::HashMap;
 use std::fmt::Debug;
+use std::iter::FromIterator;
 
 use super::bdd_plan::BddPlan;
 
@@ -902,14 +904,8 @@ impl BddManager {
                         let high_val = self.smoothed_bottomup_pass_h(high, f, low_v, high_v, cur_level+1, tbl);
 
                         let res = f(bdd.var, low_val, high_val);
-                        // smooth the current node
-                        // for v in self.get_order().between_iter(expected_level, cur_level) {
-                        //     let new_v = f(v, low_val, high_val);
-                        //     low_val = new_v;
-                        //     high_val = new_v;
-                        // }
+                        // println!("f({:?}, {:?}, {:?}) = {:?}", bdd.var, low_val, high_val, res);
 
-                        // now, low_v = high_v = aggregated smoothed node value
                         // cache result and return
                         tbl[idx] = if ptr.is_compl() {
                             (cur_reg, Some(res))
@@ -936,6 +932,7 @@ impl BddManager {
         for v in self.get_order().between_iter(expected_level, smoothing_depth) {
             r = f(v, r, r);
         }
+        // println!("bdd: {}, wmc = {:?}", self.to_string_debug(ptr), r);
         r
 
     }
@@ -961,34 +958,88 @@ impl BddManager {
 
     /// evaluates a circuit on a partial marginal MAP assignment to get an upper-bound on the wmc
     /// maxes over the `map_vars`, applies the `partial_map_assgn`
-    fn marginal_map_eval(&mut self, ptr: BddPtr, partial_map_assgn: &PartialModel, map_vars: &VarLabel, wmc: &BddWmc<f64>) -> f64 {
-        todo!()
+    fn marginal_map_eval(&mut self, ptr: BddPtr, partial_map_assgn: &PartialModel, map_vars: &BitSet, wmc: &BddWmc<f64>) -> f64 {
+        self.smoothed_bottomup_pass(ptr, |varlabel, low, high| {
+            let (low_w, high_w) = wmc.get_var_weight(varlabel);
+            println!("var: {:?}, high weight: {high_w}, low weight: {low_w}", varlabel);
+            match partial_map_assgn.get(varlabel) {
+                None => {
+                    if map_vars.contains(varlabel.value_usize()) {
+                        f64::max(*low_w * low, *high_w * high)
+                    } else {
+                        (*low_w * low) + (*high_w * high)
+                    }
+                },
+                Some(true) => *high_w * high,
+                Some(false) => *low_w * low,
+            }
+        }, wmc.zero, wmc.one)
     }
 
-    // pub fn marginal_map_h(&mut self, ptr: BddPtr, cur_lb: f64, map_vars: &[VarLabel], partial_map_assgn: &PartialModel) -> () {
-        
-    // }
+    pub fn marginal_map_h(&mut self, ptr: BddPtr, cur_lb: f64, cur_best: PartialModel,
+        margvars: &[VarLabel], wmc: &BddWmc<f64>, cur_assgn: PartialModel) -> (f64, PartialModel) {
+            match margvars {
+                [] => { 
+                    let margvar_bits = BitSet::new();
+                    let possible_best = self.marginal_map_eval(ptr, &cur_assgn, &margvar_bits, wmc);
+                    println!("eval on assignment {:?}, got {possible_best}", cur_assgn);
+                    if possible_best > cur_lb {
+                        println!("new best found");
+                        (possible_best, cur_assgn)
+                    } else {
+                        (cur_lb, cur_best)
+                    }
+                }, 
+                [x, end @ ..] => {
+                    let mut best_model = cur_best;
+                    let mut best_lb = cur_lb;
+                    let margvar_bits = BitSet::from_iter(end.iter().map(|x| x.value_usize()));
+                    for assgn in [true, false] {
+                        let mut partialmodel = cur_assgn.clone();
+                        partialmodel.set(*x, assgn);
+                        let upper_bound = self.marginal_map_eval(ptr, &partialmodel, &margvar_bits, wmc);
+                        println!("upper bound for {:?}, {upper_bound}, marg bits: {:?}, bdd: {}", partialmodel, margvar_bits, self.to_string_debug(ptr));
+                        // branch + bound
+                        if upper_bound > best_lb {
+                            (best_lb, best_model) = self.marginal_map_h(ptr, best_lb, best_model, end, wmc, partialmodel.clone());
+                        }
+                    }
+                    (best_lb, best_model)
+            }
+        }
+    }
 
     /// Computes the marginal map over variables `vars` of `ptr` with evidence `evidence`
     /// I.e., computes argmax_{v in vars} \sum_{v not in vars} w(ptr /\ evidence)
     /// ```
     /// use rsdd::builder::bdd_builder::{BddManager, BddWmc};
     /// use rsdd::repr::var_label::{VarLabel, Literal};
+    /// use rsdd::repr::model::PartialModel;
     /// use std::collections::HashMap;
     /// use rsdd::repr::cnf::Cnf;
-    /// let mut mgr = BddManager::new_default_order(10);
     /// let cnf = Cnf::from_string(String::from("(1 || 2 || 3 || 4)"));
+    /// let mut mgr = BddManager::new_default_order(cnf.num_vars());
     /// let w : HashMap<VarLabel, (f64, f64)> = (0..5).map(|x| (VarLabel::new(x), (0.3, 0.7))).collect();
-    /// let wmc = BddWmc::new_with_default(1.0, 0.0, w);
+    /// let wmc = BddWmc::new_with_default(0.0, 1.0, w);
     /// let evidence = mgr.true_ptr();
     /// let bdd = mgr.from_cnf(&cnf);
-    /// let marg_map = mgr.marginal_map(bdd, evidence, &vec![VarLabel::new(0), VarLabel::new(1)], &wmc);
-    /// assert_eq!(marg_map, vec![Literal::new(VarLabel::new(0), true), Literal::new(VarLabel::new(0), true)]);
+    /// let (p, marg_map) = mgr.marginal_map(bdd, evidence, &vec![VarLabel::new(0), VarLabel::new(1)], &wmc);
+    /// let expected_model = PartialModel::from_litvec(&vec![Literal::new(VarLabel::new(0), true), Literal::new(VarLabel::new(1), true)], cnf.num_vars());
+    /// let expected_prob = 0.49;
+    /// assert_eq!(marg_map, expected_model);
     /// ```
-    pub fn marginal_map(&mut self, ptr: BddPtr, evidence: BddPtr, vars: &[VarLabel], wmc: &BddWmc<f64>) -> 
-        Vec<Literal> {
-    // let bdd = cnf.
-        todo!()
+    pub fn marginal_map(&mut self, ptr: BddPtr, evidence: BddPtr, vars: &[VarLabel], wmc: &BddWmc<f64>) -> (f64, PartialModel) {
+        let mut marg_vars = BitSet::new();
+        for v in vars {
+            marg_vars.insert(v.value_usize());
+        }
+
+        let ptr = self.and(ptr, evidence);
+        let all_true : Vec<Literal> = vars.iter().map(|x| Literal::new(*x, true)).collect();
+        let cur_assgn = PartialModel::from_litvec(&all_true, self.num_vars());
+        let lower_bound = self.marginal_map_eval(ptr, &cur_assgn, &BitSet::new(), wmc);
+
+        self.marginal_map_h(ptr, lower_bound, cur_assgn, vars, wmc, PartialModel::from_litvec(&vec![], self.num_vars()))
     }
 
     fn sample_h(

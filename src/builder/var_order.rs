@@ -61,7 +61,7 @@ impl VarOrder {
     /// # use rsdd::builder::var_order::VarOrder;
     /// # use rsdd::repr::var_label::VarLabel;
     /// let o = VarOrder::linear_order(10);
-    /// assert_eq!(o.var_at_pos(4), VarLabel::new(4));
+    /// assert_eq!(o.var_at_level(4), VarLabel::new(4));
     /// ```
     pub fn var_at_level(&self, pos: usize) -> VarLabel {
         VarLabel::new(self.pos_to_var[pos].clone() as u64)
