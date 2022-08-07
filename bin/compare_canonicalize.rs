@@ -137,22 +137,21 @@ fn main(){
   let dtree = build_dtree(&cnf);
 
   let mut originals: Vec<f64> = Vec::new();
+  let mut modifieds: Vec<f64> = Vec::new();
+
+  // TODO(mattxwang): can we add some sort of equality check here?
+  // perhaps evaluate the same WMC on both trees with unsmoothed_wmc,
+  // or maybe eval_sdd? not sure
   for _ in 0..args.iterations{
     originals.push(compile_sdd_benchmark(black_box(&cnf), dtree.to_vtree().unwrap(), false).as_secs_f64());
+    modifieds.push(compile_sdd_benchmark(black_box(&cnf), dtree.to_vtree().unwrap(), true).as_secs_f64());
   }
 
   let originals_sum: f64 = originals.iter().sum();
   let og_time = originals_sum / args.iterations as f64;
 
-  let mut modifieds: Vec<f64> = Vec::new();
-  for _ in 0..args.iterations{
-    modifieds.push(compile_sdd_benchmark(black_box(&cnf), dtree.to_vtree().unwrap(), true).as_secs_f64());
-  }
-
   let modifieds_sum: f64 = modifieds.iter().sum();
   let md_time = modifieds_sum / args.iterations as f64;
-
-
 
   println!("
 Avg original time: {:?}s
