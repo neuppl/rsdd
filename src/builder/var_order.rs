@@ -61,9 +61,9 @@ impl VarOrder {
     /// # use rsdd::builder::var_order::VarOrder;
     /// # use rsdd::repr::var_label::VarLabel;
     /// let o = VarOrder::linear_order(10);
-    /// assert_eq!(o.var_at_pos(4), VarLabel::new(4));
+    /// assert_eq!(o.var_at_level(4), VarLabel::new(4));
     /// ```
-    pub fn var_at_pos(&self, pos: usize) -> VarLabel {
+    pub fn var_at_level(&self, pos: usize) -> VarLabel {
         VarLabel::new(self.pos_to_var[pos].clone() as u64)
     }
 
@@ -150,6 +150,17 @@ impl VarOrder {
         }
     }
 
+    /// Get the variable that appears after `a` in the current order; `None` if
+    /// `a` is last in the order
+    pub fn below(&self, a: VarLabel) -> Option<VarLabel> {
+        let this_level = self.var_to_pos[a.value() as usize];
+        if this_level + 1 >= self.pos_to_var.len() {
+            None
+        } else {
+            Some(VarLabel::new(self.pos_to_var[this_level + 1] as u64))
+        }
+    }
+
     /// get the first essential variable (i.e., the variable that comes first in
     /// the order) among `a`, `b`, `c`
     pub fn first_essential(&self, a: BddPtr, b: BddPtr, c: BddPtr) -> VarLabel {
@@ -174,6 +185,12 @@ impl VarOrder {
         self.var_to_pos.push(pos);
         self.pos_to_var.push(pos);
         VarLabel::new(pos as u64)
+    }
+
+    /// Returns an iterator of all variables between [low_level..high_level)
+    pub fn between_iter<'a>(&'a self, low_level: usize, high_level: usize) -> impl Iterator<Item=VarLabel> + 'a {
+        assert!(low_level <= high_level);
+        self.pos_to_var.iter().skip(low_level).take(high_level - low_level).rev().map(|x| VarLabel::new_usize(*x))
     }
 }
 

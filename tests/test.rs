@@ -295,6 +295,7 @@ fn test_sdd_canonicity() -> () {
 #[cfg(test)]
 mod test_bdd_manager {
     use quickcheck::TestResult;
+    use rsdd::builder::bdd_builder::BddWmc;
     use rsdd::builder::var_order::VarOrder;
     use crate::repr::cnf::Cnf;
     use crate::builder::decision_nnf_builder::DecisionNNFBuilder;
@@ -402,6 +403,44 @@ mod test_bdd_manager {
               println!("error on input {}: bddres {}, cnfres {}\n topdown bdd: {}\nbottom-up bdd: {}", c1.to_string(), bddres, dnnfres, mgr2.to_string_debug(dnnf), mgr.to_string_debug(cnf1));
             }
             TestResult::from_bool(eps)
+        }
+    }
+
+    quickcheck! {
+        fn marginal_map(c1: Cnf) -> TestResult {
+            use rsdd::repr::model::PartialModel;
+            // constrain the size
+            if c1.num_vars() < 5 || c1.num_vars() > 8 { return TestResult::discard() }
+            if c1.clauses().len() > 14 { return TestResult::discard() }
+
+            let mut mgr = super::BddManager::new_default_order(c1.num_vars());
+            let weight_map : HashMap<VarLabel, (f64, f64)> = HashMap::from_iter(
+                (0..16).map(|x| (VarLabel::new(x as u64), (0.3, 0.7))));
+            let cnf = mgr.from_cnf(&c1);
+            let vars = vec![VarLabel::new(0), VarLabel::new(2), VarLabel::new(4)];
+            let wmc = BddWmc::new_with_default(0.0, 1.0, weight_map);
+            let (marg_prob, marg_assgn) = mgr.marginal_map(cnf, mgr.true_ptr(), &vars, &wmc);
+            let assignments = vec![(true, true, true), (true, true, false), (true, false, true), (true, false, false),
+                                   (false, true, true), (false, true, false), (false, false, true), (false, false, false)];
+            
+            let mut max : f64 = -10.0;
+            let mut max_assgn : PartialModel = PartialModel::from_litvec(&vec![], c1.num_vars());
+            for (v1, v2, v3) in assignments.iter() {
+                let x = mgr.var(VarLabel::new(0), *v1);
+                let y = mgr.var(VarLabel::new(2), *v2);
+                let z = mgr.var(VarLabel::new(4), *v3);
+                let mut conj = mgr.and(x, y);
+                conj = mgr.and(conj, z);
+                conj = mgr.and(conj, cnf);
+                let poss_max = mgr.wmc(conj, &wmc);
+                if poss_max > max {
+                    max = poss_max;
+                    max_assgn.set(VarLabel::new(0), *v1);
+                    max_assgn.set(VarLabel::new(2), *v2);
+                    max_assgn.set(VarLabel::new(4), *v3);
+                }
+            }
+            TestResult::from_bool(f64::abs(max - marg_prob) < 0.00001)
         }
     }
 }
