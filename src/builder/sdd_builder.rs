@@ -648,9 +648,9 @@ impl<'a> SddManager {
 
 
     pub fn sdd_eq(&self, a: SddPtr, b: SddPtr) -> bool {
-        if self.modified_canonicalize {
-            return (self.wmc_hash::<u32>(a) - self.wmc_hash::<u32>(b)) < 1
-        }
+        // if self.modified_canonicalize {
+        //     return (self.wmc_hash::<u32>(a) - self.wmc_hash::<u32>(b)) < 1
+        // }
         a == b
     }
 
