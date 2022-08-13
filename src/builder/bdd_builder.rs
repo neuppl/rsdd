@@ -979,12 +979,9 @@ impl BddManager {
                 [] => { 
                     let margvar_bits = BitSet::new();
                     let possible_best = self.marginal_map_eval(ptr, &cur_assgn, &margvar_bits, wmc);
-                    println!("eval on assignment {:?}, got {possible_best}", cur_assgn);
                     if possible_best > cur_lb {
-                        println!("new best found");
                         (possible_best, cur_assgn)
                     } else {
-                        println!("old best kept");
                         (cur_lb, cur_best)
                     }
                 }, 
@@ -992,11 +989,22 @@ impl BddManager {
                     let mut best_model = cur_best;
                     let mut best_lb = cur_lb;
                     let margvar_bits = BitSet::from_iter(end.iter().map(|x| x.value_usize()));
-                    for assgn in [true, false] {
-                        let mut partialmodel = cur_assgn.clone();
-                        partialmodel.set(*x, assgn);
-                        let upper_bound = self.marginal_map_eval(ptr, &partialmodel, &margvar_bits, wmc);
-                        // println!("upper bound for {:?}, {upper_bound}, marg bits: {:?}, bdd: {}", partialmodel, margvar_bits, self.to_string_debug(ptr));
+
+                    let mut true_model = cur_assgn.clone();
+                    true_model.set(*x, true);
+                    let mut false_model = cur_assgn.clone();
+                    false_model.set(*x, false);
+
+                    let true_ub = self.marginal_map_eval(ptr, &true_model, &margvar_bits, wmc);
+                    let false_ub = self.marginal_map_eval(ptr, &false_model, &margvar_bits, wmc);
+
+                    // branch on the greater upper-bound first
+                    let order = if true_ub > false_ub {
+                        [(true_ub, true_model), (false_ub, false_model)]
+                    } else {
+                        [(false_ub, false_model), (true_ub, true_model)]
+                    };
+                    for (upper_bound, partialmodel) in order {
                         // branch + bound
                         if upper_bound > best_lb {
                             (best_lb, best_model) = self.marginal_map_h(ptr, best_lb, best_model, end, wmc, partialmodel.clone());
