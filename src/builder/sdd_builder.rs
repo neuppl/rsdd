@@ -523,15 +523,24 @@ impl<'a> SddManager {
     }
 
     fn is_canonical_h(&self, f: SddPtr, cache: &mut HashMap<Sdd, SddPtr>) -> bool {
-        todo!()
+        self.is_compressed(f) && self.is_trimmed(f)
     }
 
     pub fn is_canonical(&self, f: SddPtr) -> bool {
         self.is_canonical_h(f, &mut HashMap::new())
     }
 
-    pub fn is_trimmed(&self, f: SddPtr) -> bool {
+    pub fn is_compressed(&self, f: SddPtr) -> bool {
         todo!()
+    }
+
+    pub fn is_trimmed(&self, f: SddPtr) -> bool {
+        // by definition, constants are not trimmed (?)
+        if f.is_const() {
+            return false;
+        }
+
+        return true;
     }
 
     fn print_sdd_internal(&self, ptr: SddPtr) -> String {
