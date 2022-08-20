@@ -540,6 +540,41 @@ impl<'a> SddManager {
             return false;
         }
 
+        if f.is_bdd() {
+            // deal with this later?
+            return false;
+        }
+
+        let or = self.tbl
+            .sdd_get_or(f);
+
+
+        // this is a linear search for decompositions of the form (T, a)
+        let trivial_p_exists = or.iter().all(|(p, _)| {p.is_true()});
+
+        if trivial_p_exists {
+            return false;
+        }
+
+        // TODO(mattxwang): significantly optimize this
+        // this next part is an O(n^2) (i.e., pairwise) comparison of each SDD
+        // and an arbitrary prime. we are looking for untrimmed decomposition pairs of the form (a, T) and (~a, F)
+        let mut visited_sdds: Vec<SddPtr> = Vec::new();
+
+        for (p, s) in or.iter() {
+            if !s.is_const() {
+                continue;
+            }
+            let p_neg = p.neg();
+            let neg_exists =  visited_sdds.iter().any(|visited_p| {self.sdd_eq(*visited_p, p_neg)});
+
+            if neg_exists {
+                return false;
+            }
+            visited_sdds.push(*p);
+        }
+
+        // neither of the untrimmed forms exist!
         return true;
     }
 
