@@ -27,7 +27,11 @@ bit-set = "0.5.3"
 segment-tree = "2.0.0"
 dot = "0.1.4"
 rsgm = { git = "https://github.com/SHoltzen/rsgm" }
+graphviz-rust = {version="0.2.1", optional=true}
 
+[features]
+default = ["graphviz"]
+graphviz = ["graphviz-rust"]
 
 [lib]
 name = "rsdd"

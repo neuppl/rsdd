@@ -2,6 +2,8 @@
 
 pub mod btree;
 pub mod hypergraph;
+#[feature(graphviz)]
+pub mod graphviz;
 
 use std::ptr;
 

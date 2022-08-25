@@ -54,6 +54,7 @@ impl fmt::Debug for BddPtr {
     }
 }
 
+#[derive(Hash, Debug, Clone, Copy, Eq, PartialEq)]
 pub enum PointerType {
     PtrFalse,
     PtrTrue,
