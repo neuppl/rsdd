@@ -534,10 +534,13 @@ impl<'a> SddManager {
         todo!()
     }
 
+    // predicate that returns if an SDD is trimmed;
+    // see https://www.ijcai.org/Proceedings/11/Papers/143.pdf
+    // definition 8
     pub fn is_trimmed(&self, f: SddPtr) -> bool {
-        // by definition, constants are not trimmed (?)
+        // my guess is that a constant is trimmed
         if f.is_const() {
-            return false;
+            return true;
         }
 
         if f.is_bdd() {
@@ -574,8 +577,8 @@ impl<'a> SddManager {
             visited_sdds.push(*p);
         }
 
-        // neither of the untrimmed forms exist!
-        return true;
+        // neither trimmed form exists at the top-level, so we recurse down once
+        return or.iter().all(|(p, _)| {self.is_trimmed(*p)});
     }
 
     fn print_sdd_internal(&self, ptr: SddPtr) -> String {
