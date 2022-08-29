@@ -545,7 +545,8 @@ impl<'a> SddManager {
 
         if f.is_bdd() {
             // deal with this later?
-            return false;
+            // return false;
+            todo!()
         }
 
         let or = self.tbl
@@ -981,4 +982,21 @@ fn sdd_wmc2() {
         man.unsmoothed_wmc(f, &wmc_map),
         0.2 * 0.3 + 0.2 * 0.7 + 0.8 * 0.3
     );
+}
+
+#[test]
+fn is_trimmed_trivial(){
+    let mut mgr = SddManager::new(even_split(
+        &vec![
+            VarLabel::new(0),
+            VarLabel::new(1),
+            VarLabel::new(2),
+            VarLabel::new(3),
+            VarLabel::new(4),
+        ],
+        2,
+    ));
+    let a = mgr.var(VarLabel::new(0), true);
+
+    assert_eq!(mgr.is_trimmed(a), true)
 }
