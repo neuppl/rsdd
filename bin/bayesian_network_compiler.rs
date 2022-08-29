@@ -51,15 +51,17 @@ impl BayesianNetworkCNF {
                     let cur_param = VarLabel::new_usize(var_count);
                     let cur_prob = network.get_conditional_prob(&v, varassgn, &passgn);
                     wmc_params.insert(cur_param, (1.0, cur_prob));
+                    // println!("w({:?}) = {cur_prob}", cur_param);
                     var_count += 1;
 
-                    // build cur_param => cur_assgn /\ cur_indic
+                    // build cur_param <=> cur_assgn /\ cur_indic
                     let mut indic_vec : Vec<Literal> = passgn.iter().map(|(varname, varval)| {
                         let varlabel = indicators[varname][varval];
                         Literal::new(varlabel, true)
                     }).collect();
                     indic_vec.push(new_indic);
 
+                    println!("{:?} <=> {:?}", cur_param, indic_vec);
                     let mut imp1 = implies(&vec![Literal::new(cur_param, true)], &indic_vec);
                     let mut imp2 = implies(&indic_vec, &vec![Literal::new(cur_param, true)]);
                     clauses.append(&mut imp1);
@@ -70,6 +72,7 @@ impl BayesianNetworkCNF {
             let mut exactly1 = exactly_one(cur_indic);
             clauses.append(&mut exactly1);
         }
+        // println!("{:#?}", clauses);
         BayesianNetworkCNF { cnf: Cnf::new(clauses), indicators, params: BddWmc::new_with_default(0.0, 1.0, wmc_params) }
     }
 
@@ -116,6 +119,8 @@ fn implies(t1: &Vec<Literal>, t2: &Vec<Literal>) -> Vec<Vec<Literal>> {
         new_clause.push(v.clone());
         r.push(new_clause);
     }
+    // println!("{:?} => {:?}\n{:?}", t1, t2, r);
+    // println!("");
     r
 }
 
@@ -130,6 +135,7 @@ fn exactly_one(lits: Vec<Literal>) -> Vec<Vec<Literal>> {
             r.push(vec![lits[x].negated(), lits[y].negated()]);
         }
     }
+    // println!("exactly one of {:?}:\n{:?}", lits, r);
     r
 }
 
@@ -149,7 +155,9 @@ fn compile_bdd_cnf(args: &Args, network: BayesianNetwork) -> () {
             let query_var = args.query_var.as_ref().unwrap_or_else(|| panic!("Provide query variable for marginalization"));
             let query_val = args.query_value.as_ref().unwrap_or_else(|| panic!("Provide query variable value for marginalization"));
             let indic = bn.get_indicator(query_var, query_val);
-            let cond = compiler.condition(r, indic, true);
+            // let cond = compiler.condition(r, indic, true);
+            let v = compiler.var(indic, true);
+            let cond = compiler.and(r, v);
             let p = compiler.wmc(cond, &bn.params);
             let z =  compiler.wmc(r, &bn.params);
             println!("Marginal query: Pr({query_var} = {query_val}) = {p}, z = {z}, p / z = {}", p/z);
@@ -208,7 +216,7 @@ fn compile_bdd(args: &Args, network: BayesianNetwork) -> () {
         for x in 0..(cur_indic.len()) {
             for y in (x+1)..(cur_indic.len()) {
                 let v1 = compiler.var(cur_indic[x].get_label(), false);
-                let v2 = compiler.var(cur_indic[x].get_label(), false);
+                let v2 = compiler.var(cur_indic[y].get_label(), false);
                 let or = compiler.or(v1, v2);
                 exactly_one = compiler.and(exactly_one, or);
             }
@@ -219,13 +227,13 @@ fn compile_bdd(args: &Args, network: BayesianNetwork) -> () {
         });
 
         let new = compiler.and(cur_cpt, o2);
-
         cpts.push(new);
     }
     let r = cpts.iter().fold(compiler.true_ptr(), |acc, cpt| {
         println!("cur size: {}, cpt size: {}", compiler.count_nodes(acc), compiler.count_nodes(*cpt));
         compiler.and(acc, *cpt)
     });
+    println!("final size: {}", compiler.count_nodes(r));
 }
 
 fn compile_sdd_cnf(network: BayesianNetwork) -> () {
@@ -268,6 +276,7 @@ fn main() {
     match args.mode.as_str() {
         "sdd" => compile_sdd_cnf(bn),
         "bdd" => compile_bdd(&args, bn),
+        "bdd_cnf" => compile_bdd_cnf(&args, bn),
         "topdown" => compile_topdown(bn),
         _ => panic!("unrecognized mode")
     }
