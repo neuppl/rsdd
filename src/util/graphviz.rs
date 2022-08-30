@@ -17,16 +17,28 @@ use crate::util::graphviz::EdgeTy::Pair;
 fn escaped_id(s : &str, lvl :u64) -> Id {
     Escaped(format!("\"{}_{}\"", s, lvl))
 }
-fn var_id(s: &str, lvl : u64) -> NodeId {
+fn var_id(s: &str, lvl : u64, is_const : bool, bool_binsize: Option<u64>) -> NodeId {
+    let lvl = match bool_binsize {
+        None => if is_const { 0 } else { lvl },
+        Some(divisor) => {
+            if is_const {
+              lvl / divisor
+            } else {
+                lvl
+            }
+        },
+    };
+
+
     let id = escaped_id(s, lvl);
     NodeId(id, None)
 }
-fn bool_node(s: &str, lvl : u64) -> Node {
-    let id = var_id(s, lvl);
+fn bool_node(s: &str, lvl : u64, bool_binsize: Option<u64>) -> Node {
+    let id = var_id(s, lvl, true, bool_binsize);
     Node { id, attributes: vec![attr!("label", s), attr!("shape", "rectangle")]}
 }
 fn var_node(s: &str, lvl : u64, polarity:bool) -> Node {
-    let id = var_id(s, lvl);
+    let id = var_id(s, lvl, false, Some(1));
     Node { id, attributes: vec![attr!("label", s)]}
 }
 
@@ -60,12 +72,15 @@ fn get_label(mgr: &BddManager, map: &HashMap<VarLabel, VarLabel>, ptr: BddPtr) -
 /// Print a debug form of the BDD with the label remapping given by `map`
 ///
 /// TODO: probably want a json-like IR for this one.
-pub fn render(mgr: &BddManager, map: &HashMap<VarLabel, VarLabel>, ptr: BddPtr) -> Graph {
+pub fn render_full(mgr: &BddManager, map: &HashMap<VarLabel, VarLabel>, bool_binsize: Option<u64>, ptr: BddPtr) -> Graph {
     fn print_bdd_helper(
         mgr: &BddManager,
         map: &HashMap<VarLabel, VarLabel>,
+        bool_binsize: Option<u64>,
+
         optr: Option<(BddPtr, u64)>,
         queue: &mut VecDeque<(BddPtr, u64)>,
+
 
         nodes: &mut Vec<(Node, u64)>,
         edges: &mut Vec<Edge>,
@@ -81,14 +96,14 @@ pub fn render(mgr: &BddManager, map: &HashMap<VarLabel, VarLabel>, ptr: BddPtr) 
             Some((ptr, lvl)) => {
                 match ptr.ptr_type() {
                     PointerType::PtrTrue  => {
-                        nodes.extend(vec![(bool_node("T", lvl), lvl)]);
+                        nodes.extend(vec![(bool_node("T", lvl, bool_binsize), lvl)]);
                         let nxt = queue.pop_front();
-                        print_bdd_helper(mgr, map, nxt, queue, nodes, edges)
+                        print_bdd_helper(mgr, map, bool_binsize, nxt, queue, nodes, edges)
                     },
                     PointerType::PtrFalse => {
-                        nodes.extend(vec![(bool_node("F", lvl), lvl)]);
+                        nodes.extend(vec![(bool_node("F", lvl, bool_binsize,), lvl)]);
                         let nxt = queue.pop_front();
-                        print_bdd_helper(mgr, map, nxt, queue, nodes, edges)
+                        print_bdd_helper(mgr, map, bool_binsize, nxt, queue, nodes, edges)
                     },
                     PointerType::PtrNode => {
                         let lp = (mgr.low(ptr), lvl + 1);
@@ -98,17 +113,17 @@ pub fn render(mgr: &BddManager, map: &HashMap<VarLabel, VarLabel>, ptr: BddPtr) 
 
                         nodes.extend(vec![cur_node.clone()]);
                         edges.extend(vec![
-                            mk_edge(cur_node.clone().0.id, var_id(&get_label(mgr, map, lp.0), lvl+1), lp.0, false,),
-                            mk_edge(cur_node.clone().0.id, var_id(&get_label(mgr, map, hp.0), lvl+1), hp.0, true,)
+                            mk_edge(cur_node.clone().0.id, var_id(&get_label(mgr, map, lp.0), lvl+1, lp.0.is_const(), bool_binsize), lp.0, false,),
+                            mk_edge(cur_node.clone().0.id, var_id(&get_label(mgr, map, hp.0), lvl+1, hp.0.is_const(), bool_binsize), hp.0, true,)
                         ]);
                         queue.push_back(hp);
-                        print_bdd_helper(mgr, map, Some(lp), queue, nodes, edges)
+                        print_bdd_helper(mgr, map, bool_binsize, Some(lp), queue, nodes, edges)
                     }
                 }
             }
         }
     }
-    let ss = print_bdd_helper(mgr, map, Some((ptr, 0)), &mut VecDeque::new(), &mut vec![], &mut vec![]);
+    let ss = print_bdd_helper(mgr, map, bool_binsize, Some((ptr, 0)), &mut VecDeque::new(), &mut vec![], &mut vec![]);
     let mut g = Graph::DiGraph {
         id: Id::Plain("bdd".to_string()),
         strict: true,
@@ -116,6 +131,11 @@ pub fn render(mgr: &BddManager, map: &HashMap<VarLabel, VarLabel>, ptr: BddPtr) 
     };
     g
     // format!("{}{}", if ptr.is_compl() { "!" } else { "" }, s)
+}
+
+pub fn render(mgr: &BddManager, map: &HashMap<VarLabel, VarLabel>, ptr: BddPtr) -> Graph {
+    // render_full(mgr, map, Some(2), ptr)
+    render_full(mgr, map, Some(1), ptr)
 }
 pub fn to_string(mgr: &BddManager, map: &HashMap<VarLabel, VarLabel>, ptr: BddPtr) -> String {
     print(render(mgr, map, ptr), &mut PrinterContext::default())
