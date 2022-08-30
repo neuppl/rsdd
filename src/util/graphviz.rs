@@ -2,24 +2,17 @@ use core::cmp::max;
 use graphviz_rust::dot_generator::*;
 use graphviz_rust::dot_structures::*;
 use graphviz_rust::{print, parse};
-use graphviz_rust::printer::{DotPrinter, PrinterContext};
+use graphviz_rust::printer::{PrinterContext};
 use std::collections::VecDeque;
 
 use crate::builder::bdd_builder::BddManager;
 use crate::builder::bdd_plan::BddPlan;
-use crate::builder::repr::builder_bdd::BddPtr;
-use crate::builder::repr::builder_sdd::{SddPtr, VTree};
+use crate::builder::repr::builder_bdd::{BddPtr, PointerType};
 use crate::builder::*;
 use crate::repr::var_label::VarLabel;
 use std::collections::HashMap;
 use crate::util::graphviz::Id::Escaped;
 use crate::util::graphviz::EdgeTy::Pair;
-
-
-struct NodeMeta {
-    v: VarLabel,
-    s: String,
-}
 
 fn escaped_id(s : &str, lvl :u64) -> Id {
     Escaped(format!("\"{}_{}\"", s, lvl))
@@ -34,56 +27,40 @@ fn bool_node(s: &str, lvl : u64) -> Node {
 }
 fn var_node(s: &str, lvl : u64, polarity:bool) -> Node {
     let id = var_id(s, lvl);
-    // Node { id, attributes: vec![attr!("label", s), attr!("style", "fill"), attr!("style", (if polarity { "white" } else { "lightgray" }))]}
     Node { id, attributes: vec![attr!("label", s)]}
 }
-fn mk_edge(l: NodeId, r:NodeId, polarity:bool) -> Edge {
-    Edge { ty: Pair(Vertex::N(l), Vertex::N(r)), attributes: vec![attr!("style", (if polarity { "solid" } else { "dotted" }))]}
-}
 
-fn get_label(mgr: &BddManager, map: &HashMap<VarLabel, VarLabel>, ptr: BddPtr) -> String {
-    if mgr.is_var(ptr) {
-        println!("[node] {} {} {} {}", mgr.is_true(ptr), mgr.is_false(ptr), mgr.is_var(ptr), ptr.label().value().to_string());
-        let lbl = ptr.label();
-        map.get(&lbl).unwrap_or_else(|| &lbl).value().to_string()
-
-    } else {
-        println!("[bool] {} {} {} {}", mgr.is_true(ptr), mgr.is_false(ptr), mgr.is_var(ptr), ptr.label().value().to_string());
-        if mgr.is_true(ptr) {
-            "T".to_string()
-        } else {
-            "F".to_string()
-        }
+fn mk_edge(l: NodeId, r:NodeId, child: BddPtr, is_high : bool) -> Edge {
+    let polarity = is_high;
+    let is_compl = !child.is_const() && child.is_compl();
+    let mut attributes = vec![];
+    attributes.push(attr!("style", (if polarity { "solid" } else { "dotted" })));
+    if is_compl {
+        attributes.push(attr!("color", "red"));
+        attributes.push(attr!("labeldistance", "0"));
+        attributes.push(attr!("label", "o"));
+    }
+    Edge {
+        ty: Pair(Vertex::N(l), Vertex::N(r)),
+        attributes
     }
 }
 
-fn get_label_(mgr: &BddManager, map: &HashMap<VarLabel, VarLabel>, ptr: BddPtr) -> String {
-    let x = ptr.ptr_type().clone();
-    println!("[get_label_] {:?} {:?} {:?}", ptr, ptr.ptr_type(), x);
-
-    match x {
-       PtrTrue  => {
-           println!("[get_label_true] {:?} {:?} {:?}", ptr, ptr.ptr_type(), x);
-           "T".to_string()
-       },
-       PtrFalse => {
-           println!("[get_label_false] {:?} {:?} {:?}", ptr, ptr.ptr_type(), x);
-           "F".to_string()
-       },
-       PtrNode => {
-           println!("[get_label_node] {:?} {:?} {:?}", ptr, ptr.ptr_type(), x);
+fn get_label(mgr: &BddManager, map: &HashMap<VarLabel, VarLabel>, ptr: BddPtr) -> String {
+    match ptr.ptr_type() {
+       PointerType::PtrTrue  => "T".to_string(),
+       PointerType::PtrFalse => "F".to_string(),
+       PointerType::PtrNode => {
            let lbl = ptr.label();
            map.get(&lbl).unwrap_or_else(|| &lbl).value().to_string()
        }
    }
 }
 
-
 /// Print a debug form of the BDD with the label remapping given by `map`
 ///
 /// TODO: probably want a json-like IR for this one.
 pub fn render(mgr: &BddManager, map: &HashMap<VarLabel, VarLabel>, ptr: BddPtr) -> Graph {
-    use crate::builder::repr::builder_bdd::PointerType::*;
     fn print_bdd_helper(
         mgr: &BddManager,
         map: &HashMap<VarLabel, VarLabel>,
@@ -95,7 +72,6 @@ pub fn render(mgr: &BddManager, map: &HashMap<VarLabel, VarLabel>, ptr: BddPtr) 
     ) -> Vec<Stmt> {
         match optr {
             None => {
-                println!("wrapup");
                 nodes
                     .iter()
                     .map(|(n, _l)| Stmt::Node(n.clone()))
@@ -103,59 +79,30 @@ pub fn render(mgr: &BddManager, map: &HashMap<VarLabel, VarLabel>, ptr: BddPtr) 
                     .collect()
             },
             Some((ptr, lvl)) => {
-        println!("level: {}", lvl);
                 match ptr.ptr_type() {
-                    PtrTrue  => {
+                    PointerType::PtrTrue  => {
                         nodes.extend(vec![(bool_node("T", lvl), lvl)]);
                         let nxt = queue.pop_front();
                         print_bdd_helper(mgr, map, nxt, queue, nodes, edges)
                     },
-                    PtrFalse => {
+                    PointerType::PtrFalse => {
                         nodes.extend(vec![(bool_node("F", lvl), lvl)]);
                         let nxt = queue.pop_front();
                         print_bdd_helper(mgr, map, nxt, queue, nodes, edges)
                     },
-                    PtrNode => {
+                    PointerType::PtrNode => {
                         let lp = (mgr.low(ptr), lvl + 1);
                         let hp = (mgr.high(ptr), lvl + 1);
-                        // let lbl = ptr.label();
-                        // let nrender = map.get(&lbl).unwrap_or_else(|| &lbl).value().to_string();
-                        let nrender = get_label_(mgr, map, ptr);
-
-                        println!("{}", nrender);
-
+                        let nrender = get_label(mgr, map, ptr);
                         let cur_node = (var_node(&nrender, lvl, ptr.is_compl()), lvl);
 
                         nodes.extend(vec![cur_node.clone()]);
                         edges.extend(vec![
-                            mk_edge(cur_node.clone().0.id, var_id(&get_label_(mgr, map, lp.0), lvl+1), false),
-                            mk_edge(cur_node.clone().0.id, var_id(&get_label_(mgr, map, hp.0), lvl+1), true)
+                            mk_edge(cur_node.clone().0.id, var_id(&get_label(mgr, map, lp.0), lvl+1), lp.0, false,),
+                            mk_edge(cur_node.clone().0.id, var_id(&get_label(mgr, map, hp.0), lvl+1), hp.0, true,)
                         ]);
                         queue.push_back(hp);
                         print_bdd_helper(mgr, map, Some(lp), queue, nodes, edges)
-
-
-                        // let lpolarity = attr!(
-                        //     "fillcolor",
-                        //     if l_p.is_compl() { "white" } else { "lightgray" }
-                        // );
-                        // let lrender = l_s;
-                        // let rpolarity = attr!(
-                        //     "fillcolor",
-                        //     if h_p.is_compl() { "white" } else { "lightgray" }
-                        // );
-                        // let rrender = r_s;
-                        // let mut ss = vec![
-                        //     Stmt::Node(node!(lrender; attr!("style","filled"), lpolarity)),
-                        //     Stmt::Node(node!(rrender; attr!("style","filled"), rpolarity)),
-                        //     Stmt::Edge(
-                        //         edge!(node_id!(nrender) => node_id!(lrender); attr!("style", "dashed")),
-                        //     ),
-                        //     Stmt::Edge(edge!(node_id!(nrender) => node_id!(rrender))),
-                        // ];
-                        // ss.extend(l_es);
-                        // ss.extend(r_es);
-                        // ss
                     }
                 }
             }
@@ -176,65 +123,6 @@ pub fn to_string(mgr: &BddManager, map: &HashMap<VarLabel, VarLabel>, ptr: BddPt
 
 mod test_graphviz {
     use super::*;
-
-    #[test]
-    fn test_dot_var() {
-        let mut mgr = BddManager::new_default_order(0);
-        let map = HashMap::new();
-
-        let avid : VarLabel = mgr.new_var();
-        let a = mgr.var(avid, true);
-        let expected_str :&str = &format!(r#"
-        strict digraph bdd {{
-          "{0}_0"[label={0}]
-          "F_1"[label=F,shape=rectangle]
-          "T_1"[label=T,shape=rectangle]
-          "{0}_0"->"F_1"[style=dotted]
-          "{0}_0"->"T_1"[style=solid]
-        }}
-        "#, avid.value()).to_owned();
-        let expected_dot : Graph = parse(expected_str).unwrap();
-
-
-        let a_dot : Graph = render(&mgr, &map, a);
-        println!("{}", to_string(&mgr, &map,a));
-        assert_eq!(a_dot, expected_dot); // , "Got:\n{:?}\nExpected:\n{:?}\n", a_dot, expected_dot);
-    }
-
-
-    #[test]
-    fn test_dot_3or() {
-        let mut mgr = BddManager::new_default_order(3);
-        let map = HashMap::new();
-        let a = mgr.new_var();
-        let a = mgr.var(a, true);
-        let b = mgr.new_var();
-        let b = mgr.var(b, true);
-        let c = mgr.new_var();
-        let c = mgr.var(c, true);
-        let b_or_c = mgr.or(b, c);
-        let a_or_b_or_c = mgr.or(a, b_or_c);
-
-        let a_dot : Graph = render(&mgr, &map, a);
-
-
-        println!("{}", mgr.print_bdd_lbl(a_or_b_or_c,&map,));
-        println!("{}", to_string(&mgr,&map, a_or_b_or_c,));
-        todo!();
-        let expected = "strict digraph  {
-            3[style=filled,fillcolor=white]
-            2 -> 3 [style=dashed]
-            2 -> T
-            4[style=filled,fillcolor=white]
-            3 -> 4 [style=dashed]
-            3 -> T
-            T[shape=rectangle]
-            4 -> F [style=dashed]
-            4 -> T
-            F[shape=rectangle]
-        }";
-    }
-
     #[test]
     fn test_dot_tf() {
         let mut mgr = BddManager::new_default_order(0);
@@ -256,7 +144,71 @@ mod test_graphviz {
     }
 
     #[test]
-    #[ignore]
+    fn test_dot_var() {
+        let mut mgr = BddManager::new_default_order(0);
+        let map = HashMap::new();
+
+        let avid : VarLabel = mgr.new_var();
+        let a = mgr.var(avid, true);
+        let expected_str :&str = &format!(r#"
+        strict digraph bdd {{
+          "{0}_0"[label={0}]
+          "F_1"[label=F,shape=rectangle]
+          "T_1"[label=T,shape=rectangle]
+          "{0}_0"->"F_1"[style=dotted]
+          "{0}_0"->"T_1"[style=solid]
+        }}
+        "#, avid.value()).to_owned();
+        let expected_dot : Graph = parse(expected_str).unwrap();
+
+        let a_dot : Graph = render(&mgr, &map, a);
+        println!("{}", to_string(&mgr, &map,a));
+        assert_eq!(a_dot, expected_dot); // , "Got:\n{:?}\nExpected:\n{:?}\n", a_dot, expected_dot);
+    }
+
+
+    #[test]
+    fn test_dot_3or() {
+        let mut mgr = BddManager::new_default_order(3);
+        let map = HashMap::new();
+        let a = mgr.new_var();
+        let a = mgr.var(a, true);
+        let b = mgr.new_var();
+        let b = mgr.var(b, true);
+        let c = mgr.new_var();
+        let c = mgr.var(c, true);
+        let b_or_c = mgr.or(b, c);
+        let a_or_b_or_c = mgr.or(a, b_or_c);
+
+        let dot : Graph = render(&mgr, &map, a_or_b_or_c);
+
+        println!("{}", to_string(&mgr,&map, a_or_b_or_c,));
+        let expected_str = r#"strict digraph bdd {
+            "3_0"[label=3]
+            "4_1"[label=4]
+            "5_2"[label=5]
+            "F_3"[label=F,shape=rectangle]
+            "T_1"[label=T,shape=rectangle]
+            "T_2"[label=T,shape=rectangle]
+            "T_3"[label=T,shape=rectangle]
+            "3_0" -> "4_1" [style=dotted]
+            "3_0" -> "T_1" [style=solid]
+            "4_1" -> "5_2" [style=dotted]
+            "4_1" -> "T_2" [style=solid]
+            "5_2" -> "F_3" [style=dotted]
+            "5_2" -> "T_3" [style=solid]
+        }"#;
+        let expected_dot : Graph = parse(expected_str).unwrap();
+
+        assert_eq!(dot, expected_dot); // , "Got:\n{:?}\nExpected:\n{:?}\n", a_dot, expected_dot);
+
+        let dot_str = to_string(&mgr,&map, a_or_b_or_c);
+        let expected_str = print(expected_dot, &mut PrinterContext::default());
+
+        assert_eq!(dot_str, expected_str);
+    }
+
+    #[test]
     fn test_dot_structured() {
         let mut mgr = BddManager::new_default_order(4);
         let map = HashMap::new();
@@ -274,8 +226,6 @@ mod test_graphviz {
         let xor_ab_acd = mgr.xor(ab, acd);
         let xor_ab_acd_d = mgr.xor(xor_ab_acd, d);
 
-        println!("{}", to_string(&mgr,&map, b));
-        todo!();
         let expected = "strict digraph  {
             \"3t\"[label=\"3\",style=filled,fillcolor=white]
             \"2t\"[label=\"2\",style=filled,fillcolor=white]
@@ -296,7 +246,7 @@ mod test_graphviz {
             F[shape=rectangle]
         }";
 
-        println!("{}", to_string(&mgr,&map, b));
+        println!("{}", to_string(&mgr,&map, xor_ab_acd_d));
         todo!();
         let expected = "strict digraph  {
             \"3t\"[style=filled,fillcolor=white]
