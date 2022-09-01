@@ -130,16 +130,19 @@ pub fn render_full(mgr: &BddManager, map: &HashMap<VarLabel, VarLabel>, bool_bin
         stmts: ss,
     };
     g
-    // format!("{}{}", if ptr.is_compl() { "!" } else { "" }, s)
 }
 
 pub fn render(mgr: &BddManager, map: &HashMap<VarLabel, VarLabel>, ptr: BddPtr) -> Graph {
-    // render_full(mgr, map, Some(2), ptr)
     render_full(mgr, map, Some(1), ptr)
 }
+
 pub fn to_string(mgr: &BddManager, map: &HashMap<VarLabel, VarLabel>, ptr: BddPtr) -> String {
     print(render(mgr, map, ptr), &mut PrinterContext::default())
 }
+pub fn to_string_full(mgr: &BddManager, map: &HashMap<VarLabel, VarLabel>, bool_binsize: Option<u64>, ptr: BddPtr) -> String {
+    print(render_full(mgr, map, bool_binsize, ptr), &mut PrinterContext::default())
+}
+
 
 mod test_graphviz {
     use super::*;
@@ -233,12 +236,12 @@ mod test_graphviz {
         let mut mgr = BddManager::new_default_order(4);
         let map = HashMap::new();
         let a = mgr.new_var();
-        let a = mgr.var(a, true);
         let b = mgr.new_var();
-        let b = mgr.var(b, true);
         let c = mgr.new_var();
-        let c = mgr.var(c, true);
         let d = mgr.new_var();
+        let a = mgr.var(a, true);
+        let b = mgr.var(b, true);
+        let c = mgr.var(c, true);
         let d = mgr.var(d, true);
         let ab = mgr.and(a, b);
         let cd = mgr.and(c, d);
@@ -246,46 +249,45 @@ mod test_graphviz {
         let xor_ab_acd = mgr.xor(ab, acd);
         let xor_ab_acd_d = mgr.xor(xor_ab_acd, d);
 
-        let expected = "strict digraph  {
-            \"3t\"[label=\"3\",style=filled,fillcolor=white]
-            \"2t\"[label=\"2\",style=filled,fillcolor=white]
-            \"2f\"[label=\"2\",style=filled,fillcolor=lightgray]
-            \"1t\"[label=\"1\",style=filled,fillcolor=white]
-            \"1f\"[label=\"1\",style=filled,fillcolor=lightgray]
-            \"3t\" -> \"2t\"[style=solid]
-            \"3t\" -> \"2f\"[style=dotted]
-            \"2t\" -> \"1t\"[style=solid]
-            \"2t\" -> \"1f\"[style=dotted]
-            \"2f\" -> \"1t\"[style=dotted]
-            \"2f\" -> \"1f\"[style=solid]
-            \"1t\" -> \"T\"[style=solid]
-            \"1t\" -> \"T\"[style=dotted]
-            \"1f\" -> \"T\"[style=dotted]
-            \"1f\" -> \"F\"[style=solid]
-            T[shape=rectangle]
-            F[shape=rectangle]
-        }";
+        // graph is correct, but compliments are not addressed in a satisfactory manner.
+        let expected = r#"strict digraph bdd {
+          "4_0"[label=3]
+          "7_1"[label=7]
+          "5_1"[label=5]
+          "6_2"[label=6]
+          "6_2_compl"[label=6] // compliment? is this the right thing to do?
+          "7_3"[label=7]
+          "F_0"[label=F,shape=rectangle]
+          "T_0"[label=T,shape=rectangle]
 
-        println!("{}", to_string(&mgr,&map, xor_ab_acd_d));
+          "4_0" -> "7_1" [style=dotted]
+          "4_0" -> "5_1"
+          "7_1" -> "F_0" [style=dotted]
+          "7_1" -> "T_0"
+
+          // compliment
+          "5_1" -> "6_2"
+          "5_1" -> "6_2_compl" [style=dotted]
+
+          "6_2" -> "7_3" [style=dotted]
+          "6_2" -> "T_0"
+
+          "7_3" -> "F_0" [style=dotted]
+          "7_3" -> "T_0"
+
+          // compliment?
+          "6_2" -> "7_3" [style=dotted]
+          "6_2" -> "T_0"
+
+          // compliment
+          "7_3" -> "T_0" [style=dotted]
+          "7_3" -> "F_0"
+
+          "6_2_compl" -> "7_1" [style=dotted]
+          "6_2_compl" -> "F_0"
+        }"#;
+
+        println!("{}", to_string_full(&mgr,&map, None, xor_ab_acd_d));
         todo!();
-        let expected = "strict digraph  {
-            \"3t\"[style=filled,fillcolor=white]
-            \"2t\"[style=filled,fillcolor=white]
-            \"2f\"[style=filled,fillcolor=lightgray]
-            \"1t\"[style=filled,fillcolor=white]
-            \"1f\"[style=filled,fillcolor=lightgray]
-            \"3t\" -> \"2t\"[style=solid]
-            \"3t\" -> \"2f\"[style=dotted]
-            \"2t\" -> \"1t\"[style=solid]
-            \"2t\" -> \"1f\"[style=dotted]
-            \"2f\" -> \"1t\"[style=dotted]
-            \"2f\" -> \"1f\"[style=solid]
-            \"1t\" -> \"T\"[style=solid]
-            \"1t\" -> \"T\"[style=dotted]
-            \"1f\" -> \"T\"[style=dotted]
-            \"1f\" -> \"F\"[style=solid]
-            T[shape=rectangle]
-            F[shape=rectangle]
-        }";
     }
 }
