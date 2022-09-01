@@ -388,9 +388,10 @@ impl BddManager {
                     let h_p = t.high(ptr);
                     let l_s = print_bdd_helper(t, l_p, map);
                     let r_s = print_bdd_helper(t, h_p, map);
+                    let lbl = ptr.label();
                     format!(
                         "({:?}, {}{}, {}{})",
-                        map.get(&ptr.label()).unwrap().value(),
+                        map.get(&lbl).unwrap_or_else(|| &lbl).value(),
                         if l_p.is_compl() { "!" } else { "" },
                         l_s,
                         if h_p.is_compl() { "!" } else { "" },
