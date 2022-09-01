@@ -68,6 +68,13 @@ impl<T> Random<T> {
         return Random { val: r };
     }
 
+    /// Apply `f` to each component.
+    pub fn map<R, F: FnMut(&T) -> Random<R>>(&self, f: &mut F) -> Random<R> {
+        let v : Vec<(Random<R>, Probability)> = self.vec().iter().map(|(x, p)| (f(x), *p)).collect();
+        let n = Random::from_vec(v);
+        return Random::flatten(n)
+    }
+
     /// Generate a Dirac delta at value `v`
     pub fn delta(v: T) -> Random<T> {
         Random {
