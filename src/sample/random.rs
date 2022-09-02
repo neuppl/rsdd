@@ -68,6 +68,13 @@ impl<T> Random<T> {
         return Random { val: r };
     }
 
+    // applies `f` to each component
+    pub fn map<R, F: FnMut(&T) -> Random<R>>(&self, f: &mut F) -> Random<R> {
+        let v : Vec<(Random<R>, Probability)> = self.vec().iter().map(|(x, p)| (f(x), *p)).collect();
+        let n = Random::from_vec(v);
+        return Random::flatten(n)
+    }
+
     pub fn fmap<U>(&self, f: &dyn Fn(&T) -> U) -> Random<U> {
         Random {
             val: self.val.iter().map(|(t, p)| (f(t), p.clone())).collect(),
