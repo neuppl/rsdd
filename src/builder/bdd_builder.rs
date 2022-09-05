@@ -1447,6 +1447,10 @@ impl BddManager {
             let v = self.var(lit.get_label(), lit.get_polarity());
             lit_cube = self.and(v, lit_cube);
         }
+        for lit in model.assignment_iter() {
+            let v = self.var(lit.get_label(), lit.get_polarity());
+            lit_cube = self.and(v, lit_cube);
+        }
         self.and(r, lit_cube)
     }
 
