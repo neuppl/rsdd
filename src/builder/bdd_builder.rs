@@ -1426,11 +1426,15 @@ impl BddManager {
     }
 
     pub fn from_cnf_topdown(&mut self, cnf: &Cnf) -> BddPtr {
-        // let mut up = match UnitPropagate::new(cnf) {
-        //     Some(v) => v,
-        //     None => return self.false_ptr(),
-        // };
+        self.from_cnf_topdown_partial(cnf, &PartialModel::from_litvec(&Vec::new(), cnf.num_vars()))
+    }
+
+    /// Compile a CNF to a BDD top-down beginning from the partial model given in `model`
+    pub fn from_cnf_topdown_partial(&mut self, cnf: &Cnf, model: &PartialModel) -> BddPtr {
         let mut sat = SATSolver::new(&cnf);
+        for assgn in model.assignment_iter() {
+            sat.decide(assgn);
+        }
         if sat.unsat_unit() {
             return self.false_ptr()
         }
