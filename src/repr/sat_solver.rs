@@ -287,7 +287,7 @@ impl<'a> UnitPropagate<'a> {
 }
 
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, PartialEq, Eq)]
 enum SATState {
     UNSAT, // the state is currently unsatisfied according to the units in the CNF
     SAT,   // the state is satisfied according to the units in the CNF
@@ -354,9 +354,13 @@ impl<'a> SATSolver<'a> {
         match &mut self.up {
             Some(up) => {
                 let res = up.decide(lit);
+                let l = self.cur_state.len() - 1;
+                if self.cur_state[l] == SATState::UNSAT {
+                    // stay UNSAT
+                    return; 
+                }
                 if res { 
                     // TODO should check if the state is now satisfied
-                    let l = self.cur_state.len() - 1;
                     self.cur_state[l] = SATState::Unknown;
                 } else {
                     let l = self.cur_state.len() - 1;
@@ -370,7 +374,7 @@ impl<'a> SATSolver<'a> {
 
     /// True if the formula is UNSAT according to the current state of the
     /// decided units
-    pub fn unsat_unit(&mut self) -> bool {
+    pub fn unsat_unit(&self) -> bool {
         match self.top_state() {
             SATState::UNSAT => true,
             _ => false
@@ -378,7 +382,7 @@ impl<'a> SATSolver<'a> {
     }
 
     /// Get the set of currently implied units
-    pub fn get_implied_units(&mut self) -> PartialModel {
+    pub fn get_implied_units(&self) -> PartialModel {
         match self.up {
             Some(ref up) => up.get_assgn().clone(),
             None => panic!("")

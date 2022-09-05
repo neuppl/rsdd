@@ -18,7 +18,7 @@ use num::traits::Num;
 use rand::rngs::ThreadRng;
 use rand::Rng;
 use std::cmp::Ordering;
-use std::collections::BinaryHeap;
+use std::collections::{BinaryHeap, HashSet};
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::iter::FromIterator;
@@ -1435,18 +1435,24 @@ impl BddManager {
         for assgn in model.assignment_iter() {
             sat.decide(assgn);
         }
+        
         if sat.unsat_unit() {
             return self.false_ptr()
         }
 
+        let mut lit_cube = self.true_ptr();
+        let assign_set : HashSet<Literal> = model.assignment_iter().collect();
+        for lit in sat.get_implied_units().assignment_iter() {
+            // conjoin in literals that are implied but not initially set
+            if !assign_set.contains(&lit) {
+                let v = self.var(lit.get_label(), lit.get_polarity());
+                lit_cube = self.and(v, lit_cube);
+            }
+        }
+        
         let r = self.topdown_h(cnf, &mut sat, 0, &CnfHasher::new(cnf), &mut HashMap::new());
 
         // conjoin in any initially implied literals
-        let mut lit_cube = self.true_ptr();
-        for lit in sat.get_implied_units().assignment_iter() {
-            let v = self.var(lit.get_label(), lit.get_polarity());
-            lit_cube = self.and(v, lit_cube);
-        }
         self.and(r, lit_cube)
     }
 
