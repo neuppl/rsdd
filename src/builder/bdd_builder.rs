@@ -1333,7 +1333,6 @@ impl BddManager {
         cnf: &Cnf,
         sat: &mut SATSolver,
         level: usize,
-        hasher: &CnfHasher,
         cache: &mut HashMap<HashedCNF, BddPtr>,
     ) -> BddPtr {
         // check for base case
@@ -1347,11 +1346,11 @@ impl BddManager {
         // check if this literal is currently set in unit propagation; if 
         // it is, skip it
         if assgn.is_set(cur_v) {
-            return self.topdown_h(cnf, sat, level+1, hasher, cache);
+            return self.topdown_h(cnf, sat, level+1, cache);
         }
 
         // check cache
-        let hashed = hasher.hash(&assgn);
+        let hashed = cnf.get_hasher().hash(&assgn);
         match cache.get(&hashed.clone()) {
             None => (),
             Some(v) => {
@@ -1381,7 +1380,7 @@ impl BddManager {
                 let v = self.var(l.get_label(), l.get_polarity());
                 lit_cube = self.and(lit_cube, v);
             }
-            let sub = self.topdown_h(cnf, sat, level + 1, hasher, cache);
+            let sub = self.topdown_h(cnf, sat, level + 1, cache);
             self.and(sub, lit_cube)
         } else {
             self.false_ptr()
@@ -1408,7 +1407,7 @@ impl BddManager {
                 let v = self.var(l.get_label(), l.get_polarity());
                 lit_cube = self.and(lit_cube, v);
             }
-            let sub = self.topdown_h(cnf, sat, level + 1, hasher, cache);
+            let sub = self.topdown_h(cnf, sat, level + 1, cache);
             self.and(sub, lit_cube)
         } else {
             self.false_ptr()
@@ -1450,7 +1449,7 @@ impl BddManager {
             }
         }
         
-        let r = self.topdown_h(cnf, &mut sat, 0, &CnfHasher::new(cnf), &mut HashMap::new());
+        let r = self.topdown_h(cnf, &mut sat, 0, &mut HashMap::new());
 
         // conjoin in any initially implied literals
         self.and(r, lit_cube)

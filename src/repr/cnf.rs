@@ -10,6 +10,7 @@ use rand::Rng;
 use crate::repr::var_label::{Literal, VarLabel};
 use std::cmp::{max, min};
 use std::collections::{HashMap, HashSet};
+use std::hash::Hasher;
 extern crate quickcheck;
 use self::quickcheck::{Arbitrary, Gen};
 use crate::repr::model::PartialModel;
@@ -46,6 +47,7 @@ pub struct HashedCNF {
 /// ```
 /// Then, if we were to hash this CNF with the partial model (a = T), would 
 /// get the value 7
+#[derive(Eq, PartialEq, Debug, Clone)]
 pub struct CnfHasher {
     weighted_cnf: Vec<Vec<(usize, Literal)>>,
     /// state[x] contains a list of unsatisfied clauses in the CNF (indexed into weighted_cnf)
@@ -136,11 +138,12 @@ impl CnfHasher {
 }
 
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Cnf {
     clauses: Vec<Vec<Literal>>,
     imm_clauses: Vector<Vector<Literal>>,
     num_vars: usize,
+    hasher: Option<CnfHasher>
 }
 
 pub struct AssignmentIter {
@@ -330,11 +333,14 @@ impl Cnf {
             clause.dedup();
         }
 
-        Cnf {
+        let mut r = Cnf {
             clauses: clauses.clone(),
             num_vars: m as usize,
-            imm_clauses: clauses.iter().map(|x| Vector::from(x)).collect()
-        }
+            imm_clauses: clauses.iter().map(|x| Vector::from(x)).collect(),
+            hasher: None
+        };
+        r.hasher = Some(CnfHasher::new(&r));
+        r
     }
 
     /// compute the average span of the clauses with the ordering given by
@@ -550,6 +556,15 @@ impl Cnf {
             // then filter out unsat literals in this clause
             Some(clause.into_iter().filter(|lit| !m.lit_neg_implied(*lit)).collect())
         }).collect()
+    }
+
+    /// get a hasher for this CNF 
+    /// may be expensive on first call; future calls are amortized
+    pub fn get_hasher(&self) -> &CnfHasher {
+        match self.hasher {
+            Some(ref v) => v,
+            None => panic!()
+        }
     }
 }
 
