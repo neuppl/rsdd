@@ -270,6 +270,11 @@ fn compile_topdown(network: BayesianNetwork) -> () {
     println!("Compiled\n\tCompile time: {:?}\n\tSize: {sz}", duration);
 }
 
+fn print_dimacs(bn: BayesianNetwork) -> () {
+    let bn = BayesianNetworkCNF::new(&bn);
+    println!("{}", bn.cnf.to_dimacs());
+}
+
 fn main() {
     let args = Args::parse();
     let bn = BayesianNetwork::from_string(std::fs::read_to_string(&args.file).unwrap().as_str());
@@ -278,6 +283,7 @@ fn main() {
         "bdd" => compile_bdd(&args, bn),
         "bdd_cnf" => compile_bdd_cnf(&args, bn),
         "topdown" => compile_topdown(bn),
+        "print_dimacs" => print_dimacs(bn),
         _ => panic!("unrecognized mode")
     }
 }
