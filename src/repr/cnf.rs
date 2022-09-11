@@ -1,19 +1,19 @@
 //! A representation of a conjunctive normal form (CNF)
 
 use crate::builder::var_order::VarOrder;
-use dimacs::Lit;
 use im::Vector;
+use petgraph::prelude::UnGraph;
+use petgraph::stable_graph::IndexType;
 use rand;
-use rand::prelude::SliceRandom;
 use rand::rngs::ThreadRng;
 use rand::Rng;
 use crate::repr::var_label::{Literal, VarLabel};
 use std::cmp::{max, min};
 use std::collections::{HashMap, HashSet};
-use std::hash::Hasher;
 extern crate quickcheck;
 use self::quickcheck::{Arbitrary, Gen};
 use crate::repr::model::PartialModel;
+use petgraph::graph::NodeIndex;
 
 const PRIMES: [u128; 4] = [64733603481794218985640164159, 79016979402926483817096290621, 46084029846212370199652019757, 49703069216273825773136967137];
 // number of primes to consider during CNF hashing
@@ -138,6 +138,35 @@ impl CnfHasher {
 }
 
 
+/// Let G be a graph and X be a node in G. The result of eliminating node X from
+/// graph G is another graph obtained from G by first adding an edge between
+/// every pair of nonadjacent neighbors of X and then deleting node X from G.
+/// The edges that are added during the elimination process are called fill-in
+/// edges.
+fn eliminate_node(g: &mut UnGraph<VarLabel, ()>, v: NodeIndex) -> () {
+    let neighbor_vec : Vec<NodeIndex> = g.neighbors_undirected(v).collect();
+    for n1 in 0..neighbor_vec.len() {
+        for n2 in n1..neighbor_vec.len() {
+            g.add_edge(neighbor_vec[n1], neighbor_vec[n2], ());
+        }
+    }
+    g.remove_node(v);
+}
+
+/// gets the number of fill edges that are added on eliminating v
+fn num_fill(g: &UnGraph<VarLabel, ()>, v: NodeIndex) -> usize {
+    let mut count = 0;
+    let neighbor_vec : Vec<NodeIndex> = g.neighbors_undirected(v).collect();
+    for n1 in 0..neighbor_vec.len() {
+        for n2 in n1..neighbor_vec.len() {
+            if !g.find_edge(neighbor_vec[n1], neighbor_vec[n2]).is_some() {
+                count += 1;
+            }
+        }
+    }
+    return count;
+}
+
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Cnf {
     clauses: Vec<Vec<Literal>>,
@@ -190,6 +219,29 @@ impl Iterator for AssignmentIter {
 }
 
 impl Cnf {
+    pub fn new(mut clauses: Vec<Vec<Literal>>) -> Cnf {
+        let mut m = 0;
+        // filter out empty clauses
+        clauses.retain(|x| x.len() > 0);
+        for clause in clauses.iter_mut() {
+            for lit in clause.iter() {
+                m = max(lit.get_label().value() + 1, m);
+            }
+            // remove duplicate literals
+            clause.sort_by(|a, b| a.get_label().value().cmp(&b.get_label().value()));
+            clause.dedup();
+        }
+
+        let mut r = Cnf {
+            clauses: clauses.clone(),
+            num_vars: m as usize,
+            imm_clauses: clauses.iter().map(|x| Vector::from(x)).collect(),
+            hasher: None
+        };
+        r.hasher = Some(CnfHasher::new(&r));
+        r
+    }
+
     pub fn from_file(v: String) -> Cnf {
         use dimacs::*;
         let r = parse_dimacs(&v).unwrap();
@@ -320,28 +372,6 @@ impl Cnf {
         return true;
     }
 
-    pub fn new(mut clauses: Vec<Vec<Literal>>) -> Cnf {
-        let mut m = 0;
-        // filter out empty clauses
-        clauses.retain(|x| x.len() > 0);
-        for clause in clauses.iter_mut() {
-            for lit in clause.iter() {
-                m = max(lit.get_label().value() + 1, m);
-            }
-            // remove duplicate literals
-            clause.sort_by(|a, b| a.get_label().value().cmp(&b.get_label().value()));
-            clause.dedup();
-        }
-
-        let mut r = Cnf {
-            clauses: clauses.clone(),
-            num_vars: m as usize,
-            imm_clauses: clauses.iter().map(|x| Vector::from(x)).collect(),
-            hasher: None
-        };
-        r.hasher = Some(CnfHasher::new(&r));
-        r
-    }
 
     /// compute the average span of the clauses with the ordering given by
     /// `lbl_to_pos`, which is a mapping from variable labels to their position
@@ -521,6 +551,37 @@ impl Cnf {
             }
         }
         return r;
+    }
+
+    pub fn interaction_graph(&self) -> UnGraph<VarLabel, ()> {
+        let mut g : UnGraph<VarLabel, ()> = UnGraph::new_undirected();
+        for v in 0..self.num_vars {
+            g.add_node(VarLabel::new(v as u64));
+        }
+        // add a clique for each clause
+        for c in self.clauses.iter() {
+            // for every pair of literals in the clause, add an edge
+            for i in 0..c.len() {
+                for j in i..c.len() {
+                    g.add_edge(NodeIndex::new(c[i].get_label().value_usize()), NodeIndex::new(c[j].get_label().value_usize()), ());
+                }
+            }
+        }
+        g
+    }
+
+    /// get a min-fill elimination order for this CNF
+    pub fn min_fill_order(&self) -> VarOrder {
+        let mut ord : Vec<VarLabel> = Vec::new();
+        let mut ig = self.interaction_graph();
+        while ig.node_count() > 0 {
+            // find the min-fill node, eliminate it, and add it to v
+            let (idx, _) = ig.node_indices().map(|x| (x, num_fill(&ig, x)))
+                .min_by(|(_, a), (_, b)| a.cmp(b)).unwrap();
+            ord.push(ig[idx]);
+            eliminate_node(&mut ig, idx);
+        }
+        VarOrder::new(ord)
     }
 
     pub fn to_dimacs(&self) -> String {

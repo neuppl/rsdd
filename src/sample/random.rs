@@ -112,6 +112,7 @@ impl<T> Random<T> {
 }
 
 
+// TODO this test is broken due to equality checking between floats
 // #[test]
 // fn test_random() {
 //     let b1 = Random::bool(false, Probability::new(0.4), |b| {
