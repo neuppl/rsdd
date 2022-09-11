@@ -272,6 +272,7 @@ fn compile_topdown(network: BayesianNetwork) -> () {
 
 fn print_dimacs(bn: BayesianNetwork) -> () {
     let bn = BayesianNetworkCNF::new(&bn);
+    println!("p cnf {} {}", bn.cnf.clauses().len(), bn.cnf.num_vars());
     println!("{}", bn.cnf.to_dimacs());
 }
 
