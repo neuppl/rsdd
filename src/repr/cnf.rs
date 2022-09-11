@@ -146,8 +146,10 @@ impl CnfHasher {
 fn eliminate_node(g: &mut UnGraph<VarLabel, ()>, v: NodeIndex) -> () {
     let neighbor_vec : Vec<NodeIndex> = g.neighbors_undirected(v).collect();
     for n1 in 0..neighbor_vec.len() {
-        for n2 in n1..neighbor_vec.len() {
-            g.add_edge(neighbor_vec[n1], neighbor_vec[n2], ());
+        for n2 in (n1+1)..neighbor_vec.len() {
+            if !g.find_edge(neighbor_vec[n1], neighbor_vec[n2]).is_some() {
+                g.add_edge(neighbor_vec[n1], neighbor_vec[n2], ());
+            }
         }
     }
     g.remove_node(v);
@@ -158,7 +160,7 @@ fn num_fill(g: &UnGraph<VarLabel, ()>, v: NodeIndex) -> usize {
     let mut count = 0;
     let neighbor_vec : Vec<NodeIndex> = g.neighbors_undirected(v).collect();
     for n1 in 0..neighbor_vec.len() {
-        for n2 in n1..neighbor_vec.len() {
+        for n2 in (n1+1)..neighbor_vec.len() {
             if !g.find_edge(neighbor_vec[n1], neighbor_vec[n2]).is_some() {
                 count += 1;
             }
@@ -563,7 +565,11 @@ impl Cnf {
             // for every pair of literals in the clause, add an edge
             for i in 0..c.len() {
                 for j in i..c.len() {
-                    g.add_edge(NodeIndex::new(c[i].get_label().value_usize()), NodeIndex::new(c[j].get_label().value_usize()), ());
+                    let a = NodeIndex::new(c[i].get_label().value_usize());
+                    let b = NodeIndex::new(c[j].get_label().value_usize());
+                    if !g.contains_edge(a, b) {
+                        g.add_edge(a, b, ());
+                    }
                 }
             }
         }
@@ -575,6 +581,7 @@ impl Cnf {
         let mut ord : Vec<VarLabel> = Vec::new();
         let mut ig = self.interaction_graph();
         while ig.node_count() > 0 {
+            println!("step, count: {}", ig.node_count());
             // find the min-fill node, eliminate it, and add it to v
             let (idx, _) = ig.node_indices().map(|x| (x, num_fill(&ig, x)))
                 .min_by(|(_, a), (_, b)| a.cmp(b)).unwrap();
