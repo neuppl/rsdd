@@ -581,7 +581,6 @@ impl Cnf {
         let mut ord : Vec<VarLabel> = Vec::new();
         let mut ig = self.interaction_graph();
         while ig.node_count() > 0 {
-            println!("step, count: {}", ig.node_count());
             // find the min-fill node, eliminate it, and add it to v
             let (idx, _) = ig.node_indices().map(|x| (x, num_fill(&ig, x)))
                 .min_by(|(_, a), (_, b)| a.cmp(b)).unwrap();
