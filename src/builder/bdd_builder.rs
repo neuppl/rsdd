@@ -1431,6 +1431,12 @@ impl BddManager {
 
     /// Compile a CNF to a BDD top-down beginning from the partial model given in `model`
     pub fn from_cnf_topdown_partial(&mut self, cnf: &Cnf, model: &PartialModel) -> BddPtr {
+       self.from_cnf_topdown_partial_cached(cnf, model, &mut HashMap::new()) 
+    }
+
+    /// Compile a CNF to a BDD top-down beginning from the partial model given in `model`
+    /// takes a cache as an argument
+    pub fn from_cnf_topdown_partial_cached(&mut self, cnf: &Cnf, model: &PartialModel, cache: &mut HashMap<HashedCNF, BddPtr>) -> BddPtr {
         let mut sat = SATSolver::new(&cnf);
         for assgn in model.assignment_iter() {
             sat.decide(assgn);
@@ -1450,11 +1456,12 @@ impl BddManager {
             }
         }
         
-        let r = self.topdown_h(cnf, &mut sat, 0, &mut HashMap::new());
+        let r = self.topdown_h(cnf, &mut sat, 0, cache);
 
         // conjoin in any initially implied literals
         self.and(r, lit_cube)
     }
+
 
     /// Prints the total number of recursive calls executed so far by the BddManager
     /// This is a stable way to track performance
