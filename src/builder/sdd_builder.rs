@@ -106,8 +106,8 @@ pub struct SddManager {
     stats: SddStats,
     /// the apply cache
     app_cache: Vec<Lru<(SddPtr, SddPtr), SddPtr>>,
-    // experimenting with different canonicalize options
-    modified_canonicalize: bool,
+    // disabling compression for testing purposes, eventual experimentation
+    use_compression: bool,
     // base prime number for wmc-based hashing
     wmc_base: u64, // TODO(mattxwang): should we use a different bignum-esque impl here?
     wmc_map: SddWmc<u64>, // TODO(mattxwang): make this more generic?
@@ -127,7 +127,7 @@ impl<'a> SddManager {
             stats: SddStats::new(),
             vtree: VTreeManager::new(vtree),
             app_cache,
-            modified_canonicalize: false,
+            use_compression: true,
             wmc_base: 122959073, // TODO(mattxwang): make this user-configurable
             // TODO(mattxwang): many things wrong here, incl. template types
             wmc_map: SddWmc::new(0, 122959073, vtree_clone),
@@ -136,8 +136,8 @@ impl<'a> SddManager {
         return m;
     }
 
-    pub fn set_canonicalize(&mut self, b: bool) -> () {
-        self.modified_canonicalize = b
+    pub fn set_compression(&mut self, b: bool) -> () {
+        self.use_compression = b
     }
 
     // Walks the Sdd, caching results of previously computed values
@@ -241,8 +241,8 @@ impl<'a> SddManager {
     /// Canonicalizes the list of (prime, sub) terms in-place
     /// `node`: a list of (prime, sub) pairs
     fn compress(&mut self, node: &mut Vec<(SddPtr, SddPtr)>) -> () {
-        if self.modified_canonicalize {
-            panic!("compress called within modified version")
+        if !self.use_compression {
+            panic!("compress called when disabled")
         }
 
         let mut i = 0;
@@ -263,7 +263,7 @@ impl<'a> SddManager {
 
     /// Returns a canonicalized SDD pointer from a list of (prime, sub) pairs
     fn canonicalize(&mut self, mut node: Vec<(SddPtr, SddPtr)>, table: VTreeIndex) -> SddPtr {
-        if !self.modified_canonicalize {
+        if self.use_compression {
             // first compress
             self.compress(&mut node);
         }
@@ -717,7 +717,7 @@ impl<'a> SddManager {
 
 
     pub fn sdd_eq(&self, a: SddPtr, b: SddPtr) -> bool {
-        // if self.modified_canonicalize {
+        // if self.use_compression {
         //     return (self.wmc_hash::<u32>(a) - self.wmc_hash::<u32>(b)) < 1
         // }
         a == b
@@ -1037,18 +1037,45 @@ fn sdd_wmc2() {
 }
 
 #[test]
-fn is_trimmed_trivial(){
+fn is_canonical_trivial(){
     let mut mgr = SddManager::new(even_split(
         &vec![
             VarLabel::new(0),
-            VarLabel::new(1),
-            VarLabel::new(2),
-            VarLabel::new(3),
-            VarLabel::new(4),
         ],
         2,
     ));
     let a = mgr.var(VarLabel::new(0), true);
 
-    assert_eq!(mgr.is_trimmed(a), true)
+    assert_eq!(mgr.is_trimmed(a), true);
+    assert_eq!(mgr.is_compressed(a), true);
+    assert_eq!(mgr.is_canonical(a), true);
+}
+
+#[test]
+fn not_compressed_or_trimmed_trivial(){
+    let mut man = SddManager::new(even_split(
+        &vec![
+            VarLabel::new(0),
+            VarLabel::new(1),
+            VarLabel::new(2),
+            VarLabel::new(3),
+        ],
+        2,
+    ));
+
+    man.set_compression(false); // necessary so we can observe duplication
+
+    let x = man.var(VarLabel::new(0), true);
+    let y = man.var(VarLabel::new(1), true);
+    let f1 = man.var(VarLabel::new(2), true);
+
+    let iff1 = man.iff(x, f1);
+    let iff2 = man.iff(y, f1); // note: same g's here!
+    let obs = man.or(x, x);
+    let and1 = man.and(iff1, iff2);
+    let f = man.and(and1, obs);
+
+    assert_eq!(man.is_trimmed(f), false);
+    assert_eq!(man.is_compressed(f), false);
+    assert_eq!(man.is_canonical(f), false);
 }

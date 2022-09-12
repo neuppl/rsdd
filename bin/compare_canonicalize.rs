@@ -116,7 +116,7 @@ fn build_dtree(cnf: &Cnf) -> DTree {
 
 fn compile_sdd_benchmark(cnf: &Cnf, vtree: VTree, modified: bool) -> Duration {
   let mut compiler = sdd_builder::SddManager::new(vtree);
-  compiler.set_canonicalize(modified);
+  compiler.set_compression(!modified);
 
   let start = Instant::now();
   compiler.from_cnf(&cnf);
