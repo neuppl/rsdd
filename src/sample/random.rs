@@ -68,6 +68,30 @@ impl<T> Random<T> {
         return Random { val: r };
     }
 
+    // applies `f` to each component
+    pub fn map<R, F: FnMut(&T) -> Random<R>>(&self, f: &mut F) -> Random<R> {
+        let v : Vec<(Random<R>, Probability)> = self.vec().iter().map(|(x, p)| (f(x), *p)).collect();
+        let n = Random::from_vec(v);
+        return Random::flatten(n)
+    }
+
+    pub fn fmap<U>(&self, f: &dyn Fn(&T) -> U) -> Random<U> {
+        Random {
+            val: self.val.iter().map(|(t, p)| (f(t), p.clone())).collect(),
+        }
+    }
+
+    pub fn bind<U>(self, fa_mb: &mut dyn FnMut(&T) -> Random<U>) -> Random<U> {
+        let mut r: Vec<(U, Probability)> = Vec::new();
+        for (a, prob_a) in self.val.into_iter() {
+            let mb = fa_mb(&a);
+            for (b, prob_b) in mb.val.into_iter() {
+                r.push((b, Probability::new(prob_a.as_f64() * prob_b.as_f64())));
+            }
+        }
+        return Random { val: r };
+    }
+
     /// Generate a Dirac delta at value `v`
     pub fn delta(v: T) -> Random<T> {
         Random {
@@ -86,3 +110,26 @@ impl<T> Random<T> {
         &self.val
     }
 }
+
+
+// TODO this test is broken due to equality checking between floats
+// #[test]
+// fn test_random() {
+//     let b1 = Random::bool(false, Probability::new(0.4), |b| {
+//         Random::uniform_int(false, 0, 4, |x| if b { 0 } else { x })
+//     });
+//     let f = Random::flatten(b1);
+//     assert_eq!(
+//         f.val,
+//         vec![
+//             (0, Probability::new(0.1)),
+//             (0, Probability::new(0.1)),
+//             (0, Probability::new(0.1)),
+//             (0, Probability::new(0.1)),
+//             (0, Probability::new(0.15)),
+//             (1, Probability::new(0.15)),
+//             (2, Probability::new(0.15)),
+//             (3, Probability::new(0.15))
+//         ]
+//     );
+// }

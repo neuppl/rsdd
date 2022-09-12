@@ -2,38 +2,9 @@ use core::fmt::Debug;
 use core::hash::Hash;
 use std::collections::HashSet;
 
+use crate::builder::var_order::VarOrder;
+
 use super::btree::BTree;
-
-// struct SwapIter<T> {
-//     r: Vec<T>,
-//     l: Vec<T>,
-//     l_idx: usize, 
-//     r_idx: usize
-// }
-
-// // Implement `Iterator` for `Fibonacci`.
-// // The `Iterator` trait only requires a method to be defined for the `next` element.
-// impl<'a, T> Iterator for SwapIter<'a, T> {
-//     // We can refer to this type using Self::Item
-//     type Item = (Vec<T>, Vec<T>);
-    
-//     fn next(&mut self) -> Option<Self::Item> {
-//         if l_idx >= self.l.len() {
-//             return None;
-//         }
-//         let mut r = self.r.clone();
-//         let mut l = self.l.clone();
-
-//         self.curr = self.next;
-//         self.next = new_next;
-
-//         // Since there's no endpoint to a Fibonacci sequence, the `Iterator` 
-//         // will never return `None`, and `Some` is always returned.
-//         Some()
-//     }
-// }
-
-
 
 #[derive(Clone, Debug)]
 struct Hypergraph<T: Clone + Debug + PartialEq + Eq + Hash> {
@@ -71,20 +42,8 @@ impl<T: Clone + Debug + PartialEq + Eq + Hash> Hypergraph<T> {
         r
     }
 
-    pub fn get_dtree(&self) -> BTree<(), T> {
+    // pub fn get_dtree(&self) -> BTree<(), T> {
         // follow Kernighan-Lin algorithm for finding a minimum-cut 2-partition
-
-        // choose an initial arbitrary equal partitioning of the vertices
-        let mut l = self.vertices.clone();
-        let r = l.split_off(l.len() / 2);
-
-        let mut best_l = l.clone();
-        let mut best_r = r.clone();
-        let cur_e = self.get_cut_edges(&best_l, &best_r);
-
-        // consider all swaps
-
-
-        todo!()
-    }
+        // todo!()
+    // }
 }

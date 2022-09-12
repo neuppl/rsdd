@@ -16,6 +16,7 @@ extern crate twox_hash;
 extern crate bit_set;
 extern crate segment_tree;
 extern crate dot;
+extern crate petgraph;
 
 #[macro_use]
 mod util;

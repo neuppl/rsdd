@@ -18,7 +18,7 @@ use num::traits::Num;
 use rand::rngs::ThreadRng;
 use rand::Rng;
 use std::cmp::Ordering;
-use std::collections::BinaryHeap;
+use std::collections::{BinaryHeap, HashSet};
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::iter::FromIterator;
@@ -388,9 +388,10 @@ impl BddManager {
                     let h_p = t.high(ptr);
                     let l_s = print_bdd_helper(t, l_p, map);
                     let r_s = print_bdd_helper(t, h_p, map);
+                    let lbl = ptr.label();
                     format!(
                         "({:?}, {}{}, {}{})",
-                        map.get(&ptr.label()).unwrap().value(),
+                        map.get(&lbl).unwrap_or_else(|| &lbl).value(),
                         if l_p.is_compl() { "!" } else { "" },
                         l_s,
                         if h_p.is_compl() { "!" } else { "" },
@@ -1333,7 +1334,6 @@ impl BddManager {
         cnf: &Cnf,
         sat: &mut SATSolver,
         level: usize,
-        hasher: &CnfHasher,
         cache: &mut HashMap<HashedCNF, BddPtr>,
     ) -> BddPtr {
         // check for base case
@@ -1347,11 +1347,11 @@ impl BddManager {
         // check if this literal is currently set in unit propagation; if 
         // it is, skip it
         if assgn.is_set(cur_v) {
-            return self.topdown_h(cnf, sat, level+1, hasher, cache);
+            return self.topdown_h(cnf, sat, level+1, cache);
         }
 
         // check cache
-        let hashed = hasher.hash(&assgn);
+        let hashed = cnf.get_hasher().hash(&assgn);
         match cache.get(&hashed.clone()) {
             None => (),
             Some(v) => {
@@ -1381,7 +1381,7 @@ impl BddManager {
                 let v = self.var(l.get_label(), l.get_polarity());
                 lit_cube = self.and(lit_cube, v);
             }
-            let sub = self.topdown_h(cnf, sat, level + 1, hasher, cache);
+            let sub = self.topdown_h(cnf, sat, level + 1, cache);
             self.and(sub, lit_cube)
         } else {
             self.false_ptr()
@@ -1408,7 +1408,7 @@ impl BddManager {
                 let v = self.var(l.get_label(), l.get_polarity());
                 lit_cube = self.and(lit_cube, v);
             }
-            let sub = self.topdown_h(cnf, sat, level + 1, hasher, cache);
+            let sub = self.topdown_h(cnf, sat, level + 1, cache);
             self.and(sub, lit_cube)
         } else {
             self.false_ptr()
@@ -1426,25 +1426,42 @@ impl BddManager {
     }
 
     pub fn from_cnf_topdown(&mut self, cnf: &Cnf) -> BddPtr {
-        // let mut up = match UnitPropagate::new(cnf) {
-        //     Some(v) => v,
-        //     None => return self.false_ptr(),
-        // };
+        self.from_cnf_topdown_partial(cnf, &PartialModel::from_litvec(&Vec::new(), cnf.num_vars()))
+    }
+
+    /// Compile a CNF to a BDD top-down beginning from the partial model given in `model`
+    pub fn from_cnf_topdown_partial(&mut self, cnf: &Cnf, model: &PartialModel) -> BddPtr {
+       self.from_cnf_topdown_partial_cached(cnf, model, &mut HashMap::new()) 
+    }
+
+    /// Compile a CNF to a BDD top-down beginning from the partial model given in `model`
+    /// takes a cache as an argument
+    pub fn from_cnf_topdown_partial_cached(&mut self, cnf: &Cnf, model: &PartialModel, cache: &mut HashMap<HashedCNF, BddPtr>) -> BddPtr {
         let mut sat = SATSolver::new(&cnf);
+        for assgn in model.assignment_iter() {
+            sat.decide(assgn);
+        }
+        
         if sat.unsat_unit() {
             return self.false_ptr()
         }
 
-        let r = self.topdown_h(cnf, &mut sat, 0, &CnfHasher::new(cnf), &mut HashMap::new());
+        let mut lit_cube = self.true_ptr();
+        let assign_set : HashSet<Literal> = model.assignment_iter().collect();
+        for lit in sat.get_implied_units().assignment_iter() {
+            // conjoin in literals that are implied but not initially set
+            if !assign_set.contains(&lit) {
+                let v = self.var(lit.get_label(), lit.get_polarity());
+                lit_cube = self.and(v, lit_cube);
+            }
+        }
+        
+        let r = self.topdown_h(cnf, &mut sat, 0, cache);
 
         // conjoin in any initially implied literals
-        let mut lit_cube = self.true_ptr();
-        for lit in sat.get_implied_units().assignment_iter() {
-            let v = self.var(lit.get_label(), lit.get_polarity());
-            lit_cube = self.and(v, lit_cube);
-        }
         self.and(r, lit_cube)
     }
+
 
     /// Prints the total number of recursive calls executed so far by the BddManager
     /// This is a stable way to track performance
