@@ -5,7 +5,7 @@ pub struct Probability(f64);
 
 impl Probability {
     pub fn new(v: f64) -> Probability {
-        assert!((0.0..=1.0).contains(&v));
+        assert!((0.0..=1.0).contains(&v), "{} ∉ [0.0..1.0]", v);
         Probability(v)
     }
 
