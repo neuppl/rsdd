@@ -1071,11 +1071,41 @@ fn not_compressed_or_trimmed_trivial(){
 
     let iff1 = man.iff(x, f1);
     let iff2 = man.iff(y, f1); // note: same g's here!
-    let obs = man.or(x, x);
+    let obs = man.or(x, x);   // note: same x's here!
     let and1 = man.and(iff1, iff2);
     let f = man.and(and1, obs);
 
     assert_eq!(man.is_trimmed(f), false);
     assert_eq!(man.is_compressed(f), false);
     assert_eq!(man.is_canonical(f), false);
+}
+
+// note: this test is identical to the one above.
+// However, we keep compression on, and flip the asserts on the predicates
+// the idea is that we test that the SDD Manager does indeed compress / trim under-the-hood!
+#[test]
+fn test_compression(){
+    let mut man = SddManager::new(even_split(
+        &vec![
+            VarLabel::new(0),
+            VarLabel::new(1),
+            VarLabel::new(2),
+            VarLabel::new(3),
+        ],
+        2,
+    ));
+
+    let x = man.var(VarLabel::new(0), true);
+    let y = man.var(VarLabel::new(1), true);
+    let f1 = man.var(VarLabel::new(2), true);
+
+    let iff1 = man.iff(x, f1);
+    let iff2 = man.iff(y, f1); // note: same g's here!
+    let obs = man.or(x, x);
+    let and1 = man.and(iff1, iff2);
+    let f = man.and(and1, obs);
+
+    assert_eq!(man.is_trimmed(f), true);
+    assert_eq!(man.is_compressed(f), true);
+    assert_eq!(man.is_canonical(f), true);
 }
