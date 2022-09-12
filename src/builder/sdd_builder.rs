@@ -108,9 +108,6 @@ pub struct SddManager {
     app_cache: Vec<Lru<(SddPtr, SddPtr), SddPtr>>,
     // disabling compression for testing purposes, eventual experimentation
     use_compression: bool,
-    // base prime number for wmc-based hashing
-    wmc_base: u64, // TODO(mattxwang): should we use a different bignum-esque impl here?
-    wmc_map: SddWmc<u64>, // TODO(mattxwang): make this more generic?
 }
 
 impl<'a> SddManager {
@@ -128,9 +125,6 @@ impl<'a> SddManager {
             vtree: VTreeManager::new(vtree),
             app_cache,
             use_compression: true,
-            wmc_base: 122959073, // TODO(mattxwang): make this user-configurable
-            // TODO(mattxwang): many things wrong here, incl. template types
-            wmc_map: SddWmc::new(0, 122959073, vtree_clone),
         };
 
         return m;
@@ -228,14 +222,6 @@ impl<'a> SddManager {
     fn get_bdd_mgr_mut(&mut self, f: SddPtr) -> &mut BddManager {
         assert!(f.is_bdd());
         self.tbl.bdd_man_mut(f.vtree().value())
-    }
-
-    // TODO: make this more generic
-    // fn wmc_hash<T: Num + Clone + Debug + Copy>(&mut self, sdd: SddPtr) -> T
-    fn wmc_hash<T: Num + Clone + Debug + Copy>(&self, sdd: SddPtr) -> u64 {
-        // This doesn't work :( mutability issue on unsmoothed_wmc. need to make wmc immutable?
-        // self.unsmoothed_wmc::<u64>(sdd, &self.wmc_map) % self.wmc_base
-        1 % &self.wmc_base
     }
 
     /// Canonicalizes the list of (prime, sub) terms in-place
@@ -558,6 +544,9 @@ impl<'a> SddManager {
         self.is_canonical_h(f, &mut HashMap::new())
     }
 
+    // predicate that returns if an SDD is compressed;
+    // see https://www.ijcai.org/Proceedings/11/Papers/143.pdf
+    // definition 8
     pub fn is_compressed(&self, f: SddPtr) -> bool {
          if f.is_const() {
             return true;
@@ -588,7 +577,6 @@ impl<'a> SddManager {
     // see https://www.ijcai.org/Proceedings/11/Papers/143.pdf
     // definition 8
     pub fn is_trimmed(&self, f: SddPtr) -> bool {
-        // my guess is that a constant is trimmed
         if f.is_const() {
             return true;
         }
@@ -717,9 +705,6 @@ impl<'a> SddManager {
 
 
     pub fn sdd_eq(&self, a: SddPtr, b: SddPtr) -> bool {
-        // if self.use_compression {
-        //     return (self.wmc_hash::<u32>(a) - self.wmc_hash::<u32>(b)) < 1
-        // }
         a == b
     }
 
