@@ -543,10 +543,9 @@ impl<'a> SddManager {
             return true;
         }
 
+        // assumption: bdd is trimmed!
         if f.is_bdd() {
-            // deal with this later?
-            // return false;
-            todo!()
+            return true;
         }
 
         let or = self.tbl
