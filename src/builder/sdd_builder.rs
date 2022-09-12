@@ -531,7 +531,29 @@ impl<'a> SddManager {
     }
 
     pub fn is_compressed(&self, f: SddPtr) -> bool {
-        todo!()
+         if f.is_const() {
+            return true;
+        }
+
+        // TODO: is this assumption correct?
+        if f.is_bdd() {
+            return true;
+        }
+
+        // question for matt: should we be recursively passing this down?
+        let mut visited_sdds: HashSet<SddPtr> = HashSet::new();
+
+        let or = self.tbl
+            .sdd_get_or(f);
+
+        for (_, s) in or.iter() {
+            if visited_sdds.contains(&s.regular()) {
+                return false;
+            }
+            visited_sdds.insert(s.regular());
+        }
+
+        return or.iter().all(|(p, _)| {self.is_compressed(*p)});
     }
 
     // predicate that returns if an SDD is trimmed;
