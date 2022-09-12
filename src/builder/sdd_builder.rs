@@ -106,6 +106,11 @@ pub struct SddManager {
     stats: SddStats,
     /// the apply cache
     app_cache: Vec<Lru<(SddPtr, SddPtr), SddPtr>>,
+    // experimenting with different canonicalize options
+    modified_canonicalize: bool,
+    // base prime number for wmc-based hashing
+    wmc_base: u64, // TODO(mattxwang): should we use a different bignum-esque impl here?
+    wmc_map: SddWmc<u64>, // TODO(mattxwang): make this more generic?
 }
 
 impl<'a> SddManager {
@@ -115,14 +120,24 @@ impl<'a> SddManager {
             app_cache.push(Lru::new(8));
         }
 
+        let vtree_clone = vtree.clone();
+
         let m = SddManager {
             tbl: SddTable::new(&vtree),
             stats: SddStats::new(),
             vtree: VTreeManager::new(vtree),
             app_cache,
+            modified_canonicalize: false,
+            wmc_base: 122959073, // TODO(mattxwang): make this user-configurable
+            // TODO(mattxwang): many things wrong here, incl. template types
+            wmc_map: SddWmc::new(0, 122959073, vtree_clone),
         };
 
         return m;
+    }
+
+    pub fn set_canonicalize(&mut self, b: bool) -> () {
+        self.modified_canonicalize = b
     }
 
     // Walks the Sdd, caching results of previously computed values
@@ -215,10 +230,21 @@ impl<'a> SddManager {
         self.tbl.bdd_man_mut(f.vtree().value())
     }
 
+    // TODO: make this more generic
+    // fn wmc_hash<T: Num + Clone + Debug + Copy>(&mut self, sdd: SddPtr) -> T
+    fn wmc_hash<T: Num + Clone + Debug + Copy>(&self, sdd: SddPtr) -> u64 {
+        // This doesn't work :( mutability issue on unsmoothed_wmc. need to make wmc immutable?
+        // self.unsmoothed_wmc::<u64>(sdd, &self.wmc_map) % self.wmc_base
+        1 % &self.wmc_base
+    }
 
     /// Canonicalizes the list of (prime, sub) terms in-place
     /// `node`: a list of (prime, sub) pairs
     fn compress(&mut self, node: &mut Vec<(SddPtr, SddPtr)>) -> () {
+        if self.modified_canonicalize {
+            panic!("compress called within modified version")
+        }
+
         let mut i = 0;
         for i in 0..node.len() {
             // see if we can compress i
@@ -237,8 +263,10 @@ impl<'a> SddManager {
 
     /// Returns a canonicalized SDD pointer from a list of (prime, sub) pairs
     fn canonicalize(&mut self, mut node: Vec<(SddPtr, SddPtr)>, table: VTreeIndex) -> SddPtr {
-        // first compress
-        self.compress(&mut node);
+        if !self.modified_canonicalize {
+            // first compress
+            self.compress(&mut node);
+        }
         // check for a base case
         if node.len() == 0 {
             return SddPtr::new_const(true);
@@ -689,6 +717,9 @@ impl<'a> SddManager {
 
 
     pub fn sdd_eq(&self, a: SddPtr, b: SddPtr) -> bool {
+        // if self.modified_canonicalize {
+        //     return (self.wmc_hash::<u32>(a) - self.wmc_hash::<u32>(b)) < 1
+        // }
         a == b
     }
 
