@@ -548,6 +548,10 @@ impl<'a> SddManager {
     // see https://www.ijcai.org/Proceedings/11/Papers/143.pdf
     // definition 8
     pub fn is_compressed(&self, f: SddPtr) -> bool {
+        self.is_compressed_h(f, &mut HashSet::new(), &mut HashSet::new())
+    }
+
+    fn is_compressed_h(&self, f: SddPtr, known_compressed: &mut HashSet<SddPtr>, known_uncompressed: &mut HashSet<SddPtr>) -> bool {
          if f.is_const() {
             return true;
         }
@@ -577,6 +581,10 @@ impl<'a> SddManager {
     // see https://www.ijcai.org/Proceedings/11/Papers/143.pdf
     // definition 8
     pub fn is_trimmed(&self, f: SddPtr) -> bool {
+        self.is_trimmed_h(f, &mut HashSet::new(), &mut HashSet::new())
+    }
+
+    fn is_trimmed_h(&self, f: SddPtr, known_trimmed: &mut HashSet<SddPtr>, known_untrimmed: &mut HashSet<SddPtr>) -> bool {
         if f.is_const() {
             return true;
         }
