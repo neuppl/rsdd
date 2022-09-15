@@ -82,8 +82,8 @@ pub fn render_full(mgr: &BddManager, map: &HashMap<VarLabel, VarLabel>, bool_bin
         queue: &mut VecDeque<(BddPtr, u64)>,
 
 
-        nodes: &mut Vec<(Node, u64)>,
-        edges: &mut Vec<Edge>,
+        nodes: &mut Vec<BddPtr>,
+        edges: &mut Vec<(BddPtr, BddPtr)>,
     ) -> Vec<Stmt> {
         match optr {
             None => {
@@ -111,10 +111,13 @@ pub fn render_full(mgr: &BddManager, map: &HashMap<VarLabel, VarLabel>, bool_bin
                         let nrender = get_label(mgr, map, ptr);
                         let cur_node = (var_node(&nrender, lvl, ptr.is_compl()), lvl);
 
+                        let low_is_low_path = !lp.0.is_compl();
+                        println!("{:?}: {}, {}, {}", ptr, ptr.is_compl(), lp.0.is_compl(), hp.0.is_compl());
+
                         nodes.extend(vec![cur_node.clone()]);
                         edges.extend(vec![
-                            mk_edge(cur_node.clone().0.id, var_id(&get_label(mgr, map, lp.0), lvl+1, lp.0.is_const(), bool_binsize), lp.0, false,),
-                            mk_edge(cur_node.clone().0.id, var_id(&get_label(mgr, map, hp.0), lvl+1, hp.0.is_const(), bool_binsize), hp.0, true,)
+                            mk_edge(cur_node.clone().0.id, var_id(&get_label(mgr, map, lp.0), lvl+1, lp.0.is_const(), bool_binsize), lp.0, low_is_low_path,),
+                            mk_edge(cur_node.clone().0.id, var_id(&get_label(mgr, map, hp.0), lvl+1, hp.0.is_const(), bool_binsize), hp.0, !low_is_low_path,)
                         ]);
                         queue.push_back(hp);
                         print_bdd_helper(mgr, map, bool_binsize, Some(lp), queue, nodes, edges)
@@ -191,6 +194,7 @@ mod test_graphviz {
 
 
     #[test]
+    #[ignore]
     fn test_dot_3or() {
         let mut mgr = BddManager::new_default_order(3);
         let map = HashMap::new();
@@ -232,7 +236,8 @@ mod test_graphviz {
     }
 
     #[test]
-    fn test_dot_structured() {
+    #[ignore]
+    fn test_dt_structured_original() {
         let mut mgr = BddManager::new_default_order(4);
         let map = HashMap::new();
         let a = mgr.new_var();
@@ -290,4 +295,22 @@ mod test_graphviz {
         println!("{}", to_string_full(&mgr,&map, None, xor_ab_acd_d));
         todo!();
     }
+
+    #[test]
+    fn test_dot_structured() {
+        let mut mgr = BddManager::new_default_order(4);
+        let map = HashMap::new();
+        let avar = mgr.new_var();
+        let bvar = mgr.new_var();
+        let a = mgr.var(avar, true);
+        let b = mgr.var(bvar, true);
+        let not_b = mgr.var(bvar, false);
+
+        let a_xor_b = mgr.xor(a, b);
+        let a_or_not_b = mgr.or(a, not_b);
+        // println!("{}", to_string_full(&mgr,&map, None, a_xor_b));
+        println!("{}", to_string_full(&mgr,&map, None, a_or_not_b));
+        todo!();
+    }
+
 }
