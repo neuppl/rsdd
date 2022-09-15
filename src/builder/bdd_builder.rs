@@ -735,17 +735,17 @@ impl BddManager {
         match m.get(bdd.label()) {
             Some(value) => {
                 let node = self.deref_bdd(bdd).into_node();
-                let r = if value { 
-                    self.cond_model_h(node.high, m, cache) 
-                } else { 
-                    self.cond_model_h(node.low, m, cache) 
+                let r = if value {
+                    self.cond_model_h(node.high, m, cache)
+                } else {
+                    self.cond_model_h(node.low, m, cache)
                 };
                 if bdd.is_compl() {
                     r.neg()
                 } else {
                     r
                 }
-            }, 
+            },
             None => {
                 // check cache
                 let idx = self.compute_table.get_scratch(bdd).unwrap();
@@ -870,9 +870,9 @@ impl BddManager {
         self.compute_table.num_nodes()
     }
 
-    fn smoothed_bottomup_pass_h<T: Clone + Copy + Debug, F: Fn(VarLabel, T, T) -> T>(&mut self, 
-        ptr: BddPtr, 
-        f: &F, 
+    fn smoothed_bottomup_pass_h<T: Clone + Copy + Debug, F: Fn(VarLabel, T, T) -> T>(&mut self,
+        ptr: BddPtr,
+        f: &F,
         low_v: T,
         high_v: T,
         expected_level: usize,
@@ -921,7 +921,7 @@ impl BddManager {
         // smoothing
         if expected_level >= self.get_order().num_vars() {
             return r;
-        } 
+        }
         let smoothing_depth = match ptr.ptr_type() {
             PointerType::PtrFalse | PointerType::PtrTrue => self.get_order().num_vars(),
             PointerType::PtrNode => {
@@ -977,7 +977,7 @@ impl BddManager {
     fn marginal_map_h(&mut self, ptr: BddPtr, cur_lb: f64, cur_best: PartialModel,
         margvars: &[VarLabel], wmc: &BddWmc<f64>, cur_assgn: PartialModel) -> (f64, PartialModel) {
             match margvars {
-                [] => { 
+                [] => {
                     let margvar_bits = BitSet::new();
                     let possible_best = self.marginal_map_eval(ptr, &cur_assgn, &margvar_bits, wmc);
                     if possible_best > cur_lb {
@@ -985,7 +985,7 @@ impl BddManager {
                     } else {
                         (cur_lb, cur_best)
                     }
-                }, 
+                },
                 [x, end @ ..] => {
                     let mut best_model = cur_best;
                     let mut best_lb = cur_lb;
@@ -1150,12 +1150,12 @@ impl BddManager {
 
     pub fn from_dtree(&mut self, dtree: &dtree::DTree) -> BddPtr {
         use dtree::DTree;
-        match &dtree { 
+        match &dtree {
             &DTree::Leaf{ v: c, cutset: _, vars: _ } => {
                 // compile the clause
-                c.iter().fold(self.false_ptr(), |acc, i| { 
+                c.iter().fold(self.false_ptr(), |acc, i| {
                     let v = self.var(i.get_label(), i.get_polarity());
-                    self.or(acc, v) 
+                    self.or(acc, v)
                 })
             },
             &DTree::Node{ ref l, ref r, cutset: _, vars: _ } => {
@@ -1244,7 +1244,7 @@ impl BddManager {
         } else {
             return r.unwrap();
         }
-   
+
     }
 
     pub fn print_stats(&self) -> () {
@@ -1325,7 +1325,7 @@ impl BddManager {
         }
     }
 
-    /// Returns A BDD that represents `cnf` conditioned on all 
+    /// Returns A BDD that represents `cnf` conditioned on all
     ///     variables set in the current top model
     /// We need both of these BDDs for sound CNF caching
     /// `cache`: a map from hashed CNFs to their compiled BDDs
@@ -1344,7 +1344,7 @@ impl BddManager {
 
         let cur_v = self.get_order().var_at_level(level);
 
-        // check if this literal is currently set in unit propagation; if 
+        // check if this literal is currently set in unit propagation; if
         // it is, skip it
         if assgn.is_set(cur_v) {
             return self.topdown_h(cnf, sat, level+1, cache);
@@ -1431,7 +1431,7 @@ impl BddManager {
 
     /// Compile a CNF to a BDD top-down beginning from the partial model given in `model`
     pub fn from_cnf_topdown_partial(&mut self, cnf: &Cnf, model: &PartialModel) -> BddPtr {
-       self.from_cnf_topdown_partial_cached(cnf, model, &mut HashMap::new()) 
+       self.from_cnf_topdown_partial_cached(cnf, model, &mut HashMap::new())
     }
 
     /// Compile a CNF to a BDD top-down beginning from the partial model given in `model`
@@ -1441,7 +1441,7 @@ impl BddManager {
         for assgn in model.assignment_iter() {
             sat.decide(assgn);
         }
-        
+
         if sat.unsat_unit() {
             return self.false_ptr()
         }
@@ -1455,7 +1455,7 @@ impl BddManager {
                 lit_cube = self.and(v, lit_cube);
             }
         }
-        
+
         let r = self.topdown_h(cnf, &mut sat, 0, cache);
 
         // conjoin in any initially implied literals

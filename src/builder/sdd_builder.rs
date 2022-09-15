@@ -1,7 +1,6 @@
 //! The main implementation of the SDD manager, the primary way of interacting
 //! with SDDs.
 
-use crate::builder::var_order::VarOrder;
 use crate::{
     backing_store::sdd_table::*,
     builder::cache::lru::*,
@@ -219,7 +218,6 @@ impl<'a> SddManager {
     /// Canonicalizes the list of (prime, sub) terms in-place
     /// `node`: a list of (prime, sub) pairs
     fn compress(&mut self, node: &mut Vec<(SddPtr, SddPtr)>) -> () {
-        let mut i = 0;
         for i in 0..node.len() {
             // see if we can compress i
             let mut j = i+1;

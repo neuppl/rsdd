@@ -3,7 +3,6 @@
 use crate::builder::var_order::VarOrder;
 use im::Vector;
 use petgraph::prelude::UnGraph;
-use petgraph::stable_graph::IndexType;
 use rand;
 use rand::rngs::ThreadRng;
 use rand::Rng;
@@ -25,19 +24,19 @@ pub struct HashedCNF {
     v: [u128; NUM_PRIMES]
 }
 
-/// Probabilistically hashes a partially instantiated CNF, used primarily for 
-/// component caching during bottom-up compilation (a component is a partially 
+/// Probabilistically hashes a partially instantiated CNF, used primarily for
+/// component caching during bottom-up compilation (a component is a partially
 /// instantiated CNF).
-/// 
+///
 /// The hash function satisfies the invariant that, with (arbitrarily) high
 /// probability, two components are syntactically equal if and only if they have
 /// the same hash.
-/// 
+///
 /// It works by associating each literal in the CNF with a distinct prime
 /// number. To compute the hash function, one takes the product (modulo a prime
 /// field, the base of which is specified in PRIMES) of all unset literals in
 /// clauses that are not satisfied.
-/// 
+///
 /// Example: Assume we have the following CNF, with its literals annotated with
 /// distinct primes:
 /// ```
@@ -45,7 +44,7 @@ pub struct HashedCNF {
 /// //   ^    ^      ^     ^
 /// //   2    3      5     7
 /// ```
-/// Then, if we were to hash this CNF with the partial model (a = T), would 
+/// Then, if we were to hash this CNF with the partial model (a = T), would
 /// get the value 7
 #[derive(Eq, PartialEq, Debug, Clone)]
 pub struct CnfHasher {
@@ -53,9 +52,9 @@ pub struct CnfHasher {
     /// state[x] contains a list of unsatisfied clauses in the CNF (indexed into weighted_cnf)
     state: Vec<HashSet<usize>>,
     /// pos_lits[l] contains the list of indexes of clauses that contain the positive literal l
-    pos_lits: Vec<Vec<usize>>, 
+    pos_lits: Vec<Vec<usize>>,
     /// neg_lits[l] contains the list of indexes of clauses that contain the negative literal l
-    neg_lits: Vec<Vec<usize>>, 
+    neg_lits: Vec<Vec<usize>>,
 }
 
 impl CnfHasher {
@@ -66,23 +65,23 @@ impl CnfHasher {
                 (primes.next().unwrap(), *lit)
             }).collect()}).collect();
 
-        let sat_clauses : HashSet<usize> = cnf.clauses.iter().enumerate().filter_map({|(clause_idx, clause)| 
+        let sat_clauses : HashSet<usize> = cnf.clauses.iter().enumerate().filter_map({|(clause_idx, clause)|
             if clause.len() > 1 { Some(clause_idx) } else { None } // ignore units
         }).collect();
 
         let pos_lits : Vec<Vec<usize>> = (0..cnf.num_vars()).map(|lit_idx| {
             cnf.clauses.iter().enumerate().filter_map(|(clause_idx, clause)| {
-                if clause.contains(&Literal::new(VarLabel::new_usize(lit_idx), true)) { Some(clause_idx) } else { None } 
+                if clause.contains(&Literal::new(VarLabel::new_usize(lit_idx), true)) { Some(clause_idx) } else { None }
             }).collect()
         }).collect();
 
         let neg_lits : Vec<Vec<usize>> = (0..cnf.num_vars()).map(|lit_idx| {
             cnf.clauses.iter().enumerate().filter_map(|(clause_idx, clause)| {
-                if clause.contains(&Literal::new(VarLabel::new_usize(lit_idx), false)) { Some(clause_idx) } else { None } 
+                if clause.contains(&Literal::new(VarLabel::new_usize(lit_idx), false)) { Some(clause_idx) } else { None }
             }).collect()
         }).collect();
 
-        CnfHasher { weighted_cnf, state: vec![sat_clauses], pos_lits, neg_lits } 
+        CnfHasher { weighted_cnf, state: vec![sat_clauses], pos_lits, neg_lits }
     }
 
     pub fn decide(&mut self, lit: Literal) -> () {
@@ -119,14 +118,14 @@ impl CnfHasher {
                     continue 'outer;
                 } else if m.lit_neg_implied(*lit) {
                     // skip this literal and move onto the next one
-                    continue; 
+                    continue;
                 } else {
                     // cur_clause_v = cur_clause_v * (*weight as u128);
                     cur_clause_v = cur_clause_v.wrapping_mul(*weight as u128);
                 }
             }
             for i in 0..NUM_PRIMES {
-                // TODO at the moment this modular multiplication is very slow; we should use a 
+                // TODO at the moment this modular multiplication is very slow; we should use a
                 // crate that supports fast modular multiplication for fixed prime fields
                 // using just 128-bit for now, but this is a hack
                 // v[i] = (v[i]* (cur_clause_v)) % PRIMES[i];
@@ -271,7 +270,7 @@ impl Cnf {
     }
 
     /// Parses a CNF string into a CNF
-    /// 
+    ///
     /// Format: (-1 || 0 || 2) && (1)
     /// - Each clause in its own parenthesis and separated by &&
     /// - Each literal separated by ||
@@ -283,7 +282,7 @@ impl Cnf {
             let mut c : Vec<Literal> = Vec::new();
             // filter the parens off
             let mut chars = clause.trim().chars();
-            chars.next(); 
+            chars.next();
             chars.next_back();
             for lit in chars.as_str().split("||") {
                 if lit.trim().is_empty() {
@@ -295,7 +294,7 @@ impl Cnf {
             }
             clause_vec.push(c);
         }
-        Cnf::new(clause_vec) 
+        Cnf::new(clause_vec)
     }
 
 
@@ -625,7 +624,7 @@ impl Cnf {
         }).collect()
     }
 
-    /// get a hasher for this CNF 
+    /// get a hasher for this CNF
     /// may be expensive on first call; future calls are amortized
     pub fn get_hasher(&self) -> &CnfHasher {
         match self.hasher {

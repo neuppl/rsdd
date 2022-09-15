@@ -19,7 +19,7 @@ pub enum LogicalExpr {
 }
 
 impl LogicalExpr {
-    /// Parses a CNF string into a logical expr from DIMACS 
+    /// Parses a CNF string into a logical expr from DIMACS
     /// String is of the form:
     /// p cnf 185 425
     /// 19 -54 0

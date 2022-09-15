@@ -9,7 +9,7 @@ pub struct BddPtr {
 }
 
 impl BddPtr {
-    pub fn new(idx: usize) -> Self { 
+    pub fn new(idx: usize) -> Self {
         BddPtr { idx }
     }
 }

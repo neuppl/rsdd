@@ -470,10 +470,10 @@ mod test_bdd_manager {
             let cnf = mgr.from_cnf(&c1);
             let vars = vec![VarLabel::new(0), VarLabel::new(2), VarLabel::new(4)];
             let wmc = BddWmc::new_with_default(0.0, 1.0, weight_map);
-            let (marg_prob, marg_assgn) = mgr.marginal_map(cnf, mgr.true_ptr(), &vars, &wmc);
+            let (marg_prob, _marg_assgn) = mgr.marginal_map(cnf, mgr.true_ptr(), &vars, &wmc);
             let assignments = vec![(true, true, true), (true, true, false), (true, false, true), (true, false, false),
                                    (false, true, true), (false, true, false), (false, false, true), (false, false, false)];
-            
+
             let mut max : f64 = -10.0;
             let mut max_assgn : PartialModel = PartialModel::from_litvec(&vec![], c1.num_vars());
             for (v1, v2, v3) in assignments.iter() {

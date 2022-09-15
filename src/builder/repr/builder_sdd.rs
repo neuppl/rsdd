@@ -232,7 +232,7 @@ impl VTreeManager {
             }
         }
         VTreeManager {
-            dfs_to_bfs: tree.dfs_to_bfs_mapping(), 
+            dfs_to_bfs: tree.dfs_to_bfs_mapping(),
             bfs_to_dfs: tree.bfs_to_dfs_mapping(),
             vtree_idx: vtree_lookup,
             lca: LeastCommonAncestor::new(&tree),

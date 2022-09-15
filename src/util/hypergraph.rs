@@ -2,10 +2,6 @@ use core::fmt::Debug;
 use core::hash::Hash;
 use std::collections::HashSet;
 
-use crate::builder::var_order::VarOrder;
-
-use super::btree::BTree;
-
 #[derive(Clone, Debug)]
 struct Hypergraph<T: Clone + Debug + PartialEq + Eq + Hash> {
     vertices: Vec<T>,

@@ -4,9 +4,8 @@
 
 use super::{var_label::{Literal, VarLabel}, model::PartialModel, cnf::Cnf};
 
-type clause_idx = usize;
-type lit_idx = usize;
-
+type ClauseIdx = usize;
+type LitIdx = usize;
 
 
 /// A data-structure for efficient implementation of unit propagation with CNFs.
@@ -23,24 +22,24 @@ type lit_idx = usize;
 ///    C: [c1]
 /// watch_list_neg:
 ///    A: [c1]
-///    B: [c0] 
+///    B: [c0]
 ///    C: []
-/// 
+///
 /// The invariant maintained by the watched literals is that, for a given
 /// partial model state, the watched literal is either (1) satisfied by the
 /// model; or (2) unset in the model.
-/// 
+///
 /// Every clause (except for unit clauses) watch exactly 2 unique literals at all times.
-/// When a variable is decided, we decide how to update the watched literals according 
+/// When a variable is decided, we decide how to update the watched literals according
 /// to the following cases
-/// 
-/// Case 1. We decide C=False. In this case, we deduce no units, and update the literal watches 
+///
+/// Case 1. We decide C=False. In this case, we deduce no units, and update the literal watches
 /// as:
 ///     c0             c1
 /// (A \/ !B) /\ (C \/ !A \/ B)
 ///  ^     ^            ^    ^
 /// I.e., we pick a new literal to watch in c1
-/// Case 2. Decide C=True, In this case, the clause c1 is satisfied, so  we do not make 
+/// Case 2. Decide C=True, In this case, the clause c1 is satisfied, so  we do not make
 /// any changes to its watched literals.
 /// Case 3. Decide A=False. In this case there are no remaining literals to
 /// watch in c0, so we deduce a unit !B and propagate. The resulting watcher
@@ -49,9 +48,9 @@ type lit_idx = usize;
 pub struct UnitPropagate<'a> {
     // watch_list_pos[i] is a list of the clauses that are watching the positive
     // literal of varlabel i
-    watch_list_pos: Vec<Vec<clause_idx>>,
+    watch_list_pos: Vec<Vec<ClauseIdx>>,
     // similar to the above, but for negative label
-    watch_list_neg: Vec<Vec<clause_idx>>,
+    watch_list_neg: Vec<Vec<ClauseIdx>>,
     // stack of assignment states (all implied and decided literals)
     state: Vec<PartialModel>,
     cnf: &'a Cnf,
@@ -91,7 +90,7 @@ impl<'a> UnitPropagate<'a> {
             }
         }
 
-        
+
 
         let mut cur = UnitPropagate {
             watch_list_pos,
@@ -108,7 +107,7 @@ impl<'a> UnitPropagate<'a> {
 
         return Some(cur);
     }
-    
+
     fn cur_state(&self) -> &PartialModel {
         &self.state.last().unwrap()
     }
@@ -174,7 +173,7 @@ impl<'a> UnitPropagate<'a> {
         // some of the internal structure here is weird to accommodate the
         // borrow checker.
         loop {
-            // first check if there are any watchers; if no watchers left, break 
+            // first check if there are any watchers; if no watchers left, break
 
             if new_assignment.get_polarity() {
                 if watcher_idx >= self.watch_list_neg[var_idx].len() {
@@ -234,10 +233,10 @@ impl<'a> UnitPropagate<'a> {
             } else {
                 // num_remaining > 1, find a new literal to watch
                 // first, find a new literal to watch
-                let candidate_unwatched : lit_idx = remaining_lits.clone().nth(0).unwrap().get_label().value_usize();
+                let candidate_unwatched : LitIdx = remaining_lits.clone().nth(0).unwrap().get_label().value_usize();
                 // check if candidate_unwatched is already being watched; if it
                 // is, pick another literal to watch
-                let prev_watcher : clause_idx = if new_assignment.get_polarity() {
+                let prev_watcher : ClauseIdx = if new_assignment.get_polarity() {
                     self.watch_list_neg[var_idx][watcher_idx]
                 } else {
                     self.watch_list_pos[var_idx][watcher_idx]
@@ -303,7 +302,7 @@ pub struct SATSolver<'a> {
 impl<'a> SATSolver<'a> {
     pub fn new(cnf: &'a Cnf) -> SATSolver<'a> {
         let up = UnitPropagate::new(cnf);
-        let state = if up.is_some() { 
+        let state = if up.is_some() {
             if cnf.is_sat_partial(up.as_ref().unwrap().get_assgn()) {
                 SATState::SAT
             } else {
@@ -318,32 +317,32 @@ impl<'a> SATSolver<'a> {
     }
 
 
-    /// Pushes the SAT context 
-    /// 
+    /// Pushes the SAT context
+    ///
     /// Saves all current clauses and decisions
     pub fn push(&mut self) -> () {
         match &mut self.up {
-            Some(up) => { 
+            Some(up) => {
                 up.push();
                 self.cur_state.push(self.top_state());
             }
-            None => { 
+            None => {
                 self.cur_state.push(self.top_state());
             }
         }
     }
 
     /// Pops the SAT state
-    /// 
+    ///
     /// Restores the set of clause and decisions to the point at which it was previously pushed
     /// Panics if there is no prior pushed state.
     pub fn pop(&mut self) -> () {
         match &mut self.up {
-            Some(up) => { 
+            Some(up) => {
                 up.pop();
                 self.cur_state.pop();
             }
-            None => { 
+            None => {
                 self.cur_state.pop();
             }
         }
@@ -357,9 +356,9 @@ impl<'a> SATSolver<'a> {
                 let l = self.cur_state.len() - 1;
                 if self.cur_state[l] == SATState::UNSAT {
                     // stay UNSAT
-                    return; 
+                    return;
                 }
-                if res { 
+                if res {
                     // TODO should check if the state is now satisfied
                     self.cur_state[l] = SATState::Unknown;
                 } else {
@@ -488,4 +487,3 @@ impl<'a> SATSolver<'a> {
 //     let v1 = up.decide(Literal::new(VarLabel::new(3), true));
 //     assert!(v1);
 // }
-

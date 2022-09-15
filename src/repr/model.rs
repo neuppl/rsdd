@@ -29,7 +29,7 @@ impl PartialModel {
             assignments: init_assgn,
         }
     }
-    
+
     /// Unsets a variable's value in the model
     pub fn unset(&mut self, label: VarLabel) -> () {
         self.assignments[label.value_usize()] = None;

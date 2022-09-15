@@ -4,7 +4,6 @@
 //!
 
 use bit_set::BitSet;
-use im::HashSet;
 use std::{iter::FromIterator, cmp::Ordering};
 
 use crate::repr::{
