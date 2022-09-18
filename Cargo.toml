@@ -55,3 +55,6 @@ path = "bin/one_shot_benchmark.rs"
 name = "bayesian_network_compiler"
 path = "bin/bayesian_network_compiler.rs"
 
+[[bin]]
+name = "compare_canonicalize"
+path = "bin/compare_canonicalize.rs"
