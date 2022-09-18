@@ -117,8 +117,6 @@ impl<'a> SddManager {
             app_cache.push(Lru::new(8));
         }
 
-        let vtree_clone = vtree.clone();
-
         let m = SddManager {
             tbl: SddTable::new(&vtree),
             stats: SddStats::new(),
@@ -536,22 +534,22 @@ impl<'a> SddManager {
         self.count_nodes_h(f, &mut HashSet::new())
     }
 
-    fn is_canonical_h(&self, f: SddPtr, cache: &mut HashMap<Sdd, SddPtr>) -> bool {
+    fn is_canonical_h(&self, f: SddPtr) -> bool {
         self.is_compressed(f) && self.is_trimmed(f)
     }
 
     pub fn is_canonical(&self, f: SddPtr) -> bool {
-        self.is_canonical_h(f, &mut HashMap::new())
+        self.is_canonical_h(f)
     }
 
     // predicate that returns if an SDD is compressed;
     // see https://www.ijcai.org/Proceedings/11/Papers/143.pdf
     // definition 8
     pub fn is_compressed(&self, f: SddPtr) -> bool {
-        self.is_compressed_h(f, &mut HashSet::new(), &mut HashSet::new())
+        self.is_compressed_h(f)
     }
 
-    fn is_compressed_h(&self, f: SddPtr, known_compressed: &mut HashSet<SddPtr>, known_uncompressed: &mut HashSet<SddPtr>) -> bool {
+    fn is_compressed_h(&self, f: SddPtr) -> bool {
          if f.is_const() {
             return true;
         }
@@ -581,10 +579,10 @@ impl<'a> SddManager {
     // see https://www.ijcai.org/Proceedings/11/Papers/143.pdf
     // definition 8
     pub fn is_trimmed(&self, f: SddPtr) -> bool {
-        self.is_trimmed_h(f, &mut HashSet::new(), &mut HashSet::new())
+        self.is_trimmed_h(f)
     }
 
-    fn is_trimmed_h(&self, f: SddPtr, known_trimmed: &mut HashSet<SddPtr>, known_untrimmed: &mut HashSet<SddPtr>) -> bool {
+    fn is_trimmed_h(&self, f: SddPtr) -> bool {
         if f.is_const() {
             return true;
         }
