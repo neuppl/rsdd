@@ -105,6 +105,8 @@ pub struct SddManager {
     stats: SddStats,
     /// the apply cache
     app_cache: Vec<Lru<(SddPtr, SddPtr), SddPtr>>,
+    // disabling compression for testing purposes, eventual experimentation
+    use_compression: bool,
 }
 
 impl<'a> SddManager {
@@ -119,9 +121,14 @@ impl<'a> SddManager {
             stats: SddStats::new(),
             vtree: VTreeManager::new(vtree),
             app_cache,
+            use_compression: true,
         };
 
         return m;
+    }
+
+    pub fn set_compression(&mut self, b: bool) -> () {
+        self.use_compression = b
     }
 
     // Walks the Sdd, caching results of previously computed values
@@ -214,10 +221,12 @@ impl<'a> SddManager {
         self.tbl.bdd_man_mut(f.vtree().value())
     }
 
-
     /// Canonicalizes the list of (prime, sub) terms in-place
     /// `node`: a list of (prime, sub) pairs
     fn compress(&mut self, node: &mut Vec<(SddPtr, SddPtr)>) -> () {
+        if !self.use_compression {
+            panic!("compress called when disabled")
+        }
         for i in 0..node.len() {
             // see if we can compress i
             let mut j = i+1;
@@ -235,8 +244,10 @@ impl<'a> SddManager {
 
     /// Returns a canonicalized SDD pointer from a list of (prime, sub) pairs
     fn canonicalize(&mut self, mut node: Vec<(SddPtr, SddPtr)>, table: VTreeIndex) -> SddPtr {
-        // first compress
-        self.compress(&mut node);
+        if self.use_compression {
+            // first compress
+            self.compress(&mut node);
+        }
         // check for a base case
         if node.len() == 0 {
             return SddPtr::new_const(true);
@@ -520,16 +531,95 @@ impl<'a> SddManager {
         self.count_nodes_h(f, &mut HashSet::new())
     }
 
-    fn is_canonical_h(&self, f: SddPtr, cache: &mut HashMap<Sdd, SddPtr>) -> bool {
-        todo!()
+    fn is_canonical_h(&self, f: SddPtr) -> bool {
+        self.is_compressed(f) && self.is_trimmed(f)
     }
 
     pub fn is_canonical(&self, f: SddPtr) -> bool {
-        self.is_canonical_h(f, &mut HashMap::new())
+        self.is_canonical_h(f)
     }
 
+    // predicate that returns if an SDD is compressed;
+    // see https://www.ijcai.org/Proceedings/11/Papers/143.pdf
+    // definition 8
+    pub fn is_compressed(&self, f: SddPtr) -> bool {
+        self.is_compressed_h(f)
+    }
+
+    fn is_compressed_h(&self, f: SddPtr) -> bool {
+         if f.is_const() {
+            return true;
+        }
+
+        // TODO: is this assumption correct?
+        if f.is_bdd() {
+            return true;
+        }
+
+        // question for matt: should we be recursively passing this down?
+        let mut visited_sdds: HashSet<SddPtr> = HashSet::new();
+
+        let or = self.tbl
+            .sdd_get_or(f);
+
+        for (_, s) in or.iter() {
+            if visited_sdds.contains(&s.regular()) {
+                return false;
+            }
+            visited_sdds.insert(s.regular());
+        }
+
+        return or.iter().all(|(p, _)| {self.is_compressed(*p)});
+    }
+
+    // predicate that returns if an SDD is trimmed;
+    // see https://www.ijcai.org/Proceedings/11/Papers/143.pdf
+    // definition 8
     pub fn is_trimmed(&self, f: SddPtr) -> bool {
-        todo!()
+        self.is_trimmed_h(f)
+    }
+
+    fn is_trimmed_h(&self, f: SddPtr) -> bool {
+        if f.is_const() {
+            return true;
+        }
+
+        // assumption: bdd is trimmed!
+        if f.is_bdd() {
+            return true;
+        }
+
+        let or = self.tbl
+            .sdd_get_or(f);
+
+
+        // this is a linear search for decompositions of the form (T, a)
+        let trivial_p_exists = or.iter().all(|(p, _)| {p.is_true()});
+
+        if trivial_p_exists {
+            return false;
+        }
+
+        // TODO(mattxwang): significantly optimize this
+        // this next part is an O(n^2) (i.e., pairwise) comparison of each SDD
+        // and an arbitrary prime. we are looking for untrimmed decomposition pairs of the form (a, T) and (~a, F)
+        let mut visited_sdds: Vec<SddPtr> = Vec::new();
+
+        for (p, s) in or.iter() {
+            if !s.is_const() {
+                continue;
+            }
+            let p_neg = p.neg();
+            let neg_exists =  visited_sdds.iter().any(|visited_p| {self.sdd_eq(*visited_p, p_neg)});
+
+            if neg_exists {
+                return false;
+            }
+            visited_sdds.push(*p);
+        }
+
+        // neither trimmed form exists at the top-level, so we recurse down once
+        return or.iter().all(|(p, _)| {self.is_trimmed(*p)});
     }
 
     fn print_sdd_internal(&self, ptr: SddPtr) -> String {
@@ -932,4 +1022,78 @@ fn sdd_wmc2() {
         man.unsmoothed_wmc(f, &wmc_map),
         0.2 * 0.3 + 0.2 * 0.7 + 0.8 * 0.3
     );
+}
+
+#[test]
+fn is_canonical_trivial(){
+    let mut mgr = SddManager::new(even_split(
+        &vec![
+            VarLabel::new(0),
+        ],
+        2,
+    ));
+    let a = mgr.var(VarLabel::new(0), true);
+
+    assert_eq!(mgr.is_trimmed(a), true);
+    assert_eq!(mgr.is_compressed(a), true);
+    assert_eq!(mgr.is_canonical(a), true);
+}
+
+#[test]
+fn not_compressed_or_trimmed_trivial(){
+    let mut man = SddManager::new(even_split(
+        &vec![
+            VarLabel::new(0),
+            VarLabel::new(1),
+            VarLabel::new(2),
+            VarLabel::new(3),
+        ],
+        2,
+    ));
+
+    man.set_compression(false); // necessary so we can observe duplication
+
+    let x = man.var(VarLabel::new(0), true);
+    let y = man.var(VarLabel::new(1), true);
+    let f1 = man.var(VarLabel::new(2), true);
+
+    let iff1 = man.iff(x, f1);
+    let iff2 = man.iff(y, f1); // note: same g's here!
+    let obs = man.or(x, x);   // note: same x's here!
+    let and1 = man.and(iff1, iff2);
+    let f = man.and(and1, obs);
+
+    assert_eq!(man.is_trimmed(f), false);
+    assert_eq!(man.is_compressed(f), false);
+    assert_eq!(man.is_canonical(f), false);
+}
+
+// note: this test is identical to the one above.
+// However, we keep compression on, and flip the asserts on the predicates
+// the idea is that we test that the SDD Manager does indeed compress / trim under-the-hood!
+#[test]
+fn test_compression(){
+    let mut man = SddManager::new(even_split(
+        &vec![
+            VarLabel::new(0),
+            VarLabel::new(1),
+            VarLabel::new(2),
+            VarLabel::new(3),
+        ],
+        2,
+    ));
+
+    let x = man.var(VarLabel::new(0), true);
+    let y = man.var(VarLabel::new(1), true);
+    let f1 = man.var(VarLabel::new(2), true);
+
+    let iff1 = man.iff(x, f1);
+    let iff2 = man.iff(y, f1); // note: same g's here!
+    let obs = man.or(x, x);
+    let and1 = man.and(iff1, iff2);
+    let f = man.and(and1, obs);
+
+    assert_eq!(man.is_trimmed(f), true);
+    assert_eq!(man.is_compressed(f), true);
+    assert_eq!(man.is_canonical(f), true);
 }
