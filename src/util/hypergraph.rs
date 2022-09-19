@@ -44,6 +44,7 @@ impl<T: Clone + Debug + PartialEq + Eq + Hash> Hypergraph<T> {
         let cache = Self::cache_from(&vertices, &hyperedges);
         Self::new_with_cache(vertices, hyperedges, cache)
     }
+
     /// assumes that hyperedges only includes elements from vertices
     fn cache_from(
         vertices: &HashSet<T>,
@@ -64,8 +65,8 @@ impl<T: Clone + Debug + PartialEq + Eq + Hash> Hypergraph<T> {
         }
         assoc_cache
     }
-    pub fn edges(&self) -> &Vec<HashSet<T>> {
-        &self.hyperedges
+    pub fn edges(&self) -> Vec<&HashSet<T>> {
+        self.hyperedges.iter().filter(|hs| hs.len() > 0).collect()
     }
     pub fn edges_for(&self, node: &T) -> Option<Vec<&HashSet<T>>> {
         let edge_ixs = self.assoc_cache.get(node)?;
@@ -95,6 +96,44 @@ impl<T: Clone + Debug + PartialEq + Eq + Hash> Hypergraph<T> {
             }
         }
         r
+    }
+
+    /// add an edge to the hypergraph. Returns false if the edge is already in the hypergraph
+    fn insert_edge(&mut self, edge: &HashSet<T>) -> bool {
+        let new_verts : HashSet<T> = edge.difference(&self.vertices).cloned().collect();
+        if new_verts.len() > 0 {
+                    let vertices = self.vertices.union(&new_verts).cloned().collect();
+                    self.vertices = vertices;
+        }
+
+        let next_ix = self.hyperedges.len();
+        match self.hyperedges.clone().iter().find(|e| e == &edge) {
+            Some(_) => return false,
+            None => self.hyperedges.push(edge.clone())
+        }
+
+        for v in edge {
+            match self.assoc_cache.get_mut(&v) {
+                None => { self.assoc_cache.insert(v.clone(), HashSet::from([next_ix])); },
+                Some(eixs) => { eixs.insert(next_ix); }
+            }
+        }
+        true
+    }
+
+    /// cut a vertex out of the hypergraph
+    fn cut_vertex(&mut self, v: &T) -> bool {
+        let v_in_vertices = self.vertices.remove(v);
+        if !v_in_vertices {
+            false
+        } else {
+            for ix in (*self.assoc_cache.get(v).unwrap()).iter() {
+                let v_in_edge = self.hyperedges[*ix].remove(v); // FIXME: this can leave empty edges! Probably Vec is the wrong datastructure.
+                assert!(v_in_edge, "A vertex was removed that was not in the edgeset?? Impossible! Definitely, file this as a bug");
+            }
+            self.assoc_cache.remove(v);
+            true
+        }
     }
     fn count_cut_edges(&self, part1: &Vec<T>, part2: &Vec<T>) -> usize {
         let mut r = 0;
@@ -162,7 +201,7 @@ mod test {
     use petgraph::dot::{Config, Dot};
 
     #[test]
-    fn cnf_to_ig() {
+    fn cnf_to_hg() {
         let v = vec![
             vec![
                 Literal::new(VarLabel::new(0), true),
@@ -221,5 +260,34 @@ mod test {
                 g.hyperedges
             );
         }
+    }
+
+    #[test]
+    fn insert_edge_cut_vertex() {
+        let mut hg : Hypergraph<u64> = Hypergraph::new(HashSet::new(), Vec::new());
+        let e1 = HashSet::from([0,1,3]);
+        let e2 = HashSet::from([5,7,3]);
+        let e3 = HashSet::from([21]);
+
+        for e in &[e1.clone(), e2.clone(), e3.clone()] {
+            hg.insert_edge(e);
+        }
+        assert_eq!(hg.vertices, HashSet::from([0,1,3,5,7,21]));
+        assert_eq!(hg.hyperedges, Vec::from([e1.clone(), e2.clone(), e3.clone()]));
+
+        hg.insert_edge(&e2);
+        assert_eq!(hg.hyperedges, Vec::from([e1.clone(), e2.clone(), e3.clone()]));
+
+        hg.cut_vertex(&1);
+        assert_eq!(hg.hyperedges, Vec::from([HashSet::from([0,3]), e2.clone(), e3.clone()]));
+
+        hg.cut_vertex(&3);
+        assert_eq!(hg.hyperedges, Vec::from([HashSet::from([0]), HashSet::from([5,7]), e3.clone()]));
+
+        hg.cut_vertex(&21);
+        assert_eq!(hg.hyperedges, Vec::from([HashSet::from([0]), HashSet::from([5,7]), HashSet::from([])]));
+
+        let edges_api = hg.edges();
+        assert_eq!(edges_api, Vec::from([&HashSet::from([0]), &HashSet::from([5,7])]));
     }
 }
