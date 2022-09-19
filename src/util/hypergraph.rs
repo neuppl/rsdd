@@ -83,14 +83,38 @@ impl<T: Clone + Debug + PartialEq + Eq + Hash> Hypergraph<T> {
         )
     }
     pub fn size(&self) -> usize {
-        self.hyperedges.len()
+        self.edges().len()
     }
     pub fn order(&self) -> usize {
-        self.vertices.len()
+        self.vertices().len()
     }
     pub fn width(&self) -> usize {
-        todo!("minimum size of set of intersecting edges");
+        self.widths().0
     }
+    /// return (min, max) of sizes of the set of intersecting edges in the hypergraph
+    pub fn widths(&self) -> (usize, usize) {
+        let mut overlaps : Vec<(HashSet<T>, usize)> = vec![];
+        for e in self.edges() {
+            if overlaps.iter().any(|o| !o.0.is_disjoint(&e)) {
+                for o in overlaps.iter_mut().filter(|o| !o.0.is_disjoint(&e)) {
+                    // let mut overlap = &mut o.0;
+                    for v in e {
+                        o.0.insert(v.clone());
+                    }
+                    o.1 += 1;
+                }
+            } else {
+                overlaps.push((e.clone(), 1))
+            }
+        }
+        overlaps
+            .iter()
+            .fold((usize::MAX, usize::MIN), |(mn, mx), (_, w)| (
+                if mn > *w { *w } else { mn },
+                if mx > *w { mx } else { *w }
+            ))
+    }
+
     /// finds all edges that are in both part1 and part2
     fn get_cut_edges(&self, part1: &Vec<T>, part2: &Vec<T>) -> Vec<HashSet<T>> {
         let mut r = Vec::new();
@@ -107,7 +131,7 @@ impl<T: Clone + Debug + PartialEq + Eq + Hash> Hypergraph<T> {
     fn insert_edge(&mut self, edge: &HashSet<T>) -> bool {
         let new_verts : HashSet<T> = edge.difference(&self.vertices).cloned().collect();
         if new_verts.len() > 0 {
-                    let vertices = self.vertices.union(&new_verts).cloned().collect();
+                    let vertices = self.vertices().union(&new_verts).cloned().collect();
                     self.vertices = vertices;
         }
 
@@ -142,7 +166,7 @@ impl<T: Clone + Debug + PartialEq + Eq + Hash> Hypergraph<T> {
     }
     fn count_cut_edges(&self, part1: &Vec<T>, part2: &Vec<T>) -> usize {
         let mut r = 0;
-        for e in self.hyperedges.iter() {
+        for e in self.edges().iter() {
             let contains_part1 = part1.iter().any(|i| e.contains(i));
             let contains_part2 = part2.iter().any(|i| e.contains(i));
             if contains_part1 && contains_part2 {
@@ -291,8 +315,56 @@ mod test {
 
         hg.cut_vertex(&21);
         assert_eq!(hg.hyperedges, Vec::from([HashSet::from([0]), HashSet::from([5,7]), HashSet::from([])]));
+        assert_eq!(hg.vertices, HashSet::from([0,5,7]));
+
 
         let edges_api = hg.edges();
         assert_eq!(edges_api, Vec::from([&HashSet::from([0]), &HashSet::from([5,7])]));
+    }
+
+    #[test]
+    fn test_width() {
+        let mut hg : Hypergraph<u64> = Hypergraph::new(HashSet::new(), Vec::new());
+        // cover 1
+        let e1 = HashSet::from([0,1,3,]);
+        let e2 = HashSet::from([    3,5,7,21]);
+        let e3 = HashSet::from([          21]);
+        let e4 = HashSet::from([      5,  21]);
+        // cover 2
+        let e5 = HashSet::from([10,11]);
+        let e6 = HashSet::from([   11]);
+        let e7 = HashSet::from([   11, 12]);
+
+        for e in &[e1.clone(), e2.clone(), e3.clone(), e4.clone(), e5.clone(), e6.clone(), e7.clone()] {
+            hg.insert_edge(e);
+        }
+
+        let (min_width, max_width) = hg.widths();
+
+        println!("vertex\t: edges cut\t: mx width\t: mn width");
+        println!("none\t: {}\t\t: {}\t\t: {}", 0_usize, min_width, max_width);
+
+        // uncomment when you have verify these by hand
+        let stats : HashMap<u64, (usize, (usize, usize))> = HashMap::from([
+            (0, (1, (3, 4))),
+            (1, (1, (3, 4))),
+            (3, (2, (1, 3))),
+            (5, (2, (3, 4))),
+            (7, (1, (3, 4))),
+            (21, (3, (3, 3))),
+            (11, (3, (1, 4))),
+            (10, (1, (3, 4))),
+            (12, (1, (3, 4))),
+        ]);
+        for v in hg.vertices() {
+            let mut tmp = hg.clone();
+            let cut_edges_for_v = tmp.edges_for(v).unwrap();
+            let edges_cut = cut_edges_for_v.len();
+            tmp.cut_vertex(v);
+
+            let (min_width, max_width) = tmp.widths();
+            println!("{v}\t: {}\t\t: {}\t\t: {}", edges_cut, min_width, max_width);
+            assert_eq!((edges_cut, (min_width, max_width)), *stats.get(v).unwrap());
+        }
     }
 }
