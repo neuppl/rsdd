@@ -65,6 +65,9 @@ impl<T: Clone + Debug + PartialEq + Eq + Hash> Hypergraph<T> {
         }
         assoc_cache
     }
+    pub fn vertices(&self) -> &HashSet<T> {
+        &self.vertices
+    }
     pub fn edges(&self) -> Vec<&HashSet<T>> {
         self.hyperedges.iter().filter(|hs| hs.len() > 0).collect()
     }
@@ -85,6 +88,9 @@ impl<T: Clone + Debug + PartialEq + Eq + Hash> Hypergraph<T> {
     pub fn order(&self) -> usize {
         self.vertices.len()
     }
+    pub fn width(&self) -> usize {
+        todo!("minimum size of set of intersecting edges");
+    }
     /// finds all edges that are in both part1 and part2
     fn get_cut_edges(&self, part1: &Vec<T>, part2: &Vec<T>) -> Vec<HashSet<T>> {
         let mut r = Vec::new();
@@ -97,7 +103,6 @@ impl<T: Clone + Debug + PartialEq + Eq + Hash> Hypergraph<T> {
         }
         r
     }
-
     /// add an edge to the hypergraph. Returns false if the edge is already in the hypergraph
     fn insert_edge(&mut self, edge: &HashSet<T>) -> bool {
         let new_verts : HashSet<T> = edge.difference(&self.vertices).cloned().collect();
