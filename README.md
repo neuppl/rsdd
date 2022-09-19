@@ -1,4 +1,4 @@
-[![Build](https://github.com/SHoltzen/rsdd/actions/workflows/rust.yml/badge.svg)](https://github.com/SHoltzen/rsdd/actions/workflows/rust.yml)
+[![Build](https://github.com/pmall-neu/rsdd/actions/workflows/rust.yml/badge.svg)](https://github.com/pmall-neu/rsdd/actions/workflows/rust.yml)
 
 # RSDD
 
@@ -6,16 +6,16 @@ This library is a  `rust` implementation of decision diagrams ([binary decision
 diagrams](https://en.wikipedia.org/wiki/Binary_decision_diagram) and [sentential
 decision diagrams](http://reasoning.cs.ucla.edu/sdd/)). The goal of this library
 is to be a *efficient*, *safe*, and *modern* implementation of decision
-diagrams.  Ease of integration, performance, and ease of experimentation are 
-core design concerns: the hope is that this library will be a useful 
-platform for experimentation and iteration on new ideas for these important 
+diagrams.  Ease of integration, performance, and ease of experimentation are
+core design concerns: the hope is that this library will be a useful
+platform for experimentation and iteration on new ideas for these important
 data structures.
 
 To add this in your rust project, use:
 
 ```toml
 [dependencies]
-rsdd = { git = "https://github.com/SHoltzen/rsdd" }
+rsdd = { git = "https://github.com/pmall-neu/rsdd" }
 ```
 
 This project is under active research development; if you are interested in
@@ -69,6 +69,6 @@ from these for the following reasons:
 * SDDs use complemented edges internally to minimize memory usage. In addition,
   SDDs specialize to use BDDs for right-linear v-trees.
 * These libraries are written in pure safe rust (no `unsafe`). This makes it easier
-  to quickly and safely experiment when compared `C++` or `C`, in particular with 
+  to quickly and safely experiment when compared `C++` or `C`, in particular with
   multithreading or with alternative hash-table back-ends.
 * A C API is provided for ease of integration (see `src/lib.rs`)
