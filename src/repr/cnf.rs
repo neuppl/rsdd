@@ -454,7 +454,7 @@ impl Cnf {
         let sum = clause.iter().fold(0, |acc, &lbl| {
             lbl_to_pos[lbl.get_label().value() as usize] + acc
         });
-        
+
         (sum as f64) / (clause.len() as f64)
     }
 
@@ -571,7 +571,8 @@ impl Cnf {
                         .filter(|outer| {
                             !(lit.get_label() == outer.get_label()
                                 && lit.get_polarity() != outer.get_polarity())
-                        }).copied()
+                        })
+                        .copied()
                         .collect();
                     Some(filtered)
                 }

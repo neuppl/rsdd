@@ -111,9 +111,7 @@ impl DecisionNNFBuilder {
     /// Clear the internal scratch space for a BddPtr
     fn clear_scratch(&mut self, ptr: BddPtr) {
         if ptr.is_const() {
-            
         } else if self.compute_table.get_scratch(ptr).is_none() {
-            
         } else {
             self.compute_table.set_scratch(ptr, None);
             self.clear_scratch(self.low(ptr));

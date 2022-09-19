@@ -82,7 +82,7 @@ fn propagate(v: &mut [HashTableElement], cap: usize, itm: HashTableElement, pos:
         } else {
             // place the element in the current spot, we're done
             v[pos] = searcher;
-            return ;
+            return;
         }
     }
 }
@@ -111,7 +111,7 @@ where
     /// reserve a robin-hood table capable of holding at least `sz` elements
     pub fn new(sz: usize) -> BackedRobinHoodTable<T> {
         let v: Vec<HashTableElement> = zero_vec(sz);
-        
+
         BackedRobinHoodTable {
             elem: Vec::with_capacity(sz as usize),
             tbl: v,

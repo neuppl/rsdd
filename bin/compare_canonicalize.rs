@@ -124,7 +124,7 @@ fn compile_sdd_benchmark(cnf: &Cnf, vtree: VTree, modified: bool) -> Duration {
     let start = Instant::now();
     compiler.from_cnf(cnf);
     // let r = compiler.from_cnf(&cnf);
-    
+
     // let sz = compiler.count_nodes(r);
 
     start.elapsed()

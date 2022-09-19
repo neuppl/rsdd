@@ -111,8 +111,6 @@ impl<'a> SddManager {
             app_cache.push(Lru::new(8));
         }
 
-        
-
         SddManager {
             tbl: SddTable::new(&vtree),
             stats: SddStats::new(),
@@ -262,7 +260,6 @@ impl<'a> SddManager {
         // we have a fresh SDD pointer, uniqify it
         node.sort_by(|a, b| a.0.cmp(&b.0));
 
-        
         if node[0].1.is_compl() {
             for i in 0..node.len() {
                 node[i].1 = node[i].1.neg();
@@ -648,10 +645,7 @@ impl<'a> SddManager {
                         .nest(2),
                     );
                 }
-                let d = Doc::from(format!(
-                    "{}\\/",
-                    if ptr.is_compl() { "!" } else { "" }
-                ));
+                let d = Doc::from(format!("{}\\/", if ptr.is_compl() { "!" } else { "" }));
                 d.append(doc.nest(2))
             }
         }
@@ -806,11 +800,13 @@ impl<'a> SddManager {
 #[test]
 fn simple_equality() {
     let mut mgr = SddManager::new(even_split(
-        &[VarLabel::new(0),
+        &[
+            VarLabel::new(0),
             VarLabel::new(1),
             VarLabel::new(2),
             VarLabel::new(3),
-            VarLabel::new(4)],
+            VarLabel::new(4),
+        ],
         2,
     ));
     let a = mgr.var(VarLabel::new(0), true);
@@ -824,11 +820,13 @@ fn simple_equality() {
 #[test]
 fn sdd_simple_cond() {
     let mut mgr = SddManager::new(even_split(
-        &[VarLabel::new(0),
+        &[
+            VarLabel::new(0),
             VarLabel::new(1),
             VarLabel::new(2),
             VarLabel::new(3),
-            VarLabel::new(4)],
+            VarLabel::new(4),
+        ],
         2,
     ));
     let a = mgr.var(VarLabel::new(0), true);
@@ -847,11 +845,13 @@ fn sdd_simple_cond() {
 #[test]
 fn sdd_test_exist() {
     let mut man = SddManager::new(even_split(
-        &[VarLabel::new(0),
+        &[
+            VarLabel::new(0),
             VarLabel::new(1),
             VarLabel::new(2),
             VarLabel::new(3),
-            VarLabel::new(4)],
+            VarLabel::new(4),
+        ],
         2,
     ));
     // 1 /\ 2 /\ 3
@@ -873,11 +873,13 @@ fn sdd_test_exist() {
 #[test]
 fn sdd_ite1() {
     let mut man = SddManager::new(even_split(
-        &[VarLabel::new(0),
+        &[
+            VarLabel::new(0),
             VarLabel::new(1),
             VarLabel::new(2),
             VarLabel::new(3),
-            VarLabel::new(4)],
+            VarLabel::new(4),
+        ],
         2,
     ));
     let v1 = man.var(VarLabel::new(0), true);
@@ -895,11 +897,13 @@ fn sdd_ite1() {
 #[test]
 fn sdd_circuit1() {
     let mut man = SddManager::new(even_split(
-        &[VarLabel::new(0),
+        &[
+            VarLabel::new(0),
             VarLabel::new(1),
             VarLabel::new(2),
             VarLabel::new(3),
-            VarLabel::new(4)],
+            VarLabel::new(4),
+        ],
         2,
     ));
     let x = man.var(VarLabel::new(0), false);
@@ -923,11 +927,13 @@ fn sdd_circuit1() {
 fn sdd_circuit2() {
     // same as circuit1, but with a different variable order
     let mut man = SddManager::new(even_split(
-        &[VarLabel::new(0),
+        &[
+            VarLabel::new(0),
             VarLabel::new(1),
             VarLabel::new(2),
             VarLabel::new(3),
-            VarLabel::new(4)],
+            VarLabel::new(4),
+        ],
         2,
     ));
     let x = man.var(VarLabel::new(3), false);
@@ -952,10 +958,12 @@ fn sdd_wmc1() {
     // modeling the formula (x<=>fx) && (y<=>fy), with f weight of 0.5
 
     let vtree = even_split(
-        &[VarLabel::new(0),
+        &[
+            VarLabel::new(0),
             VarLabel::new(1),
             VarLabel::new(2),
-            VarLabel::new(3)],
+            VarLabel::new(3),
+        ],
         2,
     );
     let mut man = SddManager::new(vtree.clone());
@@ -985,10 +993,12 @@ fn sdd_wmc1() {
 #[test]
 fn sdd_wmc2() {
     let vtree = even_split(
-        &[VarLabel::new(0),
+        &[
+            VarLabel::new(0),
             VarLabel::new(1),
             VarLabel::new(2),
-            VarLabel::new(3)],
+            VarLabel::new(3),
+        ],
         2,
     );
     let mut man = SddManager::new(vtree.clone());
@@ -1025,10 +1035,12 @@ fn is_canonical_trivial() {
 #[test]
 fn not_compressed_or_trimmed_trivial() {
     let mut man = SddManager::new(even_split(
-        &[VarLabel::new(0),
+        &[
+            VarLabel::new(0),
             VarLabel::new(1),
             VarLabel::new(2),
-            VarLabel::new(3)],
+            VarLabel::new(3),
+        ],
         2,
     ));
 
@@ -1055,10 +1067,12 @@ fn not_compressed_or_trimmed_trivial() {
 #[test]
 fn test_compression() {
     let mut man = SddManager::new(even_split(
-        &[VarLabel::new(0),
+        &[
+            VarLabel::new(0),
             VarLabel::new(1),
             VarLabel::new(2),
-            VarLabel::new(3)],
+            VarLabel::new(3),
+        ],
         2,
     ));
 

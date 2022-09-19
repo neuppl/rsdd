@@ -182,11 +182,7 @@ pub struct BddNode {
 
 impl BddNode {
     pub fn new(low: BddPtr, high: BddPtr, var: VarLabel) -> BddNode {
-        BddNode {
-            low,
-            high,
-            var,
-        }
+        BddNode { low, high, var }
     }
 }
 
@@ -199,11 +195,7 @@ pub enum Bdd {
 
 impl Bdd {
     pub fn new_node(low: BddPtr, high: BddPtr, var: VarLabel) -> Bdd {
-        let new_n = BddNode {
-            low,
-            high,
-            var,
-        };
+        let new_n = BddNode { low, high, var };
         Bdd::Node(new_n)
     }
 
