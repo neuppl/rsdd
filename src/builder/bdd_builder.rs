@@ -6,11 +6,9 @@ use crate::repr::model::PartialModel;
 use crate::repr::sat_solver::SATSolver;
 use crate::{
     backing_store::bdd_table_robinhood::BddTable, backing_store::BackingCacheStats,
-    builder::cache::bdd_app::*, builder::repr::builder_bdd::*, builder::var_order::VarOrder, repr,
-    builder::dtree,
-    repr::logical_expr::LogicalExpr, repr::model, repr::var_label::Literal,
-    repr::cnf::*,
-    repr::var_label::VarLabel,
+    builder::cache::bdd_app::*, builder::dtree, builder::repr::builder_bdd::*,
+    builder::var_order::VarOrder, repr, repr::cnf::*, repr::logical_expr::LogicalExpr, repr::model,
+    repr::var_label::Literal, repr::var_label::VarLabel,
 };
 
 use bit_set::BitSet;
@@ -18,8 +16,8 @@ use num::traits::Num;
 use rand::rngs::ThreadRng;
 use rand::Rng;
 use std::cmp::Ordering;
-use std::collections::{BinaryHeap, HashSet};
 use std::collections::HashMap;
+use std::collections::{BinaryHeap, HashSet};
 use std::fmt::Debug;
 use std::iter::FromIterator;
 
@@ -150,7 +148,7 @@ pub struct BddManager {
     compute_table: BddTable,
     apply_table: BddApplyTable,
     stats: BddManagerStats,
-    order: VarOrder
+    order: VarOrder,
 }
 
 impl BddManager {
@@ -745,7 +743,7 @@ impl BddManager {
                 } else {
                     r
                 }
-            },
+            }
             None => {
                 // check cache
                 let idx = self.compute_table.get_scratch(bdd).unwrap();
@@ -870,29 +868,23 @@ impl BddManager {
         self.compute_table.num_nodes()
     }
 
-    fn smoothed_bottomup_pass_h<T: Clone + Copy + Debug, F: Fn(VarLabel, T, T) -> T>(&mut self,
+    fn smoothed_bottomup_pass_h<T: Clone + Copy + Debug, F: Fn(VarLabel, T, T) -> T>(
+        &mut self,
         ptr: BddPtr,
         f: &F,
         low_v: T,
         high_v: T,
         expected_level: usize,
-        tbl: &mut Vec<(Option<T>, Option<T>)>) -> T {
-            let mut r = match ptr.ptr_type() {
-            PointerType::PtrTrue => {
-                high_v
-            },
-            PointerType::PtrFalse => {
-                low_v
-            },
+        tbl: &mut Vec<(Option<T>, Option<T>)>,
+    ) -> T {
+        let mut r = match ptr.ptr_type() {
+            PointerType::PtrTrue => high_v,
+            PointerType::PtrFalse => low_v,
             PointerType::PtrNode => {
                 let idx = self.compute_table.get_scratch(ptr).unwrap();
                 match tbl[idx] {
-                    (_, Some(v)) if ptr.is_compl() => {
-                        v
-                    },
-                    (Some(v), _) if !ptr.is_compl() => {
-                        v
-                    },
+                    (_, Some(v)) if ptr.is_compl() => v,
+                    (Some(v), _) if !ptr.is_compl() => v,
                     (cur_reg, cur_compl) => {
                         let bdd = self.deref_bdd(ptr).into_node();
                         let (low, high) = if ptr.is_compl() {
@@ -901,8 +893,22 @@ impl BddManager {
                             (bdd.low, bdd.high)
                         };
                         let cur_level = self.get_order().get(bdd.var);
-                        let low_val = self.smoothed_bottomup_pass_h(low, f, low_v, high_v, cur_level+1, tbl);
-                        let high_val = self.smoothed_bottomup_pass_h(high, f, low_v, high_v, cur_level+1, tbl);
+                        let low_val = self.smoothed_bottomup_pass_h(
+                            low,
+                            f,
+                            low_v,
+                            high_v,
+                            cur_level + 1,
+                            tbl,
+                        );
+                        let high_val = self.smoothed_bottomup_pass_h(
+                            high,
+                            f,
+                            low_v,
+                            high_v,
+                            cur_level + 1,
+                            tbl,
+                        );
 
                         let res = f(bdd.var, low_val, high_val);
 
@@ -929,19 +935,27 @@ impl BddManager {
                 self.get_order().get(toplabel)
             }
         };
-        for v in self.get_order().between_iter(expected_level, smoothing_depth) {
+        for v in self
+            .get_order()
+            .between_iter(expected_level, smoothing_depth)
+        {
             r = f(v, r, r);
         }
         r
-
     }
 
     /// performs an amortized bottom-up smoothed pass with aggregating function `f`
     /// calls `f` on every (smoothed) BDD node and caches and reuses the results
     /// `f` has type `cur_label -> low_value -> high_value -> aggregated_value`
-    fn smoothed_bottomup_pass<T: Clone + Copy + Debug, F: Fn(VarLabel, T, T) -> T>(&mut self, bdd: BddPtr, f: F, low_v: T, high_v: T) -> T {
+    fn smoothed_bottomup_pass<T: Clone + Copy + Debug, F: Fn(VarLabel, T, T) -> T>(
+        &mut self,
+        bdd: BddPtr,
+        f: F,
+        low_v: T,
+        high_v: T,
+    ) -> T {
         let n = self.unique_label_nodes(bdd, 0);
-        let mut cache : Vec<(Option<T>, Option<T>)> = vec![(None, None); n];
+        let mut cache: Vec<(Option<T>, Option<T>)> = vec![(None, None); n];
         let res = self.smoothed_bottomup_pass_h(bdd, &f, low_v, high_v, 0, &mut cache);
         self.clear_scratch(bdd);
         res
@@ -949,69 +963,99 @@ impl BddManager {
 
     /// Weighted-model count
     pub fn wmc<T: Num + Clone + Debug + Copy>(&mut self, ptr: BddPtr, params: &BddWmc<T>) -> T {
-        self.smoothed_bottomup_pass(ptr, |varlabel, low, high| {
-            let (low_w, high_w) = params.get_var_weight(varlabel);
-            (*low_w * low) + (*high_w * high)
-        }, params.zero, params.one)
+        self.smoothed_bottomup_pass(
+            ptr,
+            |varlabel, low, high| {
+                let (low_w, high_w) = params.get_var_weight(varlabel);
+                (*low_w * low) + (*high_w * high)
+            },
+            params.zero,
+            params.one,
+        )
     }
 
     /// evaluates a circuit on a partial marginal MAP assignment to get an upper-bound on the wmc
     /// maxes over the `map_vars`, applies the `partial_map_assgn`
-    fn marginal_map_eval(&mut self, ptr: BddPtr, partial_map_assgn: &PartialModel, map_vars: &BitSet, wmc: &BddWmc<f64>) -> f64 {
-        self.smoothed_bottomup_pass(ptr, |varlabel, low, high| {
-            let (low_w, high_w) = wmc.get_var_weight(varlabel);
-            match partial_map_assgn.get(varlabel) {
-                None => {
-                    if map_vars.contains(varlabel.value_usize()) {
-                        f64::max(*low_w * low, *high_w * high)
-                    } else {
-                        (*low_w * low) + (*high_w * high)
-                    }
-                },
-                Some(true) => *high_w * high,
-                Some(false) => *low_w * low,
-            }
-        }, wmc.zero, wmc.one)
-    }
-
-    fn marginal_map_h(&mut self, ptr: BddPtr, cur_lb: f64, cur_best: PartialModel,
-        margvars: &[VarLabel], wmc: &BddWmc<f64>, cur_assgn: PartialModel) -> (f64, PartialModel) {
-            match margvars {
-                [] => {
-                    let margvar_bits = BitSet::new();
-                    let possible_best = self.marginal_map_eval(ptr, &cur_assgn, &margvar_bits, wmc);
-                    if possible_best > cur_lb {
-                        (possible_best, cur_assgn)
-                    } else {
-                        (cur_lb, cur_best)
-                    }
-                },
-                [x, end @ ..] => {
-                    let mut best_model = cur_best;
-                    let mut best_lb = cur_lb;
-                    let margvar_bits = BitSet::from_iter(end.iter().map(|x| x.value_usize()));
-
-                    let mut true_model = cur_assgn.clone();
-                    true_model.set(*x, true);
-                    let mut false_model = cur_assgn.clone();
-                    false_model.set(*x, false);
-
-                    let true_ub = self.marginal_map_eval(ptr, &true_model, &margvar_bits, wmc);
-                    let false_ub = self.marginal_map_eval(ptr, &false_model, &margvar_bits, wmc);
-
-                    // branch on the greater upper-bound first
-                    let order = if true_ub > false_ub {
-                        [(true_ub, true_model), (false_ub, false_model)]
-                    } else {
-                        [(false_ub, false_model), (true_ub, true_model)]
-                    };
-                    for (upper_bound, partialmodel) in order {
-                        // branch + bound
-                        if upper_bound > best_lb {
-                            (best_lb, best_model) = self.marginal_map_h(ptr, best_lb, best_model, end, wmc, partialmodel.clone());
+    fn marginal_map_eval(
+        &mut self,
+        ptr: BddPtr,
+        partial_map_assgn: &PartialModel,
+        map_vars: &BitSet,
+        wmc: &BddWmc<f64>,
+    ) -> f64 {
+        self.smoothed_bottomup_pass(
+            ptr,
+            |varlabel, low, high| {
+                let (low_w, high_w) = wmc.get_var_weight(varlabel);
+                match partial_map_assgn.get(varlabel) {
+                    None => {
+                        if map_vars.contains(varlabel.value_usize()) {
+                            f64::max(*low_w * low, *high_w * high)
+                        } else {
+                            (*low_w * low) + (*high_w * high)
                         }
                     }
-                    (best_lb, best_model)
+                    Some(true) => *high_w * high,
+                    Some(false) => *low_w * low,
+                }
+            },
+            wmc.zero,
+            wmc.one,
+        )
+    }
+
+    fn marginal_map_h(
+        &mut self,
+        ptr: BddPtr,
+        cur_lb: f64,
+        cur_best: PartialModel,
+        margvars: &[VarLabel],
+        wmc: &BddWmc<f64>,
+        cur_assgn: PartialModel,
+    ) -> (f64, PartialModel) {
+        match margvars {
+            [] => {
+                let margvar_bits = BitSet::new();
+                let possible_best = self.marginal_map_eval(ptr, &cur_assgn, &margvar_bits, wmc);
+                if possible_best > cur_lb {
+                    (possible_best, cur_assgn)
+                } else {
+                    (cur_lb, cur_best)
+                }
+            }
+            [x, end @ ..] => {
+                let mut best_model = cur_best;
+                let mut best_lb = cur_lb;
+                let margvar_bits = BitSet::from_iter(end.iter().map(|x| x.value_usize()));
+
+                let mut true_model = cur_assgn.clone();
+                true_model.set(*x, true);
+                let mut false_model = cur_assgn.clone();
+                false_model.set(*x, false);
+
+                let true_ub = self.marginal_map_eval(ptr, &true_model, &margvar_bits, wmc);
+                let false_ub = self.marginal_map_eval(ptr, &false_model, &margvar_bits, wmc);
+
+                // branch on the greater upper-bound first
+                let order = if true_ub > false_ub {
+                    [(true_ub, true_model), (false_ub, false_model)]
+                } else {
+                    [(false_ub, false_model), (true_ub, true_model)]
+                };
+                for (upper_bound, partialmodel) in order {
+                    // branch + bound
+                    if upper_bound > best_lb {
+                        (best_lb, best_model) = self.marginal_map_h(
+                            ptr,
+                            best_lb,
+                            best_model,
+                            end,
+                            wmc,
+                            partialmodel.clone(),
+                        );
+                    }
+                }
+                (best_lb, best_model)
             }
         }
     }
@@ -1035,18 +1079,31 @@ impl BddManager {
     /// let expected_prob = 0.49;
     /// assert_eq!(marg_map, expected_model);
     /// ```
-    pub fn marginal_map(&mut self, ptr: BddPtr, evidence: BddPtr, vars: &[VarLabel], wmc: &BddWmc<f64>) -> (f64, PartialModel) {
+    pub fn marginal_map(
+        &mut self,
+        ptr: BddPtr,
+        evidence: BddPtr,
+        vars: &[VarLabel],
+        wmc: &BddWmc<f64>,
+    ) -> (f64, PartialModel) {
         let mut marg_vars = BitSet::new();
         for v in vars {
             marg_vars.insert(v.value_usize());
         }
 
         let ptr = self.and(ptr, evidence);
-        let all_true : Vec<Literal> = vars.iter().map(|x| Literal::new(*x, true)).collect();
+        let all_true: Vec<Literal> = vars.iter().map(|x| Literal::new(*x, true)).collect();
         let cur_assgn = PartialModel::from_litvec(&all_true, self.num_vars());
         let lower_bound = self.marginal_map_eval(ptr, &cur_assgn, &BitSet::new(), wmc);
 
-        self.marginal_map_h(ptr, lower_bound, cur_assgn, vars, wmc, PartialModel::from_litvec(&vec![], self.num_vars()))
+        self.marginal_map_h(
+            ptr,
+            lower_bound,
+            cur_assgn,
+            vars,
+            wmc,
+            PartialModel::from_litvec(&vec![], self.num_vars()),
+        )
     }
 
     // TODO: resolve dead code
@@ -1153,14 +1210,23 @@ impl BddManager {
     pub fn from_dtree(&mut self, dtree: &dtree::DTree) -> BddPtr {
         use dtree::DTree;
         match &dtree {
-            &DTree::Leaf{ v: c, cutset: _, vars: _ } => {
+            &DTree::Leaf {
+                v: c,
+                cutset: _,
+                vars: _,
+            } => {
                 // compile the clause
                 c.iter().fold(self.false_ptr(), |acc, i| {
                     let v = self.var(i.get_label(), i.get_polarity());
                     self.or(acc, v)
                 })
-            },
-            &DTree::Node{ ref l, ref r, cutset: _, vars: _ } => {
+            }
+            &DTree::Node {
+                ref l,
+                ref r,
+                cutset: _,
+                vars: _,
+            } => {
                 let l = self.from_dtree(l);
                 let r = self.from_dtree(r);
                 self.and(l, r)
@@ -1246,7 +1312,6 @@ impl BddManager {
         } else {
             return r.unwrap();
         }
-
     }
 
     pub fn print_stats(&self) -> () {
@@ -1349,7 +1414,7 @@ impl BddManager {
         // check if this literal is currently set in unit propagation; if
         // it is, skip it
         if assgn.is_set(cur_v) {
-            return self.topdown_h(cnf, sat, level+1, cache);
+            return self.topdown_h(cnf, sat, level + 1, cache);
         }
 
         // check cache
@@ -1368,13 +1433,18 @@ impl BddManager {
         let high_bdd = if !unsat {
             let new_assgn = sat.get_implied_units();
             let mut lit_cube = self.true_ptr();
-            let implied_lits = new_assgn.get_vec().iter().enumerate().zip(assgn.get_vec()).filter_map(|((idx, new), prev)| {
-                if new != prev && idx != cur_v.value_usize() {
-                    Some(Literal::new(VarLabel::new_usize(idx), new.unwrap()))
-                } else {
-                    None
-                }
-            });
+            let implied_lits = new_assgn
+                .get_vec()
+                .iter()
+                .enumerate()
+                .zip(assgn.get_vec())
+                .filter_map(|((idx, new), prev)| {
+                    if new != prev && idx != cur_v.value_usize() {
+                        Some(Literal::new(VarLabel::new_usize(idx), new.unwrap()))
+                    } else {
+                        None
+                    }
+                });
 
             for l in implied_lits {
                 if l.get_label() == cur_v {
@@ -1395,13 +1465,18 @@ impl BddManager {
         let unsat = sat.unsat_unit();
         let low_bdd = if !unsat {
             let new_assgn = sat.get_implied_units();
-            let implied_lits = new_assgn.get_vec().iter().enumerate().zip(assgn.get_vec()).filter_map(|((idx, new), prev)| {
-                if new != prev && idx != cur_v.value_usize() {
-                    Some(Literal::new(VarLabel::new_usize(idx), new.unwrap()))
-                } else {
-                    None
-                }
-            });
+            let implied_lits = new_assgn
+                .get_vec()
+                .iter()
+                .enumerate()
+                .zip(assgn.get_vec())
+                .filter_map(|((idx, new), prev)| {
+                    if new != prev && idx != cur_v.value_usize() {
+                        Some(Literal::new(VarLabel::new_usize(idx), new.unwrap()))
+                    } else {
+                        None
+                    }
+                });
             let mut lit_cube = self.true_ptr();
             for l in implied_lits {
                 if l.get_label() == cur_v {
@@ -1433,23 +1508,28 @@ impl BddManager {
 
     /// Compile a CNF to a BDD top-down beginning from the partial model given in `model`
     pub fn from_cnf_topdown_partial(&mut self, cnf: &Cnf, model: &PartialModel) -> BddPtr {
-       self.from_cnf_topdown_partial_cached(cnf, model, &mut HashMap::new())
+        self.from_cnf_topdown_partial_cached(cnf, model, &mut HashMap::new())
     }
 
     /// Compile a CNF to a BDD top-down beginning from the partial model given in `model`
     /// takes a cache as an argument
-    pub fn from_cnf_topdown_partial_cached(&mut self, cnf: &Cnf, model: &PartialModel, cache: &mut HashMap<HashedCNF, BddPtr>) -> BddPtr {
+    pub fn from_cnf_topdown_partial_cached(
+        &mut self,
+        cnf: &Cnf,
+        model: &PartialModel,
+        cache: &mut HashMap<HashedCNF, BddPtr>,
+    ) -> BddPtr {
         let mut sat = SATSolver::new(&cnf);
         for assgn in model.assignment_iter() {
             sat.decide(assgn);
         }
 
         if sat.unsat_unit() {
-            return self.false_ptr()
+            return self.false_ptr();
         }
 
         let mut lit_cube = self.true_ptr();
-        let assign_set : HashSet<Literal> = model.assignment_iter().collect();
+        let assign_set: HashSet<Literal> = model.assignment_iter().collect();
         for lit in sat.get_implied_units().assignment_iter() {
             // conjoin in literals that are implied but not initially set
             if !assign_set.contains(&lit) {
@@ -1463,7 +1543,6 @@ impl BddManager {
         // conjoin in any initially implied literals
         self.and(r, lit_cube)
     }
-
 
     /// Prints the total number of recursive calls executed so far by the BddManager
     /// This is a stable way to track performance
@@ -1481,7 +1560,7 @@ mod tests {
         builder::bdd_builder::{BddManager, BddWmc},
         builder::repr::builder_bdd::BddPtr,
         repr::{
-            cnf::{Cnf},
+            cnf::Cnf,
             var_label::{Literal, VarLabel},
         },
     };
@@ -1872,12 +1951,8 @@ mod tests {
     #[test]
     fn test_topdown_4() {
         let clauses = vec![
-            vec![
-                Literal::new(VarLabel::new(0), true),
-            ],
-            vec![
-                Literal::new(VarLabel::new(0), true),
-            ],
+            vec![Literal::new(VarLabel::new(0), true)],
+            vec![Literal::new(VarLabel::new(0), true)],
         ];
         let cnf = Cnf::new(clauses);
         let mut mgr = BddManager::new_default_order(cnf.num_vars());

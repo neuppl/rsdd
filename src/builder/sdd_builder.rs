@@ -2,18 +2,13 @@
 //! with SDDs.
 
 use crate::{
-    backing_store::sdd_table::*,
-    builder::cache::lru::*,
-    repr::logical_expr::LogicalExpr,
-    repr::cnf::Cnf,
-    builder::repr::builder_sdd::*,
-    repr::var_label::VarLabel,
-    util::btree::*
+    backing_store::sdd_table::*, builder::cache::lru::*, builder::repr::builder_sdd::*,
+    repr::cnf::Cnf, repr::logical_expr::LogicalExpr, repr::var_label::VarLabel, util::btree::*,
 };
 
+use num::traits::Num;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
-use num::traits::Num;
 
 use super::bdd_builder::{BddManager, BddWmc};
 
@@ -229,7 +224,7 @@ impl<'a> SddManager {
         }
         for i in 0..node.len() {
             // see if we can compress i
-            let mut j = i+1;
+            let mut j = i + 1;
             while j < node.len() {
                 if self.sdd_eq(node[i].1, node[j].1) {
                     // compress j into i and remove j from the node list
@@ -275,7 +270,8 @@ impl<'a> SddManager {
                 .get_or_insert_sdd(&SddOr { nodes: node }, table.value())
                 .neg()
         } else {
-            self.tbl.get_or_insert_sdd(&SddOr { nodes: node }, table.value())
+            self.tbl
+                .get_or_insert_sdd(&SddOr { nodes: node }, table.value())
         };
         return r;
     }
@@ -439,10 +435,11 @@ impl<'a> SddManager {
             if self.get_vtree(f).extract_leaf().contains(&lbl) {
                 // it does; condition and return
                 let mapped = self.tbl.sdd_to_bdd_label(&lbl).clone();
-                let bdd = self
-                    .tbl
-                    .bdd_man_mut(f.vtree().value())
-                    .condition(f.as_bdd_ptr(), mapped, value);
+                let bdd = self.tbl.bdd_man_mut(f.vtree().value()).condition(
+                    f.as_bdd_ptr(),
+                    mapped,
+                    value,
+                );
                 return SddPtr::new_bdd(bdd, f.vtree().value() as u16);
             } else {
                 // do nothing
@@ -547,7 +544,7 @@ impl<'a> SddManager {
     }
 
     fn is_compressed_h(&self, f: SddPtr) -> bool {
-         if f.is_const() {
+        if f.is_const() {
             return true;
         }
 
@@ -559,8 +556,7 @@ impl<'a> SddManager {
         // question for matt: should we be recursively passing this down?
         let mut visited_sdds: HashSet<SddPtr> = HashSet::new();
 
-        let or = self.tbl
-            .sdd_get_or(f);
+        let or = self.tbl.sdd_get_or(f);
 
         for (_, s) in or.iter() {
             if visited_sdds.contains(&s.regular()) {
@@ -569,7 +565,7 @@ impl<'a> SddManager {
             visited_sdds.insert(s.regular());
         }
 
-        return or.iter().all(|(p, _)| {self.is_compressed(*p)});
+        return or.iter().all(|(p, _)| self.is_compressed(*p));
     }
 
     // predicate that returns if an SDD is trimmed;
@@ -589,12 +585,10 @@ impl<'a> SddManager {
             return true;
         }
 
-        let or = self.tbl
-            .sdd_get_or(f);
-
+        let or = self.tbl.sdd_get_or(f);
 
         // this is a linear search for decompositions of the form (T, a)
-        let trivial_p_exists = or.iter().all(|(p, _)| {p.is_true()});
+        let trivial_p_exists = or.iter().all(|(p, _)| p.is_true());
 
         if trivial_p_exists {
             return false;
@@ -610,7 +604,9 @@ impl<'a> SddManager {
                 continue;
             }
             let p_neg = p.neg();
-            let neg_exists =  visited_sdds.iter().any(|visited_p| {self.sdd_eq(*visited_p, p_neg)});
+            let neg_exists = visited_sdds
+                .iter()
+                .any(|visited_p| self.sdd_eq(*visited_p, p_neg));
 
             if neg_exists {
                 return false;
@@ -619,7 +615,7 @@ impl<'a> SddManager {
         }
 
         // neither trimmed form exists at the top-level, so we recurse down once
-        return or.iter().all(|(p, _)| {self.is_trimmed(*p)});
+        return or.iter().all(|(p, _)| self.is_trimmed(*p));
     }
 
     fn print_sdd_internal(&self, ptr: SddPtr) -> String {
@@ -628,7 +624,10 @@ impl<'a> SddManager {
             if ptr.is_bdd() {
                 let bdd_ptr = ptr.as_bdd_ptr();
                 let m = man.tbl.bdd_conv(ptr.vtree().value());
-                let s = man.tbl.bdd_man(ptr.vtree().value()).print_bdd_lbl(bdd_ptr, m);
+                let s = man
+                    .tbl
+                    .bdd_man(ptr.vtree().value())
+                    .print_bdd_lbl(bdd_ptr, m);
                 Doc::from(s)
             } else {
                 if ptr.is_true() {
@@ -687,7 +686,9 @@ impl<'a> SddManager {
                     }
                 }
                 let bdd_ptr = sdd.as_bdd_ptr();
-                man.tbl.bdd_man(sdd.vtree().value()).eval_bdd(bdd_ptr, &new_m)
+                man.tbl
+                    .bdd_man(sdd.vtree().value())
+                    .eval_bdd(bdd_ptr, &new_m)
             } else {
                 let mut res = false;
                 let sl = man.tbl.sdd_get_or(sdd);
@@ -705,7 +706,6 @@ impl<'a> SddManager {
         }
         helper(self, ptr, assgn)
     }
-
 
     pub fn sdd_eq(&self, a: SddPtr, b: SddPtr) -> bool {
         a == b
@@ -779,7 +779,11 @@ impl<'a> SddManager {
                 let r2 = self.from_logical_expr(r);
                 self.iff(r1, r2)
             }
-            &LogicalExpr::Ite { ref guard, ref thn, ref els } => {
+            &LogicalExpr::Ite {
+                ref guard,
+                ref thn,
+                ref els,
+            } => {
                 let g = self.from_logical_expr(guard);
                 let thn = self.from_logical_expr(thn);
                 let els = self.from_logical_expr(els);
@@ -1025,13 +1029,8 @@ fn sdd_wmc2() {
 }
 
 #[test]
-fn is_canonical_trivial(){
-    let mut mgr = SddManager::new(even_split(
-        &vec![
-            VarLabel::new(0),
-        ],
-        2,
-    ));
+fn is_canonical_trivial() {
+    let mut mgr = SddManager::new(even_split(&vec![VarLabel::new(0)], 2));
     let a = mgr.var(VarLabel::new(0), true);
 
     assert_eq!(mgr.is_trimmed(a), true);
@@ -1040,7 +1039,7 @@ fn is_canonical_trivial(){
 }
 
 #[test]
-fn not_compressed_or_trimmed_trivial(){
+fn not_compressed_or_trimmed_trivial() {
     let mut man = SddManager::new(even_split(
         &vec![
             VarLabel::new(0),
@@ -1059,7 +1058,7 @@ fn not_compressed_or_trimmed_trivial(){
 
     let iff1 = man.iff(x, f1);
     let iff2 = man.iff(y, f1); // note: same g's here!
-    let obs = man.or(x, x);   // note: same x's here!
+    let obs = man.or(x, x); // note: same x's here!
     let and1 = man.and(iff1, iff2);
     let f = man.and(and1, obs);
 
@@ -1072,7 +1071,7 @@ fn not_compressed_or_trimmed_trivial(){
 // However, we keep compression on, and flip the asserts on the predicates
 // the idea is that we test that the SDD Manager does indeed compress / trim under-the-hood!
 #[test]
-fn test_compression(){
+fn test_compression() {
     let mut man = SddManager::new(even_split(
         &vec![
             VarLabel::new(0),

@@ -20,7 +20,11 @@ impl BddPtr {
 pub enum Bdd {
     True,
     False,
-    Node { var: VarLabel, low: BddPtr, high: BddPtr }
+    Node {
+        var: VarLabel,
+        low: BddPtr,
+        high: BddPtr,
+    },
 }
 
 // TODO: resolve unused
@@ -28,11 +32,15 @@ pub enum Bdd {
 pub struct FinalizedBDD {
     bdd: BddPtr,
     allocator: Vec<Bdd>,
-    order: VarOrder
+    order: VarOrder,
 }
 
 impl FinalizedBDD {
     pub fn new(bdd: BddPtr, allocator: Vec<Bdd>, order: VarOrder) -> Self {
-        FinalizedBDD { bdd, allocator, order }
+        FinalizedBDD {
+            bdd,
+            allocator,
+            order,
+        }
     }
 }

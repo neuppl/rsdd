@@ -5,7 +5,6 @@ use crate::repr::var_label::VarLabel;
 
 const DEFAULT_SUBTABLE_SZ: usize = 16384;
 
-
 #[derive(Clone)]
 /// The primary storage unit for binary decision diagram nodes
 /// Each variable is associated with an individual subtable
@@ -20,9 +19,7 @@ impl BddTable {
             v.push(BackedRobinHoodTable::new(DEFAULT_SUBTABLE_SZ));
         }
 
-        BddTable {
-            subtables: v,
-        }
+        BddTable { subtables: v }
     }
 
     /// Generate a new variable which was not in the original order. Places the
@@ -61,12 +58,16 @@ impl BddTable {
 
     /// Set the scratch value for a BddPtr
     pub fn set_scratch(&mut self, ptr: BddPtr, v: Option<usize>) -> () {
-        self.subtables[ptr.var() as usize].deref_mut(BackingPtr(ptr.idx() as u32)).scratch = v;
+        self.subtables[ptr.var() as usize]
+            .deref_mut(BackingPtr(ptr.idx() as u32))
+            .scratch = v;
     }
 
     /// Set the scratch value for a BddPtr
     pub fn get_scratch(&mut self, ptr: BddPtr) -> Option<usize> {
-        self.subtables[ptr.var() as usize].deref_mut(BackingPtr(ptr.idx() as u32)).scratch
+        self.subtables[ptr.var() as usize]
+            .deref_mut(BackingPtr(ptr.idx() as u32))
+            .scratch
     }
 
     pub fn num_nodes(&self) -> usize {

@@ -1,10 +1,10 @@
 //! A representation of an arbitrary logical formula
 
+use crate::repr::var_label::VarLabel;
 use dimacs::*;
 use rand;
 use rand::rngs::ThreadRng;
 use rand::Rng;
-use crate::repr::var_label::VarLabel;
 use std::collections::HashMap;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -15,7 +15,11 @@ pub enum LogicalExpr {
     Or(Box<LogicalExpr>, Box<LogicalExpr>),
     Iff(Box<LogicalExpr>, Box<LogicalExpr>),
     Xor(Box<LogicalExpr>, Box<LogicalExpr>),
-    Ite { guard: Box<LogicalExpr>, thn: Box<LogicalExpr>, els: Box<LogicalExpr> },
+    Ite {
+        guard: Box<LogicalExpr>,
+        thn: Box<LogicalExpr>,
+        els: Box<LogicalExpr>,
+    },
 }
 
 impl LogicalExpr {
@@ -142,11 +146,19 @@ impl LogicalExpr {
                 let r_v = (*r).eval(values);
                 (!l_v && r_v) || (l_v && !r_v)
             }
-            &LogicalExpr::Ite { ref guard, ref thn, ref els } => {
+            &LogicalExpr::Ite {
+                ref guard,
+                ref thn,
+                ref els,
+            } => {
                 let g = (*guard).eval(values);
                 let thn = (*thn).eval(values);
                 let els = (*els).eval(values);
-                if g { thn } else { els }
+                if g {
+                    thn
+                } else {
+                    els
+                }
             }
         }
     }

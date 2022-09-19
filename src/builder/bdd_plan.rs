@@ -34,5 +34,4 @@ impl BddPlan {
     pub fn ite(pc: BddPlan, pt: BddPlan, pf: BddPlan) -> Self {
         Self::Ite(Box::new(pc), Box::new(pt), Box::new(pf))
     }
-
 }

@@ -11,7 +11,6 @@ use crate::repr::var_label::VarLabel;
 use rsdd::*;
 extern crate rand;
 
-
 /// A list of canonical forms in DIMACS form. The goal of these tests is to ensure that caching
 /// and application are working as intended
 static C1_A: &'static str = "
@@ -285,13 +284,13 @@ fn test_sdd_canonicity() -> () {
 
 #[cfg(test)]
 mod test_bdd_manager {
+    use crate::builder::decision_nnf_builder::DecisionNNFBuilder;
+    use crate::repr::cnf::Cnf;
+    use crate::repr::var_label::VarLabel;
     use quickcheck::TestResult;
     use rsdd::builder::bdd_builder::BddWmc;
     use rsdd::builder::var_order::VarOrder;
     use rsdd::repr::model::PartialModel;
-    use crate::repr::cnf::Cnf;
-    use crate::builder::decision_nnf_builder::DecisionNNFBuilder;
-    use crate::repr::var_label::VarLabel;
     use std::collections::HashMap;
     use std::iter::FromIterator;
 
@@ -402,7 +401,6 @@ mod test_bdd_manager {
         }
     }
 
-
     quickcheck! {
         fn wmc_eq(c1: Cnf) -> TestResult {
             // constrain the size
@@ -490,9 +488,9 @@ mod test_bdd_manager {
 #[cfg(test)]
 mod test_sdd_manager {
     use crate::builder::bdd_builder::{BddManager, BddWmc};
-    use quickcheck::TestResult;
     use crate::repr::cnf::Cnf;
     use crate::repr::var_label::{Literal, VarLabel};
+    use quickcheck::TestResult;
     use std::collections::HashMap;
     use std::iter::FromIterator;
 

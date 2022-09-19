@@ -1,10 +1,10 @@
 //! A backing store based on robin-hood hashing
 
 use crate::backing_store::*;
+use crate::util::*;
 use fnv::FnvHasher;
 use std::hash::{Hash, Hasher};
 use std::mem;
-use crate::util::*;
 
 /// The load factor of the table, i.e. how full the table will be when it
 /// automatically resizes

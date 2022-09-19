@@ -47,17 +47,16 @@ impl PartialModel {
     pub fn lit_implied(&self, lit: Literal) -> bool {
         match self.get(lit.get_label()) {
             Some(v) => v == lit.get_polarity(),
-            None => false
+            None => false,
         }
     }
 
     pub fn lit_neg_implied(&self, lit: Literal) -> bool {
         match self.get(lit.get_label()) {
             Some(v) => v != lit.get_polarity(),
-            None => false
+            None => false,
         }
     }
-
 
     pub fn get_vec(&self) -> &[Option<bool>] {
         &self.assignments

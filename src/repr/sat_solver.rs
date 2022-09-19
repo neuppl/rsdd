@@ -1,13 +1,14 @@
 //! A generic SAT solver for CNFs
 //! This SAT solver supports incremental solving via a push/pop interface
 
-
-use super::{var_label::{Literal, VarLabel}, model::PartialModel, cnf::Cnf};
+use super::{
+    cnf::Cnf,
+    model::PartialModel,
+    var_label::{Literal, VarLabel},
+};
 
 type ClauseIdx = usize;
 type LitIdx = usize;
-
-
 
 /// A data-structure for efficient implementation of unit propagation with CNFs.
 /// It implements a two-literal watching scheme.
@@ -91,8 +92,6 @@ impl<'a> UnitPropagate<'a> {
             }
         }
 
-
-
         let mut cur = UnitPropagate {
             watch_list_pos,
             watch_list_neg,
@@ -102,7 +101,7 @@ impl<'a> UnitPropagate<'a> {
 
         for i in implied {
             if !cur.decide(i) {
-                return None
+                return None;
             }
         }
 
@@ -126,24 +125,30 @@ impl<'a> UnitPropagate<'a> {
 
     /// Returns an iterator over the literals that were decided at the previous decision step
     /// Panics if no previous decision step was made
-    pub fn get_decided_literals(&self) -> impl Iterator<Item=Literal> + '_ {
+    pub fn get_decided_literals(&self) -> impl Iterator<Item = Literal> + '_ {
         // the most recently decided literals is the diff between the new
         let n = self.state.len();
-        let cur_state_i = self.state[n-1].get_vec().iter();
-        let prev_state_i = self.state[n-2].get_vec().iter();
-        let iter = cur_state_i.zip(prev_state_i).enumerate().filter_map(|(idx, (cur, prev))| {
-            if *cur == *prev {
-                None
-            } else {
-                Some(Literal::new(VarLabel::new_usize(idx), cur.unwrap()))
-            }
-        });
+        let cur_state_i = self.state[n - 1].get_vec().iter();
+        let prev_state_i = self.state[n - 2].get_vec().iter();
+        let iter = cur_state_i
+            .zip(prev_state_i)
+            .enumerate()
+            .filter_map(|(idx, (cur, prev))| {
+                if *cur == *prev {
+                    None
+                } else {
+                    Some(Literal::new(VarLabel::new_usize(idx), cur.unwrap()))
+                }
+            });
         iter
     }
 
     /// Backtracks to the previous decision
     pub fn pop(&mut self) -> () {
-        assert!(self.state.len() > 1, "Unit Propagate cannot backtrack past first decision");
+        assert!(
+            self.state.len() > 1,
+            "Unit Propagate cannot backtrack past first decision"
+        );
         self.state.pop();
     }
 
@@ -212,11 +217,9 @@ impl<'a> UnitPropagate<'a> {
             let mut remaining_lits =
                 clause
                     .iter()
-                    .filter(|x| {
-                        match self.cur_state().get(x.get_label()) {
-                            None => true,
-                            Some(_) => false,
-                        }
+                    .filter(|x| match self.cur_state().get(x.get_label()) {
+                        None => true,
+                        Some(_) => false,
                     });
 
             let num_remaining = remaining_lits.clone().count();
@@ -234,16 +237,21 @@ impl<'a> UnitPropagate<'a> {
             } else {
                 // num_remaining > 1, find a new literal to watch
                 // first, find a new literal to watch
-                let candidate_unwatched : LitIdx = remaining_lits.clone().nth(0).unwrap().get_label().value_usize();
+                let candidate_unwatched: LitIdx = remaining_lits
+                    .clone()
+                    .nth(0)
+                    .unwrap()
+                    .get_label()
+                    .value_usize();
                 // check if candidate_unwatched is already being watched; if it
                 // is, pick another literal to watch
-                let prev_watcher : ClauseIdx = if new_assignment.get_polarity() {
+                let prev_watcher: ClauseIdx = if new_assignment.get_polarity() {
                     self.watch_list_neg[var_idx][watcher_idx]
                 } else {
                     self.watch_list_pos[var_idx][watcher_idx]
                 };
 
-                let new_lit : &Literal = if new_assignment.get_polarity() {
+                let new_lit: &Literal = if new_assignment.get_polarity() {
                     if self.watch_list_pos[candidate_unwatched].contains(&prev_watcher) {
                         remaining_lits.nth(1).unwrap()
                     } else {
@@ -286,19 +294,17 @@ impl<'a> UnitPropagate<'a> {
     }
 }
 
-
 #[derive(Copy, Clone, PartialEq, Eq)]
 enum SATState {
     UNSAT, // the state is currently unsatisfied according to the units in the CNF
     SAT,   // the state is satisfied according to the units in the CNF
-    Unknown
+    Unknown,
 }
 
 pub struct SATSolver<'a> {
     up: Option<UnitPropagate<'a>>,
-    cur_state: Vec<SATState>
+    cur_state: Vec<SATState>,
 }
-
 
 impl<'a> SATSolver<'a> {
     pub fn new(cnf: &'a Cnf) -> SATSolver<'a> {
@@ -309,14 +315,18 @@ impl<'a> SATSolver<'a> {
             } else {
                 SATState::Unknown
             }
-        } else { SATState::UNSAT };
-        SATSolver { up, cur_state: vec![state] }
+        } else {
+            SATState::UNSAT
+        };
+        SATSolver {
+            up,
+            cur_state: vec![state],
+        }
     }
 
     fn top_state(&self) -> SATState {
         *self.cur_state.last().unwrap()
     }
-
 
     /// Pushes the SAT context
     ///
@@ -366,9 +376,8 @@ impl<'a> SATSolver<'a> {
                     let l = self.cur_state.len() - 1;
                     self.cur_state[l] = SATState::UNSAT;
                 }
-            },
-            None => {
             }
+            None => {}
         }
     }
 
@@ -377,7 +386,7 @@ impl<'a> SATSolver<'a> {
     pub fn unsat_unit(&self) -> bool {
         match self.top_state() {
             SATState::UNSAT => true,
-            _ => false
+            _ => false,
         }
     }
 
@@ -385,7 +394,7 @@ impl<'a> SATSolver<'a> {
     pub fn get_implied_units(&self) -> PartialModel {
         match self.up {
             Some(ref up) => up.get_assgn().clone(),
-            None => panic!("")
+            None => panic!(""),
         }
     }
 }

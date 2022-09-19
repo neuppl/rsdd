@@ -1,7 +1,7 @@
 //! A generic importance sampling interface with methods for automated testing
 
-use super::random::Random;
 use super::probability::Probability;
+use super::random::Random;
 
 /// An importance sampler takes two types in order to support (optional)
 /// collapsed sampling:
@@ -43,9 +43,7 @@ pub trait ImportanceSampler<Sample: std::fmt::Debug + Clone, State: std::fmt::De
         for (proposal, outer_prob) in proposals.vec().iter() {
             let collapsed = self.collapse(proposal);
             let unnormalized = self.unnormalized_prob(proposal);
-            for (state, inner_prob) in collapsed.vec().iter() {
-
-            }
+            for (state, inner_prob) in collapsed.vec().iter() {}
         }
         false
     }
@@ -60,5 +58,4 @@ pub trait ImportanceSampler<Sample: std::fmt::Debug + Clone, State: std::fmt::De
     /// Returns a distribution over the set of possible samples (i.e., draws
     /// a sample from `q(x)`)
     fn propose(&mut self, sampled: bool) -> Random<Sample>;
-
 }

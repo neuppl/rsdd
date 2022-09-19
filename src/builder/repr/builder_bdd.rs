@@ -222,7 +222,7 @@ impl Bdd {
 pub struct ToplessBdd {
     pub low: BddPtr,
     pub high: BddPtr,
-    pub scratch: Option<usize>
+    pub scratch: Option<usize>,
 }
 
 impl Hash for ToplessBdd {
@@ -245,7 +245,7 @@ impl ToplessBdd {
         ToplessBdd {
             low: low,
             high: high,
-            scratch: None
+            scratch: None,
         }
     }
 }

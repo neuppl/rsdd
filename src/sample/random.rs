@@ -1,6 +1,6 @@
 //! Defines a monadic-style random value
-use rand::prelude::*;
 use super::probability::Probability;
+use rand::prelude::*;
 
 /// Carries a possibly symbolic random computation (in monadic style)
 #[derive(Debug, Clone)]
@@ -26,7 +26,7 @@ impl<T> Random<T> {
                 }
             } else {
                 Random {
-                    val: vec![(f(false), Probability::new(1.0) -prob)],
+                    val: vec![(f(false), Probability::new(1.0) - prob)],
                 }
             }
         } else {
@@ -48,7 +48,10 @@ impl<T> Random<T> {
             let mut c = rand::thread_rng();
             let v = c.gen_range(low..high);
             Random {
-                val: vec![(f(v), Probability::new(1.0) / Probability::new((high - low) as f64))],
+                val: vec![(
+                    f(v),
+                    Probability::new(1.0) / Probability::new((high - low) as f64),
+                )],
             }
         } else {
             let prob = Probability::new(1.0 / (high - low) as f64);
@@ -70,9 +73,9 @@ impl<T> Random<T> {
 
     // applies `f` to each component
     pub fn map<R, F: FnMut(&T) -> Random<R>>(&self, f: &mut F) -> Random<R> {
-        let v : Vec<(Random<R>, Probability)> = self.vec().iter().map(|(x, p)| (f(x), *p)).collect();
+        let v: Vec<(Random<R>, Probability)> = self.vec().iter().map(|(x, p)| (f(x), *p)).collect();
         let n = Random::from_vec(v);
-        return Random::flatten(n)
+        return Random::flatten(n);
     }
 
     pub fn fmap<U>(&self, f: &dyn Fn(&T) -> U) -> Random<U> {
@@ -110,7 +113,6 @@ impl<T> Random<T> {
         &self.val
     }
 }
-
 
 // TODO this test is broken due to equality checking between floats
 // #[test]

@@ -30,14 +30,14 @@ impl std::ops::Sub<Probability> for Probability {
 
 impl std::ops::Mul<Probability> for Probability {
     type Output = Probability;
-    fn mul(self, rhs: Probability) -> Probability{
+    fn mul(self, rhs: Probability) -> Probability {
         Probability::new(self.0 * rhs.0)
     }
 }
 
 impl std::ops::Div<Probability> for Probability {
     type Output = Probability;
-    fn div(self, rhs: Probability) -> Probability{
+    fn div(self, rhs: Probability) -> Probability {
         Probability::new(self.0 * rhs.0)
     }
 }

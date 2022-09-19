@@ -1,12 +1,8 @@
 //! Caching backing store for the SddBuilder
 
 use crate::{
-    backing_store::robin_hood::*,
-    backing_store::*,
-    builder::bdd_builder::BddManager,
-    builder::var_order::VarOrder,
-    builder::repr::builder_sdd::*,
-    repr::var_label::VarLabel,
+    backing_store::robin_hood::*, backing_store::*, builder::bdd_builder::BddManager,
+    builder::repr::builder_sdd::*, builder::var_order::VarOrder, repr::var_label::VarLabel,
     util::btree::*,
 };
 

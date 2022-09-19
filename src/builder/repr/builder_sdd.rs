@@ -3,9 +3,8 @@
 
 use crate::builder::repr::builder_bdd::*;
 use crate::repr::var_label::VarLabel;
-use std::mem;
 use crate::util::btree::*;
-
+use std::mem;
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub struct VTreeIndex(usize);
@@ -206,7 +205,6 @@ impl VTree {
     }
 }
 
-
 /// Handles VTree related operations
 #[derive(Clone, Debug)]
 pub struct VTreeManager {
@@ -218,7 +216,7 @@ pub struct VTreeManager {
     bfs_to_dfs: Vec<usize>,
     /// maps an Sdd VarLabel into its vtree index in the depth-first order
     vtree_idx: Vec<usize>,
-    lca: LeastCommonAncestor
+    lca: LeastCommonAncestor,
 }
 
 impl VTreeManager {

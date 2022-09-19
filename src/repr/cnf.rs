@@ -1,12 +1,12 @@
 //! A representation of a conjunctive normal form (CNF)
 
 use crate::builder::var_order::VarOrder;
+use crate::repr::var_label::{Literal, VarLabel};
 use im::Vector;
 use petgraph::prelude::UnGraph;
 use rand;
 use rand::rngs::ThreadRng;
 use rand::Rng;
-use crate::repr::var_label::{Literal, VarLabel};
 use std::cmp::{max, min};
 use std::collections::{HashMap, HashSet};
 extern crate quickcheck;
@@ -16,14 +16,18 @@ use petgraph::graph::NodeIndex;
 
 // TODO: resolve unused
 #[allow(unused)]
-const PRIMES: [u128; 4] = [64733603481794218985640164159, 79016979402926483817096290621, 46084029846212370199652019757, 49703069216273825773136967137];
+const PRIMES: [u128; 4] = [
+    64733603481794218985640164159,
+    79016979402926483817096290621,
+    46084029846212370199652019757,
+    49703069216273825773136967137,
+];
 // number of primes to consider during CNF hashing
-const NUM_PRIMES : usize = 2;
-
+const NUM_PRIMES: usize = 2;
 
 #[derive(Debug, Hash, Eq, PartialEq, Clone)]
 pub struct HashedCNF {
-    v: [u128; NUM_PRIMES]
+    v: [u128; NUM_PRIMES],
 }
 
 /// Probabilistically hashes a partially instantiated CNF, used primarily for
@@ -62,28 +66,72 @@ pub struct CnfHasher {
 impl CnfHasher {
     pub fn new(cnf: &Cnf) -> CnfHasher {
         let mut primes = primal::Primes::all();
-        let weighted_cnf = cnf.clauses.iter().map({|clause|
-            clause.iter().map(|lit| {
-                (primes.next().unwrap(), *lit)
-            }).collect()}).collect();
+        let weighted_cnf = cnf
+            .clauses
+            .iter()
+            .map({
+                |clause| {
+                    clause
+                        .iter()
+                        .map(|lit| (primes.next().unwrap(), *lit))
+                        .collect()
+                }
+            })
+            .collect();
 
-        let sat_clauses : HashSet<usize> = cnf.clauses.iter().enumerate().filter_map({|(clause_idx, clause)|
-            if clause.len() > 1 { Some(clause_idx) } else { None } // ignore units
-        }).collect();
+        let sat_clauses: HashSet<usize> = cnf
+            .clauses
+            .iter()
+            .enumerate()
+            .filter_map({
+                |(clause_idx, clause)| {
+                    if clause.len() > 1 {
+                        Some(clause_idx)
+                    } else {
+                        None
+                    }
+                } // ignore units
+            })
+            .collect();
 
-        let pos_lits : Vec<Vec<usize>> = (0..cnf.num_vars()).map(|lit_idx| {
-            cnf.clauses.iter().enumerate().filter_map(|(clause_idx, clause)| {
-                if clause.contains(&Literal::new(VarLabel::new_usize(lit_idx), true)) { Some(clause_idx) } else { None }
-            }).collect()
-        }).collect();
+        let pos_lits: Vec<Vec<usize>> = (0..cnf.num_vars())
+            .map(|lit_idx| {
+                cnf.clauses
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(clause_idx, clause)| {
+                        if clause.contains(&Literal::new(VarLabel::new_usize(lit_idx), true)) {
+                            Some(clause_idx)
+                        } else {
+                            None
+                        }
+                    })
+                    .collect()
+            })
+            .collect();
 
-        let neg_lits : Vec<Vec<usize>> = (0..cnf.num_vars()).map(|lit_idx| {
-            cnf.clauses.iter().enumerate().filter_map(|(clause_idx, clause)| {
-                if clause.contains(&Literal::new(VarLabel::new_usize(lit_idx), false)) { Some(clause_idx) } else { None }
-            }).collect()
-        }).collect();
+        let neg_lits: Vec<Vec<usize>> = (0..cnf.num_vars())
+            .map(|lit_idx| {
+                cnf.clauses
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(clause_idx, clause)| {
+                        if clause.contains(&Literal::new(VarLabel::new_usize(lit_idx), false)) {
+                            Some(clause_idx)
+                        } else {
+                            None
+                        }
+                    })
+                    .collect()
+            })
+            .collect();
 
-        CnfHasher { weighted_cnf, state: vec![sat_clauses], pos_lits, neg_lits }
+        CnfHasher {
+            weighted_cnf,
+            state: vec![sat_clauses],
+            pos_lits,
+            neg_lits,
+        }
     }
 
     pub fn decide(&mut self, lit: Literal) -> () {
@@ -98,7 +146,6 @@ impl CnfHasher {
         }
     }
 
-
     pub fn push(&mut self) -> () {
         let n = self.state.last().unwrap().clone();
         self.state.push(n);
@@ -109,9 +156,9 @@ impl CnfHasher {
     }
 
     pub fn hash(&self, m: &PartialModel) -> HashedCNF {
-        let mut v : [u128; NUM_PRIMES] = [1; NUM_PRIMES];
+        let mut v: [u128; NUM_PRIMES] = [1; NUM_PRIMES];
         'outer: for clause_idx in self.state.last().unwrap().iter() {
-            let mut cur_clause_v : u128 = 1;
+            let mut cur_clause_v: u128 = 1;
             let cur_clause = &self.weighted_cnf[*clause_idx];
             for (ref weight, ref lit) in cur_clause.iter() {
                 if m.lit_implied(*lit) {
@@ -138,16 +185,15 @@ impl CnfHasher {
     }
 }
 
-
 /// Let G be a graph and X be a node in G. The result of eliminating node X from
 /// graph G is another graph obtained from G by first adding an edge between
 /// every pair of nonadjacent neighbors of X and then deleting node X from G.
 /// The edges that are added during the elimination process are called fill-in
 /// edges.
 fn eliminate_node(g: &mut UnGraph<VarLabel, ()>, v: NodeIndex) -> () {
-    let neighbor_vec : Vec<NodeIndex> = g.neighbors_undirected(v).collect();
+    let neighbor_vec: Vec<NodeIndex> = g.neighbors_undirected(v).collect();
     for n1 in 0..neighbor_vec.len() {
-        for n2 in (n1+1)..neighbor_vec.len() {
+        for n2 in (n1 + 1)..neighbor_vec.len() {
             if !g.find_edge(neighbor_vec[n1], neighbor_vec[n2]).is_some() {
                 g.add_edge(neighbor_vec[n1], neighbor_vec[n2], ());
             }
@@ -159,9 +205,9 @@ fn eliminate_node(g: &mut UnGraph<VarLabel, ()>, v: NodeIndex) -> () {
 /// gets the number of fill edges that are added on eliminating v
 fn num_fill(g: &UnGraph<VarLabel, ()>, v: NodeIndex) -> usize {
     let mut count = 0;
-    let neighbor_vec : Vec<NodeIndex> = g.neighbors_undirected(v).collect();
+    let neighbor_vec: Vec<NodeIndex> = g.neighbors_undirected(v).collect();
     for n1 in 0..neighbor_vec.len() {
-        for n2 in (n1+1)..neighbor_vec.len() {
+        for n2 in (n1 + 1)..neighbor_vec.len() {
             if !g.find_edge(neighbor_vec[n1], neighbor_vec[n2]).is_some() {
                 count += 1;
             }
@@ -175,7 +221,7 @@ pub struct Cnf {
     clauses: Vec<Vec<Literal>>,
     imm_clauses: Vector<Vector<Literal>>,
     num_vars: usize,
-    hasher: Option<CnfHasher>
+    hasher: Option<CnfHasher>,
 }
 
 pub struct AssignmentIter {
@@ -239,7 +285,7 @@ impl Cnf {
             clauses: clauses.clone(),
             num_vars: m as usize,
             imm_clauses: clauses.iter().map(|x| Vector::from(x)).collect(),
-            hasher: None
+            hasher: None,
         };
         r.hasher = Some(CnfHasher::new(&r));
         r
@@ -279,9 +325,9 @@ impl Cnf {
     /// - Literal negation implied by "-"
     pub fn from_string(s: String) -> Cnf {
         let clauses = s.split("&&");
-        let mut clause_vec : Vec<Vec<Literal>> = Vec::new();
+        let mut clause_vec: Vec<Vec<Literal>> = Vec::new();
         for clause in clauses {
-            let mut c : Vec<Literal> = Vec::new();
+            let mut c: Vec<Literal> = Vec::new();
             // filter the parens off
             let mut chars = clause.trim().chars();
             chars.next();
@@ -290,15 +336,20 @@ impl Cnf {
                 if lit.trim().is_empty() {
                     continue;
                 }
-                let parsed : i64 = lit.trim().parse().unwrap_or_else(|_| panic!("failed to parse literal {}", lit));
+                let parsed: i64 = lit
+                    .trim()
+                    .parse()
+                    .unwrap_or_else(|_| panic!("failed to parse literal {}", lit));
                 let neg = parsed <= 0;
-                c.push(Literal::new(VarLabel::new_usize(i64::abs(parsed) as usize), !neg));
+                c.push(Literal::new(
+                    VarLabel::new_usize(i64::abs(parsed) as usize),
+                    !neg,
+                ));
             }
             clause_vec.push(c);
         }
         Cnf::new(clause_vec)
     }
-
 
     pub fn rand_cnf(rng: &mut ThreadRng, num_vars: usize, num_clauses: usize) -> Cnf {
         assert!(num_clauses > 2, "requires at least 2 clauses in CNF");
@@ -364,8 +415,8 @@ impl Cnf {
                         if lit.get_polarity() == assgn {
                             clause_sat = true;
                         }
-                    },
-                    None => ()
+                    }
+                    None => (),
                 };
             }
             if !clause_sat {
@@ -374,7 +425,6 @@ impl Cnf {
         }
         return true;
     }
-
 
     /// compute the average span of the clauses with the ordering given by
     /// `lbl_to_pos`, which is a mapping from variable labels to their position
@@ -557,7 +607,7 @@ impl Cnf {
     }
 
     pub fn interaction_graph(&self) -> UnGraph<VarLabel, ()> {
-        let mut g : UnGraph<VarLabel, ()> = UnGraph::new_undirected();
+        let mut g: UnGraph<VarLabel, ()> = UnGraph::new_undirected();
         for v in 0..self.num_vars {
             g.add_node(VarLabel::new(v as u64));
         }
@@ -579,12 +629,15 @@ impl Cnf {
 
     /// get a min-fill elimination order for this CNF
     pub fn min_fill_order(&self) -> VarOrder {
-        let mut ord : Vec<VarLabel> = Vec::new();
+        let mut ord: Vec<VarLabel> = Vec::new();
         let mut ig = self.interaction_graph();
         while ig.node_count() > 0 {
             // find the min-fill node, eliminate it, and add it to v
-            let (idx, _) = ig.node_indices().map(|x| (x, num_fill(&ig, x)))
-                .min_by(|(_, a), (_, b)| a.cmp(b)).unwrap();
+            let (idx, _) = ig
+                .node_indices()
+                .map(|x| (x, num_fill(&ig, x)))
+                .min_by(|(_, a), (_, b)| a.cmp(b))
+                .unwrap();
             ord.push(ig[idx]);
             eliminate_node(&mut ig, idx);
         }
@@ -614,16 +667,25 @@ impl Cnf {
 
     /// Generates the sub-cnf that is the result of subsuming all assigned literals in `m`
     pub fn sub_cnf(&self, m: &PartialModel) -> Vector<Vector<Literal>> {
-        self.imm_clauses.clone().into_iter().filter_map(|clause| {
-            // first filter out all satisfied clauses
-            for lit in clause.iter() {
-                if m.lit_implied(*lit) {
-                    return None
+        self.imm_clauses
+            .clone()
+            .into_iter()
+            .filter_map(|clause| {
+                // first filter out all satisfied clauses
+                for lit in clause.iter() {
+                    if m.lit_implied(*lit) {
+                        return None;
+                    }
                 }
-            }
-            // then filter out unsat literals in this clause
-            Some(clause.into_iter().filter(|lit| !m.lit_neg_implied(*lit)).collect())
-        }).collect()
+                // then filter out unsat literals in this clause
+                Some(
+                    clause
+                        .into_iter()
+                        .filter(|lit| !m.lit_neg_implied(*lit))
+                        .collect(),
+                )
+            })
+            .collect()
     }
 
     /// get a hasher for this CNF
@@ -631,7 +693,7 @@ impl Cnf {
     pub fn get_hasher(&self) -> &CnfHasher {
         match self.hasher {
             Some(ref v) => v,
-            None => panic!()
+            None => panic!(),
         }
     }
 }
@@ -655,7 +717,6 @@ impl Arbitrary for Cnf {
         Cnf::new(clauses)
     }
 }
-
 
 #[test]
 fn test_cnf_wmc() {

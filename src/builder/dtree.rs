@@ -4,7 +4,7 @@
 //!
 
 use bit_set::BitSet;
-use std::{iter::FromIterator, cmp::Ordering};
+use std::{cmp::Ordering, iter::FromIterator};
 
 use crate::repr::{
     cnf::Cnf,
@@ -135,22 +135,26 @@ impl DTree {
     }
 
     pub fn from_cnf(cnf: &Cnf, elim_order: &VarOrder) -> DTree {
-        let mut clauses: Vec<Vec<Literal>> = cnf.clauses().iter().map(|clause| {
-            // sort the literals in each clause by order
-            let mut new_c = clause.clone();
-            new_c.sort_by(|lit1, lit2| {
-                let lt = elim_order.lt(lit1.get_label(), lit2.get_label());
-                if lt {
-                    Ordering::Less
-                } else {
-                    Ordering::Greater
-                }
-            });
-            new_c
-        }).collect();
+        let mut clauses: Vec<Vec<Literal>> = cnf
+            .clauses()
+            .iter()
+            .map(|clause| {
+                // sort the literals in each clause by order
+                let mut new_c = clause.clone();
+                new_c.sort_by(|lit1, lit2| {
+                    let lt = elim_order.lt(lit1.get_label(), lit2.get_label());
+                    if lt {
+                        Ordering::Less
+                    } else {
+                        Ordering::Greater
+                    }
+                });
+                new_c
+            })
+            .collect();
         clauses.sort_by(|c1, c2| {
             if c1.is_empty() {
-                Ordering:: Less
+                Ordering::Less
             } else if c2.is_empty() {
                 Ordering::Greater
             } else {
