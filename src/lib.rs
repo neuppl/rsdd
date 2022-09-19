@@ -231,7 +231,7 @@ pub extern "C" fn rsdd_high(mgr: *mut BddManager, a: u64) -> u64 {
 }
 
 #[no_mangle]
-pub extern "C" fn rsdd_print_stats(mgr: *mut BddManager) -> () {
+pub extern "C" fn rsdd_print_stats(mgr: *mut BddManager) {
     let mgr = unsafe { &mut *mgr };
     mgr.print_stats();
 }
@@ -300,7 +300,7 @@ pub extern "C" fn rsdd_plan_ite(f: *mut BddPlan, g: *mut BddPlan, h: *mut BddPla
 
 /// Frees a plan object
 #[no_mangle]
-pub extern "C" fn rsdd_plan_free(a: *mut BddPlan) -> () {
+pub extern "C" fn rsdd_plan_free(a: *mut BddPlan) {
     unsafe {
         let _a = Box::from_raw(a);
     }

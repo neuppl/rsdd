@@ -46,19 +46,19 @@ pub struct BddApplyTable {
 
 impl BddApplyTable {
     pub fn new(num_vars: usize) -> BddApplyTable {
-        let tbl = BddApplyTable {
+        
+        BddApplyTable {
             table: (0..num_vars).map(|_| Lru::new(INITIAL_CAPACITY)).collect(),
-        };
-        tbl
+        }
     }
 
     /// Push a new apply table for a new variable
-    pub fn push_table(&mut self) -> () {
+    pub fn push_table(&mut self) {
         self.table.push(Lru::new(INITIAL_CAPACITY));
     }
 
     /// Insert an ite (f, g, h) into the apply table
-    pub fn insert(&mut self, f: BddPtr, g: BddPtr, h: BddPtr, res: BddPtr) -> () {
+    pub fn insert(&mut self, f: BddPtr, g: BddPtr, h: BddPtr, res: BddPtr) {
         // convert the ITE into a canonical form
         while f.label().value_usize() >= self.table.len() {
             self.push_table();

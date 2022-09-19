@@ -35,7 +35,7 @@ impl DTree {
         match self {
             // TODO: resolve unused
             #[allow(unused)]
-            Self::Leaf { v, cutset: _, vars } => &vars.as_ref().unwrap(),
+            Self::Leaf { v, cutset: _, vars } => vars.as_ref().unwrap(),
             // TODO: resolve unused
             #[allow(unused)]
             Self::Node {
@@ -64,8 +64,8 @@ impl DTree {
                 cutset: _,
                 ref mut vars,
             } if vars.is_none() => {
-                let l_vars = l.init_vars().clone();
-                let r_vars = r.init_vars().clone();
+                let l_vars = l.init_vars();
+                let r_vars = r.init_vars();
                 let r: BitSet = l_vars.union(&r_vars).collect();
                 *vars = Some(r.clone());
                 r
@@ -82,13 +82,13 @@ impl DTree {
         }
     }
 
-    fn gen_cutset(&mut self, parent_vars: &BitSet) -> () {
+    fn gen_cutset(&mut self, parent_vars: &BitSet) {
         match self {
             Self::Leaf { v: _, cutset, vars } => {
                 // cutset of leaf is all vars mentioned in leaf not mentioned in parent
                 // println!("parent vars: {:?}", parent_vars);
                 let mut c = vars.as_ref().unwrap().clone();
-                c.difference_with(&parent_vars);
+                c.difference_with(parent_vars);
                 *cutset = Some(c);
             }
             Self::Node {
@@ -114,7 +114,7 @@ impl DTree {
     }
 
     fn balanced(leaves: &[&Vec<Literal>]) -> DTree {
-        assert!(leaves.len() > 0);
+        assert!(!leaves.is_empty());
         if leaves.len() == 1 {
             DTree::Leaf {
                 v: leaves[0].clone(),
@@ -177,7 +177,7 @@ impl DTree {
                 let top_v = all_mentioned[0][0];
                 let cur_v = clause[0];
                 if top_v.get_label() == cur_v.get_label() {
-                    all_mentioned.push(&clause);
+                    all_mentioned.push(clause);
                 } else {
                     // found a new top variable; refresh the tree
                     let subtree = DTree::balanced(&all_mentioned);
@@ -227,7 +227,7 @@ impl DTree {
             }
             (&[v1], None) => VTree::new_leaf(vec![v1]),
             (&[v, ref vars @ ..], _) => {
-                let sub = DTree::right_linear(&vars, continuation);
+                let sub = DTree::right_linear(vars, continuation);
                 VTree::new_node(Box::new(VTree::new_leaf(vec![v])), Box::new(sub))
             }
         }

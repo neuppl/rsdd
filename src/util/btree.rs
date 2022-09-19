@@ -34,7 +34,7 @@ where
     fn next(&mut self) -> Option<Self::Item> {
         use self::BTree::*;
         match self.queue.pop_front() {
-            None => return None,
+            None => None,
             Some(v) => match v {
                 &Leaf(_) => Some(v),
                 &Node(_, ref l, ref r) => {
@@ -65,7 +65,7 @@ where
     fn next(&mut self) -> Option<Self::Item> {
         use self::BTree::*;
         match self.stack.pop() {
-            None => return None,
+            None => None,
             Some(v) => match v {
                 &Leaf(_) => Some(v),
                 &Node(_, _, ref r) => {
@@ -112,9 +112,9 @@ where
     }
 
     pub fn bfs_iter<'a>(&'a self) -> BreadthFirstIter<'a, N, L> {
-        return BreadthFirstIter {
+        BreadthFirstIter {
             queue: VecDeque::from([self]),
-        };
+        }
     }
 
     pub fn contains_leaf<F>(&self, f: &F) -> bool
@@ -234,8 +234,8 @@ fn test_traversal() {
 
     for (idx, v) in vtree.dfs_iter().enumerate() {
         let value = match v {
-            &Node(ref v, _, _) => v.clone(),
-            &Leaf(ref v) => v.clone(),
+            &Node(ref v, _, _) => *v,
+            &Leaf(ref v) => *v,
         };
         assert_eq!((idx + 1) as i32, value);
     }
@@ -256,7 +256,7 @@ impl LeastCommonAncestor {
         tree: &BTree<N, L>,
         map: &HashMap<*const BTree<N, L>, usize>,
         v: &mut Vec<usize>,
-    ) -> ()
+    )
     where
         N: PartialEq + Eq + Clone,
         L: PartialEq + Eq + Clone,

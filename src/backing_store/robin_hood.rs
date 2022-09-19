@@ -29,7 +29,7 @@ impl HashTableElement {
         init.set_occupied(1);
         init.set_hash((hash >> 32) as u64); // grab some high-order bits of the hash
         init.set_idx(idx.0 as u64);
-        return init;
+        init
     }
 }
 
@@ -49,12 +49,12 @@ where
     T: Hash + PartialEq + Eq + Clone,
 {
     fn hash(&self) -> usize {
-        return self.hash_mem;
+        self.hash_mem
     }
 
     fn new(elem: T, hash: usize) -> BackingElem<T> {
         BackingElem {
-            elem: elem,
+            elem,
             hash_mem: hash,
             mark: false,
         }
@@ -64,12 +64,12 @@ where
 /// Insert an element into `tbl` without inserting into the backing table. This
 /// is used during growing and after an element has been found during
 /// `get_or_insert`
-fn propagate(v: &mut [HashTableElement], cap: usize, itm: HashTableElement, pos: usize) -> () {
+fn propagate(v: &mut [HashTableElement], cap: usize, itm: HashTableElement, pos: usize) {
     let mut searcher = itm;
     let mut pos = pos;
     loop {
         if v[pos].occupied() == 1 {
-            let cur_itm = v[pos].clone();
+            let cur_itm = v[pos];
             // check if this item's position is closer than ours
             if cur_itm.offset() < searcher.offset() {
                 // swap the searcher and this item
@@ -81,8 +81,8 @@ fn propagate(v: &mut [HashTableElement], cap: usize, itm: HashTableElement, pos:
             pos = (pos + 1) % cap; // wrap to the beginning of the array
         } else {
             // place the element in the current spot, we're done
-            v[pos] = searcher.clone();
-            return ();
+            v[pos] = searcher;
+            return ;
         }
     }
 }
@@ -111,14 +111,14 @@ where
     /// reserve a robin-hood table capable of holding at least `sz` elements
     pub fn new(sz: usize) -> BackedRobinHoodTable<T> {
         let v: Vec<HashTableElement> = zero_vec(sz);
-        let r = BackedRobinHoodTable {
+        
+        BackedRobinHoodTable {
             elem: Vec::with_capacity(sz as usize),
             tbl: v,
             cap: sz,
             len: 0,
             stats: BackingCacheStats::new(),
-        };
-        return r;
+        }
     }
 
     /// check if item at index `pos` is occupied
@@ -138,7 +138,7 @@ where
     }
 
     /// Begin inserting `itm` from point `pos` in the hash table.
-    fn propagate(&mut self, itm: HashTableElement, pos: usize) -> () {
+    fn propagate(&mut self, itm: HashTableElement, pos: usize) {
         propagate(&mut self.tbl, self.cap, itm, pos)
     }
 
@@ -155,15 +155,13 @@ where
         let mut searcher = HashTableElement::new(BackingPtr(self.elem.len() as u32), hash_v as u64);
         loop {
             if self.is_occupied(pos) {
-                let cur_itm = self.tbl[pos].clone();
+                let cur_itm = self.tbl[pos];
                 // first check the hashes to see if these elements could
                 // possibly be equal
 
-                if cur_itm.hash() == searcher.hash() {
-                    if elem.eq(self.get_pos(pos as usize)) {
-                        self.stats.hit_count += 1;
-                        return BackingPtr(cur_itm.idx() as u32);
-                    }
+                if cur_itm.hash() == searcher.hash() && elem.eq(self.get_pos(pos as usize)) {
+                    self.stats.hit_count += 1;
+                    return BackingPtr(cur_itm.idx() as u32);
                 }
                 // check if this item's position is closer than ours
                 if cur_itm.offset() < searcher.offset() {
@@ -198,7 +196,7 @@ where
         let mut pos = (hash_v as usize) % self.cap;
         let searcher = HashTableElement::new(BackingPtr(self.elem.len() as u32), hash_v);
         loop {
-            let cur_itm = self.tbl[pos].clone();
+            let cur_itm = self.tbl[pos];
             if cur_itm.occupied() == 1 {
                 // first check the hashes to see if these elements could
                 // possibly be equal
@@ -226,7 +224,7 @@ where
     }
 
     /// Expands the capacity of the hash table
-    pub fn grow(&mut self) -> () {
+    pub fn grow(&mut self) {
         let new_sz = (self.cap + 1).next_power_of_two();
         self.cap = new_sz;
         self.tbl = zero_vec(new_sz);
@@ -243,7 +241,7 @@ where
     }
 
     pub fn average_offset(&self) -> f64 {
-        let total = self.tbl.iter().fold(0, |sum, ref cur| cur.offset() + sum);
+        let total = self.tbl.iter().fold(0, |sum, cur| cur.offset() + sum);
         (total as f64) / (self.len as f64)
     }
 

@@ -134,7 +134,7 @@ impl CnfHasher {
         }
     }
 
-    pub fn decide(&mut self, lit: Literal) -> () {
+    pub fn decide(&mut self, lit: Literal) {
         if lit.get_polarity() {
             for clause_idx in self.pos_lits[lit.get_label().value_usize()].iter() {
                 self.state.last_mut().unwrap().remove(clause_idx);
@@ -146,12 +146,12 @@ impl CnfHasher {
         }
     }
 
-    pub fn push(&mut self) -> () {
+    pub fn push(&mut self) {
         let n = self.state.last().unwrap().clone();
         self.state.push(n);
     }
 
-    pub fn pop(&mut self) -> () {
+    pub fn pop(&mut self) {
         self.state.pop();
     }
 
@@ -190,11 +190,11 @@ impl CnfHasher {
 /// every pair of nonadjacent neighbors of X and then deleting node X from G.
 /// The edges that are added during the elimination process are called fill-in
 /// edges.
-fn eliminate_node(g: &mut UnGraph<VarLabel, ()>, v: NodeIndex) -> () {
+fn eliminate_node(g: &mut UnGraph<VarLabel, ()>, v: NodeIndex) {
     let neighbor_vec: Vec<NodeIndex> = g.neighbors_undirected(v).collect();
     for n1 in 0..neighbor_vec.len() {
         for n2 in (n1 + 1)..neighbor_vec.len() {
-            if !g.find_edge(neighbor_vec[n1], neighbor_vec[n2]).is_some() {
+            if g.find_edge(neighbor_vec[n1], neighbor_vec[n2]).is_none() {
                 g.add_edge(neighbor_vec[n1], neighbor_vec[n2], ());
             }
         }
@@ -208,12 +208,12 @@ fn num_fill(g: &UnGraph<VarLabel, ()>, v: NodeIndex) -> usize {
     let neighbor_vec: Vec<NodeIndex> = g.neighbors_undirected(v).collect();
     for n1 in 0..neighbor_vec.len() {
         for n2 in (n1 + 1)..neighbor_vec.len() {
-            if !g.find_edge(neighbor_vec[n1], neighbor_vec[n2]).is_some() {
+            if g.find_edge(neighbor_vec[n1], neighbor_vec[n2]).is_none() {
                 count += 1;
             }
         }
     }
-    return count;
+    count
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -243,7 +243,7 @@ impl Iterator for AssignmentIter {
     fn next(&mut self) -> Option<Self::Item> {
         if self.cur.is_none() {
             self.cur = Some((0..self.num_vars).map(|_| false).collect());
-            return self.cur.clone();
+            self.cur.clone()
         } else {
             // attempt to do a binary increment of the current state
             let (new_c, carry) = self.cur.as_ref().unwrap().iter().fold(
@@ -271,7 +271,7 @@ impl Cnf {
     pub fn new(mut clauses: Vec<Vec<Literal>>) -> Cnf {
         let mut m = 0;
         // filter out empty clauses
-        clauses.retain(|x| x.len() > 0);
+        clauses.retain(|x| !x.is_empty());
         for clause in clauses.iter_mut() {
             for lit in clause.iter() {
                 m = max(lit.get_label().value() + 1, m);
@@ -284,7 +284,7 @@ impl Cnf {
         let mut r = Cnf {
             clauses: clauses.clone(),
             num_vars: m as usize,
-            imm_clauses: clauses.iter().map(|x| Vector::from(x)).collect(),
+            imm_clauses: clauses.iter().map(Vector::from).collect(),
             hasher: None,
         };
         r.hasher = Some(CnfHasher::new(&r));
@@ -365,12 +365,12 @@ impl Cnf {
             if num_vars > 1 {
                 let mut var_vec: Vec<Literal> = Vec::new();
                 for _ in 0..clause_size {
-                    let var = vars.get(rng.gen_range(0..vars.len())).unwrap().clone();
+                    let var = *vars.get(rng.gen_range(0..vars.len())).unwrap();
                     var_vec.push(var);
                 }
                 clause_vec.push(var_vec);
             } else {
-                let var = vars.get(rng.gen_range(0..vars.len())).unwrap().clone();
+                let var = *vars.get(rng.gen_range(0..vars.len())).unwrap();
                 clause_vec.push(vec![var]);
             }
         }
@@ -402,7 +402,7 @@ impl Cnf {
             }
         }
         // no unsat clauses
-        return true;
+        true
     }
 
     /// true if the partial model implies the CNF
@@ -423,7 +423,7 @@ impl Cnf {
                 return false;
             }
         }
-        return true;
+        true
     }
 
     /// compute the average span of the clauses with the ordering given by
@@ -454,8 +454,8 @@ impl Cnf {
         let sum = clause.iter().fold(0, |acc, &lbl| {
             lbl_to_pos[lbl.get_label().value() as usize] + acc
         });
-        let r = (sum as f64) / (clause.len() as f64);
-        r
+        
+        (sum as f64) / (clause.len() as f64)
     }
 
     /// compute a weighted model count of a CNF
@@ -479,7 +479,7 @@ impl Cnf {
                 total += assgn_w;
             }
         }
-        return total;
+        total
     }
 
     pub fn linear_order(&self) -> VarOrder {
@@ -487,7 +487,7 @@ impl Cnf {
             .into_iter()
             .map(|x| VarLabel::new(x as u64))
             .collect();
-        return VarOrder::new(v);
+        VarOrder::new(v)
     }
 
     /// heuristically generate a variable ordering which minimizes the average
@@ -567,18 +567,17 @@ impl Cnf {
                 } else {
                     // next, filter out clauses with false literals
                     let filtered: Vec<Literal> = clause
-                        .into_iter()
+                        .iter()
                         .filter(|outer| {
                             !(lit.get_label() == outer.get_label()
                                 && lit.get_polarity() != outer.get_polarity())
-                        })
-                        .map(|x| *x)
+                        }).copied()
                         .collect();
                     Some(filtered)
                 }
             })
             .collect();
-        return Cnf::new(new_cnf);
+        Cnf::new(new_cnf)
     }
 
     pub fn to_string(&self) -> String {
@@ -603,7 +602,7 @@ impl Cnf {
                 r = format!(" {} && ({})", r, clause_str);
             }
         }
-        return r;
+        r
     }
 
     pub fn interaction_graph(&self) -> UnGraph<VarLabel, ()> {
@@ -662,7 +661,7 @@ impl Cnf {
             }
             r = format!("{}\n{} 0", r, clause_str);
         }
-        return r;
+        r
     }
 
     /// Generates the sub-cnf that is the result of subsuming all assigned literals in `m`

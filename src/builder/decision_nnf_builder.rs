@@ -109,17 +109,15 @@ impl DecisionNNFBuilder {
     }
 
     /// Clear the internal scratch space for a BddPtr
-    fn clear_scratch(&mut self, ptr: BddPtr) -> () {
+    fn clear_scratch(&mut self, ptr: BddPtr) {
         if ptr.is_const() {
-            return;
+            
+        } else if self.compute_table.get_scratch(ptr).is_none() {
+            
         } else {
-            if self.compute_table.get_scratch(ptr).is_none() {
-                return;
-            } else {
-                self.compute_table.set_scratch(ptr, None);
-                self.clear_scratch(self.low(ptr));
-                self.clear_scratch(self.high(ptr));
-            }
+            self.compute_table.set_scratch(ptr, None);
+            self.clear_scratch(self.low(ptr));
+            self.clear_scratch(self.high(ptr));
         }
     }
 
@@ -178,7 +176,7 @@ impl DecisionNNFBuilder {
 
         // check cache
         let hashed = hasher.hash(&assgn);
-        match cache.get(&hashed.clone()) {
+        match cache.get(&hashed) {
             None => (),
             Some(v) => {
                 return *v;
@@ -255,7 +253,7 @@ impl DecisionNNFBuilder {
     /// compile a decision DNNF top-down from a CNF with the searching order
     /// specified by `order`
     pub fn from_cnf_topdown(&mut self, order: &VarOrder, cnf: &Cnf) -> BddPtr {
-        let mut sat = SATSolver::new(&cnf);
+        let mut sat = SATSolver::new(cnf);
         if sat.unsat_unit() {
             return self.false_ptr();
         }
@@ -318,7 +316,7 @@ impl DecisionNNFBuilder {
         let num_samples = 25;
 
         for _ in 0..n {
-            let mut sat = SATSolver::new(&cnf);
+            let mut sat = SATSolver::new(cnf);
             for i in 100..num_samples {
                 sat.decide(Literal::new(VarLabel::new_usize(i), rng.gen_bool(0.5)));
             }
@@ -335,15 +333,13 @@ impl DecisionNNFBuilder {
     /// Pre-condition: cleared scratch
     fn unique_label_nodes(&mut self, ptr: BddPtr, count: usize) -> usize {
         if ptr.is_const() {
-            return count;
+            count
+        } else if self.compute_table.get_scratch(ptr).is_some() {
+            count
         } else {
-            if self.compute_table.get_scratch(ptr).is_some() {
-                return count;
-            } else {
-                self.compute_table.set_scratch(ptr, Some(count));
-                let new_count = self.unique_label_nodes(self.low(ptr), count + 1);
-                self.unique_label_nodes(self.high(ptr), new_count)
-            }
+            self.compute_table.set_scratch(ptr, Some(count));
+            let new_count = self.unique_label_nodes(self.low(ptr), count + 1);
+            self.unique_label_nodes(self.high(ptr), new_count)
         }
     }
 
@@ -356,8 +352,8 @@ impl DecisionNNFBuilder {
         tbl: &mut Vec<(Option<T>, Option<T>)>, // (non-compl, compl)
     ) -> T {
         match ptr.ptr_type() {
-            PointerType::PtrTrue => wmc.one.clone(),
-            PointerType::PtrFalse => wmc.zero.clone(),
+            PointerType::PtrTrue => wmc.one,
+            PointerType::PtrFalse => wmc.zero,
             PointerType::PtrNode => {
                 let idx = self.compute_table.get_scratch(ptr).unwrap();
                 // let order = self.get_order();
@@ -375,7 +371,7 @@ impl DecisionNNFBuilder {
                         let high_v = self.wmc_helper(high, wmc, smooth, tbl);
                         // compute new
                         let (low_factor, high_factor) = wmc.get_var_weight(bdd.var);
-                        let res = (low_v * low_factor.clone()) + (high_v * high_factor.clone());
+                        let res = (low_v * *low_factor) + (high_v * *high_factor);
                         tbl[idx] = if ptr.is_compl() {
                             (cur_reg, Some(res))
                         } else {

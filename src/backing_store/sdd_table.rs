@@ -44,12 +44,12 @@ impl SddTable {
                     let mut m: HashMap<VarLabel, VarLabel> = HashMap::new();
                     for (var_idx, v) in o.iter().enumerate() {
                         t.sdd_to_bdd
-                            .insert(v.clone(), VarLabel::new(var_idx as u64));
-                        m.insert(VarLabel::new(var_idx as u64), v.clone());
+                            .insert(*v, VarLabel::new(var_idx as u64));
+                        m.insert(VarLabel::new(var_idx as u64), *v);
                         new_order.push(VarLabel::new(var_idx as u64));
                     }
                     let man = BddManager::new(VarOrder::new(new_order));
-                    t.tables.push(SubTable::BddSubTable { man: man, conv: m })
+                    t.tables.push(SubTable::BddSubTable { man, conv: m })
                 }
                 &BTree::Node(_, _, _) => {
                     let s = SubTable::SddSubTable {
@@ -95,7 +95,7 @@ impl SddTable {
     /// Fetch the slice for a set of or-nodes; panics if this is not an SDD node
     pub fn sdd_get_or(&self, ptr: SddPtr) -> &[(SddPtr, SddPtr)] {
         match &self.tables[ptr.vtree().value() as usize] {
-            &SubTable::SddSubTable { ref tbl } => &tbl.deref(BackingPtr(ptr.idx() as u32)),
+            &SubTable::SddSubTable { ref tbl } => tbl.deref(BackingPtr(ptr.idx() as u32)),
             _ => panic!("dereferencing BDD into SDD"),
         }
     }

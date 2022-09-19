@@ -48,7 +48,7 @@ struct BenchmarkEntry {
 
 // TODO: resolve unused
 #[allow(unused)]
-fn compile_topdown_nnf(str: String, debug: bool) -> () {
+fn compile_topdown_nnf(str: String, debug: bool) {
     let cnf = Cnf::from_file(str);
     let mut man = rsdd::builder::decision_nnf_builder::DecisionNNFBuilder::new(cnf.num_vars());
     let order = VarOrder::linear_order(cnf.num_vars());
@@ -60,7 +60,7 @@ fn compile_topdown_nnf(str: String, debug: bool) -> () {
 
 // TODO: resolve unused
 #[allow(unused)]
-fn compile_sdd(str: String, debug: bool) -> () {
+fn compile_sdd(str: String, debug: bool) {
     use rsdd::builder::sdd_builder::*;
     let cnf = Cnf::from_file(str);
     let dtree = DTree::from_cnf(&cnf, &VarOrder::linear_order(cnf.num_vars()));
@@ -70,7 +70,7 @@ fn compile_sdd(str: String, debug: bool) -> () {
 
 // TODO: resolve unused
 #[allow(unused)]
-fn compile_bdd(str: String, debug: bool) -> () {
+fn compile_bdd(str: String, debug: bool) {
     use rsdd::builder::bdd_builder::*;
     let cnf = Cnf::from_file(str);
     // let order : VarOrder = cnf.force_order();

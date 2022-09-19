@@ -62,7 +62,7 @@ impl Assignment {
     }
 
     pub fn get_assignment(&self, var: VarLabel) -> bool {
-        return self.assignments[var.value() as usize];
+        self.assignments[var.value() as usize]
     }
 }
 
@@ -86,8 +86,8 @@ impl<T: Num + Clone + Debug + Copy> BddWmc<T> {
             var_to_val_vec[key.value_usize()] = Some(*value);
         }
         BddWmc {
-            zero: zero,
-            one: one,
+            zero,
+            one,
             var_to_val: var_to_val_vec,
         }
     }
@@ -95,8 +95,8 @@ impl<T: Num + Clone + Debug + Copy> BddWmc<T> {
     /// Generate a new `BddWmc` with no associations
     pub fn new(zero: T, one: T) -> BddWmc<T> {
         BddWmc {
-            zero: zero,
-            one: one,
+            zero,
+            one,
             var_to_val: Vec::new(),
         }
     }
@@ -111,10 +111,10 @@ impl<T: Num + Clone + Debug + Copy> BddWmc<T> {
                 prod = prod * self.var_to_val[lit.get_label().value_usize()].unwrap().0
             }
         }
-        return prod;
+        prod
     }
 
-    pub fn set_weight(&mut self, lbl: VarLabel, low: T, high: T) -> () {
+    pub fn set_weight(&mut self, lbl: VarLabel, low: T, high: T) {
         let n = lbl.value_usize();
         while n >= self.var_to_val.len() {
             self.var_to_val.push(None);
@@ -123,7 +123,7 @@ impl<T: Num + Clone + Debug + Copy> BddWmc<T> {
     }
 
     pub fn get_var_weight(&self, label: VarLabel) -> &(T, T) {
-        return &(self.var_to_val[label.value_usize()]).as_ref().unwrap();
+        return (self.var_to_val[label.value_usize()]).as_ref().unwrap();
     }
 }
 
@@ -159,17 +159,15 @@ impl BddManager {
     }
 
     /// Clear the internal scratch space for a BddPtr
-    fn clear_scratch(&mut self, ptr: BddPtr) -> () {
+    fn clear_scratch(&mut self, ptr: BddPtr) {
         if ptr.is_const() {
-            return;
+            
+        } else if self.compute_table.get_scratch(ptr).is_none() {
+            
         } else {
-            if self.compute_table.get_scratch(ptr).is_none() {
-                return;
-            } else {
-                self.compute_table.set_scratch(ptr, None);
-                self.clear_scratch(self.low(ptr));
-                self.clear_scratch(self.high(ptr));
-            }
+            self.compute_table.set_scratch(ptr, None);
+            self.clear_scratch(self.low(ptr));
+            self.clear_scratch(self.high(ptr));
         }
     }
 
@@ -180,15 +178,13 @@ impl BddManager {
     /// Pre-condition: cleared scratch
     fn unique_label_nodes(&mut self, ptr: BddPtr, count: usize) -> usize {
         if ptr.is_const() {
-            return count;
+            count
+        } else if self.compute_table.get_scratch(ptr).is_some() {
+            count
         } else {
-            if self.compute_table.get_scratch(ptr).is_some() {
-                return count;
-            } else {
-                self.compute_table.set_scratch(ptr, Some(count));
-                let new_count = self.unique_label_nodes(self.low(ptr), count + 1);
-                self.unique_label_nodes(self.high(ptr), new_count)
-            }
+            self.compute_table.set_scratch(ptr, Some(count));
+            let new_count = self.unique_label_nodes(self.low(ptr), count + 1);
+            self.unique_label_nodes(self.high(ptr), new_count)
         }
     }
 
@@ -389,7 +385,7 @@ impl BddManager {
                     let lbl = ptr.label();
                     format!(
                         "({:?}, {}{}, {}{})",
-                        map.get(&lbl).unwrap_or_else(|| &lbl).value(),
+                        map.get(&lbl).unwrap_or(&lbl).value(),
                         if l_p.is_compl() { "!" } else { "" },
                         l_s,
                         if h_p.is_compl() { "!" } else { "" },
@@ -409,8 +405,8 @@ impl BddManager {
         let var = self.var(lbl, true);
         let iff = self.iff(var, g);
         let a = self.and(iff, f);
-        let r = self.exists(a, lbl);
-        r
+        
+        self.exists(a, lbl)
     }
 
     /// true if `a` represents a variable (both high and low are constant)
@@ -508,8 +504,8 @@ impl BddManager {
 
     /// if f then g else h
     pub fn ite(&mut self, f: BddPtr, g: BddPtr, h: BddPtr) -> BddPtr {
-        let r = self.ite_helper(f, g, h);
-        r
+        
+        self.ite_helper(f, g, h)
     }
 
     /// Produce a new BDD that is the result of conjoining `f` and `g`
@@ -607,7 +603,7 @@ impl BddManager {
 
         // now normalize the result
         if new_h == new_l {
-            return new_h;
+            new_h
         } else {
             let n = BddNode {
                 low: new_l,
@@ -616,7 +612,7 @@ impl BddManager {
             };
             let r = self.get_or_insert(n);
             self.apply_table.insert(f, g, BddPtr::false_node(), r);
-            return r;
+            r
         }
     }
 
@@ -841,7 +837,7 @@ impl BddManager {
     }
 
     pub fn get_backing_store_stats(&self) -> BackingCacheStats {
-        self.compute_table.get_stats().clone()
+        self.compute_table.get_stats()
     }
 
     /// Counts the number of nodes present in the BDD (not including constant nodes)
@@ -1102,7 +1098,7 @@ impl BddManager {
             cur_assgn,
             vars,
             wmc,
-            PartialModel::from_litvec(&vec![], self.num_vars()),
+            PartialModel::from_litvec(&[], self.num_vars()),
         )
     }
 
@@ -1116,7 +1112,7 @@ impl BddManager {
         assgn: &mut Vec<bool>,
         cache: &HashMap<BddPtr, f64>,
         cur_level: usize,
-    ) -> () {
+    ) {
         // check for smoothing
         if ptr.is_const() {
             if cur_level == self.num_vars() {
@@ -1204,7 +1200,7 @@ impl BddManager {
         }
 
         let CompiledCNF { ptr, sz: _sz } = compiled_heap.pop().unwrap();
-        return ptr;
+        ptr
     }
 
     pub fn from_dtree(&mut self, dtree: &dtree::DTree) -> BddPtr {
@@ -1243,7 +1239,7 @@ impl BddManager {
             return BddPtr::true_node();
         }
         // check if there is an empty clause -- if so, UNSAT
-        if cnf.clauses().iter().find(|x| x.is_empty()).is_some() {
+        if cnf.clauses().iter().any(|x| x.is_empty()) {
             return BddPtr::false_node();
         }
 
@@ -1291,10 +1287,10 @@ impl BddManager {
         }
         // now cvec has a list of all the clauses; collapse it down
         fn helper(vec: &[BddPtr], man: &mut BddManager) -> Option<BddPtr> {
-            if vec.len() == 0 {
+            if vec.is_empty() {
                 None
             } else if vec.len() == 1 {
-                return Some(vec[0]);
+                Some(vec[0])
             } else {
                 let (l, r) = vec.split_at(vec.len() / 2);
                 let sub_l = helper(l, man);
@@ -1308,13 +1304,13 @@ impl BddManager {
         }
         let r = helper(&cvec, self);
         if r.is_none() {
-            return BddPtr::true_node();
+            BddPtr::true_node()
         } else {
-            return r.unwrap();
+            r.unwrap()
         }
     }
 
-    pub fn print_stats(&self) -> () {
+    pub fn print_stats(&self) {
         // let compute_stats = self.get_backing_store_stats();
         // let apply_stats = self.apply_table.get_stats();
         // println!("BDD Manager Stats\nCompute hit count: {}\nCompute lookup count: {}\nCompute total elements: {}\nCompute average offset: {}\nApply lookup: {}\nApply miss: {}\nApply evictions: {}",
@@ -1363,28 +1359,28 @@ impl BddManager {
         match expr {
             &BddPlan::Literal(var, polarity) => self.var(VarLabel::new(var as u64), polarity),
             &BddPlan::And(ref l, ref r) => {
-                let r1 = self.compile_plan(&*l);
-                let r2 = self.compile_plan(&*r);
+                let r1 = self.compile_plan(l);
+                let r2 = self.compile_plan(r);
                 self.and(r1, r2)
             }
             &BddPlan::Or(ref l, ref r) => {
-                let r1 = self.compile_plan(&*l);
-                let r2 = self.compile_plan(&*r);
+                let r1 = self.compile_plan(l);
+                let r2 = self.compile_plan(r);
                 self.or(r1, r2)
             }
             &BddPlan::Iff(ref l, ref r) => {
-                let r1 = self.compile_plan(&*l);
-                let r2 = self.compile_plan(&*r);
+                let r1 = self.compile_plan(l);
+                let r2 = self.compile_plan(r);
                 self.iff(r1, r2)
             }
             &BddPlan::Ite(ref f, ref g, ref h) => {
-                let f = self.compile_plan(&*f);
-                let g = self.compile_plan(&*g);
-                let h = self.compile_plan(&*h);
+                let f = self.compile_plan(f);
+                let g = self.compile_plan(g);
+                let h = self.compile_plan(h);
                 self.ite(f, g, h)
             }
             &BddPlan::Not(ref f) => {
-                let f = self.compile_plan(&*f);
+                let f = self.compile_plan(f);
                 self.negate(f)
             }
             &BddPlan::ConstTrue => self.true_ptr(),
@@ -1419,7 +1415,7 @@ impl BddManager {
 
         // check cache
         let hashed = cnf.get_hasher().hash(&assgn);
-        match cache.get(&hashed.clone()) {
+        match cache.get(&hashed) {
             None => (),
             Some(v) => {
                 return *v;
@@ -1519,7 +1515,7 @@ impl BddManager {
         model: &PartialModel,
         cache: &mut HashMap<HashedCNF, BddPtr>,
     ) -> BddPtr {
-        let mut sat = SATSolver::new(&cnf);
+        let mut sat = SATSolver::new(cnf);
         for assgn in model.assignment_iter() {
             sat.decide(assgn);
         }
@@ -1547,7 +1543,7 @@ impl BddManager {
     /// Prints the total number of recursive calls executed so far by the BddManager
     /// This is a stable way to track performance
     pub fn num_recursive_calls(&self) -> usize {
-        return self.stats.num_recursive_calls;
+        self.stats.num_recursive_calls
     }
 }
 

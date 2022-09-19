@@ -72,7 +72,7 @@ pub enum SddPtrType {
 impl SddPtr {
     pub fn new_node(idx: usize, vtree: u16) -> SddPtr {
         SddPtr {
-            idx: idx,
+            idx,
             pack: PackedInternalData::new(vtree, 0, 0, 0),
         }
     }
@@ -83,7 +83,7 @@ impl SddPtr {
             let v = self.as_bdd_ptr();
             SddPtr::new_bdd(v.neg(), self.pack.vtree() as u16)
         } else {
-            let mut v = self.clone();
+            let mut v = *self;
             v.pack.set_compl(if self.is_compl() { 0 } else { 1 });
             v
         }
@@ -120,11 +120,11 @@ impl SddPtr {
         if self.is_bdd() {
             // produce a regular BDD pointer
             let bdd = BddPtr::from_raw(self.idx as u64);
-            let mut v = self.clone();
+            let mut v = *self;
             v.idx = bdd.regular().raw() as usize;
             v
         } else {
-            let mut v = self.clone();
+            let mut v = *self;
             v.pack.set_compl(0);
             v
         }

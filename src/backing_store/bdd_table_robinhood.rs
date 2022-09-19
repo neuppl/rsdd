@@ -57,7 +57,7 @@ impl BddTable {
     }
 
     /// Set the scratch value for a BddPtr
-    pub fn set_scratch(&mut self, ptr: BddPtr, v: Option<usize>) -> () {
+    pub fn set_scratch(&mut self, ptr: BddPtr, v: Option<usize>) {
         self.subtables[ptr.var() as usize]
             .deref_mut(BackingPtr(ptr.idx() as u32))
             .scratch = v;
@@ -87,7 +87,7 @@ impl BddTable {
             st.num_elements += tbl.num_nodes();
             st.avg_offset += cur_st.avg_offset;
         }
-        st.avg_offset = st.avg_offset / (self.subtables.len() as f64);
+        st.avg_offset /= self.subtables.len() as f64;
         st
     }
 }

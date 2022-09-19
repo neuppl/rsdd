@@ -16,7 +16,7 @@ impl PartialModel {
     /// Creates a partial model from a total model (assignment to all vars)
     pub fn from_total_model(assignments: Vec<bool>) -> PartialModel {
         PartialModel {
-            assignments: assignments.into_iter().map(|x| Some(x)).collect(),
+            assignments: assignments.into_iter().map(Some).collect(),
         }
     }
 
@@ -31,11 +31,11 @@ impl PartialModel {
     }
 
     /// Unsets a variable's value in the model
-    pub fn unset(&mut self, label: VarLabel) -> () {
+    pub fn unset(&mut self, label: VarLabel) {
         self.assignments[label.value_usize()] = None;
     }
 
-    pub fn set(&mut self, label: VarLabel, value: bool) -> () {
+    pub fn set(&mut self, label: VarLabel, value: bool) {
         self.assignments[label.value_usize()] = Some(value);
     }
 
@@ -64,7 +64,7 @@ impl PartialModel {
 
     /// True if this is a set variable, false otherwise
     pub fn is_set(&self, label: VarLabel) -> bool {
-        return self.assignments[label.value_usize()].is_some();
+        self.assignments[label.value_usize()].is_some()
     }
 
     /// Produces an iterator of all the assigned literals
@@ -72,10 +72,7 @@ impl PartialModel {
         self.assignments
             .iter()
             .enumerate()
-            .filter_map(|(idx, x)| match x {
-                None => None,
-                Some(v) => Some(Literal::new(VarLabel::new_usize(idx), *v)),
-            })
+            .filter_map(|(idx, x)| x.as_ref().map(|v| Literal::new(VarLabel::new_usize(idx), *v)))
     }
 
     pub fn unassigned_vars<'a>(&'a self) -> impl Iterator<Item = VarLabel> + 'a {

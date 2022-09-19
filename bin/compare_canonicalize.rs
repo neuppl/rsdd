@@ -40,7 +40,7 @@ fn implies(t1: &Vec<Literal>, t2: &Vec<Literal>) -> Vec<Vec<Literal>> {
         .collect();
     for v in t2.iter() {
         let mut new_clause = lhs.clone();
-        new_clause.push(v.clone());
+        new_clause.push(*v);
         r.push(new_clause);
     }
     r
@@ -110,7 +110,7 @@ fn bn_to_cnf(network: &BayesianNetwork) -> Cnf {
 
 fn build_dtree(cnf: &Cnf) -> DTree {
     let start = Instant::now();
-    let dtree = DTree::from_cnf(&cnf, &VarOrder::linear_order(cnf.num_vars()));
+    let dtree = DTree::from_cnf(cnf, &VarOrder::linear_order(cnf.num_vars()));
     let duration = start.elapsed();
     println!("Dtree built\nNumber of variables: {}\n\tNumber of clauses: {}\n\tWidth: {}\n\tElapsed dtree time: {:?}",
         cnf.num_vars(), cnf.clauses().len(), dtree.width(), duration);
@@ -122,12 +122,12 @@ fn compile_sdd_benchmark(cnf: &Cnf, vtree: VTree, modified: bool) -> Duration {
     compiler.set_compression(!modified);
 
     let start = Instant::now();
-    compiler.from_cnf(&cnf);
+    compiler.from_cnf(cnf);
     // let r = compiler.from_cnf(&cnf);
-    let duration = start.elapsed();
+    
     // let sz = compiler.count_nodes(r);
 
-    duration
+    start.elapsed()
 }
 
 fn main() {

@@ -54,7 +54,7 @@ impl<T: Num + Clone + Debug + Copy> SddWmc<T> {
     }
 
     // Given an SDD VarLabel, set the weight in the appropriate BddWmc struct
-    pub fn set_weight(&mut self, man: &mut SddManager, lbl: VarLabel, low: T, high: T) -> () {
+    pub fn set_weight(&mut self, man: &mut SddManager, lbl: VarLabel, low: T, high: T) {
         let vlbl = man.tbl.sdd_to_bdd_label(&lbl);
         let idx = man.get_vtree_idx(lbl);
         match &mut self.wmc_structs[idx.value()] {
@@ -111,18 +111,18 @@ impl<'a> SddManager {
             app_cache.push(Lru::new(8));
         }
 
-        let m = SddManager {
+        
+
+        SddManager {
             tbl: SddTable::new(&vtree),
             stats: SddStats::new(),
             vtree: VTreeManager::new(vtree),
             app_cache,
             use_compression: true,
-        };
-
-        return m;
+        }
     }
 
-    pub fn set_compression(&mut self, b: bool) -> () {
+    pub fn set_compression(&mut self, b: bool) {
         self.use_compression = b
     }
 
@@ -146,11 +146,11 @@ impl<'a> SddManager {
                     let mgr = self.get_bdd_mgr_mut(ptr);
                     let bdd_ptr = ptr.as_bdd_ptr();
                     let pot_wmc = &weights.wmc_structs[ptr.vtree().value()];
-                    let mut bdd_wmc = match pot_wmc {
+                    let bdd_wmc = match pot_wmc {
                         WmcStruct::Bdd(wmc) => wmc,
                         WmcStruct::Dummy(_) => panic!("Oh the humanity!"),
                     };
-                    let wmc_val = mgr.wmc(bdd_ptr, &mut bdd_wmc);
+                    let wmc_val = mgr.wmc(bdd_ptr, bdd_wmc);
                     tbl.insert(ptr.regular(), wmc_val);
                     return wmc_val;
                 }
@@ -182,7 +182,7 @@ impl<'a> SddManager {
     /// Generate a new variable of label `lbl` with truth value `is_true`
     pub fn var(&mut self, lbl: VarLabel, is_true: bool) -> SddPtr {
         // convert the var label into the correct BDD var label
-        let vlbl = self.tbl.sdd_to_bdd.get(&lbl).unwrap().clone();
+        let vlbl = *self.tbl.sdd_to_bdd.get(&lbl).unwrap();
         let idx = self.get_vtree_idx(lbl).value();
         SddPtr::new_bdd(self.tbl.bdd_man_mut(idx).var(vlbl, is_true), idx as u16)
     }
@@ -195,7 +195,7 @@ impl<'a> SddManager {
     /// Get a pointer to the vtree for `f`
     /// Equivalent to finding the variable order of a variable in a BDD
     fn get_vtree(&self, f: SddPtr) -> &VTree {
-        return self.vtree.get_idx(f.vtree());
+        self.vtree.get_idx(f.vtree())
     }
 
     pub fn get_vtree_root(&self) -> &VTree {
@@ -206,7 +206,7 @@ impl<'a> SddManager {
     /// panics if `f` is not a BDD pointer
     fn get_bdd_mgr(&self, f: SddPtr) -> &BddManager {
         assert!(f.is_bdd());
-        &self.tbl.bdd_man(f.vtree().value())
+        self.tbl.bdd_man(f.vtree().value())
     }
 
     /// get the BDD manager for `f`, where `f` is a BDD pointer
@@ -218,7 +218,7 @@ impl<'a> SddManager {
 
     /// Canonicalizes the list of (prime, sub) terms in-place
     /// `node`: a list of (prime, sub) pairs
-    fn compress(&mut self, node: &mut Vec<(SddPtr, SddPtr)>) -> () {
+    fn compress(&mut self, node: &mut Vec<(SddPtr, SddPtr)>) {
         if !self.use_compression {
             panic!("compress called when disabled")
         }
@@ -231,7 +231,7 @@ impl<'a> SddManager {
                     node[i].0 = self.or(node[i].0, node[j].0);
                     node.swap_remove(j);
                 } else {
-                    j = j + 1;
+                    j += 1;
                 }
             }
         }
@@ -244,7 +244,7 @@ impl<'a> SddManager {
             self.compress(&mut node);
         }
         // check for a base case
-        if node.len() == 0 {
+        if node.is_empty() {
             return SddPtr::new_const(true);
         }
         if node.len() == 1 {
@@ -262,7 +262,8 @@ impl<'a> SddManager {
         // we have a fresh SDD pointer, uniqify it
         node.sort_by(|a, b| a.0.cmp(&b.0));
 
-        let r = if node[0].1.is_compl() {
+        
+        if node[0].1.is_compl() {
             for i in 0..node.len() {
                 node[i].1 = node[i].1.neg();
             }
@@ -272,8 +273,7 @@ impl<'a> SddManager {
         } else {
             self.tbl
                 .get_or_insert_sdd(&SddOr { nodes: node }, table.value())
-        };
-        return r;
+        }
     }
 
     pub fn or_internal(&mut self, a: SddPtr, b: SddPtr) -> SddPtr {
@@ -396,7 +396,7 @@ impl<'a> SddManager {
                 // return a `true` SddPtr here, for trimming
                 if p.is_true() && s.is_true() {
                     let new_v = SddPtr::new_const(true);
-                    self.app_cache[lca.value()].insert((a, b), new_v.clone());
+                    self.app_cache[lca.value()].insert((a, b), new_v);
                     return new_v;
                 }
                 r.push((p, s));
@@ -434,7 +434,7 @@ impl<'a> SddManager {
             // check if this BDD contains the label
             if self.get_vtree(f).extract_leaf().contains(&lbl) {
                 // it does; condition and return
-                let mapped = self.tbl.sdd_to_bdd_label(&lbl).clone();
+                let mapped = *self.tbl.sdd_to_bdd_label(&lbl);
                 let bdd = self.tbl.bdd_man_mut(f.vtree().value()).condition(
                     f.as_bdd_ptr(),
                     mapped,
@@ -456,9 +456,9 @@ impl<'a> SddManager {
         }
         let r = self.canonicalize(v, f.vtree());
         if f.is_compl() {
-            return r.neg();
+            r.neg()
         } else {
-            return r;
+            r
         }
     }
 
@@ -639,8 +639,8 @@ impl<'a> SddManager {
                 let mut doc: Doc<BoxDoc> = Doc::from("");
                 let sl = man.tbl.sdd_get_or(ptr);
                 for &(ref prime, ref sub) in sl.iter() {
-                    let new_s1 = helper(man, prime.clone());
-                    let new_s2 = helper(man, sub.clone());
+                    let new_s1 = helper(man, *prime);
+                    let new_s2 = helper(man, *sub);
                     doc = doc.append(Doc::newline()).append(
                         (Doc::from("/\\")
                             .append(Doc::newline())
@@ -648,10 +648,10 @@ impl<'a> SddManager {
                         .nest(2),
                     );
                 }
-                let d = Doc::from(String::from(format!(
+                let d = Doc::from(format!(
                     "{}\\/",
                     if ptr.is_compl() { "!" } else { "" }
-                )));
+                ));
                 d.append(doc.nest(2))
             }
         }
@@ -676,7 +676,7 @@ impl<'a> SddManager {
             } else if sdd.is_bdd() {
                 let mut labels: HashSet<VarLabel> = HashSet::new();
                 for lbl in man.tbl.bdd_conv(sdd.vtree().value()).values() {
-                    labels.insert(lbl.clone());
+                    labels.insert(*lbl);
                 }
                 let mut new_m: HashMap<VarLabel, bool> = HashMap::new();
                 for (key, value) in assgn.iter() {
@@ -722,7 +722,7 @@ impl<'a> SddManager {
     pub fn from_cnf(&mut self, cnf: &Cnf) -> SddPtr {
         let mut cvec: Vec<SddPtr> = Vec::with_capacity(cnf.clauses().len());
         for lit_vec in cnf.clauses().iter() {
-            assert!(lit_vec.len() > 0, "empty cnf");
+            assert!(!lit_vec.is_empty(), "empty cnf");
             let (vlabel, val) = (lit_vec[0].get_label(), lit_vec[0].get_polarity());
             let mut sdd = self.var(vlabel, val);
             for i in 1..lit_vec.len() {
@@ -734,10 +734,10 @@ impl<'a> SddManager {
         }
         // now cvec has a list of all the clauses; collapse it down
         fn helper(vec: &[SddPtr], man: &mut SddManager) -> Option<SddPtr> {
-            if vec.len() == 0 {
+            if vec.is_empty() {
                 None
             } else if vec.len() == 1 {
-                return Some(vec[0]);
+                Some(vec[0])
             } else {
                 let (l, r) = vec.split_at(vec.len() / 2);
                 let sub_l = helper(l, man);
@@ -796,7 +796,7 @@ impl<'a> SddManager {
         &self.stats
     }
 
-    pub fn print_stats(&self) -> () {
+    pub fn print_stats(&self) {
         println!("***************[ SDD Stats ]***************");
         println!("\tNumber of recursive calls: {}", self.stats.num_rec);
     }
@@ -806,13 +806,11 @@ impl<'a> SddManager {
 #[test]
 fn simple_equality() {
     let mut mgr = SddManager::new(even_split(
-        &vec![
-            VarLabel::new(0),
+        &[VarLabel::new(0),
             VarLabel::new(1),
             VarLabel::new(2),
             VarLabel::new(3),
-            VarLabel::new(4),
-        ],
+            VarLabel::new(4)],
         2,
     ));
     let a = mgr.var(VarLabel::new(0), true);
@@ -826,13 +824,11 @@ fn simple_equality() {
 #[test]
 fn sdd_simple_cond() {
     let mut mgr = SddManager::new(even_split(
-        &vec![
-            VarLabel::new(0),
+        &[VarLabel::new(0),
             VarLabel::new(1),
             VarLabel::new(2),
             VarLabel::new(3),
-            VarLabel::new(4),
-        ],
+            VarLabel::new(4)],
         2,
     ));
     let a = mgr.var(VarLabel::new(0), true);
@@ -851,13 +847,11 @@ fn sdd_simple_cond() {
 #[test]
 fn sdd_test_exist() {
     let mut man = SddManager::new(even_split(
-        &vec![
-            VarLabel::new(0),
+        &[VarLabel::new(0),
             VarLabel::new(1),
             VarLabel::new(2),
             VarLabel::new(3),
-            VarLabel::new(4),
-        ],
+            VarLabel::new(4)],
         2,
     ));
     // 1 /\ 2 /\ 3
@@ -879,13 +873,11 @@ fn sdd_test_exist() {
 #[test]
 fn sdd_ite1() {
     let mut man = SddManager::new(even_split(
-        &vec![
-            VarLabel::new(0),
+        &[VarLabel::new(0),
             VarLabel::new(1),
             VarLabel::new(2),
             VarLabel::new(3),
-            VarLabel::new(4),
-        ],
+            VarLabel::new(4)],
         2,
     ));
     let v1 = man.var(VarLabel::new(0), true);
@@ -903,13 +895,11 @@ fn sdd_ite1() {
 #[test]
 fn sdd_circuit1() {
     let mut man = SddManager::new(even_split(
-        &vec![
-            VarLabel::new(0),
+        &[VarLabel::new(0),
             VarLabel::new(1),
             VarLabel::new(2),
             VarLabel::new(3),
-            VarLabel::new(4),
-        ],
+            VarLabel::new(4)],
         2,
     ));
     let x = man.var(VarLabel::new(0), false);
@@ -933,13 +923,11 @@ fn sdd_circuit1() {
 fn sdd_circuit2() {
     // same as circuit1, but with a different variable order
     let mut man = SddManager::new(even_split(
-        &vec![
-            VarLabel::new(0),
+        &[VarLabel::new(0),
             VarLabel::new(1),
             VarLabel::new(2),
             VarLabel::new(3),
-            VarLabel::new(4),
-        ],
+            VarLabel::new(4)],
         2,
     ));
     let x = man.var(VarLabel::new(3), false);
@@ -964,16 +952,14 @@ fn sdd_wmc1() {
     // modeling the formula (x<=>fx) && (y<=>fy), with f weight of 0.5
 
     let vtree = even_split(
-        &vec![
-            VarLabel::new(0),
+        &[VarLabel::new(0),
             VarLabel::new(1),
             VarLabel::new(2),
-            VarLabel::new(3),
-        ],
+            VarLabel::new(3)],
         2,
     );
     let mut man = SddManager::new(vtree.clone());
-    let mut wmc_map = SddWmc::new(0.0, 1.0, vtree.clone());
+    let mut wmc_map = SddWmc::new(0.0, 1.0, vtree);
     let x = man.var(VarLabel::new(0), true);
     wmc_map.set_weight(&mut man, VarLabel::new(0), 1.0, 1.0);
     let y = man.var(VarLabel::new(1), true);
@@ -999,16 +985,14 @@ fn sdd_wmc1() {
 #[test]
 fn sdd_wmc2() {
     let vtree = even_split(
-        &vec![
-            VarLabel::new(0),
+        &[VarLabel::new(0),
             VarLabel::new(1),
             VarLabel::new(2),
-            VarLabel::new(3),
-        ],
+            VarLabel::new(3)],
         2,
     );
     let mut man = SddManager::new(vtree.clone());
-    let mut wmc_map = SddWmc::new(0.0, 1.0, vtree.clone());
+    let mut wmc_map = SddWmc::new(0.0, 1.0, vtree);
     let x = man.var(VarLabel::new(0), true);
     wmc_map.set_weight(&mut man, VarLabel::new(0), 1.0, 1.0);
     let y = man.var(VarLabel::new(1), true);
@@ -1030,7 +1014,7 @@ fn sdd_wmc2() {
 
 #[test]
 fn is_canonical_trivial() {
-    let mut mgr = SddManager::new(even_split(&vec![VarLabel::new(0)], 2));
+    let mut mgr = SddManager::new(even_split(&[VarLabel::new(0)], 2));
     let a = mgr.var(VarLabel::new(0), true);
 
     assert_eq!(mgr.is_trimmed(a), true);
@@ -1041,12 +1025,10 @@ fn is_canonical_trivial() {
 #[test]
 fn not_compressed_or_trimmed_trivial() {
     let mut man = SddManager::new(even_split(
-        &vec![
-            VarLabel::new(0),
+        &[VarLabel::new(0),
             VarLabel::new(1),
             VarLabel::new(2),
-            VarLabel::new(3),
-        ],
+            VarLabel::new(3)],
         2,
     ));
 
@@ -1073,12 +1055,10 @@ fn not_compressed_or_trimmed_trivial() {
 #[test]
 fn test_compression() {
     let mut man = SddManager::new(even_split(
-        &vec![
-            VarLabel::new(0),
+        &[VarLabel::new(0),
             VarLabel::new(1),
             VarLabel::new(2),
-            VarLabel::new(3),
-        ],
+            VarLabel::new(3)],
         2,
     ));
 

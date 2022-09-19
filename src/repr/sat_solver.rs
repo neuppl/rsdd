@@ -73,7 +73,7 @@ impl<'a> UnitPropagate<'a> {
         // do initial unit propagation
         let mut implied: Vec<Literal> = Vec::new();
         for (idx, c) in cnf.clauses().iter().enumerate() {
-            if c.len() == 0 {
+            if c.is_empty() {
                 return None;
             }
             if c.len() == 1 {
@@ -105,11 +105,11 @@ impl<'a> UnitPropagate<'a> {
             }
         }
 
-        return Some(cur);
+        Some(cur)
     }
 
     fn cur_state(&self) -> &PartialModel {
-        &self.state.last().unwrap()
+        self.state.last().unwrap()
     }
 
     fn cur_state_mut(&mut self) -> &mut PartialModel {
@@ -130,7 +130,8 @@ impl<'a> UnitPropagate<'a> {
         let n = self.state.len();
         let cur_state_i = self.state[n - 1].get_vec().iter();
         let prev_state_i = self.state[n - 2].get_vec().iter();
-        let iter = cur_state_i
+        
+        cur_state_i
             .zip(prev_state_i)
             .enumerate()
             .filter_map(|(idx, (cur, prev))| {
@@ -139,12 +140,11 @@ impl<'a> UnitPropagate<'a> {
                 } else {
                     Some(Literal::new(VarLabel::new_usize(idx), cur.unwrap()))
                 }
-            });
-        iter
+            })
     }
 
     /// Backtracks to the previous decision
-    pub fn pop(&mut self) -> () {
+    pub fn pop(&mut self) {
         assert!(
             self.state.len() > 1,
             "Unit Propagate cannot backtrack past first decision"
@@ -159,11 +159,7 @@ impl<'a> UnitPropagate<'a> {
         match self.cur_state().get(new_assignment.get_label()) {
             None => (),
             Some(v) => {
-                if new_assignment.get_polarity() != v {
-                    return false;
-                } else {
-                    return true;
-                }
+                return new_assignment.get_polarity() == v
             }
         };
 
@@ -185,10 +181,8 @@ impl<'a> UnitPropagate<'a> {
                 if watcher_idx >= self.watch_list_neg[var_idx].len() {
                     break;
                 }
-            } else {
-                if watcher_idx >= self.watch_list_pos[var_idx].len() {
-                    break;
-                }
+            } else if watcher_idx >= self.watch_list_pos[var_idx].len() {
+                break;
             }
             let clause = if new_assignment.get_polarity() {
                 &self.cnf.clauses()[self.watch_list_neg[var_idx][watcher_idx]]
@@ -229,7 +223,7 @@ impl<'a> UnitPropagate<'a> {
                 return false;
             } else if num_remaining == 1 {
                 // unit propagate and move onto the next watcher
-                let new_unit = remaining_lits.nth(0).unwrap();
+                let new_unit = remaining_lits.next().unwrap();
                 if !self.set(*new_unit) {
                     return false;
                 }
@@ -238,8 +232,7 @@ impl<'a> UnitPropagate<'a> {
                 // num_remaining > 1, find a new literal to watch
                 // first, find a new literal to watch
                 let candidate_unwatched: LitIdx = remaining_lits
-                    .clone()
-                    .nth(0)
+                    .clone().next()
                     .unwrap()
                     .get_label()
                     .value_usize();
@@ -255,14 +248,12 @@ impl<'a> UnitPropagate<'a> {
                     if self.watch_list_pos[candidate_unwatched].contains(&prev_watcher) {
                         remaining_lits.nth(1).unwrap()
                     } else {
-                        remaining_lits.nth(0).unwrap()
+                        remaining_lits.next().unwrap()
                     }
+                } else if self.watch_list_neg[candidate_unwatched].contains(&prev_watcher) {
+                    remaining_lits.nth(1).unwrap()
                 } else {
-                    if self.watch_list_neg[candidate_unwatched].contains(&prev_watcher) {
-                        remaining_lits.nth(1).unwrap()
-                    } else {
-                        remaining_lits.nth(0).unwrap()
-                    }
+                    remaining_lits.next().unwrap()
                 };
 
                 let new_loc = new_lit.get_label().value_usize();
@@ -282,14 +273,14 @@ impl<'a> UnitPropagate<'a> {
                 // do not increment watcher_idx (since we decreased the total number of watchers, we have made progress)
             }
         }
-        return true;
+        true
     }
 
     pub fn get_assgn(&self) -> &PartialModel {
-        &self.cur_state()
+        self.cur_state()
     }
 
-    pub fn push(&mut self) -> () {
+    pub fn push(&mut self) {
         self.state.push(self.cur_state().clone());
     }
 }
@@ -331,7 +322,7 @@ impl<'a> SATSolver<'a> {
     /// Pushes the SAT context
     ///
     /// Saves all current clauses and decisions
-    pub fn push(&mut self) -> () {
+    pub fn push(&mut self) {
         match &mut self.up {
             Some(up) => {
                 up.push();
@@ -347,7 +338,7 @@ impl<'a> SATSolver<'a> {
     ///
     /// Restores the set of clause and decisions to the point at which it was previously pushed
     /// Panics if there is no prior pushed state.
-    pub fn pop(&mut self) -> () {
+    pub fn pop(&mut self) {
         match &mut self.up {
             Some(up) => {
                 up.pop();
@@ -360,7 +351,7 @@ impl<'a> SATSolver<'a> {
     }
 
     /// Sets a literal in the SAT context
-    pub fn decide(&mut self, lit: Literal) -> () {
+    pub fn decide(&mut self, lit: Literal) {
         match &mut self.up {
             Some(up) => {
                 let res = up.decide(lit);

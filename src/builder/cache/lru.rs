@@ -56,7 +56,7 @@ where
     V: Eq + PartialEq + Clone,
 {
     fn new(key: K, val: V) -> Element<K, V> {
-        Element { key: key, val: val }
+        Element { key, val }
     }
 }
 
@@ -84,13 +84,13 @@ where
         Lru {
             tbl: v,
             len: 0,
-            cap: cap,
+            cap,
             num_filled: 0,
             stat: ApplyCacheStats::new(),
         }
     }
 
-    pub fn insert(&mut self, key: K, val: V) -> () {
+    pub fn insert(&mut self, key: K, val: V) {
         // see if we need to grow
         if (self.num_filled as f64 / (1 << self.cap) as f64) > GROW_RATIO {
             self.grow();
@@ -117,16 +117,16 @@ where
         let pos = pow_cap(hash_v as usize, self.cap);
         let v = &self.tbl[pos];
         match v {
-            Some(ref v) if v.key == key => return Some(v.val.clone()),
+            Some(ref v) if v.key == key => Some(v.val.clone()),
             _ => {
                 self.stat.miss_count += 1;
-                return None;
+                None
             }
         }
     }
 
     /// grow the hashtable to accomodate more elements
-    fn grow(&mut self) -> () {
+    fn grow(&mut self) {
         let new_sz = self.cap + 1;
         let new_v = zero_vec(1 << new_sz);
         let mut new_tbl = Lru {

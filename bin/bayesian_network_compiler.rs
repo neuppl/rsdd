@@ -131,7 +131,7 @@ fn implies(t1: &Vec<Literal>, t2: &Vec<Literal>) -> Vec<Vec<Literal>> {
         .collect();
     for v in t2.iter() {
         let mut new_clause = lhs.clone();
-        new_clause.push(v.clone());
+        new_clause.push(*v);
         r.push(new_clause);
     }
     // println!("{:?} => {:?}\n{:?}", t1, t2, r);
@@ -154,7 +154,7 @@ fn exactly_one(lits: Vec<Literal>) -> Vec<Vec<Literal>> {
     r
 }
 
-fn compile_bdd_cnf(args: &Args, network: BayesianNetwork) -> () {
+fn compile_bdd_cnf(args: &Args, network: BayesianNetwork) {
     let bn = BayesianNetworkCNF::new(&network);
     let mut compiler = BddManager::new(VarOrder::linear_order(bn.cnf.num_vars()));
 
@@ -190,7 +190,7 @@ fn compile_bdd_cnf(args: &Args, network: BayesianNetwork) -> () {
     }
 }
 
-fn compile_bdd(_args: &Args, network: BayesianNetwork) -> () {
+fn compile_bdd(_args: &Args, network: BayesianNetwork) {
     let mut compiler = BddManager::new_default_order(1);
 
     // let mut clauses : Vec<Vec<Literal>> = Vec::new();
@@ -270,7 +270,7 @@ fn compile_bdd(_args: &Args, network: BayesianNetwork) -> () {
     println!("final size: {}", compiler.count_nodes(r));
 }
 
-fn compile_sdd_cnf(network: BayesianNetwork) -> () {
+fn compile_sdd_cnf(network: BayesianNetwork) {
     println!("############################\n\tCompiling in SDD mode\n############################");
     let bn = BayesianNetworkCNF::new(&network);
     // println!("{}", cnf.to_dimacs());
@@ -291,7 +291,7 @@ fn compile_sdd_cnf(network: BayesianNetwork) -> () {
     println!("Compiled\n\tCompile time: {:?}\n\tSize: {sz}", duration);
 }
 
-fn compile_topdown(network: BayesianNetwork) -> () {
+fn compile_topdown(network: BayesianNetwork) {
     println!("############################\n\tCompiling topdown\n############################");
     let bn = BayesianNetworkCNF::new(&network);
     let mut compiler = DecisionNNFBuilder::new(bn.cnf.num_vars());
@@ -304,7 +304,7 @@ fn compile_topdown(network: BayesianNetwork) -> () {
     println!("Compiled\n\tCompile time: {:?}\n\tSize: {sz}", duration);
 }
 
-fn print_dimacs(bn: BayesianNetwork) -> () {
+fn print_dimacs(bn: BayesianNetwork) {
     let bn = BayesianNetworkCNF::new(&bn);
     println!("p cnf {} {}", bn.cnf.clauses().len(), bn.cnf.num_vars());
     println!("{}", bn.cnf.to_dimacs());

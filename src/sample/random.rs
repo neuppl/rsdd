@@ -68,19 +68,19 @@ impl<T> Random<T> {
             }
         }
         // assert!(tot > 0.0 && tot <= 1.0);
-        return Random { val: r };
+        Random { val: r }
     }
 
     // applies `f` to each component
     pub fn map<R, F: FnMut(&T) -> Random<R>>(&self, f: &mut F) -> Random<R> {
         let v: Vec<(Random<R>, Probability)> = self.vec().iter().map(|(x, p)| (f(x), *p)).collect();
         let n = Random::from_vec(v);
-        return Random::flatten(n);
+        Random::flatten(n)
     }
 
     pub fn fmap<U>(&self, f: &dyn Fn(&T) -> U) -> Random<U> {
         Random {
-            val: self.val.iter().map(|(t, p)| (f(t), p.clone())).collect(),
+            val: self.val.iter().map(|(t, p)| (f(t), *p)).collect(),
         }
     }
 
@@ -92,7 +92,7 @@ impl<T> Random<T> {
                 r.push((b, Probability::new(prob_a.as_f64() * prob_b.as_f64())));
             }
         }
-        return Random { val: r };
+        Random { val: r }
     }
 
     /// Generate a Dirac delta at value `v`
@@ -105,7 +105,7 @@ impl<T> Random<T> {
     /// Extract a Diract delta
     pub fn unwrap(&self) -> &T {
         assert!(self.val.len() == 1);
-        return &self.val[0].0;
+        &self.val[0].0
     }
 
     /// Retrieve the underlying vector of (value, probability) pairs

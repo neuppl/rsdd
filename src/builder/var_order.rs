@@ -28,7 +28,7 @@ impl VarOrder {
         }
         VarOrder {
             var_to_pos: v,
-            pos_to_var: pos_to_var,
+            pos_to_var,
         }
     }
 
@@ -64,7 +64,7 @@ impl VarOrder {
     /// assert_eq!(o.var_at_level(4), VarLabel::new(4));
     /// ```
     pub fn var_at_level(&self, pos: usize) -> VarLabel {
-        VarLabel::new(self.pos_to_var[pos].clone() as u64)
+        VarLabel::new(self.pos_to_var[pos] as u64)
     }
 
     /// True if `a` is before `b` in this ordering
