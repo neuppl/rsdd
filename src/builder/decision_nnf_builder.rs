@@ -18,7 +18,7 @@ pub struct DecisionNNFBuilder {
 impl DecisionNNFBuilder {
     pub fn new(num_vars: usize) -> DecisionNNFBuilder {
         DecisionNNFBuilder { compute_table: BddTable::new(num_vars) }
-    } 
+    }
 
     pub fn true_ptr(&self) -> BddPtr {
         BddPtr::true_node()
@@ -130,7 +130,7 @@ impl DecisionNNFBuilder {
         }
         let mut sub = nnf;
         for l in literals {
-           let node = if l.get_polarity() { 
+           let node = if l.get_polarity() {
                BddNode::new(self.false_ptr(), sub, l.get_label())
            } else {
                BddNode::new(sub, self.false_ptr(), l.get_label())
@@ -140,7 +140,7 @@ impl DecisionNNFBuilder {
         sub
     }
 
-    /// Returns A BDD that represents `cnf` conditioned on all 
+    /// Returns A BDD that represents `cnf` conditioned on all
     ///     variables set in the current top model
     /// We need both of these BDDs for sound CNF caching
     /// `cache`: a map from hashed CNFs to their compiled BDDs
@@ -160,7 +160,7 @@ impl DecisionNNFBuilder {
         }
         let cur_v = order.var_at_level(level);
 
-        // check if this literal is currently set in unit propagation; if 
+        // check if this literal is currently set in unit propagation; if
         // it is, skip it
         if assgn.is_set(cur_v) {
             return self.topdown_h(cnf, sat, level+1, order, hasher, cache);
@@ -176,7 +176,7 @@ impl DecisionNNFBuilder {
         }
 
         // recurse on both values of cur_v
-        sat.push(); 
+        sat.push();
         hasher.push();
         sat.decide(Literal::new(cur_v, true));
         hasher.decide(Literal::new(cur_v, true));
@@ -199,7 +199,7 @@ impl DecisionNNFBuilder {
         sat.pop();
         hasher.pop();
 
-        sat.push(); 
+        sat.push();
         hasher.push();
         sat.decide(Literal::new(cur_v, false));
         hasher.decide(Literal::new(cur_v, false));
@@ -219,7 +219,7 @@ impl DecisionNNFBuilder {
         } else {
             self.false_ptr()
         };
-        sat.pop(); 
+        sat.pop();
         hasher.pop();
 
 
@@ -245,7 +245,7 @@ impl DecisionNNFBuilder {
 
         // conjoin in any initially implied literals
         for l in sat.get_implied_units().assignment_iter() {
-            let node = if l.get_polarity() { 
+            let node = if l.get_polarity() {
                 BddNode::new(self.false_ptr(), r, l.get_label())
             } else {
                 BddNode::new(r, self.false_ptr(), l.get_label())
@@ -263,6 +263,8 @@ impl DecisionNNFBuilder {
 
     /// Gets the probability that variable `lbl` is true in `bdd` according to
     /// the weight given in `wmc`
+    /// TODO: resolve dead code
+    #[allow(dead_code)]
     fn prob_true(&mut self, wmc: &BddWmc<f64>, lbl: VarLabel, bdd: BddPtr) -> f64 {
         let z = self.unsmsoothed_wmc(bdd, wmc);
         let cond = self.condition(bdd, lbl, true);
@@ -277,7 +279,7 @@ impl DecisionNNFBuilder {
 
     /// Generates `n` top-down samples
     /// Returns a vector of results that are pairs (BddPtr, importance weight)
-    pub fn from_cnf_topdown_sample(&mut self, order: &VarOrder, cnf: &Cnf, wmc: &BddWmc<f64>, n: usize) -> Vec<(BddPtr, f64)> {
+    pub fn from_cnf_topdown_sample(&mut self, order: &VarOrder, cnf: &Cnf, _wmc: &BddWmc<f64>, n: usize) -> Vec<(BddPtr, f64)> {
         let cache = &mut HashMap::new();
         let mut hasher = CnfHasher::new(cnf);
         let mut res = Vec::new();
@@ -289,7 +291,7 @@ impl DecisionNNFBuilder {
             for i in 100..num_samples {
                 sat.decide(Literal::new(VarLabel::new_usize(i), rng.gen_bool(0.5)));
             }
-            let mut r = self.topdown_h(cnf, &mut sat, 0, order, &mut hasher, cache);
+            let r = self.topdown_h(cnf, &mut sat, 0, order, &mut hasher, cache);
             res.push((r, 0.5));
         }
         res

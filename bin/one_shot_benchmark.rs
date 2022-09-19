@@ -4,12 +4,11 @@ extern crate rsdd;
 extern crate serde_json;
 
 use clap::Parser;
-use criterion::black_box;
 use rayon::prelude::*;
-use rsdd::{builder::{bdd_builder::{BddManager, BddWmc}, var_order::VarOrder, repr::builder_sdd::VTree, dtree::DTree}, repr::{cnf::Cnf, var_label::VarLabel}};
+use rsdd::{builder::{var_order::VarOrder, dtree::DTree}, repr::{cnf::Cnf}};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use std::{collections::HashMap, iter::FromIterator};
+use std::{collections::HashMap};
 use std::fs;
 use std::{time::{Duration, Instant}};
 
@@ -44,6 +43,8 @@ struct BenchmarkEntry {
     time_in_secs: f64,
 }
 
+// TODO: resolve unused
+#[allow(unused)]
 fn compile_topdown_nnf(str: String, debug: bool) -> () {
     let cnf = Cnf::from_file(str);
     let mut man = rsdd::builder::decision_nnf_builder::DecisionNNFBuilder::new(cnf.num_vars());
@@ -54,21 +55,25 @@ fn compile_topdown_nnf(str: String, debug: bool) -> () {
     println!("size: {:?}", man.count_nodes(ddnnf));
 }
 
+// TODO: resolve unused
+#[allow(unused)]
 fn compile_sdd(str: String, debug: bool) -> () {
     use rsdd::builder::sdd_builder::*;
     let cnf = Cnf::from_file(str);
     let dtree = DTree::from_cnf(&cnf, &VarOrder::linear_order(cnf.num_vars()));
     let mut man = SddManager::new(dtree.to_vtree().unwrap());
-    let sdd = man.from_cnf(&cnf);
+    let _sdd = man.from_cnf(&cnf);
 }
 
+// TODO: resolve unused
+#[allow(unused)]
 fn compile_bdd(str: String, debug: bool) -> () {
     use rsdd::builder::bdd_builder::*;
     let cnf = Cnf::from_file(str);
     // let order : VarOrder = cnf.force_order();
     let mut man = BddManager::new(VarOrder::linear_order(cnf.num_vars()));
     // let mut man = BddManager::new(order);
-    let bdd = man.from_cnf(&cnf);
+    let _bdd = man.from_cnf(&cnf);
 }
 
 fn bench_cnf_bdd(cnf_str: String, debug: bool) -> Duration {

@@ -1,7 +1,6 @@
 //! The main implementation of the SDD manager, the primary way of interacting
 //! with SDDs.
 
-use crate::builder::var_order::VarOrder;
 use crate::{
     backing_store::sdd_table::*,
     builder::cache::lru::*,
@@ -228,8 +227,6 @@ impl<'a> SddManager {
         if !self.use_compression {
             panic!("compress called when disabled")
         }
-
-        let mut i = 0;
         for i in 0..node.len() {
             // see if we can compress i
             let mut j = i+1;

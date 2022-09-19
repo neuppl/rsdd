@@ -1,5 +1,5 @@
 //! Sampling interface for drawing samples from decision diagrams
-//! 
+//!
 
 pub mod random;
 pub mod probability;

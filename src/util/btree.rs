@@ -176,7 +176,7 @@ where
     /// For instance, a tree can have the following DFS and BFS orderings:
     /// DFS:
     ///    0
-    ///  1    4 
+    ///  1    4
     /// 2 3  5 6
     /// BFS:
     ///    0
@@ -195,7 +195,7 @@ where
     }
 
     /// gives a vector that maps BTree pointers into their labeling in a breadth-first search ordering
-    pub fn bfs_labeling(&self) -> HashMap<*const Self, usize> { 
+    pub fn bfs_labeling(&self) -> HashMap<*const Self, usize> {
         let mut h : HashMap<*const Self, usize> = HashMap::new();
         for (idx, itm) in self.bfs_iter().enumerate() {
             let p : *const Self = itm;
@@ -204,7 +204,7 @@ where
         h
     }
 
-    pub fn dfs_labeling(&self) -> HashMap<*const Self, usize> { 
+    pub fn dfs_labeling(&self) -> HashMap<*const Self, usize> {
         let mut h : HashMap<*const Self, usize> = HashMap::new();
         for (idx, itm) in self.dfs_iter().enumerate() {
             let p : *const Self = itm;
@@ -252,10 +252,10 @@ pub struct LeastCommonAncestor {
 }
 
 impl LeastCommonAncestor {
-    /// Build a vector that holds the Euler tour of the tree 
+    /// Build a vector that holds the Euler tour of the tree
     /// with nodes indexed in breadth-first order
     pub fn build_euler_vec<N, L>(tree: &BTree<N, L>, map: &HashMap<*const BTree<N, L>, usize>, v: &mut Vec<usize>) -> ()
-        where 
+        where
             N: PartialEq + Eq + Clone,
             L: PartialEq + Eq + Clone,
     {
@@ -276,7 +276,7 @@ impl LeastCommonAncestor {
     }
 
     pub fn new<N, L>(tree: &BTree<N, L>) -> LeastCommonAncestor
-        where 
+        where
             N: PartialEq + Eq + Clone,
             L: PartialEq + Eq + Clone,
     {
@@ -296,7 +296,7 @@ impl LeastCommonAncestor {
         LeastCommonAncestor { seg_tree: SegmentPoint::build(euler_vec, Min), index_map: lookup.iter().map(|x| x.unwrap()).collect() }
     }
 
-    /// Given two breadth-first indexes into the tree, returns the LCA 
+    /// Given two breadth-first indexes into the tree, returns the LCA
     /// between these two indexes
     pub fn lca(&self, l: usize, r: usize) -> usize {
         if l == r {

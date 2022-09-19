@@ -4,7 +4,6 @@
 //!
 
 use bit_set::BitSet;
-use im::HashSet;
 use std::{iter::FromIterator, cmp::Ordering};
 
 use crate::repr::{
@@ -34,7 +33,11 @@ pub enum DTree {
 impl DTree {
     fn get_vars(&self) -> &VarSet {
         match self {
+            // TODO: resolve unused
+            #[allow(unused)]
             Self::Leaf { v, cutset: _, vars } => &vars.as_ref().unwrap(),
+            // TODO: resolve unused
+            #[allow(unused)]
             Self::Node {
                 l,
                 r,
@@ -67,6 +70,8 @@ impl DTree {
                 *vars = Some(r.clone());
                 r
             }
+            // TODO: resolve unused
+            #[allow(unused)]
             Self::Node {
                 l,
                 r,
@@ -231,6 +236,8 @@ impl DTree {
     /// Programming. Springer, Cham, 2014.
     pub fn to_vtree(&self) -> Option<VTree> {
         match &self {
+            // TODO: resolve unused
+            #[allow(unused)]
             &Self::Leaf {
                 v: _v,
                 cutset,
@@ -248,6 +255,8 @@ impl DTree {
                     Some(DTree::right_linear(cutset_v.as_slice(), &None))
                 }
             }
+            // TODO: resolve unused
+            #[allow(unused)]
             &Self::Node { l, r, cutset, vars } => {
                 let cutset_v: Vec<VarLabel> = cutset
                     .clone()
@@ -272,6 +281,8 @@ impl DTree {
     }
 
     pub fn width(&self) -> usize {
+        // TODO: resolve unused
+        #[allow(unused)]
         match &self {
             &Self::Leaf { v, cutset, vars } => cutset.as_ref().unwrap().len(),
             &Self::Node { l, r, cutset, vars } => {

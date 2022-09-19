@@ -1,7 +1,6 @@
 extern crate criterion;
 extern crate rsdd;
 
-use rsdd::builder::sdd_builder::SddManager;
 use rsdd::{builder::bdd_builder::BddManager, repr::cnf::Cnf};
 
 use criterion::*;

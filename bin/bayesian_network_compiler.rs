@@ -7,11 +7,11 @@ use rsdd::builder::decision_nnf_builder::DecisionNNFBuilder;
 use rsdd::builder::repr::builder_bdd::BddPtr;
 
 use std::collections::HashMap;
-use std::time::{Duration, Instant};
+use std::time::{Instant};
 
 
 use rsdd::{
-    repr::{cnf::Cnf, var_label::{Literal, VarLabel}}, builder::{decision_nnf_builder, var_order::VarOrder, bdd_builder::BddManager, sdd_builder, dtree::DTree}, 
+    repr::{cnf::Cnf, var_label::{Literal, VarLabel}}, builder::{var_order::VarOrder, bdd_builder::BddManager, sdd_builder, dtree::DTree},
 };
 use rsgm::bayesian_network::BayesianNetwork;
 
@@ -161,12 +161,12 @@ fn compile_bdd_cnf(args: &Args, network: BayesianNetwork) -> () {
             let p = compiler.wmc(cond, &bn.params);
             let z =  compiler.wmc(r, &bn.params);
             println!("Marginal query: Pr({query_var} = {query_val}) = {p}, z = {z}, p / z = {}", p/z);
-        }, 
+        },
         _ => ()
     }
 }
 
-fn compile_bdd(args: &Args, network: BayesianNetwork) -> () {
+fn compile_bdd(_args: &Args, network: BayesianNetwork) -> () {
     let mut compiler = BddManager::new_default_order(1);
 
     // let mut clauses : Vec<Vec<Literal>> = Vec::new();
@@ -244,7 +244,7 @@ fn compile_sdd_cnf(network: BayesianNetwork) -> () {
     let start = Instant::now();
     let dtree = DTree::from_cnf(&bn.cnf, &VarOrder::linear_order(bn.cnf.num_vars()));
     let duration = start.elapsed();
-    println!("Dtree built\nNumber of variables: {}\n\tNumber of clauses: {}\n\tWidth: {}\n\tElapsed dtree time: {:?}", 
+    println!("Dtree built\nNumber of variables: {}\n\tNumber of clauses: {}\n\tWidth: {}\n\tElapsed dtree time: {:?}",
         bn.cnf.num_vars(), bn.cnf.clauses().len(), dtree.width(), duration);
 
     let mut compiler = sdd_builder::SddManager::new(dtree.to_vtree().unwrap());

@@ -3,13 +3,15 @@ use crate::builder::var_order::VarOrder;
 
 use super::var_label::VarLabel;
 
+// TODO: resolve unused
+#[allow(unused)]
 #[derive(Debug, Clone)]
 pub struct BddPtr {
     idx: usize,
 }
 
 impl BddPtr {
-    pub fn new(idx: usize) -> Self { 
+    pub fn new(idx: usize) -> Self {
         BddPtr { idx }
     }
 }
@@ -21,6 +23,8 @@ pub enum Bdd {
     Node { var: VarLabel, low: BddPtr, high: BddPtr }
 }
 
+// TODO: resolve unused
+#[allow(unused)]
 pub struct FinalizedBDD {
     bdd: BddPtr,
     allocator: Vec<Bdd>,
