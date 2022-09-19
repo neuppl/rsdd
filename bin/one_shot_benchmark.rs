@@ -4,14 +4,16 @@ extern crate rsdd;
 extern crate serde_json;
 
 use clap::Parser;
-use criterion::black_box;
 use rayon::prelude::*;
-use rsdd::{builder::{bdd_builder::{BddManager, BddWmc}, var_order::VarOrder, repr::builder_sdd::VTree, dtree::DTree}, repr::{cnf::Cnf, var_label::VarLabel}};
+use rsdd::{
+    builder::{dtree::DTree, var_order::VarOrder},
+    repr::cnf::Cnf,
+};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use std::{collections::HashMap, iter::FromIterator};
+use std::collections::HashMap;
 use std::fs;
-use std::{time::{Duration, Instant}};
+use std::time::{Duration, Instant};
 
 /// Test driver for one-shot benchmark
 #[derive(Parser, Debug)]
@@ -44,7 +46,9 @@ struct BenchmarkEntry {
     time_in_secs: f64,
 }
 
-fn compile_topdown_nnf(str: String, debug: bool) -> () {
+// TODO: resolve unused
+#[allow(unused)]
+fn compile_topdown_nnf(str: String, debug: bool) {
     let cnf = Cnf::from_file(str);
     let mut man = rsdd::builder::decision_nnf_builder::DecisionNNFBuilder::new(cnf.num_vars());
     let order = VarOrder::linear_order(cnf.num_vars());
@@ -54,21 +58,25 @@ fn compile_topdown_nnf(str: String, debug: bool) -> () {
     println!("size: {:?}", man.count_nodes(ddnnf));
 }
 
-fn compile_sdd(str: String, debug: bool) -> () {
+// TODO: resolve unused
+#[allow(unused)]
+fn compile_sdd(str: String, debug: bool) {
     use rsdd::builder::sdd_builder::*;
     let cnf = Cnf::from_file(str);
     let dtree = DTree::from_cnf(&cnf, &VarOrder::linear_order(cnf.num_vars()));
     let mut man = SddManager::new(dtree.to_vtree().unwrap());
-    let sdd = man.from_cnf(&cnf);
+    let _sdd = man.from_cnf(&cnf);
 }
 
-fn compile_bdd(str: String, debug: bool) -> () {
+// TODO: resolve unused
+#[allow(unused)]
+fn compile_bdd(str: String, debug: bool) {
     use rsdd::builder::bdd_builder::*;
     let cnf = Cnf::from_file(str);
     // let order : VarOrder = cnf.force_order();
     let mut man = BddManager::new(VarOrder::linear_order(cnf.num_vars()));
     // let mut man = BddManager::new(order);
-    let bdd = man.from_cnf(&cnf);
+    let _bdd = man.from_cnf(&cnf);
 }
 
 fn bench_cnf_bdd(cnf_str: String, debug: bool) -> Duration {
@@ -83,10 +91,16 @@ fn bench_cnf_bdd(cnf_str: String, debug: bool) -> Duration {
 fn main() {
     let args = Args::parse();
 
-    rayon::ThreadPoolBuilder::new().num_threads(args.threads).build_global().unwrap();
+    rayon::ThreadPoolBuilder::new()
+        .num_threads(args.threads)
+        .build_global()
+        .unwrap();
 
     let cnf_strs = vec![
-        ("grid-50-10-1-q", String::from(include_str!("../cnf/50-10-1-q.cnf"))),
+        (
+            "grid-50-10-1-q",
+            String::from(include_str!("../cnf/50-10-1-q.cnf")),
+        ),
         // ("tiny1", String::from(include_str!("../cnf/tiny1.cnf"))),
         // ("tiny2", String::from(include_str!("../cnf/tiny2.cnf"))),
         // (
@@ -188,23 +202,44 @@ fn main() {
         // ("c8", String::from(include_str!("../cnf/c8.cnf"))),
     ];
 
-    println!("Benchmarking {} CNFs with {} thread{}", cnf_strs.len(), args.threads, if args.threads > 1 {"s"} else {""});
+    println!(
+        "Benchmarking {} CNFs with {} thread{}",
+        cnf_strs.len(),
+        args.threads,
+        if args.threads > 1 { "s" } else { "" }
+    );
 
-    let cnf_results: Vec<(&str, f64)> = cnf_strs.into_par_iter().map(|(cnf_name, cnf_str)| {
-        let d = bench_cnf_bdd(cnf_str, args.debug);
-        (cnf_name, d.as_secs_f64())
-    }).collect();
-
-    let benchmarks: HashMap<String, BenchmarkEntry> = cnf_results.into_iter().map(|(cnf_name, cnf_time)| {
-        (cnf_name.to_string(), BenchmarkEntry {
-            time_in_secs: cnf_time
+    let cnf_results: Vec<(&str, f64)> = cnf_strs
+        .into_par_iter()
+        .map(|(cnf_name, cnf_str)| {
+            let d = bench_cnf_bdd(cnf_str, args.debug);
+            (cnf_name, d.as_secs_f64())
         })
-    }).into_iter().collect();
+        .collect();
+
+    let benchmarks: HashMap<String, BenchmarkEntry> = cnf_results
+        .into_iter()
+        .map(|(cnf_name, cnf_time)| {
+            (
+                cnf_name.to_string(),
+                BenchmarkEntry {
+                    time_in_secs: cnf_time,
+                },
+            )
+        })
+        .into_iter()
+        .collect();
 
     // borrowed from: https://stackoverflow.com/questions/43753491/include-git-commit-hash-as-string-into-rust-program
     // and strips whitespace
-    let git_output = std::process::Command::new("git").args(&["rev-parse", "HEAD"]).output().unwrap();
-    let git_hash = String::from_utf8(git_output.stdout).unwrap().split_whitespace().collect();
+    let git_output = std::process::Command::new("git")
+        .args(&["rev-parse", "HEAD"])
+        .output()
+        .unwrap();
+    let git_hash = String::from_utf8(git_output.stdout)
+        .unwrap()
+        .split_whitespace()
+        .collect();
 
     let benchmark_log = BenchmarkLog {
         git_hash,

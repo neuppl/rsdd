@@ -26,7 +26,7 @@ impl VarLabel {
     }
 
     pub fn new_usize(v: usize) -> VarLabel {
-        return VarLabel::new(v as u64);
+        VarLabel::new(v as u64)
     }
 
     pub fn value_usize(&self) -> usize {

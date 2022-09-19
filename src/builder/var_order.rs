@@ -3,8 +3,8 @@
 //! Lower numbers occur first in the order (i.e., closer to the root)
 use crate::builder::repr::builder_bdd::*;
 use crate::repr::var_label::VarLabel;
-use std::slice::Iter;
 use crate::util;
+use std::slice::Iter;
 
 #[derive(Debug, Clone)]
 pub struct VarOrder {
@@ -28,7 +28,7 @@ impl VarOrder {
         }
         VarOrder {
             var_to_pos: v,
-            pos_to_var: pos_to_var,
+            pos_to_var,
         }
     }
 
@@ -64,7 +64,7 @@ impl VarOrder {
     /// assert_eq!(o.var_at_level(4), VarLabel::new(4));
     /// ```
     pub fn var_at_level(&self, pos: usize) -> VarLabel {
-        VarLabel::new(self.pos_to_var[pos].clone() as u64)
+        VarLabel::new(self.pos_to_var[pos] as u64)
     }
 
     /// True if `a` is before `b` in this ordering
@@ -169,7 +169,7 @@ impl VarOrder {
         f2.label()
     }
 
-    /// Produces a vector of variable positions indexed by 
+    /// Produces a vector of variable positions indexed by
     pub fn get_var_to_pos_vec(&self) -> Vec<usize> {
         self.var_to_pos.clone()
     }
@@ -188,9 +188,18 @@ impl VarOrder {
     }
 
     /// Returns an iterator of all variables between [low_level..high_level)
-    pub fn between_iter<'a>(&'a self, low_level: usize, high_level: usize) -> impl Iterator<Item=VarLabel> + 'a {
+    pub fn between_iter<'a>(
+        &'a self,
+        low_level: usize,
+        high_level: usize,
+    ) -> impl Iterator<Item = VarLabel> + 'a {
         assert!(low_level <= high_level);
-        self.pos_to_var.iter().skip(low_level).take(high_level - low_level).rev().map(|x| VarLabel::new_usize(*x))
+        self.pos_to_var
+            .iter()
+            .skip(low_level)
+            .take(high_level - low_level)
+            .rev()
+            .map(|x| VarLabel::new_usize(*x))
     }
 }
 

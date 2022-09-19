@@ -36,7 +36,7 @@ pub fn zero_vec<T>(sz: usize) -> Vec<T> {
         ptr::write_bytes(vec_ptr, 0, sz as usize);
         v.set_len(sz);
     }
-    return v;
+    v
 }
 
 /// custom allocation of a non-initialized vector
@@ -45,5 +45,5 @@ pub fn malloc_vec<T>(sz: usize) -> Vec<T> {
     unsafe {
         v.set_len(sz);
     }
-    return v;
+    v
 }

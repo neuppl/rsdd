@@ -128,14 +128,14 @@ impl BddPtr {
 
     /// Gets a non-complemented version of self
     pub fn regular(&self) -> BddPtr {
-        let mut new = self.clone();
+        let mut new = *self;
         new.set_compl(0);
         new
     }
 
     /// Negate the BDD pointer
     pub fn neg(&self) -> BddPtr {
-        let mut r = self.clone();
+        let mut r = *self;
         if self.is_compl() {
             r.set_compl(0);
         } else {
@@ -183,9 +183,9 @@ pub struct BddNode {
 impl BddNode {
     pub fn new(low: BddPtr, high: BddPtr, var: VarLabel) -> BddNode {
         BddNode {
-            low: low,
-            high: high,
-            var: var,
+            low,
+            high,
+            var,
         }
     }
 }
@@ -200,9 +200,9 @@ pub enum Bdd {
 impl Bdd {
     pub fn new_node(low: BddPtr, high: BddPtr, var: VarLabel) -> Bdd {
         let new_n = BddNode {
-            low: low,
-            high: high,
-            var: var,
+            low,
+            high,
+            var,
         };
         Bdd::Node(new_n)
     }
@@ -222,7 +222,7 @@ impl Bdd {
 pub struct ToplessBdd {
     pub low: BddPtr,
     pub high: BddPtr,
-    pub scratch: Option<usize>
+    pub scratch: Option<usize>,
 }
 
 impl Hash for ToplessBdd {
@@ -243,9 +243,9 @@ impl PartialEq for ToplessBdd {
 impl ToplessBdd {
     pub fn new(low: BddPtr, high: BddPtr) -> ToplessBdd {
         ToplessBdd {
-            low: low,
-            high: high,
-            scratch: None
+            low,
+            high,
+            scratch: None,
         }
     }
 }

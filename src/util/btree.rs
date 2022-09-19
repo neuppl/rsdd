@@ -1,9 +1,7 @@
 /// A binary tree with leaves of type L and nodes of type N, represented with
 /// child pointers
-
-use segment_tree::{SegmentPoint, ops::Min};
-use std::collections::{VecDeque, HashMap};
-
+use segment_tree::{ops::Min, SegmentPoint};
+use std::collections::{HashMap, VecDeque};
 
 /// A generic B-Tree type with leaf data type L and node data type N
 #[derive(Clone, Debug)]
@@ -36,7 +34,7 @@ where
     fn next(&mut self) -> Option<Self::Item> {
         use self::BTree::*;
         match self.queue.pop_front() {
-            None => return None,
+            None => None,
             Some(v) => match v {
                 &Leaf(_) => Some(v),
                 &Node(_, ref l, ref r) => {
@@ -67,7 +65,7 @@ where
     fn next(&mut self) -> Option<Self::Item> {
         use self::BTree::*;
         match self.stack.pop() {
-            None => return None,
+            None => None,
             Some(v) => match v {
                 &Leaf(_) => Some(v),
                 &Node(_, _, ref r) => {
@@ -90,7 +88,6 @@ where
         }
     }
 }
-
 
 impl<N, L> BTree<N, L>
 where
@@ -115,7 +112,9 @@ where
     }
 
     pub fn bfs_iter<'a>(&'a self) -> BreadthFirstIter<'a, N, L> {
-        return BreadthFirstIter { queue: VecDeque::from([self]) };
+        BreadthFirstIter {
+            queue: VecDeque::from([self]),
+        }
     }
 
     pub fn contains_leaf<F>(&self, f: &F) -> bool
@@ -159,7 +158,7 @@ where
     pub fn is_leaf(&self) -> bool {
         match self {
             Self::Leaf(_) => true,
-            _ => false
+            _ => false,
         }
     }
 
@@ -176,7 +175,7 @@ where
     /// For instance, a tree can have the following DFS and BFS orderings:
     /// DFS:
     ///    0
-    ///  1    4 
+    ///  1    4
     /// 2 3  5 6
     /// BFS:
     ///    0
@@ -188,26 +187,26 @@ where
         let mut r = Vec::new();
         let bfs_map = self.bfs_labeling();
         for i in self.dfs_iter() {
-            let p : *const Self = i;
+            let p: *const Self = i;
             r.push(bfs_map[&p]);
         }
         r
     }
 
     /// gives a vector that maps BTree pointers into their labeling in a breadth-first search ordering
-    pub fn bfs_labeling(&self) -> HashMap<*const Self, usize> { 
-        let mut h : HashMap<*const Self, usize> = HashMap::new();
+    pub fn bfs_labeling(&self) -> HashMap<*const Self, usize> {
+        let mut h: HashMap<*const Self, usize> = HashMap::new();
         for (idx, itm) in self.bfs_iter().enumerate() {
-            let p : *const Self = itm;
+            let p: *const Self = itm;
             h.insert(p, idx);
         }
         h
     }
 
-    pub fn dfs_labeling(&self) -> HashMap<*const Self, usize> { 
-        let mut h : HashMap<*const Self, usize> = HashMap::new();
+    pub fn dfs_labeling(&self) -> HashMap<*const Self, usize> {
+        let mut h: HashMap<*const Self, usize> = HashMap::new();
         for (idx, itm) in self.dfs_iter().enumerate() {
-            let p : *const Self = itm;
+            let p: *const Self = itm;
             h.insert(p, idx);
         }
         h
@@ -217,7 +216,7 @@ where
         let mut r = Vec::new();
         let dfs_map = self.dfs_labeling();
         for i in self.bfs_iter() {
-            let p : *const Self = i;
+            let p: *const Self = i;
             r.push(dfs_map[&p]);
         }
         r
@@ -235,36 +234,37 @@ fn test_traversal() {
 
     for (idx, v) in vtree.dfs_iter().enumerate() {
         let value = match v {
-            &Node(ref v, _, _) => v.clone(),
-            &Leaf(ref v) => v.clone(),
+            &Node(ref v, _, _) => *v,
+            &Leaf(ref v) => *v,
         };
         assert_eq!((idx + 1) as i32, value);
     }
 }
-
 
 #[derive(Debug, Clone)]
 /// A helper structure for efficiently computing the LCA of a tree
 pub struct LeastCommonAncestor {
     seg_tree: SegmentPoint<usize, Min>,
     /// maps BFS-ordered tree indices into their first occurrence in the Euler tour
-    index_map: Vec<usize>
+    index_map: Vec<usize>,
 }
 
 impl LeastCommonAncestor {
-    /// Build a vector that holds the Euler tour of the tree 
+    /// Build a vector that holds the Euler tour of the tree
     /// with nodes indexed in breadth-first order
-    pub fn build_euler_vec<N, L>(tree: &BTree<N, L>, map: &HashMap<*const BTree<N, L>, usize>, v: &mut Vec<usize>) -> ()
-        where 
-            N: PartialEq + Eq + Clone,
-            L: PartialEq + Eq + Clone,
+    pub fn build_euler_vec<N, L>(
+        tree: &BTree<N, L>,
+        map: &HashMap<*const BTree<N, L>, usize>,
+        v: &mut Vec<usize>,
+    )
+    where
+        N: PartialEq + Eq + Clone,
+        L: PartialEq + Eq + Clone,
     {
-        let p : *const BTree<N, L> = tree;
+        let p: *const BTree<N, L> = tree;
         let idx = map[&p];
         match &tree {
-            BTree::Leaf(_) => {
-                v.push(idx)
-            },
+            BTree::Leaf(_) => v.push(idx),
             BTree::Node(_, ref l, ref r) => {
                 v.push(idx);
                 LeastCommonAncestor::build_euler_vec(l, map, v);
@@ -276,9 +276,9 @@ impl LeastCommonAncestor {
     }
 
     pub fn new<N, L>(tree: &BTree<N, L>) -> LeastCommonAncestor
-        where 
-            N: PartialEq + Eq + Clone,
-            L: PartialEq + Eq + Clone,
+    where
+        N: PartialEq + Eq + Clone,
+        L: PartialEq + Eq + Clone,
     {
         let mut euler_vec = Vec::new();
         let bfs_map = tree.bfs_labeling();
@@ -293,17 +293,20 @@ impl LeastCommonAncestor {
                 lookup[cur_var] = Some(i);
             }
         }
-        LeastCommonAncestor { seg_tree: SegmentPoint::build(euler_vec, Min), index_map: lookup.iter().map(|x| x.unwrap()).collect() }
+        LeastCommonAncestor {
+            seg_tree: SegmentPoint::build(euler_vec, Min),
+            index_map: lookup.iter().map(|x| x.unwrap()).collect(),
+        }
     }
 
-    /// Given two breadth-first indexes into the tree, returns the LCA 
+    /// Given two breadth-first indexes into the tree, returns the LCA
     /// between these two indexes
     pub fn lca(&self, l: usize, r: usize) -> usize {
         if l == r {
             l
         } else {
             let (l, r) = (self.index_map[l], self.index_map[r]);
-            let (l ,r) = if l < r { (l, r) } else { (r, l) };
+            let (l, r) = if l < r { (l, r) } else { (r, l) };
             self.seg_tree.query(l, r)
         }
     }

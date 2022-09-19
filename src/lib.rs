@@ -1,22 +1,22 @@
 //! Defines exports and the C api
 extern crate dimacs;
 extern crate fnv;
+extern crate im;
 extern crate libc;
 extern crate maplit;
-extern crate im;
-extern crate primal;
 extern crate num;
 extern crate pretty;
+extern crate primal;
 extern crate rand;
 #[macro_use]
 extern crate serde;
-extern crate quickcheck;
-extern crate time_test;
-extern crate twox_hash;
 extern crate bit_set;
-extern crate segment_tree;
 extern crate dot;
 extern crate petgraph;
+extern crate quickcheck;
+extern crate segment_tree;
+extern crate time_test;
+extern crate twox_hash;
 
 #[macro_use]
 mod util;
@@ -26,11 +26,11 @@ pub mod repr;
 pub mod sample;
 
 use crate::builder::bdd_builder::BddManager;
+use crate::builder::bdd_plan::BddPlan;
+use crate::builder::repr::builder_bdd::BddPtr;
+use crate::builder::repr::builder_sdd::{SddPtr, VTree};
 use crate::builder::sdd_builder::SddManager;
 use crate::builder::*;
-use crate::builder::repr::builder_bdd::BddPtr;
-use crate::builder::bdd_plan::BddPlan;
-use crate::builder::repr::builder_sdd::{SddPtr, VTree};
 use crate::repr::var_label::VarLabel;
 
 /// Creates a vtree leaf
@@ -231,7 +231,7 @@ pub extern "C" fn rsdd_high(mgr: *mut BddManager, a: u64) -> u64 {
 }
 
 #[no_mangle]
-pub extern "C" fn rsdd_print_stats(mgr: *mut BddManager) -> () {
+pub extern "C" fn rsdd_print_stats(mgr: *mut BddManager) {
     let mgr = unsafe { &mut *mgr };
     mgr.print_stats();
 }
@@ -300,7 +300,7 @@ pub extern "C" fn rsdd_plan_ite(f: *mut BddPlan, g: *mut BddPlan, h: *mut BddPla
 
 /// Frees a plan object
 #[no_mangle]
-pub extern "C" fn rsdd_plan_free(a: *mut BddPlan) -> () {
+pub extern "C" fn rsdd_plan_free(a: *mut BddPlan) {
     unsafe {
         let _a = Box::from_raw(a);
     }

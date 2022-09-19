@@ -3,9 +3,8 @@
 
 use crate::builder::repr::builder_bdd::*;
 use crate::repr::var_label::VarLabel;
-use std::mem;
 use crate::util::btree::*;
-
+use std::mem;
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub struct VTreeIndex(usize);
@@ -73,7 +72,7 @@ pub enum SddPtrType {
 impl SddPtr {
     pub fn new_node(idx: usize, vtree: u16) -> SddPtr {
         SddPtr {
-            idx: idx,
+            idx,
             pack: PackedInternalData::new(vtree, 0, 0, 0),
         }
     }
@@ -84,7 +83,7 @@ impl SddPtr {
             let v = self.as_bdd_ptr();
             SddPtr::new_bdd(v.neg(), self.pack.vtree() as u16)
         } else {
-            let mut v = self.clone();
+            let mut v = *self;
             v.pack.set_compl(if self.is_compl() { 0 } else { 1 });
             v
         }
@@ -121,11 +120,11 @@ impl SddPtr {
         if self.is_bdd() {
             // produce a regular BDD pointer
             let bdd = BddPtr::from_raw(self.idx as u64);
-            let mut v = self.clone();
+            let mut v = *self;
             v.idx = bdd.regular().raw() as usize;
             v
         } else {
-            let mut v = self.clone();
+            let mut v = *self;
             v.pack.set_compl(0);
             v
         }
@@ -206,7 +205,6 @@ impl VTree {
     }
 }
 
-
 /// Handles VTree related operations
 #[derive(Clone, Debug)]
 pub struct VTreeManager {
@@ -218,7 +216,7 @@ pub struct VTreeManager {
     bfs_to_dfs: Vec<usize>,
     /// maps an Sdd VarLabel into its vtree index in the depth-first order
     vtree_idx: Vec<usize>,
-    lca: LeastCommonAncestor
+    lca: LeastCommonAncestor,
 }
 
 impl VTreeManager {
@@ -232,7 +230,7 @@ impl VTreeManager {
             }
         }
         VTreeManager {
-            dfs_to_bfs: tree.dfs_to_bfs_mapping(), 
+            dfs_to_bfs: tree.dfs_to_bfs_mapping(),
             bfs_to_dfs: tree.bfs_to_dfs_mapping(),
             vtree_idx: vtree_lookup,
             lca: LeastCommonAncestor::new(&tree),

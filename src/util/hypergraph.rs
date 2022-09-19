@@ -1,3 +1,6 @@
+// TODO: remove crate-level disable
+#![allow(dead_code, unused_imports, unused_variables)]
+
 use crate::repr::cnf::Cnf;
 use crate::repr::var_label::{Literal, VarLabel};
 use core::fmt::{Debug, Formatter, Result};

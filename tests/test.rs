@@ -9,60 +9,58 @@ use crate::builder::sdd_builder::{even_split, SddManager, SddWmc};
 use crate::repr::cnf::Cnf;
 use crate::repr::var_label::VarLabel;
 use rsdd::*;
-use std::collections::HashMap;
 extern crate rand;
-
 
 /// A list of canonical forms in DIMACS form. The goal of these tests is to ensure that caching
 /// and application are working as intended
-static C1_A: &'static str = "
+static C1_A: &str = "
 p cnf 5 3
 1 2 0
 -1 2 0
 ";
 
-static C1_B: &'static str = "
+static C1_B: &str = "
 p cnf 2 1
 2 0
 ";
 
-static C2_A: &'static str = "
+static C2_A: &str = "
 p cnf 5 3
 1 2 3 0
 1 2 0
 -1 2 0
 ";
 
-static C2_B: &'static str = "
+static C2_B: &str = "
 p cnf 2 1
 2 0
 ";
 
-static C3_A: &'static str = "
+static C3_A: &str = "
 p cnf 5 3
 1 2 3 4 5 0
 1 2 0
 -1 2 0
 ";
 
-static C3_B: &'static str = "
+static C3_B: &str = "
 p cnf 2 1
 2 0
 ";
 
-static C4_A: &'static str = "
+static C4_A: &str = "
 p cnf 5 3
 -1 2 0
 1
 ";
 
-static C4_B: &'static str = "
+static C4_B: &str = "
 p cnf 2 1
 1 0
 2 0
 ";
 
-static C5_A: &'static str = "
+static C5_A: &str = "
 p cnf 5 3
 -1 2 0
 -2 3 0
@@ -74,7 +72,7 @@ p cnf 5 3
 1
 ";
 
-static C5_B: &'static str = "
+static C5_B: &str = "
 p cnf 2 1
 1 0
 2 0
@@ -86,101 +84,101 @@ p cnf 2 1
 8 0
 ";
 
-static C6_A: &'static str = "
+static C6_A: &str = "
 p cnf 8 3
 1 2 3 4 5 6 7 8 0
 1 8 0
 ";
 
-static C6_B: &'static str = "
+static C6_B: &str = "
 p cnf 2 1
 1 8 0
 ";
 
-static C7_A: &'static str = "
+static C7_A: &str = "
 p cnf 8 3
 1 2 3 4 5 6 7 8 0
 3 5 0
 ";
 
-static C7_B: &'static str = "
+static C7_B: &str = "
 p cnf 2 1
 3 5 0
 ";
 
-static C8_A: &'static str = "
+static C8_A: &str = "
 p cnf 8 3
 1 2 3 4 5 6 7 8 0
 1 5 0
 ";
 
-static C8_B: &'static str = "
+static C8_B: &str = "
 p cnf 2 1
 1 5 0
 ";
 
-static C9_A: &'static str = "
+static C9_A: &str = "
 p cnf 8 3
 1 2 3 4 5 6 7 8 0
 2 6 0
 ";
 
-static C9_B: &'static str = "
+static C9_B: &str = "
 p cnf 2 1
 2 6 0
 ";
 
-static C10_A: &'static str = "
+static C10_A: &str = "
 p cnf 8 3
 1 2 3 4 5 6 7 8 0
 2 7 0
 ";
 
-static C10_B: &'static str = "
+static C10_B: &str = "
 p cnf 2 1
 2 7 0
 ";
 
-static C11_A: &'static str = "
+static C11_A: &str = "
 p cnf 8 3
 1 2 3 4 5 6 7 8 0
 1 3 5 0
 ";
 
-static C11_B: &'static str = "
+static C11_B: &str = "
 p cnf 2 1
 1 3 5 0
 ";
 
-static C12_A: &'static str = "
+static C12_A: &str = "
 p cnf 8 3
 1 2 3 4 5 6 7 8 0
 2 4 8 0
 ";
 
-static C12_B: &'static str = "
+static C12_B: &str = "
 p cnf 2 1
 2 4 8 0
 ";
 
-static C13_A: &'static str = "
+static C13_A: &str = "
 p cnf 8 3
 1 2 3 4 5 6 7 8 0
 1 2 3 4 5 6 7 0
 ";
 
-static C13_B: &'static str = "
+static C13_B: &str = "
 p cnf 2 1
 1 2 3 4 5 6 7 0
 ";
 
-static C14_A: &'static str = "
+static C14_A: &str = "
 p cnf 8 3
 1 2 3 4 5 6 7 8 0
 2 3 4 5 6 7 8 0
 ";
 
-static C14_B: &'static str = "
+static C14_B: &str = "
 p cnf 2 1
 2 3 4 5 6 7 8 0
 ";
@@ -246,16 +244,8 @@ fn get_canonical_forms() -> Vec<(Cnf, Cnf)> {
     ]
 }
 
-fn random_assignment(num_vars: usize) -> HashMap<VarLabel, bool> {
-    let mut init = HashMap::new();
-    for i in 0..num_vars {
-        init.insert(VarLabel::new(i as u64), rand::random());
-    }
-    init
-}
-
 #[test]
-fn test_bdd_canonicity() -> () {
+fn test_bdd_canonicity() {
     for (cnf1, cnf2) in get_canonical_forms().into_iter() {
         let mut man = BddManager::new_default_order(cnf1.num_vars());
         let r1 = man.from_cnf(&cnf1);
@@ -272,7 +262,7 @@ fn test_bdd_canonicity() -> () {
 }
 
 #[test]
-fn test_sdd_canonicity() -> () {
+fn test_sdd_canonicity() {
     for (cnf1, cnf2) in get_canonical_forms().into_iter() {
         let v: Vec<VarLabel> = (0..cnf1.num_vars())
             .map(|x| VarLabel::new(x as u64))
@@ -294,13 +284,13 @@ fn test_sdd_canonicity() -> () {
 
 #[cfg(test)]
 mod test_bdd_manager {
+    use crate::builder::decision_nnf_builder::DecisionNNFBuilder;
+    use crate::repr::cnf::Cnf;
+    use crate::repr::var_label::VarLabel;
     use quickcheck::TestResult;
     use rsdd::builder::bdd_builder::BddWmc;
     use rsdd::builder::var_order::VarOrder;
     use rsdd::repr::model::PartialModel;
-    use crate::repr::cnf::Cnf;
-    use crate::builder::decision_nnf_builder::DecisionNNFBuilder;
-    use crate::repr::var_label::VarLabel;
     use std::collections::HashMap;
     use std::iter::FromIterator;
 
@@ -411,7 +401,6 @@ mod test_bdd_manager {
         }
     }
 
-
     quickcheck! {
         fn wmc_eq(c1: Cnf) -> TestResult {
             // constrain the size
@@ -446,7 +435,7 @@ mod test_bdd_manager {
             let mut mgr2 = DecisionNNFBuilder::new(c1.num_vars());
             let dnnf = mgr2.from_cnf_topdown(&VarOrder::linear_order(c1.num_vars()), &c1);
 
-            let bddwmc = super::BddWmc::new_with_default(0.0, 1.0, weight_map.clone());
+            let bddwmc = super::BddWmc::new_with_default(0.0, 1.0, weight_map);
             let bddres = mgr.wmc(cnf1, &bddwmc);
             let dnnfres = mgr2.unsmsoothed_wmc(dnnf, &bddwmc);
             let eps = f64::abs(bddres - dnnfres) < 0.0001;
@@ -470,12 +459,12 @@ mod test_bdd_manager {
             let cnf = mgr.from_cnf(&c1);
             let vars = vec![VarLabel::new(0), VarLabel::new(2), VarLabel::new(4)];
             let wmc = BddWmc::new_with_default(0.0, 1.0, weight_map);
-            let (marg_prob, marg_assgn) = mgr.marginal_map(cnf, mgr.true_ptr(), &vars, &wmc);
+            let (marg_prob, _marg_assgn) = mgr.marginal_map(cnf, mgr.true_ptr(), &vars, &wmc);
             let assignments = vec![(true, true, true), (true, true, false), (true, false, true), (true, false, false),
                                    (false, true, true), (false, true, false), (false, false, true), (false, false, false)];
-            
+
             let mut max : f64 = -10.0;
-            let mut max_assgn : PartialModel = PartialModel::from_litvec(&vec![], c1.num_vars());
+            let mut max_assgn : PartialModel = PartialModel::from_litvec(&[], c1.num_vars());
             for (v1, v2, v3) in assignments.iter() {
                 let x = mgr.var(VarLabel::new(0), *v1);
                 let y = mgr.var(VarLabel::new(2), *v2);
@@ -499,15 +488,15 @@ mod test_bdd_manager {
 #[cfg(test)]
 mod test_sdd_manager {
     use crate::builder::bdd_builder::{BddManager, BddWmc};
-    use quickcheck::TestResult;
     use crate::repr::cnf::Cnf;
     use crate::repr::var_label::{Literal, VarLabel};
+    use quickcheck::TestResult;
     use std::collections::HashMap;
     use std::iter::FromIterator;
 
     quickcheck! {
         fn test_cond_and(c: Cnf) -> bool {
-            let order : Vec<VarLabel> = (0..16).map(|x| VarLabel::new(x)).collect();
+            let order : Vec<VarLabel> = (0..16).map(VarLabel::new).collect();
             let mut mgr = super::SddManager::new(super::even_split(&order, 4));
             let cnf = mgr.from_cnf(&c);
             let v1 = VarLabel::new(0);
@@ -522,7 +511,7 @@ mod test_sdd_manager {
 
     quickcheck! {
         fn ite_iff(c1: Cnf, c2: Cnf) -> bool {
-            let order : Vec<VarLabel> = (0..16).map(|x| VarLabel::new(x)).collect();
+            let order : Vec<VarLabel> = (0..16).map(VarLabel::new).collect();
             let mut mgr = super::SddManager::new(super::even_split(&order, 4));
             let cnf1 = mgr.from_cnf(&c1);
             let cnf2 = mgr.from_cnf(&c2);
