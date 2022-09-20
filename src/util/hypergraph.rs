@@ -65,21 +65,37 @@ impl<T: Clone + Debug + PartialEq + Eq + Hash> Hypergraph<T> {
                 .collect::<Vec<&HashSet<T>>>(),
         )
     }
-    pub fn covers(&self) -> Vec<(HashSet<T>, Vec<&HashSet<T>>)> {
+
+    pub fn edges_to_covers(es : Vec<&HashSet<T>>) -> Vec<(HashSet<T>, Vec<&HashSet<T>>)> {
         let mut overlaps : Vec<(HashSet<T>, Vec<&HashSet<T>>)> = vec![];
-        for e in self.edges() {
-            if overlaps.iter().any(|o| !o.0.is_disjoint(&e)) {
-                for o in overlaps.iter_mut().filter(|o| !o.0.is_disjoint(&e)) {
-                    for v in e {
-                        o.0.insert(v.clone());
-                    }
-                    o.1.push(e);
-                }
-            } else {
+        for e in es {
+            let os : Vec<(usize, (HashSet<T>, Vec<&HashSet<T>>))> = overlaps.iter().enumerate().filter(|(_, o)| !o.0.is_disjoint(&e)).map(|(i, (l, r))| (i, (l.clone(), r.clone()))).collect();
+
+            if os.len() == 0 {
                 overlaps.push((e.clone(), vec![e]))
+            } else {
+                let mut newc = e.clone();
+                let mut newes = vec![e];
+                let mut diff = 0;
+                for (i, (c, ess)) in os {
+                    for v in c.iter() {
+                        newc.insert(v.clone());
+                    }
+                    for es in ess {
+                        newes.push(es);
+                    }
+                    overlaps.remove(i - diff);
+                    diff += 1;
+                }
+                overlaps.push((newc, dedupe_hashset_refs(newes.into_iter().filter(|s| s.len() > 0).collect())));
             }
         }
         overlaps
+    }
+
+
+    pub fn covers(&self) -> Vec<(HashSet<T>, Vec<&HashSet<T>>)> {
+        Self::edges_to_covers(self.edges())
     }
 
     pub fn size(&self) -> usize {
@@ -189,6 +205,32 @@ fn dedupe_hashsets<T: Hash + Eq>(hss: Vec<HashSet<T>>) -> Vec<HashSet<T>> {
     }
     cache.into_values().flatten().collect()
 }
+
+fn dedupe_hashset_refs<T: Hash + Eq>(hss: Vec<&HashSet<T>>) -> Vec<&HashSet<T>> {
+    let mut cache: HashMap<usize, Vec<&HashSet<T>>> = HashMap::new();
+    for cur in hss {
+        let len = cur.len();
+        match cache.get_mut(&len) {
+            None => {
+                cache.insert(len, vec![cur]);
+            }
+            Some(cached_hss) => {
+                let mut add = true;
+                for hs in cached_hss.iter() {
+                    if hs.symmetric_difference(&cur).next().is_none() {
+                        add = false;
+                        break;
+                    }
+                }
+                if add {
+                    cached_hss.push(cur);
+                }
+            }
+        }
+    }
+    cache.into_values().flatten().collect()
+}
+
 
 
 fn from_cnf(cnf: &Cnf) -> Hypergraph<VarLabel> {
@@ -321,7 +363,6 @@ mod test {
     #[test]
     fn test_width() {
         let mut hg : Hypergraph<u64> = Hypergraph::new(HashSet::new(), Vec::new());
-        // {3, 1}, {{21}, 5},  {7, 21, 3, 5}]
         // cover 1
         let e1 = HashSet::from([0,1,3,]);
         let e2 = HashSet::from([    3,5,7,21]);
@@ -349,9 +390,9 @@ mod test {
             (5, (2, (3, 3))), // thinks this should be (5, 2, 3, 3)
             (7, (1, (3, 4))),
             (21, (3, (3, 3))),
-            (11, (3, (1, 3))),
-            (10, (1, (3, 3))),
-            (12, (1, (3, 3))),
+            (11, (3, (1, 4))),
+            (10, (1, (2, 4))),
+            (12, (1, (2, 4))),
         ]);
         for v in hg.vertices() {
             let mut tmp = hg.clone();
@@ -367,7 +408,6 @@ mod test {
         }
     }
     #[test]
-    #[ignore]
     fn test_heuristic() {
         // in this heuristic, we essentially want to take the cut with the max "potential of vertex cover".
 
@@ -439,15 +479,19 @@ mod test {
                 let cut_cover_widths = g
                     .covers()
                     .iter()
-                    .map(|(cover, _)| {
+                    .flat_map(|(cover, es)| {
                         let l = cover.len() as f64;
-                        if cover.contains(&v) { l - 1.0 } else { l }
+                        if !cover.contains(&v) { vec![ l ] } else {
+                            let newes : Vec<HashSet<u64>> = es.iter().cloned().map(|e| e.difference(&HashSet::from([*v])).cloned().collect()).filter(|e:&HashSet<u64>| e.len() > 0).collect();
+                            let cs = Hypergraph::edges_to_covers(newes.clone().iter().collect()).iter().map(|(c, es)| es.len() as f64).collect();
+                            cs
+                        }
                     })
                     .collect::<Vec<f64>>();
 
                 let avg_cut_cover_widths = (-1.0) * cut_cover_widths.iter().sum::<f64>() / cut_cover_widths.len() as f64;
-
-                let h = avg_cut_cover_widths;
+                let max_cut_cover_widths = (-1.0) * cut_cover_widths.iter().fold(f64::MIN, |acc, w| if acc > *w { acc } else { *w });
+                let h = max_cut_cover_widths;
                 order.push((v.clone(), h));
             }
             order.sort_by(|l,r| r.1.partial_cmp(&l.1).unwrap());
@@ -472,8 +516,10 @@ mod test {
         for v in topscore(&ordering) {
             let mut tmp = hg1.clone();
             tmp.cut_vertex(&v.0);
-            println!("{}: {:?}", v.0, tmp.edges());
+            println!("{}: {:?}", v.0, tmp.covers());
         }
+        let topvars : HashSet<u64> = topscore(&ordering).into_iter().map(|(v, _)| v).collect();
+        assert!(!topvars.is_disjoint(&HashSet::from([21, 10])));
 
         println!("\nScenario: glue2 (want: 11 or 0)");
         let mut hg2 = hg.clone();
@@ -484,8 +530,11 @@ mod test {
         for v in topscore(&ordering) {
             let mut tmp = hg1.clone();
             tmp.cut_vertex(&v.0);
-            println!("{}: {:?}", v.0, tmp.edges());
+            println!("{}: {:?}", v.0, tmp.covers());
         }
+        let topvars : HashSet<u64> = topscore(&ordering).into_iter().map(|(v, _)| v).collect();
+        assert!(!topvars.is_disjoint(&HashSet::from([11, 0])));
+
 
 
         println!("\nScenario: glue3 (want: 7 or 10)");
@@ -497,8 +546,10 @@ mod test {
         for v in topscore(&ordering) {
             let mut tmp = hg1.clone();
             tmp.cut_vertex(&v.0);
-            println!("{}: {:?}", v.0, tmp.edges());
+            println!("{}: {:?}", v.0, tmp.covers());
         }
+        let topvars : HashSet<u64> = topscore(&ordering).into_iter().map(|(v, _)| v).collect();
+        assert!(!topvars.is_disjoint(&HashSet::from([10, 7])));
 
 
 
@@ -512,13 +563,10 @@ mod test {
         for v in topscore(&ordering) {
             let mut tmp = hg1.clone();
             tmp.cut_vertex(&v.0);
-            println!("{}: {:?}", v.0, tmp.edges());
+            println!("{}: {:?}", v.0, tmp.covers());
         }
-
-
-
-
-        todo!();
+        let topvars : HashSet<u64> = topscore(&ordering).into_iter().map(|(v, _)| v).collect();
+        assert!(!topvars.is_disjoint(&HashSet::from([21, 55, 12])));
 
     }
 
