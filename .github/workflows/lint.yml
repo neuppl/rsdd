@@ -1,8 +1,6 @@
-name: Rust
+name: rustfmt
 
 on:
-  push:
-    branches: [ master ]
   pull_request:
     branches: [ master ]
 
@@ -10,7 +8,7 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build:
+  lint:
     strategy:
       fail-fast: false
       matrix:
@@ -22,7 +20,4 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
-    - name: Build
-      run: cargo build --verbose
-    - name: Run tests
-      run: cargo test --verbose
+    - run: cargo fmt --all -- --check

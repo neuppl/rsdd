@@ -256,8 +256,7 @@ impl LeastCommonAncestor {
         tree: &BTree<N, L>,
         map: &HashMap<*const BTree<N, L>, usize>,
         v: &mut Vec<usize>,
-    )
-    where
+    ) where
         N: PartialEq + Eq + Clone,
         L: PartialEq + Eq + Clone,
     {

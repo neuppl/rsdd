@@ -43,8 +43,7 @@ impl SddTable {
                     let mut new_order = Vec::new();
                     let mut m: HashMap<VarLabel, VarLabel> = HashMap::new();
                     for (var_idx, v) in o.iter().enumerate() {
-                        t.sdd_to_bdd
-                            .insert(*v, VarLabel::new(var_idx as u64));
+                        t.sdd_to_bdd.insert(*v, VarLabel::new(var_idx as u64));
                         m.insert(VarLabel::new(var_idx as u64), *v);
                         new_order.push(VarLabel::new(var_idx as u64));
                     }

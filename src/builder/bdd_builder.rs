@@ -161,9 +161,7 @@ impl BddManager {
     /// Clear the internal scratch space for a BddPtr
     fn clear_scratch(&mut self, ptr: BddPtr) {
         if ptr.is_const() {
-            
         } else if self.compute_table.get_scratch(ptr).is_none() {
-            
         } else {
             self.compute_table.set_scratch(ptr, None);
             self.clear_scratch(self.low(ptr));
@@ -405,7 +403,7 @@ impl BddManager {
         let var = self.var(lbl, true);
         let iff = self.iff(var, g);
         let a = self.and(iff, f);
-        
+
         self.exists(a, lbl)
     }
 
@@ -504,7 +502,6 @@ impl BddManager {
 
     /// if f then g else h
     pub fn ite(&mut self, f: BddPtr, g: BddPtr, h: BddPtr) -> BddPtr {
-        
         self.ite_helper(f, g, h)
     }
 

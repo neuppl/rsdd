@@ -46,7 +46,6 @@ pub struct BddApplyTable {
 
 impl BddApplyTable {
     pub fn new(num_vars: usize) -> BddApplyTable {
-        
         BddApplyTable {
             table: (0..num_vars).map(|_| Lru::new(INITIAL_CAPACITY)).collect(),
         }

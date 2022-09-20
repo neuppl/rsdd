@@ -130,7 +130,7 @@ impl<'a> UnitPropagate<'a> {
         let n = self.state.len();
         let cur_state_i = self.state[n - 1].get_vec().iter();
         let prev_state_i = self.state[n - 2].get_vec().iter();
-        
+
         cur_state_i
             .zip(prev_state_i)
             .enumerate()
@@ -158,9 +158,7 @@ impl<'a> UnitPropagate<'a> {
         // if already assigned, check if consistent -- if not, return unsat
         match self.cur_state().get(new_assignment.get_label()) {
             None => (),
-            Some(v) => {
-                return new_assignment.get_polarity() == v
-            }
+            Some(v) => return new_assignment.get_polarity() == v,
         };
 
         // update the value of the decided variable in the partial model
@@ -232,7 +230,8 @@ impl<'a> UnitPropagate<'a> {
                 // num_remaining > 1, find a new literal to watch
                 // first, find a new literal to watch
                 let candidate_unwatched: LitIdx = remaining_lits
-                    .clone().next()
+                    .clone()
+                    .next()
                     .unwrap()
                     .get_label()
                     .value_usize();

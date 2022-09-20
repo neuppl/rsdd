@@ -37,9 +37,7 @@ fn bench_bdd_full(c: &mut Criterion) {
     group.bench_function("bench-01", |b| b.iter(bench01_cnf_bdd));
     group.bench_function("bench-02", |b| b.iter(bench02_cnf_bdd));
     group.bench_function("bench-03", |b| b.iter(bench03_cnf_bdd));
-    group.bench_function("bench-c8-very-easy", |b| {
-        b.iter(bench_c8_easier_cnf_bdd)
-    });
+    group.bench_function("bench-c8-very-easy", |b| b.iter(bench_c8_easier_cnf_bdd));
     group.finish();
 }
 
