@@ -102,6 +102,8 @@ pub struct SddManager {
     app_cache: Vec<Lru<(SddPtr, SddPtr), SddPtr>>,
     // disabling compression for testing purposes, eventual experimentation
     use_compression: bool,
+    // use probablistic equivalence checking instead of strict pointer equality
+    use_prob_equiv_check: bool,
 }
 
 impl<'a> SddManager {
@@ -117,11 +119,17 @@ impl<'a> SddManager {
             vtree: VTreeManager::new(vtree),
             app_cache,
             use_compression: true,
+            use_prob_equiv_check: false,
         }
     }
 
     pub fn set_compression(&mut self, b: bool) {
         self.use_compression = b
+    }
+
+    pub fn use_prob_equiv_check(&mut self) {
+        self.use_compression = false;
+        self.use_prob_equiv_check = true
     }
 
     // Walks the Sdd, caching results of previously computed values
@@ -702,7 +710,22 @@ impl<'a> SddManager {
     }
 
     pub fn sdd_eq(&self, a: SddPtr, b: SddPtr) -> bool {
-        a == b
+        return a == b;
+    }
+
+    // TODO: unify this with sdd_eq?
+    pub fn sdd_equiv<T: Num + Clone + Debug + Copy>(
+        &mut self,
+        a: SddPtr,
+        b: SddPtr,
+        weights: &SddWmc<T>,
+    ) -> bool {
+        if !self.use_prob_equiv_check {
+            return a == b;
+        }
+        let a_wmc = self.unsmoothed_wmc(a, weights);
+        let b_wmc = self.unsmoothed_wmc(b, weights);
+        return a_wmc == b_wmc;
     }
 
     pub fn is_true(&self, a: SddPtr) -> bool {
@@ -1089,4 +1112,27 @@ fn test_compression() {
     assert_eq!(man.is_trimmed(f), true);
     assert_eq!(man.is_compressed(f), true);
     assert_eq!(man.is_canonical(f), true);
+}
+
+#[test]
+fn test_sdd_equiv_trivial() {
+    let vtree = even_split(
+        &[
+            VarLabel::new(0),
+            VarLabel::new(1),
+            VarLabel::new(2),
+            VarLabel::new(3),
+        ],
+        2,
+    );
+    let mut man = SddManager::new(vtree.clone());
+    man.use_prob_equiv_check(); // disables compression
+    let mut wmc_map = SddWmc::new(0.0, 1.0, vtree);
+    let x = man.var(VarLabel::new(0), true);
+    wmc_map.set_weight(&mut man, VarLabel::new(0), 1.0, 1.0);
+    let f1 = man.var(VarLabel::new(2), true);
+    wmc_map.set_weight(&mut man, VarLabel::new(2), 0.8, 0.2);
+    let iff1 = man.iff(x, f1);
+    let iff2 = man.iff(x, f1);
+    assert_eq!(man.sdd_equiv(iff1, iff2, &wmc_map), true);
 }
