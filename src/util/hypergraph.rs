@@ -13,7 +13,7 @@ use crate::builder::var_order::VarOrder;
 use super::btree::BTree;
 
 #[derive(Clone, Debug)]
-struct Hypergraph<T: Clone + Debug + PartialEq + Eq + Hash> {
+pub struct Hypergraph<T: Clone + Debug + PartialEq + Eq + Hash> {
     vertices: HashSet<T>,
     hyperedges: Vec<HashSet<T>>,
 }
@@ -124,7 +124,7 @@ impl<T: Clone + Debug + PartialEq + Eq + Hash> Hypergraph<T> {
     }
 
     /// finds all edges that are in both part1 and part2
-    fn get_cut_edges(&self, part1: &Vec<T>, part2: &Vec<T>) -> Vec<HashSet<T>> {
+    pub fn get_cut_edges(&self, part1: &Vec<T>, part2: &Vec<T>) -> Vec<HashSet<T>> {
         let mut r = Vec::new();
         for e in self.hyperedges.iter() {
             let contains_part1 = part1.iter().any(|i| e.contains(i));
@@ -136,7 +136,7 @@ impl<T: Clone + Debug + PartialEq + Eq + Hash> Hypergraph<T> {
         r
     }
     /// add an edge to the hypergraph. Returns false if the edge is already in the hypergraph
-    fn insert_edge(&mut self, edge: &HashSet<T>) -> bool {
+    pub fn insert_edge(&mut self, edge: &HashSet<T>) -> bool {
         let new_verts: HashSet<T> = edge.difference(&self.vertices).cloned().collect();
         if new_verts.len() > 0 {
             let vertices = self.vertices().union(&new_verts).cloned().collect();
@@ -152,7 +152,7 @@ impl<T: Clone + Debug + PartialEq + Eq + Hash> Hypergraph<T> {
     }
 
     /// cut a vertex out of the hypergraph
-    fn cut_vertex(&mut self, v: &T) -> bool {
+    pub fn cut_vertex(&mut self, v: &T) -> bool {
         let v_in_vertices = self.vertices.remove(v);
         if !v_in_vertices {
             false
@@ -171,7 +171,7 @@ impl<T: Clone + Debug + PartialEq + Eq + Hash> Hypergraph<T> {
             true
         }
     }
-    fn count_cut_edges(&self, part1: &Vec<T>, part2: &Vec<T>) -> usize {
+    pub fn count_cut_edges(&self, part1: &Vec<T>, part2: &Vec<T>) -> usize {
         let mut r = 0;
         for e in self.edges().iter() {
             let contains_part1 = part1.iter().any(|i| e.contains(i));
@@ -238,7 +238,7 @@ fn dedupe_hashset_refs<T: Hash + Eq>(hss: Vec<&HashSet<T>>) -> Vec<&HashSet<T>> 
     cache.into_values().flatten().collect()
 }
 
-fn from_cnf(cnf: &Cnf) -> Hypergraph<VarLabel> {
+pub fn from_cnf(cnf: &Cnf) -> Hypergraph<VarLabel> {
     let mut vars: HashSet<VarLabel> = HashSet::new();
     let mut hedges: Vec<HashSet<VarLabel>> = vec![];
 
