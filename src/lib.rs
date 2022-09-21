@@ -19,7 +19,7 @@ extern crate time_test;
 extern crate twox_hash;
 
 #[macro_use]
-mod util;
+pub mod util;
 mod backing_store;
 pub mod builder;
 pub mod repr;
