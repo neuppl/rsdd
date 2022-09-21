@@ -72,27 +72,16 @@ impl<T> Random<T> {
     }
 
     // applies `f` to each component
-    pub fn map<R, F: FnMut(&T) -> Random<R>>(&self, f: &mut F) -> Random<R> {
+    pub fn bind<R>(&self, f: &mut FnMut(&T) -> Random<R>) -> Random<R> {
         let v: Vec<(Random<R>, Probability)> = self.vec().iter().map(|(x, p)| (f(x), *p)).collect();
         let n = Random::from_vec(v);
         Random::flatten(n)
     }
 
-    pub fn fmap<U>(&self, f: &dyn Fn(&T) -> U) -> Random<U> {
+    pub fn map<U>(&self, f: &dyn Fn(&T) -> U) -> Random<U> {
         Random {
             val: self.val.iter().map(|(t, p)| (f(t), *p)).collect(),
         }
-    }
-
-    pub fn bind<U>(self, fa_mb: &mut dyn FnMut(&T) -> Random<U>) -> Random<U> {
-        let mut r: Vec<(U, Probability)> = Vec::new();
-        for (a, prob_a) in self.val.into_iter() {
-            let mb = fa_mb(&a);
-            for (b, prob_b) in mb.val.into_iter() {
-                r.push((b, Probability::new(prob_a.as_f64() * prob_b.as_f64())));
-            }
-        }
-        Random { val: r }
     }
 
     /// Generate a Dirac delta at value `v`
