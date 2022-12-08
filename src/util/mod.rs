@@ -2,6 +2,7 @@
 
 pub mod btree;
 pub mod hypergraph;
+pub mod lru;
 
 use std::ptr;
 

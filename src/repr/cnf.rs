@@ -1,6 +1,6 @@
 //! A representation of a conjunctive normal form (CNF)
 
-use crate::builder::var_order::VarOrder;
+use crate::repr::var_order::VarOrder;
 use crate::repr::var_label::{Literal, VarLabel};
 use im::Vector;
 use petgraph::prelude::UnGraph;

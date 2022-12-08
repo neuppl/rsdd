@@ -8,7 +8,7 @@ use core::hash::Hash;
 use petgraph::graph::{Node, UnGraph};
 use std::collections::{HashMap, HashSet};
 
-use crate::builder::var_order::VarOrder;
+use crate::repr::var_order::VarOrder;
 
 use super::btree::BTree;
 

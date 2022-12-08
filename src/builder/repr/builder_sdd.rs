@@ -3,6 +3,7 @@
 
 use crate::builder::repr::builder_bdd::*;
 use crate::repr::var_label::VarLabel;
+use crate::repr::vtree::VTree;
 use crate::util::btree::*;
 use std::mem;
 
@@ -187,23 +188,6 @@ pub enum Sdd {
     Bdd(BddPtr),
 }
 
-pub type VTree = BTree<(), Vec<VarLabel>>;
-
-impl VTree {
-    pub fn new_node(l: Box<VTree>, r: Box<VTree>) -> VTree {
-        VTree::Node((), l, r)
-    }
-    pub fn new_leaf(v: Vec<VarLabel>) -> VTree {
-        VTree::Leaf(v)
-    }
-
-    pub fn num_vars(&self) -> usize {
-        match self {
-            BTree::Leaf(v) => v.len(),
-            BTree::Node((), l, r) => l.num_vars() + r.num_vars(),
-        }
-    }
-}
 
 /// Handles VTree related operations
 #[derive(Clone, Debug)]

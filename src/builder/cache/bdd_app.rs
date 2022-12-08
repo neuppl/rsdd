@@ -1,5 +1,5 @@
 //! Apply cache for BDD operations
-use crate::builder::cache::lru::*;
+use crate::util::lru::*;
 use crate::builder::repr::builder_bdd::*;
 
 const INITIAL_CAPACITY: usize = 8; // given as a power of two

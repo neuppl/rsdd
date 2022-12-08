@@ -1,4 +1,5 @@
 //! A generic lossy LRU cache
+//! will automatically grow in size if it hits a certain size threshold
 
 use crate::util::*;
 use fnv::FnvHasher;

@@ -4,14 +4,18 @@ extern crate rsgm;
 
 use clap::Parser;
 use criterion::black_box;
+use rsdd::builder::sdd_builder;
+use rsdd::repr::vtree::VTree;
 
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
+use rsdd::repr::dtree::DTree;
+use rsdd::repr::var_order::VarOrder;
+use rsdd::repr::cnf::Cnf;
+
 
 use rsdd::{
-    builder::{dtree::DTree, repr::builder_sdd::VTree, sdd_builder, var_order::VarOrder},
     repr::{
-        cnf::Cnf,
         var_label::{Literal, VarLabel},
     },
 };

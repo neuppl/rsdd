@@ -2,7 +2,7 @@
 
 use crate::{
     backing_store::robin_hood::*, backing_store::*, builder::bdd_builder::BddManager,
-    builder::repr::builder_sdd::*, builder::var_order::VarOrder, repr::var_label::VarLabel,
+    builder::repr::builder_sdd::*, repr::{var_label::VarLabel, vtree::VTree, var_order::VarOrder},
     util::btree::*,
 };
 

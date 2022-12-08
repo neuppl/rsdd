@@ -1,5 +1,5 @@
 //! Public-facing binary decision diagram representation
-use crate::builder::var_order::VarOrder;
+use crate::repr::var_order::VarOrder;
 
 use super::var_label::VarLabel;
 

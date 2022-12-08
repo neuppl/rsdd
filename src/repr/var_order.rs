@@ -43,7 +43,7 @@ impl VarOrder {
 
     /// Gives the number of variables in the order
     /// ```
-    /// # use rsdd::builder::var_order::VarOrder;
+    /// # use rsdd::repr::var_order::VarOrder;
     /// let o = VarOrder::linear_order(10);
     /// assert_eq!(o.num_vars(), 10);
     /// ```
@@ -58,7 +58,7 @@ impl VarOrder {
 
     /// Fetches the variable that it as the specified position in the order
     /// ```
-    /// # use rsdd::builder::var_order::VarOrder;
+    /// # use rsdd::repr::var_order::VarOrder;
     /// # use rsdd::repr::var_label::VarLabel;
     /// let o = VarOrder::linear_order(10);
     /// assert_eq!(o.var_at_level(4), VarLabel::new(4));
@@ -69,7 +69,7 @@ impl VarOrder {
 
     /// True if `a` is before `b` in this ordering
     /// ```
-    /// # use rsdd::builder::var_order::VarOrder;
+    /// # use rsdd::repr::var_order::VarOrder;
     /// # use rsdd::repr::var_label::VarLabel;
     /// let o = VarOrder::linear_order(10);
     /// assert!(o.lt(VarLabel::new(3), VarLabel::new(4)));

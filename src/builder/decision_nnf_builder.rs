@@ -10,13 +10,13 @@ use crate::{
     repr::{
         cnf::*,
         var_label::{Literal, VarLabel},
+        var_order::VarOrder
     },
 };
 
 use super::{
     bdd_builder::BddWmc,
     repr::builder_bdd::{Bdd, BddNode, BddPtr},
-    var_order::VarOrder,
 };
 
 use crate::repr::sat_solver::SATSolver;

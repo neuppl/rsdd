@@ -2,12 +2,14 @@
 //! manager, which manages the global state necessary for constructing canonical
 //! binary decision diagrams.
 
+use crate::repr::dtree;
 use crate::repr::model::PartialModel;
 use crate::repr::sat_solver::SATSolver;
+use crate::repr::var_order::VarOrder;
 use crate::{
     backing_store::bdd_table_robinhood::BddTable, backing_store::BackingCacheStats,
-    builder::cache::bdd_app::*, builder::dtree, builder::repr::builder_bdd::*,
-    builder::var_order::VarOrder, repr, repr::cnf::*, repr::logical_expr::LogicalExpr, repr::model,
+    builder::cache::bdd_app::*, builder::repr::builder_bdd::*,
+    repr, repr::cnf::*, repr::logical_expr::LogicalExpr, repr::model,
     repr::var_label::Literal, repr::var_label::VarLabel,
 };
 

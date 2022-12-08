@@ -1,8 +1,10 @@
 //! The main implementation of the SDD manager, the primary way of interacting
 //! with SDDs.
 
+use crate::repr::vtree::VTree;
 use crate::{
-    backing_store::sdd_table::*, builder::cache::lru::*, builder::repr::builder_sdd::*,
+    util::lru::Lru,
+    backing_store::sdd_table::*, builder::repr::builder_sdd::*,
     repr::cnf::Cnf, repr::logical_expr::LogicalExpr, repr::var_label::VarLabel, util::btree::*,
 };
 

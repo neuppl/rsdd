@@ -289,8 +289,8 @@ mod test_bdd_manager {
     use crate::repr::var_label::VarLabel;
     use quickcheck::TestResult;
     use rsdd::builder::bdd_builder::BddWmc;
-    use rsdd::builder::var_order::VarOrder;
     use rsdd::repr::model::PartialModel;
+    use rsdd::repr::var_order::VarOrder;
     use std::collections::HashMap;
     use std::iter::FromIterator;
 

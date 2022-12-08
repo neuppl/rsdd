@@ -24,11 +24,14 @@ mod backing_store;
 pub mod builder;
 pub mod repr;
 pub mod sample;
+pub mod unique_table;
+
+use repr::vtree::VTree;
 
 use crate::builder::bdd_builder::BddManager;
 use crate::builder::bdd_plan::BddPlan;
 use crate::builder::repr::builder_bdd::BddPtr;
-use crate::builder::repr::builder_sdd::{SddPtr, VTree};
+use crate::builder::repr::builder_sdd::SddPtr;
 use crate::builder::sdd_builder::SddManager;
 use crate::builder::*;
 use crate::repr::var_label::VarLabel;

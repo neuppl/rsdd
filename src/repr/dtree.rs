@@ -11,7 +11,7 @@ use crate::repr::{
     var_label::{Literal, VarLabel},
 };
 
-use super::{repr::builder_sdd::VTree, var_order::VarOrder};
+use super::{var_order::VarOrder, vtree::VTree};
 
 type VarSet = BitSet;
 

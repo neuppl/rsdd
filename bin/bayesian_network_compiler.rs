@@ -2,7 +2,10 @@ extern crate rsdd;
 extern crate rsgm;
 
 use clap::Parser;
-use rsdd::builder::bdd_builder::BddWmc;
+use rsdd::builder::bdd_builder::BddManager;
+use rsdd::builder::sdd_builder;
+use rsdd::repr::dtree::DTree;
+use rsdd::{builder::bdd_builder::BddWmc, repr::var_order::VarOrder};
 use rsdd::builder::decision_nnf_builder::DecisionNNFBuilder;
 use rsdd::builder::repr::builder_bdd::BddPtr;
 
@@ -10,7 +13,6 @@ use std::collections::HashMap;
 use std::time::Instant;
 
 use rsdd::{
-    builder::{bdd_builder::BddManager, dtree::DTree, sdd_builder, var_order::VarOrder},
     repr::{
         cnf::Cnf,
         var_label::{Literal, VarLabel},
