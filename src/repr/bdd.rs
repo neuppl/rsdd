@@ -1,46 +1,638 @@
-//! Public-facing binary decision diagram representation
-use crate::repr::var_order::VarOrder;
+//! Binary decision diagram representation
+use super::{var_label::{VarLabel, Literal}, var_order::VarOrder, model::PartialModel};
+use core::fmt::Debug;
+use std::iter::FromIterator;
 
-use super::var_label::VarLabel;
-
-// TODO: resolve unused
-#[allow(unused)]
+/// Weighted model counting parameters for a BDD. It primarily is a storage for
+/// the weight on each variable.
 #[derive(Debug, Clone)]
-pub struct BddPtr {
-    idx: usize,
+pub struct BddWmc<T: Num + Clone + Debug + Copy> {
+    pub zero: T,
+    pub one: T,
+    /// a vector which maps variable labels to `(low, high)`
+    /// valuations.
+    var_to_val: Vec<Option<(T, T)>>,
 }
 
-impl BddPtr {
-    pub fn new(idx: usize) -> Self {
-        BddPtr { idx }
+impl<T: Num + Clone + Debug + Copy> BddWmc<T> {
+    /// Generates a new `BddWmc` with a default `var_to_val`; it is private because we
+    /// do not want to expose the structure of the associative array
+    pub fn new_with_default(zero: T, one: T, var_to_val: HashMap<VarLabel, (T, T)>) -> BddWmc<T> {
+        let mut var_to_val_vec: Vec<Option<(T, T)>> = vec![None; var_to_val.len()];
+        for (key, value) in var_to_val.iter() {
+            var_to_val_vec[key.value_usize()] = Some(*value);
+        }
+        BddWmc {
+            zero,
+            one,
+            var_to_val: var_to_val_vec,
+        }
+    }
+
+    /// Generate a new `BddWmc` with no associations
+    pub fn new(zero: T, one: T) -> BddWmc<T> {
+        BddWmc {
+            zero,
+            one,
+            var_to_val: Vec::new(),
+        }
+    }
+
+    /// get the weight of an asignment
+    pub fn get_weight(&self, assgn: &[Literal]) -> T {
+        let mut prod = self.one;
+        for lit in assgn.iter() {
+            if lit.get_polarity() {
+                prod = prod * self.var_to_val[lit.get_label().value_usize()].unwrap().1
+            } else {
+                prod = prod * self.var_to_val[lit.get_label().value_usize()].unwrap().0
+            }
+        }
+        prod
+    }
+
+    pub fn set_weight(&mut self, lbl: VarLabel, low: T, high: T) {
+        let n = lbl.value_usize();
+        while n >= self.var_to_val.len() {
+            self.var_to_val.push(None);
+        }
+        self.var_to_val[n] = Some((low, high));
+    }
+
+    pub fn get_var_weight(&self, label: VarLabel) -> &(T, T) {
+        return (self.var_to_val[label.value_usize()]).as_ref().unwrap();
     }
 }
 
-#[derive(Debug, Clone)]
-pub enum Bdd {
-    True,
-    False,
-    Node {
-        var: VarLabel,
-        low: BddPtr,
-        high: BddPtr,
-    },
+
+/// Core BDD pointer datatype
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+pub enum BddPtr {
+    Compl(*mut BddNode),
+    Reg(*mut BddNode),
+    PtrTrue,
+    PtrFalse,
 }
 
-// TODO: resolve unused
-#[allow(unused)]
-pub struct FinalizedBDD {
-    bdd: BddPtr,
-    allocator: Vec<Bdd>,
-    order: VarOrder,
-}
+use BddPtr::*;
+use bit_set::BitSet;
+use num::Num;
 
-impl FinalizedBDD {
-    pub fn new(bdd: BddPtr, allocator: Vec<Bdd>, order: VarOrder) -> Self {
-        FinalizedBDD {
-            bdd,
-            allocator,
-            order,
+impl BddPtr {
+    pub fn new_reg(n: *mut BddNode) -> BddPtr {
+        Reg(n)
+    }
+
+    pub fn new_compl(n: *mut BddNode) -> BddPtr {
+        Compl(n)
+    }
+
+    pub fn true_ptr() -> BddPtr {
+        PtrTrue
+    }
+
+    pub fn false_ptr() -> BddPtr {
+        PtrFalse
+    }
+
+    /// Gets the varlabel of &self 
+    /// Panics if not a node
+    pub fn var(&self) -> VarLabel {
+        self.into_node().var
+    }
+
+    /// Get a mutable reference to the node that &self points to
+    /// 
+    /// Panics if not a node pointer
+    pub fn mut_node_ref(&self) -> &mut BddNode {
+        unsafe {
+            match &self {
+                Reg(x) => {
+                    &mut (**x)
+                },
+                Compl(x) => {
+                    &mut (**x)
+                },
+                _ => panic!("Dereferencing constant in deref_or_panic")
+            }
+        }       
+    }
+
+    /// Dereferences the BddPtr into a BddNode 
+    /// The pointer is returned in regular-form (i.e., if &self is complemented, then 
+    /// the returned BddNode incorporates this information)
+    /// 
+    /// Panics if the pointer is constant (i.e., true or false)
+    pub fn into_node(&self) -> BddNode {
+        unsafe {
+            match &self {
+                Reg(x) => {
+                    **x
+                },
+                Compl(x) => {
+                    let BddNode {var, low, high, data } = **x;
+                    BddNode { var, low: low.compl(), high: high.compl(), data}
+                },
+                _ => panic!("Dereferencing constant in deref_or_panic")
+            }
         }
+    }
+
+    /// convert a BddPtr into a regular (non-complemented) pointer
+    pub fn to_reg(&self) -> BddPtr {
+        match &self {
+            Compl(x) => Reg(*x),
+            Reg(x) => Reg(*x),
+            PtrTrue => PtrTrue,
+            PtrFalse => PtrTrue
+        }
+    }
+
+    /// Returns a complemented version of &self
+    pub fn compl(&self) -> BddPtr {
+         match &self {
+            Compl(x) => Reg(*x),
+            Reg(x) => Compl(*x),
+            PtrTrue => PtrFalse,
+            PtrFalse => PtrTrue
+        }
+    }
+
+    pub fn low(&self) -> BddPtr {
+        unsafe {
+            match &self {
+                Compl(x) => (**x).low,
+                Reg(x) => (**x).low,
+                PtrTrue | PtrFalse => panic!("deref constant BDD")
+            }
+        }
+    }
+
+    pub fn high(&self) -> BddPtr {
+        unsafe {
+            match &self {
+                Compl(x) => (**x).high,
+                Reg(x) => (**x).high,
+                PtrTrue | PtrFalse => panic!("deref constant BDD")
+            }
+        }
+    }
+
+
+    /// Traverses the BDD and clears all scratch memory (sets it equal to 0)
+    pub fn clear_scratch(&mut self) -> () {
+        if self.is_const() {
+            return;
+        } else {
+            let n = self.mut_node_ref();
+            if n.data.is_some() {
+                n.data = None;
+                n.low.clear_scratch();
+                n.high.clear_scratch();
+            }
+        }
+    }
+
+    /// Fill the scratch space of each node with a counter that
+    /// indexes an in-order left-first depth-first traversal
+    /// returns the new count (will be #nodes in the BDD at the end)
+    ///
+    /// Pre-condition: cleared scratch
+    pub fn unique_label_nodes(&mut self, count: usize) -> usize {
+        if self.is_const() {
+            return count
+        } else {
+            let n = self.mut_node_ref();
+            if n.data.is_some() {
+                return count
+            } else {
+                n.data = Some(count);
+                let newcount = n.low.unique_label_nodes(count+1);
+                return n.high.unique_label_nodes(newcount)
+            }
+        }
+    }
+
+    /// evaluates the top element of the data stack on the values found in
+    /// `vars`
+    pub fn eval(&self, assgn: &HashMap<VarLabel, bool>) -> bool {
+        fn eval_bdd_helper(ptr: BddPtr, assgn: &HashMap<VarLabel, bool>) -> bool {
+            if ptr.is_true() {
+                return true;
+            } else if ptr.is_false() {
+                return false;
+            }
+            let bdd = ptr.into_node();
+            let value = assgn.get(&bdd.var).unwrap();
+            let r = if *value {
+                eval_bdd_helper(bdd.high, assgn)
+            } else {
+                eval_bdd_helper(bdd.low, assgn)
+            };
+            if ptr.is_compl() {
+                !r
+            } else {
+                r
+            }
+        }
+        eval_bdd_helper(*self, assgn)
+    }
+
+
+    /// Counts the number of nodes present in the BDD (not including constant nodes)
+    /// ```
+    /// # use rsdd::builder::bdd_builder::BddManager;
+    /// # use rsdd::repr::var_label::VarLabel;
+    /// let mut mgr = BddManager::new_default_order(10);
+    /// let lbl_a = mgr.new_var();
+    /// let lbl_b = mgr.new_var();
+    /// let a = mgr.var(lbl_a, true);
+    /// let b = mgr.var(lbl_b, true);
+    /// let a_and_b = mgr.and(a, b);
+    /// // This BDD has size 2, as it looks like (if a then b else false)
+    /// assert_eq!(mgr.count_nodes(a_and_b), 2);
+    /// ```
+    pub fn count_nodes(&mut self) -> usize {
+        let s = self.unique_label_nodes(0);
+        self.clear_scratch();
+        s
+    }
+
+    /// true if the BddPtr points to a constant (i.e., True or False)
+    pub fn is_const(&self) -> bool {
+        match &self {
+            Compl(x) => false,
+            Reg(x) => false,
+            PtrTrue => true,
+            PtrFalse => true 
+        }
+    }
+
+    pub fn is_true(&self) -> bool {
+        match &self {
+            Compl(_) | Reg(_) | PtrFalse  => false,
+            PtrTrue => true,
+        }
+    }
+
+    pub fn is_false(&self) -> bool {
+        match &self {
+            Compl(_) | Reg(_) | PtrTrue => false,
+            PtrFalse => true,
+        }
+    }
+
+
+    /// True is this is a complemented edge pointer
+    pub fn is_compl(&self) -> bool {
+         match &self {
+            Compl(x) => true,
+            Reg(x) => false,
+            PtrTrue => false,
+            PtrFalse => true 
+        }
+    }
+
+    /// gets scratch (panics if not node)
+    pub fn get_scratch(&self) -> Option<usize> {
+        self.into_node().data
+    }
+
+    pub fn to_string_debug(&self) -> String {
+        panic!("todo")
+        // fn print_bdd_helper(t: &BddManager, ptr: BddPtr) -> String {
+        //     match ptr.ptr_type() {
+        //         PointerType::PtrTrue => String::from("T"),
+        //         PointerType::PtrFalse => String::from("F"),
+        //         PointerType::PtrNode => {
+        //             let l_p = if ptr.is_compl() {
+        //                 t.low(ptr).neg()
+        //             } else {
+        //                 t.low(ptr)
+        //             };
+        //             let h_p = if ptr.is_compl() {
+        //                 t.high(ptr).neg()
+        //             } else {
+        //                 t.high(ptr)
+        //             };
+        //             let l_s = print_bdd_helper(t, l_p);
+        //             let h_s = print_bdd_helper(t, h_p);
+        //             format!("({}, {}, {})", ptr.var(), h_s, l_s)
+        //         }
+        //     }
+        // }
+        // print_bdd_helper(self, ptr)
+    }
+
+
+    /// Print a debug form of the BDD with the label remapping given by `map`
+    pub fn print_bdd_lbl(&self, ptr: BddPtr, map: &HashMap<VarLabel, VarLabel>) -> String {
+        panic!("todo")
+        // use crate::builder::repr::builder_bdd::PointerType::*;
+        // fn print_bdd_helper(
+        //     t: &BddManager,
+        //     ptr: BddPtr,
+        //     map: &HashMap<VarLabel, VarLabel>,
+        // ) -> String {
+        //     match ptr.ptr_type() {
+        //         PtrTrue => String::from("T"),
+        //         PtrFalse => String::from("T"),
+        //         PtrNode => {
+        //             let l_p = t.low(ptr);
+        //             let h_p = t.high(ptr);
+        //             let l_s = print_bdd_helper(t, l_p, map);
+        //             let r_s = print_bdd_helper(t, h_p, map);
+        //             let lbl = ptr.label();
+        //             format!(
+        //                 "({:?}, {}{}, {}{})",
+        //                 map.get(&lbl).unwrap_or(&lbl).value(),
+        //                 if l_p.is_compl() { "!" } else { "" },
+        //                 l_s,
+        //                 if h_p.is_compl() { "!" } else { "" },
+        //                 r_s
+        //             )
+        //         }
+        //     }
+        // }
+        // let s = print_bdd_helper(self, ptr, map);
+        // format!("{}{}", if ptr.is_compl() { "!" } else { "" }, s)
+    }
+
+    fn smoothed_bottomup_pass_h<T: Clone + Copy + Debug, F: Fn(VarLabel, T, T) -> T>(
+        &mut self,
+        order: &VarOrder,
+        f: &F,
+        low_v: T,
+        high_v: T,
+        expected_level: usize,
+        tbl: &mut Vec<(Option<T>, Option<T>)>,
+    ) -> T {
+        if self.is_true() {
+            return high_v;
+        }
+        if self.is_false() {
+            return low_v;
+        }
+        let mut r = {
+            if self.is_true() {
+                high_v
+            } else if self.is_false() {
+                low_v
+            } else {
+                let idx = self.get_scratch().unwrap();
+                match tbl[idx] {
+                    (_, Some(v)) if self.is_compl() => v,
+                    (Some(v), _) if !self.is_compl() => v,
+                    (cur_reg, cur_compl) => {
+                        let bdd = self.into_node();
+                        let (low, high) = if self.is_compl() {
+                            (bdd.low.compl(), bdd.high.compl())
+                        } else {
+                            (bdd.low, bdd.high)
+                        };
+                        let cur_level = order.get(bdd.var);
+                        let low_val = low.smoothed_bottomup_pass_h(
+                            order,
+                            f,
+                            low_v,
+                            high_v,
+                            cur_level + 1,
+                            tbl,
+                        );
+                        let high_val = high.smoothed_bottomup_pass_h(
+                            order,
+                            f,
+                            low_v,
+                            high_v,
+                            cur_level + 1,
+                            tbl,
+                        );
+
+                        let res = f(bdd.var, low_val, high_val);
+
+                        // cache result and return
+                        tbl[idx] = if self.is_compl() {
+                            (cur_reg, Some(res))
+                        } else {
+                            (Some(res), cur_compl)
+                        };
+                        res
+                    }
+                }
+            }
+        };
+
+        // smoothing
+        if expected_level >= order.num_vars() {
+            return r;
+        }
+        let smoothing_depth = {
+            if self.is_const() {
+                order.num_vars()
+            } else {
+                let toplabel = self.into_node().var;
+                order.get(toplabel)
+           }
+        };
+        for v in order.between_iter(expected_level, smoothing_depth)
+        {
+            r = f(v, r, r);
+        }
+        r
+    }
+
+    /// performs an amortized bottom-up smoothed pass with aggregating function `f`
+    /// calls `f` on every (smoothed) BDD node and caches and reuses the results
+    /// `f` has type `cur_label -> low_value -> high_value -> aggregated_value`
+    fn smoothed_bottomup_pass<T: Clone + Copy + Debug, F: Fn(VarLabel, T, T) -> T>(
+        &mut self,
+        order: &VarOrder,
+        f: F,
+        low_v: T,
+        high_v: T,
+    ) -> T {
+        let n = self.unique_label_nodes(0);
+        let mut cache: Vec<(Option<T>, Option<T>)> = vec![(None, None); n];
+        let res = self.smoothed_bottomup_pass_h(order, &f, low_v, high_v, 0, &mut cache);
+        self.clear_scratch();
+        res
+    }
+
+
+    /// Weighted-model count
+    pub fn wmc<T: Num + Clone + Debug + Copy>(&mut self, order: &VarOrder, params: &BddWmc<T>) -> T {
+        self.smoothed_bottomup_pass(
+            order,
+            |varlabel, low, high| {
+                let (low_w, high_w) = params.get_var_weight(varlabel);
+                (*low_w * low) + (*high_w * high)
+            },
+            params.zero,
+            params.one,
+        )
+    }
+
+    /// evaluates a circuit on a partial marginal MAP assignment to get an upper-bound on the wmc
+    /// maxes over the `map_vars`, applies the `partial_map_assgn`
+    fn marginal_map_eval(
+        &mut self,
+        order: &VarOrder,
+        partial_map_assgn: &PartialModel,
+        map_vars: &BitSet,
+        wmc: &BddWmc<f64>,
+    ) -> f64 {
+        self.smoothed_bottomup_pass(
+            order,
+            |varlabel, low, high| {
+                let (low_w, high_w) = wmc.get_var_weight(varlabel);
+                match partial_map_assgn.get(varlabel) {
+                    None => {
+                        if map_vars.contains(varlabel.value_usize()) {
+                            f64::max(*low_w * low, *high_w * high)
+                        } else {
+                            (*low_w * low) + (*high_w * high)
+                        }
+                    }
+                    Some(true) => *high_w * high,
+                    Some(false) => *low_w * low,
+                }
+            },
+            wmc.zero,
+            wmc.one,
+        )
+    }
+
+    fn marginal_map_h(
+        &mut self,
+        order: &VarOrder,
+        cur_lb: f64,
+        cur_best: PartialModel,
+        margvars: &[VarLabel],
+        wmc: &BddWmc<f64>,
+        cur_assgn: PartialModel,
+    ) -> (f64, PartialModel) {
+        match margvars {
+            [] => {
+                let margvar_bits = BitSet::new();
+                let possible_best = self.marginal_map_eval(order, &cur_assgn, &margvar_bits, wmc);
+                if possible_best > cur_lb {
+                    (possible_best, cur_assgn)
+                } else {
+                    (cur_lb, cur_best)
+                }
+            }
+            [x, end @ ..] => {
+                let mut best_model = cur_best;
+                let mut best_lb = cur_lb;
+                let margvar_bits = BitSet::from_iter(end.iter().map(|x| x.value_usize()));
+
+                let mut true_model = cur_assgn.clone();
+                true_model.set(*x, true);
+                let mut false_model = cur_assgn.clone();
+                false_model.set(*x, false);
+
+                let true_ub = self.marginal_map_eval(order, &true_model, &margvar_bits, wmc);
+                let false_ub = self.marginal_map_eval(order, &false_model, &margvar_bits, wmc);
+
+                // branch on the greater upper-bound first
+                let o = if true_ub > false_ub {
+                    [(true_ub, true_model), (false_ub, false_model)]
+                } else {
+                    [(false_ub, false_model), (true_ub, true_model)]
+                };
+                for (upper_bound, partialmodel) in o {
+                    // branch + bound
+                    if upper_bound > best_lb {
+                        (best_lb, best_model) = self.marginal_map_h(
+                            order,
+                            best_lb,
+                            best_model,
+                            end,
+                            wmc,
+                            partialmodel.clone(),
+                        );
+                    }
+                }
+                (best_lb, best_model)
+            }
+        }
+    }
+
+    /// Computes the marginal map over variables `vars` of `ptr` with evidence `evidence`
+    /// I.e., computes argmax_{v in vars} \sum_{v not in vars} w(ptr /\ evidence)
+    /// ```
+    /// use rsdd::builder::bdd_builder::{BddManager, BddWmc};
+    /// use rsdd::repr::var_label::{VarLabel, Literal};
+    /// use rsdd::repr::model::PartialModel;
+    /// use std::collections::HashMap;
+    /// use rsdd::repr::cnf::Cnf;
+    /// let cnf = Cnf::from_string(String::from("(1 || 2 || 3 || 4)"));
+    /// let mut mgr = BddManager::new_default_order(cnf.num_vars());
+    /// let w : HashMap<VarLabel, (f64, f64)> = (0..5).map(|x| (VarLabel::new(x), (0.3, 0.7))).collect();
+    /// let wmc = BddWmc::new_with_default(0.0, 1.0, w);
+    /// let evidence = mgr.true_ptr();
+    /// let bdd = mgr.from_cnf(&cnf);
+    /// let (p, marg_map) = mgr.marginal_map(bdd, evidence, &vec![VarLabel::new(0), VarLabel::new(1)], &wmc);
+    /// let expected_model = PartialModel::from_litvec(&vec![Literal::new(VarLabel::new(0), true), Literal::new(VarLabel::new(1), true)], cnf.num_vars());
+    /// let expected_prob = 0.49;
+    /// assert_eq!(marg_map, expected_model);
+    /// ```
+    pub fn marginal_map(
+        &mut self,
+        order: &VarOrder,
+        ptr: BddPtr,
+        vars: &[VarLabel],
+        wmc: &BddWmc<f64>,
+    ) -> (f64, PartialModel) {
+        let mut marg_vars = BitSet::new();
+        for v in vars {
+            marg_vars.insert(v.value_usize());
+        }
+
+        let all_true: Vec<Literal> = vars.iter().map(|x| Literal::new(*x, true)).collect();
+        let cur_assgn = PartialModel::from_litvec(&all_true, order.num_vars());
+        let lower_bound = self.marginal_map_eval(order, &cur_assgn, &BitSet::new(), wmc);
+
+        self.marginal_map_h(
+            order,
+            lower_bound,
+            cur_assgn,
+            vars,
+            wmc,
+            PartialModel::from_litvec(&[], order.num_vars()),
+        )
+    }
+
+}
+
+/// Core BDD node storage
+#[derive(Debug, Clone, Eq)]
+pub struct BddNode {
+    pub var: VarLabel,
+    pub low: BddPtr,
+    pub high: BddPtr,
+    /// scratch space used for caching data during traversals; ignored during
+    /// equality checking and hashing
+    data: Option<usize>
+}
+
+impl BddNode {
+    pub fn new(var: VarLabel, low: BddPtr, high: BddPtr) -> BddNode {
+        BddNode { var, low, high, data: None}
+    }
+}
+
+impl PartialEq for BddNode {
+    fn eq(&self, other: &Self) -> bool {
+        self.var == other.var && self.low == other.low && self.high == other.high
+    }
+}
+
+use std::{hash::{Hash, Hasher}, collections::HashMap};
+impl Hash for BddNode {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.var.hash(state);
+        self.low.hash(state);
+        self.high.hash(state);
     }
 }

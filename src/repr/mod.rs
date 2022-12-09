@@ -5,6 +5,7 @@
 //! (i.e., conjunctive normal forms, arbitrary logical formulae, etc.)
 
 pub mod bdd;
+pub mod sdd;
 pub mod cnf;
 pub mod logical_expr;
 pub mod model;

@@ -5,18 +5,11 @@ use rand::Rng;
 use std::collections::HashMap;
 
 use crate::{
-    backing_store::bdd_table_robinhood::BddTable,
-    builder::repr::builder_bdd::PointerType,
     repr::{
         cnf::*,
         var_label::{Literal, VarLabel},
         var_order::VarOrder
     },
-};
-
-use super::{
-    bdd_builder::BddWmc,
-    repr::builder_bdd::{Bdd, BddNode, BddPtr},
 };
 
 use crate::repr::sat_solver::SATSolver;

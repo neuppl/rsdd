@@ -17,6 +17,7 @@ extern crate quickcheck;
 extern crate segment_tree;
 extern crate time_test;
 extern crate twox_hash;
+extern crate bumpalo;
 
 #[macro_use]
 mod util;
@@ -30,7 +31,6 @@ use repr::vtree::VTree;
 
 use crate::builder::bdd_builder::BddManager;
 use crate::builder::bdd_plan::BddPlan;
-use crate::builder::repr::builder_bdd::BddPtr;
 use crate::builder::repr::builder_sdd::SddPtr;
 use crate::builder::sdd_builder::SddManager;
 use crate::builder::*;
