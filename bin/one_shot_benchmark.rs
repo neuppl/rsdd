@@ -77,6 +77,7 @@ fn compile_bdd(str: String, debug: bool) {
     // let mut man = BddManager::new(order);
     let _bdd = man.from_cnf(&cnf);
     println!("# recursive: {}", man.num_recursive_calls());
+    println!("size: {}", man.count_nodes(_bdd));
 }
 
 fn bench_cnf_bdd(cnf_str: String, debug: bool) -> Duration {
