@@ -14,3 +14,4 @@ pub mod var_label;
 pub mod var_order;
 pub mod dtree;
 pub mod vtree;
+pub mod wmc;

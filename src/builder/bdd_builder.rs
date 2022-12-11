@@ -144,7 +144,7 @@ impl BddManager {
 
     /// Normalizes and fetches a node from the store
     fn get_or_insert(&mut self, bdd: BddNode) -> BddPtr {
-        if bdd.high.is_compl() {
+        if bdd.high.is_compl() || bdd.high.is_false() {
             let bdd = BddNode::new(bdd.var, bdd.low.compl(), bdd.high.compl());
             BddPtr::new_compl(self.compute_table.get_or_insert(bdd)) 
         } else {
@@ -186,10 +186,7 @@ impl BddManager {
         // standardize
         // See pgs. 115-117 of "Algorithms and Data Structures in VLSI Design"
         // attempt a base case
-        match self.apply_table.get(f, g, h) {
-            Some(v) => return v,
-            None => (),
-        };
+
         let f_orig = f;
         let g_orig = g;
         let h_orig = h;
@@ -218,6 +215,12 @@ impl BddManager {
             (f, g, h) if g == h && self.get_order().lt(g.var(), f.var()) => (g, f, f.compl()),
             _ => (f, g, h),
         };
+
+        match self.apply_table.get(f, g, h) {
+            Some(v) => return v,
+            None => (),
+        };
+
 
         // ok the work!
         // find the first essential variable for f, g, or h
@@ -391,12 +394,11 @@ impl BddManager {
         cache: &mut Vec<Option<BddPtr>>,
     ) -> BddPtr {
         self.stats.num_recursive_calls += 1;
-        if self.get_order().lt(lbl, bdd.var()) || bdd.is_const() {
+        if bdd.is_const() || self.get_order().lt(lbl, bdd.var())  {
             // we passed the variable in the order, we will never find it
             bdd
         } else if bdd.var() == lbl {
-            let node = bdd.into_node();
-            let r = if value { node.high } else { node.low };
+            let r = if value { bdd.high() } else { bdd.low() };
             if bdd.is_compl() {
                 r.compl()
             } else {
@@ -411,17 +413,18 @@ impl BddManager {
             };
 
             // recurse on the children
-            let n = bdd.into_node();
-            let l = self.cond_helper(n.low, lbl, value, cache);
-            let h = self.cond_helper(n.high, lbl, value, cache);
+            let l = self.cond_helper(bdd.low(), lbl, value, cache);
+            let h = self.cond_helper(bdd.high(), lbl, value, cache);
+
             if l == h {
+                // reduce the BDD -- two children identical
                 if bdd.is_compl() {
                     return l.compl();
                 } else {
                     return l;
                 };
             };
-            let res = if l != n.low || h != n.high {
+            let res = if l != bdd.low() || h != bdd.high() {
                 // cache and return the new BDD
                 let new_bdd = BddNode::new(bdd.var(), l, h);
                 let r = self.get_or_insert(new_bdd);
@@ -523,6 +526,7 @@ impl BddManager {
         // TODO this can be optimized by specializing it
         let v1 = self.condition(bdd, lbl, true);
         let v2 = self.condition(bdd, lbl, false);
+        println!("bdd: {}, bdd|T: {}, bdd|F: {}", bdd.to_string_debug(), v1.to_string_debug(), v2.to_string_debug());
         self.or(v1, v2)
     }
 
@@ -915,13 +919,13 @@ impl BddManager {
 #[cfg(test)]
 mod tests {
 
-    use libc::NOTE_EXIT_DECRYPTFAIL;
     use maplit::*;
+    use crate::repr::wmc::WmcParams;
 
     use crate::{
         repr::{
             cnf::Cnf,
-            var_label::{Literal, VarLabel}, bdd::{BddPtr, BddWmc},
+            var_label::{Literal, VarLabel}, bdd::BddPtr,
         }, builder::bdd_builder::BddManager,
     };
 
@@ -981,7 +985,7 @@ mod tests {
         let r1 = man.or(v1, v2);
         let weights = hashmap! {VarLabel::new(0) => (2,3),
         VarLabel::new(1) => (5,7)};
-        let params = BddWmc::new_with_default(0, 1, weights);
+        let params = WmcParams::new_with_default(0, 1, weights);
         let wmc = r1.wmc(&man.order, &params);
         assert_eq!(wmc, 50);
     }
@@ -996,7 +1000,7 @@ mod tests {
         VarLabel::new(0) => (2,3),
         VarLabel::new(1) => (5,7),
         VarLabel::new(2) => (11,13)};
-        let params = BddWmc::new_with_default(0, 1, weights);
+        let params = WmcParams::new_with_default(0, 1, weights);
         let wmc = r1.wmc(&man.order, &params);
         assert_eq!(wmc, 1176);
     }
@@ -1009,7 +1013,7 @@ mod tests {
         VarLabel::new(0) => (2,3),
         VarLabel::new(1) => (5,7),
         VarLabel::new(2) => (11,13)};
-        let params = BddWmc::new_with_default(0, 1, weights);
+        let params = WmcParams::new_with_default(0, 1, weights);
         let wmc = r1.wmc(&man.order, &params);
         assert_eq!(wmc, 1440);
     }
@@ -1156,6 +1160,7 @@ mod tests {
         let v1 = man.var(vlbl1, false);
         let v2 = man.var(vlbl2, false);
         let r1 = man.and(v1, v2);
+        println!("before condition: on 1=T: {}", r1.to_string_debug());
         let r3 = man.condition(r1, VarLabel::new(1), false);
         assert!(
             man.eq_bdd(r3, v1),
@@ -1173,7 +1178,9 @@ mod tests {
         let delta = man.and(x, y);
         let yp = man.var(VarLabel::new(2), true);
         let inner = man.iff(yp, y);
+        println!("yp: {}, y: {}, yp <=> y: {}", yp.to_string_debug(), y.to_string_debug(), inner.to_string_debug());
         let conj = man.and(inner, delta);
+        println!("yp <=> y && !x && y: {}", conj.to_string_debug());
         let res = man.exists(conj, VarLabel::new(1));
 
         let expected = man.and(x, yp);
@@ -1195,7 +1202,7 @@ mod tests {
         let r2 = man.and(r1, z);
         // now r2 is x /\ !y /\ !z
 
-        let res = man.condition(r2, VarLabel::new(1), true);
+        let res = man.condition(r2, VarLabel::new(1), true); // condition on y=T
         let expected = BddPtr::false_ptr();
         assert!(
             man.eq_bdd(res, expected),
@@ -1217,7 +1224,7 @@ mod tests {
         VarLabel::new(1) => (1.0, 1.0),
         VarLabel::new(2) => (0.8, 0.2),
         VarLabel::new(3) => (0.7, 0.3) };
-        let wmc = BddWmc::new_with_default(0.0, 1.0, map);
+        let wmc = WmcParams::new_with_default(0.0, 1.0, map);
         let iff1 = man.iff(x, f1);
         let iff2 = man.iff(y, f2);
         let obs = man.or(x, y);

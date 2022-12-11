@@ -5,7 +5,7 @@ extern crate quickcheck;
 use self::quickcheck::{Arbitrary, Gen};
 
 /// a label for each distinct variable in the BDD
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Hash, Copy)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Hash, Copy, PartialOrd, Ord)]
 pub struct VarLabel(u64);
 
 impl VarLabel {

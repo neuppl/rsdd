@@ -12,17 +12,24 @@ pub struct BumpTable<T: Eq + PartialEq + Hash> {
     unique_map: HashMap<T, *mut T, BuildHasherDefault<XxHash64>>
 }
 
-impl<T: Eq + PartialEq + Hash> BumpTable<T> {
+impl<T: Eq + PartialEq + Hash + Clone> BumpTable<T> {
     pub fn new() -> BumpTable<T> {
         BumpTable { table: Bump::new(), unique_map: Default::default() }
     }
 }
 
-impl<T: Eq + PartialEq + Hash> UniqueTable<T> for BumpTable<T> {
+impl<T: Eq + PartialEq + Hash + Clone > UniqueTable<T> for BumpTable<T> {
     fn get_or_insert(&mut self, item: T) -> *mut T {
-        *self.unique_map.entry(item).or_insert_with(|| {
-            // allocate a new item
-             self.table.alloc(item) as *mut T
-        })
+        let i = self.unique_map.get(&item).cloned();
+        match i {
+            None => { 
+                let ptr = self.table.alloc(item.clone());
+                self.unique_map.insert(item, ptr);
+                return ptr
+            },
+            Some(v) => { 
+                v
+            }
+        }
     }
 }

@@ -1,6 +1,5 @@
 //! Apply cache for BDD operations
-use crate::util::lru::*;
-use crate::builder::repr::builder_bdd::*;
+use crate::{util::lru::*, repr::bdd::BddPtr};
 
 const INITIAL_CAPACITY: usize = 8; // given as a power of two
 
@@ -19,18 +18,18 @@ impl Ite {
         // See pgs. 115-117 of "Algorithms and Data Structures in VLSI Design"
         // first, introduce constants if possible
         let (f, g, h) = match (f, g, h) {
-            (f, g, h) if f == h => (f, g, BddPtr::false_node()),
-            (f, g, h) if f == h.neg() => (f, g, BddPtr::true_node()),
-            (f, g, h) if f == g.neg() => (f, BddPtr::false_node(), h),
+            (f, g, h) if f == h => (f, g, BddPtr::false_ptr()),
+            (f, g, h) if f == h.compl() => (f, g, BddPtr::true_ptr()),
+            (f, g, h) if f == g.compl() => (f, BddPtr::false_ptr(), h),
             _ => (f, g, h),
         };
 
         // now, standardize for negation: ensure f and g are non-negated
         // follow the table on p.g 116
         let (f, g, h, compl) = match (f, g, h) {
-            (f, g, h) if f.is_compl() && !h.is_compl() => (f.neg(), h, g, false),
-            (f, g, h) if !f.is_compl() && g.is_compl() => (f, g.neg(), h.neg(), true),
-            (f, g, h) if f.is_compl() && h.is_compl() => (f.neg(), h.neg(), g.neg(), true),
+            (f, g, h) if f.is_compl() && !h.is_compl() => (f.compl(), h, g, false),
+            (f, g, h) if !f.is_compl() && g.is_compl() => (f, g.compl(), h.compl(), true),
+            (f, g, h) if f.is_compl() && h.is_compl() => (f.compl(), h.compl(), g.compl(), true),
             _ => (f, g, h, false),
         };
         assert!(!f.is_compl() && !g.is_compl());
@@ -59,29 +58,25 @@ impl BddApplyTable {
     /// Insert an ite (f, g, h) into the apply table
     pub fn insert(&mut self, f: BddPtr, g: BddPtr, h: BddPtr, res: BddPtr) {
         // convert the ITE into a canonical form
-        while f.label().value_usize() >= self.table.len() {
+        while f.var().value_usize() >= self.table.len() {
             self.push_table();
         }
         let (ite, compl) = Ite::new(f, g, h);
-        self.table[f.label().value() as usize].insert(ite, if compl { res.neg() } else { res });
+        self.table[f.var().value() as usize].insert(ite, if compl { res.compl() } else { res });
         // println!("Inserted Ite({:?}, {:?}, {:?}, standardized {:?}", f, g, h, ite);
     }
 
     pub fn get(&mut self, f: BddPtr, g: BddPtr, h: BddPtr) -> Option<BddPtr> {
         let (ite, compl) = Ite::new(f, g, h);
-        while f.label().value_usize() >= self.table.len() {
+        while f.var().value_usize() >= self.table.len() {
             self.push_table();
         }
         // println!("Looking up Ite({:?}, {:?}, {:?}, standardized {:?}\n", f, g, h, ite);
-        let r = self.table[f.label().value() as usize].get(ite);
+        let r = self.table[f.var().value() as usize].get(ite);
         if compl {
-            r.map(|v| v.neg())
+            r.map(|v| v.compl())
         } else {
             r
         }
     }
-
-    // pub fn get_stats(&self) -> ApplyCacheStats {
-    //     self.table.get_stats()
-    // }
 }

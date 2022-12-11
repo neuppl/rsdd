@@ -22,7 +22,7 @@ impl VTree {
 }
 
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, PartialOrd, Ord, Hash)]
 pub struct VTreeIndex(usize);
 
 impl VTreeIndex {

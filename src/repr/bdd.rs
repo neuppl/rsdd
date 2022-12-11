@@ -1,72 +1,12 @@
 //! Binary decision diagram representation
-use super::{var_label::{VarLabel, Literal}, var_order::VarOrder, model::PartialModel};
+use super::{var_label::{VarLabel, Literal}, var_order::VarOrder, model::PartialModel, wmc::WmcParams};
 use core::fmt::Debug;
 use std::iter::FromIterator;
 
-/// Weighted model counting parameters for a BDD. It primarily is a storage for
-/// the weight on each variable.
-#[derive(Debug, Clone)]
-pub struct BddWmc<T: Num + Clone + Debug + Copy> {
-    pub zero: T,
-    pub one: T,
-    /// a vector which maps variable labels to `(low, high)`
-    /// valuations.
-    var_to_val: Vec<Option<(T, T)>>,
-}
-
-impl<T: Num + Clone + Debug + Copy> BddWmc<T> {
-    /// Generates a new `BddWmc` with a default `var_to_val`; it is private because we
-    /// do not want to expose the structure of the associative array
-    pub fn new_with_default(zero: T, one: T, var_to_val: HashMap<VarLabel, (T, T)>) -> BddWmc<T> {
-        let mut var_to_val_vec: Vec<Option<(T, T)>> = vec![None; var_to_val.len()];
-        for (key, value) in var_to_val.iter() {
-            var_to_val_vec[key.value_usize()] = Some(*value);
-        }
-        BddWmc {
-            zero,
-            one,
-            var_to_val: var_to_val_vec,
-        }
-    }
-
-    /// Generate a new `BddWmc` with no associations
-    pub fn new(zero: T, one: T) -> BddWmc<T> {
-        BddWmc {
-            zero,
-            one,
-            var_to_val: Vec::new(),
-        }
-    }
-
-    /// get the weight of an asignment
-    pub fn get_weight(&self, assgn: &[Literal]) -> T {
-        let mut prod = self.one;
-        for lit in assgn.iter() {
-            if lit.get_polarity() {
-                prod = prod * self.var_to_val[lit.get_label().value_usize()].unwrap().1
-            } else {
-                prod = prod * self.var_to_val[lit.get_label().value_usize()].unwrap().0
-            }
-        }
-        prod
-    }
-
-    pub fn set_weight(&mut self, lbl: VarLabel, low: T, high: T) {
-        let n = lbl.value_usize();
-        while n >= self.var_to_val.len() {
-            self.var_to_val.push(None);
-        }
-        self.var_to_val[n] = Some((low, high));
-    }
-
-    pub fn get_var_weight(&self, label: VarLabel) -> &(T, T) {
-        return (self.var_to_val[label.value_usize()]).as_ref().unwrap();
-    }
-}
 
 
 /// Core BDD pointer datatype
-#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Copy)]
 pub enum BddPtr {
     Compl(*mut BddNode),
     Reg(*mut BddNode),
@@ -127,7 +67,7 @@ impl BddPtr {
         unsafe {
             match &self {
                 Reg(x) => {
-                    **x
+                    (**x).clone()
                 },
                 Compl(x) => {
                     let BddNode {var, low, high, data } = **x;
@@ -180,7 +120,7 @@ impl BddPtr {
 
 
     /// Traverses the BDD and clears all scratch memory (sets it equal to 0)
-    pub fn clear_scratch(&mut self) -> () {
+    pub fn clear_scratch(&self) -> () {
         if self.is_const() {
             return;
         } else {
@@ -198,7 +138,7 @@ impl BddPtr {
     /// returns the new count (will be #nodes in the BDD at the end)
     ///
     /// Pre-condition: cleared scratch
-    pub fn unique_label_nodes(&mut self, count: usize) -> usize {
+    pub fn unique_label_nodes(&self, count: usize) -> usize {
         if self.is_const() {
             return count
         } else {
@@ -252,7 +192,7 @@ impl BddPtr {
     /// // This BDD has size 2, as it looks like (if a then b else false)
     /// assert_eq!(mgr.count_nodes(a_and_b), 2);
     /// ```
-    pub fn count_nodes(&mut self) -> usize {
+    pub fn count_nodes(&self) -> usize {
         let s = self.unique_label_nodes(0);
         self.clear_scratch();
         s
@@ -261,8 +201,8 @@ impl BddPtr {
     /// true if the BddPtr points to a constant (i.e., True or False)
     pub fn is_const(&self) -> bool {
         match &self {
-            Compl(x) => false,
-            Reg(x) => false,
+            Compl(_) => false,
+            Reg(_) => false,
             PtrTrue => true,
             PtrFalse => true 
         }
@@ -286,10 +226,10 @@ impl BddPtr {
     /// True is this is a complemented edge pointer
     pub fn is_compl(&self) -> bool {
          match &self {
-            Compl(x) => true,
-            Reg(x) => false,
+            Compl(_) => true,
+            Reg(_) => false,
             PtrTrue => false,
-            PtrFalse => true 
+            PtrFalse => false
         }
     }
 
@@ -299,29 +239,28 @@ impl BddPtr {
     }
 
     pub fn to_string_debug(&self) -> String {
-        panic!("todo")
-        // fn print_bdd_helper(t: &BddManager, ptr: BddPtr) -> String {
-        //     match ptr.ptr_type() {
-        //         PointerType::PtrTrue => String::from("T"),
-        //         PointerType::PtrFalse => String::from("F"),
-        //         PointerType::PtrNode => {
-        //             let l_p = if ptr.is_compl() {
-        //                 t.low(ptr).neg()
-        //             } else {
-        //                 t.low(ptr)
-        //             };
-        //             let h_p = if ptr.is_compl() {
-        //                 t.high(ptr).neg()
-        //             } else {
-        //                 t.high(ptr)
-        //             };
-        //             let l_s = print_bdd_helper(t, l_p);
-        //             let h_s = print_bdd_helper(t, h_p);
-        //             format!("({}, {}, {})", ptr.var(), h_s, l_s)
-        //         }
-        //     }
-        // }
-        // print_bdd_helper(self, ptr)
+        fn print_bdd_helper(ptr: BddPtr) -> String {
+            if ptr.is_true() {
+                return String::from("T");
+            } else if ptr.is_false() {
+                return String::from("F");
+            } else {
+                let l_p = if ptr.is_compl() {
+                    ptr.low().compl()
+                } else {
+                    ptr.low()
+                };
+                let h_p = if ptr.is_compl() {
+                    ptr.high().compl()
+                } else {
+                    ptr.high()
+                };
+                let l_s = print_bdd_helper(l_p);
+                let h_s = print_bdd_helper(h_p);
+                format!("({}, {}, {})", ptr.var().value(), h_s, l_s)
+            }
+        }
+        print_bdd_helper(*self)
     }
 
 
@@ -359,7 +298,7 @@ impl BddPtr {
     }
 
     fn smoothed_bottomup_pass_h<T: Clone + Copy + Debug, F: Fn(VarLabel, T, T) -> T>(
-        &mut self,
+        &self,
         order: &VarOrder,
         f: &F,
         low_v: T,
@@ -367,12 +306,6 @@ impl BddPtr {
         expected_level: usize,
         tbl: &mut Vec<(Option<T>, Option<T>)>,
     ) -> T {
-        if self.is_true() {
-            return high_v;
-        }
-        if self.is_false() {
-            return low_v;
-        }
         let mut r = {
             if self.is_true() {
                 high_v
@@ -384,13 +317,12 @@ impl BddPtr {
                     (_, Some(v)) if self.is_compl() => v,
                     (Some(v), _) if !self.is_compl() => v,
                     (cur_reg, cur_compl) => {
-                        let bdd = self.into_node();
                         let (low, high) = if self.is_compl() {
-                            (bdd.low.compl(), bdd.high.compl())
+                            (self.low().compl(), self.high().compl())
                         } else {
-                            (bdd.low, bdd.high)
+                            (self.low(), self.high())
                         };
-                        let cur_level = order.get(bdd.var);
+                        let cur_level = order.get(self.var());
                         let low_val = low.smoothed_bottomup_pass_h(
                             order,
                             f,
@@ -408,7 +340,7 @@ impl BddPtr {
                             tbl,
                         );
 
-                        let res = f(bdd.var, low_val, high_val);
+                        let res = f(self.var(), low_val, high_val);
 
                         // cache result and return
                         tbl[idx] = if self.is_compl() {
@@ -430,7 +362,7 @@ impl BddPtr {
             if self.is_const() {
                 order.num_vars()
             } else {
-                let toplabel = self.into_node().var;
+                let toplabel = self.var();
                 order.get(toplabel)
            }
         };
@@ -445,7 +377,7 @@ impl BddPtr {
     /// calls `f` on every (smoothed) BDD node and caches and reuses the results
     /// `f` has type `cur_label -> low_value -> high_value -> aggregated_value`
     fn smoothed_bottomup_pass<T: Clone + Copy + Debug, F: Fn(VarLabel, T, T) -> T>(
-        &mut self,
+        &self,
         order: &VarOrder,
         f: F,
         low_v: T,
@@ -460,7 +392,7 @@ impl BddPtr {
 
 
     /// Weighted-model count
-    pub fn wmc<T: Num + Clone + Debug + Copy>(&mut self, order: &VarOrder, params: &BddWmc<T>) -> T {
+    pub fn wmc<T: Num + Clone + Debug + Copy>(&self, order: &VarOrder, params: &WmcParams<T>) -> T {
         self.smoothed_bottomup_pass(
             order,
             |varlabel, low, high| {
@@ -475,11 +407,11 @@ impl BddPtr {
     /// evaluates a circuit on a partial marginal MAP assignment to get an upper-bound on the wmc
     /// maxes over the `map_vars`, applies the `partial_map_assgn`
     fn marginal_map_eval(
-        &mut self,
+        &self,
         order: &VarOrder,
         partial_map_assgn: &PartialModel,
         map_vars: &BitSet,
-        wmc: &BddWmc<f64>,
+        wmc: &WmcParams<f64>,
     ) -> f64 {
         self.smoothed_bottomup_pass(
             order,
@@ -503,12 +435,12 @@ impl BddPtr {
     }
 
     fn marginal_map_h(
-        &mut self,
+        &self,
         order: &VarOrder,
         cur_lb: f64,
         cur_best: PartialModel,
         margvars: &[VarLabel],
-        wmc: &BddWmc<f64>,
+        wmc: &WmcParams<f64>,
         cur_assgn: PartialModel,
     ) -> (f64, PartialModel) {
         match margvars {
@@ -578,11 +510,10 @@ impl BddPtr {
     /// assert_eq!(marg_map, expected_model);
     /// ```
     pub fn marginal_map(
-        &mut self,
+        &self,
         order: &VarOrder,
-        ptr: BddPtr,
         vars: &[VarLabel],
-        wmc: &BddWmc<f64>,
+        wmc: &WmcParams<f64>,
     ) -> (f64, PartialModel) {
         let mut marg_vars = BitSet::new();
         for v in vars {

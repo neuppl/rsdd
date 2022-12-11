@@ -54,7 +54,7 @@ fn compile_topdown_nnf(str: String, debug: bool) {
     // let order = cnf.force_order();
     let ddnnf = man.from_cnf_topdown(&order, &cnf);
 
-    println!("size: {:?}", man.count_nodes(ddnnf));
+    println!("size: {:?}", ddnnf.count_nodes());
 }
 
 // TODO: resolve unused

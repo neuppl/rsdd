@@ -5,187 +5,216 @@ use crate::repr::var_label::VarLabel;
 use crate::repr::vtree::VTree;
 use crate::util::btree::*;
 use std::mem;
-
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
-pub struct VTreeIndex(usize);
-
-impl VTreeIndex {
-    pub fn value(&self) -> usize {
-        self.0
-    }
-}
-
-/// holds metadata for an SDD pointer as a packed u32. It has the following fields:
-/// `vtree`: holds the index into a depth-first left-first traversal of the SDD vtree
-/// `is_bdd`: true if this SDD pointer points to a BDD
-/// `is_const`: true if this SDD pointer is a constant (true or false)
-///
-/// There is some redundant information that occurs between SddPtr and BddPtr (for instance,
-/// whether or not an edge is complemented, or true or false); whenever possible, this
-/// information is "pushed inside" the BddPtr
-#[repr(C)]
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Ord, PartialOrd, Copy)]
-struct PackedInternalData {
-    data: u32,
-}
-
-BITFIELD!(PackedInternalData data : u32 [
-    vtree set_vtree[0..16],
-    is_bdd set_is_bdd[16..17],
-    is_const set_is_const[17..18],
-    compl set_compl[18..19],
-]);
-
-impl PackedInternalData {
-    fn new(vtree: u16, is_bdd: u32, is_const: u32, compl: u32) -> PackedInternalData {
-        let mut n = PackedInternalData { data: 0 };
-        n.set_vtree(vtree as u32);
-        n.set_is_bdd(is_bdd);
-        n.set_is_const(is_const);
-        n.set_compl(compl);
-        n
-    }
-}
+use num::Num;
+use tinyvec::TinyVec;
 
 /// An SddPtr is either (1) a BDD pointer, or (2) a pointer to an SDD node.
-#[repr(C)]
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Ord, PartialOrd, Copy)]
-pub struct SddPtr {
-    /// the index into the table *or* a BDD pointer, depending on the is_bdd
-    /// flag
-    idx: usize,
-    pack: PackedInternalData,
+pub enum SddPtr {
+    PtrTrue,
+    PtrFalse,
+    Var(VarLabel, bool),
+    Compl(*mut SddOr),
+    Reg(*mut SddOr)
 }
+
+use SddPtr::*;
 
 /// An SddOr node is a vector of (prime, sub) pairs.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Ord, PartialOrd)]
+#[derive(Debug, Clone, Eq, Ord, PartialOrd)]
 pub struct SddOr {
+    index: VTreeIndex,
     pub nodes: Vec<(SddPtr, SddPtr)>,
+    pub scratch: Option<usize>
 }
 
-pub enum SddPtrType {
-    True,
-    False,
-    Node,
+impl SddOr {
+    pub fn new(nodes: Vec<(SddPtr, SddPtr)>, index: VTreeIndex) -> SddOr {
+        SddOr { nodes, index, scratch: None}
+    }
+}
+
+impl PartialEq for SddOr {
+    fn eq(&self, other: &Self) -> bool {
+        self.index == other.index && self.nodes == other.nodes
+    }
+}
+
+use std::{hash::{Hash, Hasher}, collections::HashMap};
+
+use super::{wmc::WmcParams, vtree::VTreeIndex};
+impl Hash for SddOr {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.index.hash(state);
+        self.nodes.hash(state);
+    }
 }
 
 impl SddPtr {
-    pub fn new_node(idx: usize, vtree: u16) -> SddPtr {
-        SddPtr {
-            idx,
-            pack: PackedInternalData::new(vtree, 0, 0, 0),
-        }
+    pub fn or(ptr: *mut SddOr) -> SddPtr {
+        Reg(ptr)
     }
 
     /// negate an SDD pointer
     pub fn neg(&self) -> SddPtr {
-        if self.is_bdd() {
-            let v = self.as_bdd_ptr();
-            SddPtr::new_bdd(v.neg(), self.pack.vtree() as u16)
-        } else {
-            let mut v = *self;
-            v.pack.set_compl(if self.is_compl() { 0 } else { 1 });
-            v
+        match &self {
+            TruePtr => PtrFalse,
+            FalsePtr => PtrTrue,
+            Var(x, p) => Var(*x, !p),
+            Compl(x) => Reg(*x),
+            Reg(x) => Compl(*x)
         }
     }
 
     /// true if the node is complemented
     pub fn is_compl(&self) -> bool {
-        self.pack.compl() == 1
-    }
-
-    /// create a new constant value
-    pub fn new_const(v: bool) -> SddPtr {
-        SddPtr {
-            idx: 0,
-            pack: PackedInternalData::new(0, 0, 1, if v { 0 } else { 1 }),
+        match &self {
+            PtrTrue | Reg(_) => false, 
+            Var(_, _) => false,
+            PtrFalse | Compl(_) => true
         }
     }
 
-    /// create a new BDD pointer at the vtree `vtree`
-    pub fn new_bdd(ptr: BddPtr, vtree: u16) -> SddPtr {
-        SddPtr {
-            idx: ptr.raw() as usize,
-            pack: PackedInternalData::new(
-                vtree,
-                1,
-                if ptr.is_const() { 1 } else { 0 },
-                if ptr.is_compl() { 1 } else { 0 },
-            ),
-        }
+    pub fn false_ptr() -> SddPtr {
+        PtrFalse
     }
 
-    /// produce an uncomplemented version of an SDD
-    pub fn regular(&self) -> SddPtr {
-        if self.is_bdd() {
-            // produce a regular BDD pointer
-            let bdd = BddPtr::from_raw(self.idx as u64);
-            let mut v = *self;
-            v.idx = bdd.regular().raw() as usize;
-            v
-        } else {
-            let mut v = *self;
-            v.pack.set_compl(0);
-            v
+    pub fn true_ptr() -> SddPtr {
+        PtrTrue
+    }
+
+    pub fn var(lbl: VarLabel, polarity: bool) -> SddPtr {
+        Var(lbl, polarity)
+    }
+
+    /// convert a BddPtr into a regular (non-complemented) pointer
+    pub fn to_reg(&self) -> SddPtr {
+        match &self {
+            Compl(x) => Reg(*x),
+            Reg(x) => Reg(*x),
+            Var(x, p) => Var(*x, true),
+            PtrTrue => PtrTrue,
+            PtrFalse => PtrTrue
         }
     }
 
     pub fn is_const(&self) -> bool {
-        self.pack.is_const() == 1
+        match &self {
+            Compl(x) => false,
+            Reg(x) => false,
+            Var(_, _) => false,
+            PtrTrue => true,
+            PtrFalse => true 
+        }
     }
 
-    /// true if this SddPtr represents a logically true Boolean function
-    pub fn is_true(&self) -> bool {
-        self.is_const() && !self.is_compl()
+     pub fn is_true(&self) -> bool {
+        match &self {
+            Compl(_) | Reg(_) | PtrFalse | Var(_, _) => false,
+            PtrTrue => true,
+        }
     }
 
-    /// true if this SddPtr represents a false true Boolean function
     pub fn is_false(&self) -> bool {
-        self.is_const() && self.is_compl()
-    }
-
-    pub fn is_bdd(&self) -> bool {
-        self.pack.is_bdd() == 1
-    }
-
-    pub fn as_bdd_ptr(&self) -> BddPtr {
-        assert!(self.is_bdd());
-        if self.is_true() {
-            BddPtr::true_node()
-        } else if self.is_false() {
-            BddPtr::false_node()
-        } else {
-            BddPtr::from_raw(self.idx as u64)
+        match &self {
+            Compl(_) | Reg(_) | PtrTrue | Var(_,_) => false,
+            PtrFalse => true,
         }
     }
 
-    pub fn idx(&self) -> usize {
-        self.idx
+    /// Get a mutable reference to the node that &self points to
+    /// 
+    /// Panics if not a node pointer
+    pub fn mut_node_ref(&mut self) -> &mut SddOr {
+        unsafe {
+            match &self {
+                Reg(x) => {
+                    &mut (**x)
+                },
+                Compl(x) => {
+                    &mut (**x)
+                },
+                _ => panic!("Dereferencing constant in deref_or_panic")
+            }
+        }       
     }
 
+    /// Get an immutable reference to the node that &self points to
+    /// 
+    /// Panics if not a node pointer
+    pub fn node_ref(&self) -> &SddOr {
+        unsafe {
+            match &self {
+                Reg(x) => {
+                    &(**x)
+                },
+                Compl(x) => {
+                    &(**x)
+                },
+                _ => panic!("Dereferencing constant in deref_or_panic")
+            }
+        }       
+    }
+
+    /// Get a reference to the slice &[(prime, sub)] that &self points to
+    /// 
+    /// Panics if not a node pointer
+    pub fn or_ref(&self) -> &[(SddPtr, SddPtr)] {
+        &self.node_ref().nodes
+    }
+
+    // // Walks the Sdd, caching results of previously computed values
+    // fn unsmoothed_wmc_h<T: Num + Clone + Debug + Copy>(
+    //     &mut self,
+    //     ptr: SddPtr,
+    //     weights: &SddWmc<T>,
+    //     tbl: &mut HashMap<SddPtr, T>,
+    // ) -> T {
+    //     match tbl.get(&ptr.regular()) {
+    //         Some(v) => *v,
+    //         None => {
+    //             if ptr.is_false() {
+    //                 return weights.zero;
+    //             }
+    //             if ptr.is_true() {
+    //                 return weights.one;
+    //             }
+    //             if ptr.is_bdd() {
+    //                 let mgr = self.get_bdd_mgr_mut(ptr);
+    //                 let bdd_ptr = ptr.as_bdd_ptr();
+    //                 let pot_wmc = &weights.wmc_structs[ptr.vtree().value()];
+    //                 let bdd_wmc = match pot_wmc {
+    //                     WmcStruct::Bdd(wmc) => wmc,
+    //                     WmcStruct::Dummy(_) => panic!("Oh the humanity!"),
+    //                 };
+    //                 let wmc_val = mgr.wmc(bdd_ptr, bdd_wmc);
+    //                 tbl.insert(ptr.regular(), wmc_val);
+    //                 return wmc_val;
+    //             }
+    //             // TODO remove this allocation
+    //             let or = Vec::from(self.tbl.sdd_get_or(ptr));
+    //             or.iter().fold(weights.zero, |acc, (p, s)| {
+    //                 let s = if ptr.is_compl() { s.neg() } else { *s };
+    //                 acc + (self.unsmoothed_wmc_h(*p, weights, tbl)
+    //                     * self.unsmoothed_wmc_h(s, weights, tbl))
+    //             })
+    //         }
+    //     }
+    // }
+
+    pub fn unsmoothed_wmc<T: Num + Clone + std::fmt::Debug + Copy>(
+        &mut self,
+        ptr: SddPtr,
+        weights: &WmcParams<T>,
+    ) -> T {
+        panic!("not implementd")
+        // self.unsmoothed_wmc_h(ptr, weights, &mut HashMap::new())
+    }
+   
     /// retrieve the vtree index (as its index in a left-first depth-first traversal)
+    /// 
+    /// panics if this is a constant
     pub fn vtree(&self) -> VTreeIndex {
-        VTreeIndex(self.pack.vtree() as usize)
-    }
-
-    pub fn ptr_type(&self) -> SddPtrType {
-        if self.is_false() {
-            SddPtrType::False
-        } else if self.is_true() {
-            SddPtrType::True
-        } else {
-            SddPtrType::Node
-        }
+        self.node_ref().index
     }
 }
-
-/// Represent an SDD as a list of BDD pointers. The ordering of the BDDs
-/// corresponds with the depth-first left-first traversal of the vtree
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum Sdd {
-    Or(SddOr),
-    Bdd(BddPtr),
-}
-
-
-
