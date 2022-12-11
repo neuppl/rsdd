@@ -9,7 +9,7 @@ use std::collections::HashMap;
 
 pub struct BumpTable<T: Eq + PartialEq + Hash> {
     table: Bump,
-    unique_map: HashMap<T, *mut T, BuildHasherDefault<XxHash64>>
+    unique_map: HashMap<T, *mut T>
 }
 
 impl<T: Eq + PartialEq + Hash + Clone> BumpTable<T> {

@@ -63,7 +63,6 @@ impl BddApplyTable {
         }
         let (ite, compl) = Ite::new(f, g, h);
         self.table[f.var().value() as usize].insert(ite, if compl { res.compl() } else { res });
-        // println!("Inserted Ite({:?}, {:?}, {:?}, standardized {:?}", f, g, h, ite);
     }
 
     pub fn get(&mut self, f: BddPtr, g: BddPtr, h: BddPtr) -> Option<BddPtr> {
@@ -71,7 +70,6 @@ impl BddApplyTable {
         while f.var().value_usize() >= self.table.len() {
             self.push_table();
         }
-        // println!("Looking up Ite({:?}, {:?}, {:?}, standardized {:?}\n", f, g, h, ite);
         let r = self.table[f.var().value() as usize].get(ite);
         if compl {
             r.map(|v| v.compl())
