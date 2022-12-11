@@ -76,6 +76,8 @@ fn compile_bdd(str: String, debug: bool) {
     let mut man = BddManager::new(VarOrder::linear_order(cnf.num_vars()));
     // let mut man = BddManager::new(order);
     let _bdd = man.from_cnf(&cnf);
+    println!("recursive: {}", man.num_recursive_calls());
+    println!("size: {}", _bdd.count_nodes());
 }
 
 fn bench_cnf_bdd(cnf_str: String, debug: bool) -> Duration {
@@ -100,27 +102,27 @@ fn main() {
         //     "grid-50-10-1-q",
         //     String::from(include_str!("../cnf/50-10-1-q.cnf")),
         // ),
-        ("tiny1", String::from(include_str!("../cnf/tiny1.cnf"))),
-        ("tiny2", String::from(include_str!("../cnf/tiny2.cnf"))),
-        (
-            "bench-01",
-            String::from(include_str!("../cnf/bench-01.cnf")),
-        ),
-        (
-            "bench-02",
-            String::from(include_str!("../cnf/bench-02.cnf")),
-        ),
-        (
-            "bench-03",
-            String::from(include_str!("../cnf/bench-03.cnf")),
-        ),
+        // ("tiny1", String::from(include_str!("../cnf/tiny1.cnf"))),
+        // ("tiny2", String::from(include_str!("../cnf/tiny2.cnf"))),
+        // (
+        //     "bench-01",
+        //     String::from(include_str!("../cnf/bench-01.cnf")),
+        // ),
+        // (
+        //     "bench-02",
+        //     String::from(include_str!("../cnf/bench-02.cnf")),
+        // ),
+        // (
+        //     "bench-03",
+        //     String::from(include_str!("../cnf/bench-03.cnf")),
+        // ),
         // ("php-4-6", String::from(include_str!("../cnf/php-4-6.cnf"))),
         // ("php-5-4", String::from(include_str!("../cnf/php-5-4.cnf"))),
         // ("php-12-14", String::from(include_str!("../cnf/php-12-14.cnf"))),
-        (
-            "rand-3-25-75-1",
-            String::from(include_str!("../cnf/rand-3-25-75-1.cnf")),
-        ),
+        // (
+        //     "rand-3-25-75-1",
+        //     String::from(include_str!("../cnf/rand-3-25-75-1.cnf")),
+        // ),
         // (
         //     "rand-3-25-100-1",
         //     String::from(include_str!("../cnf/rand-3-25-100-1.cnf")),
