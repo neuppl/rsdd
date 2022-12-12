@@ -1,7 +1,7 @@
 //! Contains the core datastructures for constructing and maintaining decision
 //! diagrams.
 
-mod cache;
+pub mod cache;
 
 pub mod bdd_builder;
 pub mod bdd_plan;

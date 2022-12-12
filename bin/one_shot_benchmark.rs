@@ -8,6 +8,7 @@ use rayon::prelude::*;
 use rsdd::repr::dtree::DTree;
 use rsdd::repr::var_order::VarOrder;
 use rsdd::repr::cnf::Cnf;
+use rsdd::builder::cache::bdd_all_app::BddAllTable;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::collections::HashMap;
@@ -73,7 +74,7 @@ fn compile_bdd(str: String, debug: bool) {
     use rsdd::builder::bdd_builder::*;
     let cnf = Cnf::from_file(str);
     // let order : VarOrder = cnf.force_order();
-    let mut man = BddManager::new(VarOrder::linear_order(cnf.num_vars()));
+    let mut man = BddManager::<BddAllTable>::new_default_order(cnf.num_vars());
     // let mut man = BddManager::new(order);
     let _bdd = man.from_cnf(&cnf);
     println!("recursive: {}", man.num_recursive_calls());

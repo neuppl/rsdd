@@ -2,14 +2,14 @@
 //! hashmap for checking equality
 
 use bumpalo::Bump;
-use std::hash::{Hash, BuildHasherDefault};
-use twox_hash::XxHash64;
+use std::hash::Hash;
 use super::UniqueTable;
-use std::collections::HashMap;
+use fnv::FnvHashMap;
+
 
 pub struct BumpTable<T: Eq + PartialEq + Hash> {
     table: Bump,
-    unique_map: HashMap<T, *mut T>
+    unique_map: FnvHashMap<T, *mut T>
 }
 
 impl<T: Eq + PartialEq + Hash + Clone> BumpTable<T> {

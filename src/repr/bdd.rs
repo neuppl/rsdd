@@ -6,7 +6,7 @@ use std::iter::FromIterator;
 
 
 /// Core BDD pointer datatype
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Copy)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Copy, PartialOrd, Ord)]
 pub enum BddPtr {
     Compl(*mut BddNode),
     Reg(*mut BddNode),

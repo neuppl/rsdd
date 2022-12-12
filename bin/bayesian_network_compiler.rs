@@ -2,6 +2,7 @@ extern crate rsdd;
 extern crate rsgm;
 
 use clap::Parser;
+use rsdd::builder::cache::bdd_all_app::BddAllTable;
 use rsdd::repr::bdd::BddPtr;
 use rsdd::repr::var_order::VarOrder;
 use rsdd::{builder::bdd_builder::BddManager, repr::wmc::WmcParams};
@@ -158,7 +159,7 @@ fn exactly_one(lits: Vec<Literal>) -> Vec<Vec<Literal>> {
 
 fn compile_bdd_cnf(args: &Args, network: BayesianNetwork) {
     let bn = BayesianNetworkCNF::new(&network);
-    let mut compiler = BddManager::new(VarOrder::linear_order(bn.cnf.num_vars()));
+    let mut compiler = BddManager::<BddAllTable>::new_default_order(bn.cnf.num_vars());
 
     println!("Compiling...");
     let start = Instant::now();
@@ -193,7 +194,7 @@ fn compile_bdd_cnf(args: &Args, network: BayesianNetwork) {
 }
 
 fn compile_bdd(_args: &Args, network: BayesianNetwork) {
-    let mut compiler = BddManager::new_default_order(1);
+    let mut compiler = BddManager::<BddAllTable>::new_default_order(1);
 
     // let mut clauses : Vec<Vec<Literal>> = Vec::new();
     let mut wmc_params: HashMap<VarLabel, (f64, f64)> = HashMap::new();
