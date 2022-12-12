@@ -30,7 +30,6 @@ macro_rules! BITFIELD {
     }
 }
 
-
 /// custom allocations for zeroed vectors
 pub fn zero_vec<T>(sz: usize) -> Vec<T> {
     let mut v: Vec<T> = Vec::with_capacity(sz);

@@ -3,9 +3,8 @@
 
 use crate::repr::var_label::VarLabel;
 use crate::repr::vtree::VTree;
-use crate::util::btree::*;
-use std::mem;
 use num::Num;
+use std::mem;
 use tinyvec::TinyVec;
 
 /// An SddPtr is either (1) a BDD pointer, or (2) a pointer to an SDD node.
@@ -15,7 +14,7 @@ pub enum SddPtr {
     PtrFalse,
     Var(VarLabel, bool),
     Compl(*mut SddOr),
-    Reg(*mut SddOr)
+    Reg(*mut SddOr),
 }
 
 use SddPtr::*;
@@ -25,12 +24,16 @@ use SddPtr::*;
 pub struct SddOr {
     index: VTreeIndex,
     pub nodes: Vec<(SddPtr, SddPtr)>,
-    pub scratch: Option<usize>
+    pub scratch: Option<usize>,
 }
 
 impl SddOr {
     pub fn new(nodes: Vec<(SddPtr, SddPtr)>, index: VTreeIndex) -> SddOr {
-        SddOr { nodes, index, scratch: None}
+        SddOr {
+            nodes,
+            index,
+            scratch: None,
+        }
     }
 }
 
@@ -40,9 +43,12 @@ impl PartialEq for SddOr {
     }
 }
 
-use std::{hash::{Hash, Hasher}, collections::HashMap};
+use std::{
+    collections::HashMap,
+    hash::{Hash, Hasher},
+};
 
-use super::{wmc::WmcParams, vtree::VTreeIndex};
+use super::{vtree::VTreeIndex, wmc::WmcParams};
 impl Hash for SddOr {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.index.hash(state);
@@ -62,16 +68,16 @@ impl SddPtr {
             FalsePtr => PtrTrue,
             Var(x, p) => Var(*x, !p),
             Compl(x) => Reg(*x),
-            Reg(x) => Compl(*x)
+            Reg(x) => Compl(*x),
         }
     }
 
     /// true if the node is complemented
     pub fn is_compl(&self) -> bool {
         match &self {
-            PtrTrue | Reg(_) => false, 
+            PtrTrue | Reg(_) => false,
             Var(_, _) => false,
-            PtrFalse | Compl(_) => true
+            PtrFalse | Compl(_) => true,
         }
     }
 
@@ -94,7 +100,7 @@ impl SddPtr {
             Reg(x) => Reg(*x),
             Var(x, p) => Var(*x, true),
             PtrTrue => PtrTrue,
-            PtrFalse => PtrTrue
+            PtrFalse => PtrTrue,
         }
     }
 
@@ -104,11 +110,11 @@ impl SddPtr {
             Reg(x) => false,
             Var(_, _) => false,
             PtrTrue => true,
-            PtrFalse => true 
+            PtrFalse => true,
         }
     }
 
-     pub fn is_true(&self) -> bool {
+    pub fn is_true(&self) -> bool {
         match &self {
             Compl(_) | Reg(_) | PtrFalse | Var(_, _) => false,
             PtrTrue => true,
@@ -117,47 +123,39 @@ impl SddPtr {
 
     pub fn is_false(&self) -> bool {
         match &self {
-            Compl(_) | Reg(_) | PtrTrue | Var(_,_) => false,
+            Compl(_) | Reg(_) | PtrTrue | Var(_, _) => false,
             PtrFalse => true,
         }
     }
 
     /// Get a mutable reference to the node that &self points to
-    /// 
+    ///
     /// Panics if not a node pointer
     pub fn mut_node_ref(&mut self) -> &mut SddOr {
         unsafe {
             match &self {
-                Reg(x) => {
-                    &mut (**x)
-                },
-                Compl(x) => {
-                    &mut (**x)
-                },
-                _ => panic!("Dereferencing constant in deref_or_panic")
+                Reg(x) => &mut (**x),
+                Compl(x) => &mut (**x),
+                _ => panic!("Dereferencing constant in deref_or_panic"),
             }
-        }       
+        }
     }
 
     /// Get an immutable reference to the node that &self points to
-    /// 
+    ///
     /// Panics if not a node pointer
     pub fn node_ref(&self) -> &SddOr {
         unsafe {
             match &self {
-                Reg(x) => {
-                    &(**x)
-                },
-                Compl(x) => {
-                    &(**x)
-                },
-                _ => panic!("Dereferencing constant in deref_or_panic")
+                Reg(x) => &(**x),
+                Compl(x) => &(**x),
+                _ => panic!("Dereferencing constant in deref_or_panic"),
             }
-        }       
+        }
     }
 
     /// Get a reference to the slice &[(prime, sub)] that &self points to
-    /// 
+    ///
     /// Panics if not a node pointer
     pub fn or_ref(&self) -> &[(SddPtr, SddPtr)] {
         &self.node_ref().nodes
@@ -210,9 +208,9 @@ impl SddPtr {
         panic!("not implementd")
         // self.unsmoothed_wmc_h(ptr, weights, &mut HashMap::new())
     }
-   
+
     /// retrieve the vtree index (as its index in a left-first depth-first traversal)
-    /// 
+    ///
     /// panics if this is a constant
     pub fn vtree(&self) -> VTreeIndex {
         self.node_ref().index

@@ -1,8 +1,8 @@
-use num::Num;
 use core::fmt::Debug;
+use num::Num;
 use std::collections::HashMap;
 
-use super::var_label::{VarLabel, Literal};
+use super::var_label::{Literal, VarLabel};
 
 /// Weighted model counting parameters for a BDD. It primarily is a storage for
 /// the weight on each variable.
@@ -18,7 +18,11 @@ pub struct WmcParams<T: Num + Clone + Debug + Copy> {
 impl<T: Num + Clone + Debug + Copy> WmcParams<T> {
     /// Generates a new `BddWmc` with a default `var_to_val`; it is private because we
     /// do not want to expose the structure of the associative array
-    pub fn new_with_default(zero: T, one: T, var_to_val: HashMap<VarLabel, (T, T)>) -> WmcParams<T> {
+    pub fn new_with_default(
+        zero: T,
+        one: T,
+        var_to_val: HashMap<VarLabel, (T, T)>,
+    ) -> WmcParams<T> {
         let mut var_to_val_vec: Vec<Option<(T, T)>> = vec![None; var_to_val.len()];
         for (key, value) in var_to_val.iter() {
             var_to_val_vec[key.value_usize()] = Some(*value);

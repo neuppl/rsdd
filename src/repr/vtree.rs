@@ -1,7 +1,7 @@
 //! Defines the vtree datastructure used by SDDs for decomposition
 
-use crate::util::btree::{BTree, LeastCommonAncestor};
 use super::var_label::VarLabel;
+use crate::util::btree::{BTree, LeastCommonAncestor};
 
 pub type VTree = BTree<(), Vec<VarLabel>>;
 
@@ -20,7 +20,6 @@ impl VTree {
         }
     }
 }
-
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, PartialOrd, Ord, Hash)]
 pub struct VTreeIndex(usize);
@@ -76,7 +75,6 @@ pub struct VTreeManager {
     vtree_idx: Vec<usize>,
     lca: LeastCommonAncestor,
 }
-
 
 impl VTreeManager {
     pub fn new(tree: VTree) -> VTreeManager {

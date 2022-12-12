@@ -1,13 +1,13 @@
 //! The main implementation of the SDD manager, the primary way of interacting
 //! with SDDs.
 
-use crate::backing_store::UniqueTable;
 use crate::backing_store::bump_table::BumpTable;
+use crate::backing_store::UniqueTable;
 use crate::repr::sdd::{SddOr, SddPtr};
-use crate::repr::vtree::{VTree, VTreeManager, VTreeIndex};
+use crate::repr::vtree::{VTree, VTreeIndex, VTreeManager};
 use crate::{
-    util::lru::Lru,
     repr::cnf::Cnf, repr::logical_expr::LogicalExpr, repr::var_label::VarLabel, util::btree::*,
+    util::lru::Lru,
 };
 
 use std::collections::{HashMap, HashSet};
@@ -24,7 +24,6 @@ impl SddStats {
         SddStats { num_rec: 0 }
     }
 }
-
 
 /// generate an even vtree by splitting a variable ordering in half `num_splits`
 /// times
@@ -68,8 +67,6 @@ impl<'a> SddManager {
     pub fn set_compression(&mut self, b: bool) {
         self.use_compression = b
     }
-
-
 
     /// Find the index into self.vtree that contains the label `lbl`
     /// panics if this does not exist.
@@ -148,8 +145,7 @@ impl<'a> SddManager {
             for i in 0..node.len() {
                 node[i].1 = node[i].1.neg();
             }
-            self.get_or_insert(SddOr::new(node, table))
-                .neg()
+            self.get_or_insert(SddOr::new(node, table)).neg()
         } else {
             self.get_or_insert(SddOr::new(node, table))
         }

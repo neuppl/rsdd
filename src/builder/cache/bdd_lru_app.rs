@@ -1,12 +1,11 @@
 //! Apply cache for ITEs that uses a dynamically-expanding LRU cache
-use crate::{util::lru::*, repr::bdd::BddPtr};
+use crate::{repr::bdd::BddPtr, util::lru::*};
 
 use super::{ite::Ite, LruTable};
 
 const INITIAL_CAPACITY: usize = 8; // given as a power of two
 
 /// An Ite structure, assumed to be in standard form.
-
 
 /// The top-level data structure that caches applications
 pub struct BddApplyTable {
@@ -29,15 +28,16 @@ impl LruTable for BddApplyTable {
                     self.push_table();
                 }
                 let compl = ite.is_compl_choice();
-                self.table[f.var().value() as usize].insert((f, g, h), if compl { res.compl() } else { res });
-            },
+                self.table[f.var().value() as usize]
+                    .insert((f, g, h), if compl { res.compl() } else { res });
+            }
             Ite::IteConst(_) => (), // do not cache base-cases
         }
     }
 
     fn get(&mut self, ite: Ite) -> Option<BddPtr> {
         match ite {
-            Ite::IteChoice {f, g, h} | Ite::IteComplChoice { f, g, h } => {
+            Ite::IteChoice { f, g, h } | Ite::IteComplChoice { f, g, h } => {
                 while f.var().value_usize() >= self.table.len() {
                     self.push_table();
                 }
@@ -48,10 +48,10 @@ impl LruTable for BddApplyTable {
                 } else {
                     r
                 }
-               },
-               Ite::IteConst(f) => Some(f)
             }
+            Ite::IteConst(f) => Some(f),
         }
+    }
 }
 
 impl BddApplyTable {
@@ -60,5 +60,4 @@ impl BddApplyTable {
             table: (0..num_vars).map(|_| Lru::new(INITIAL_CAPACITY)).collect(),
         }
     }
-
 }

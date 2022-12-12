@@ -11,12 +11,12 @@ extern crate rand;
 #[macro_use]
 extern crate serde;
 extern crate bit_set;
+extern crate bumpalo;
 extern crate dot;
 extern crate petgraph;
 extern crate quickcheck;
 extern crate segment_tree;
 extern crate time_test;
-extern crate bumpalo;
 extern crate tinyvec;
 
 #[macro_use]

@@ -5,10 +5,11 @@ extern crate serde_json;
 
 use clap::Parser;
 use rayon::prelude::*;
+use rsdd::builder::cache::bdd_all_app::BddAllTable;
+use rsdd::repr::cnf::Cnf;
+use rsdd::repr::ddnnf::DDNNFPtr;
 use rsdd::repr::dtree::DTree;
 use rsdd::repr::var_order::VarOrder;
-use rsdd::repr::cnf::Cnf;
-use rsdd::builder::cache::bdd_all_app::BddAllTable;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::collections::HashMap;

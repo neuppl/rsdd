@@ -6,10 +6,10 @@ extern crate rsdd;
 extern crate quickcheck;
 use crate::repr::cnf::Cnf;
 use crate::repr::var_label::VarLabel;
-use rsdd::*;
 use rsdd::builder::bdd_builder::BddManager;
 use rsdd::builder::cache::bdd_all_app::BddAllTable;
 use rsdd::builder::sdd_builder::{even_split, SddManager};
+use rsdd::*;
 extern crate rand;
 
 /// A list of canonical forms in DIMACS form. The goal of these tests is to ensure that caching
@@ -288,9 +288,11 @@ mod test_bdd_manager {
     use crate::builder::decision_nnf_builder::DecisionNNFBuilder;
     use crate::repr::cnf::Cnf;
     use crate::repr::var_label::VarLabel;
+    use num::abs;
     use quickcheck::TestResult;
     use rsdd::builder::cache::bdd_all_app::BddAllTable;
     use rsdd::repr::bdd::BddPtr;
+    use rsdd::repr::ddnnf::DDNNFPtr;
     use rsdd::repr::model::PartialModel;
     use rsdd::repr::var_order::VarOrder;
     use rsdd::repr::wmc::WmcParams;
@@ -411,23 +413,19 @@ mod test_bdd_manager {
             if c1.clauses().len() > 16 { return TestResult::discard() }
 
             let mut mgr = super::BddManager::<BddAllTable>::new_default_order(c1.num_vars());
-            let weight_map : HashMap<VarLabel, (usize, usize)> = HashMap::from_iter(
-                (0..16).map(|x| (VarLabel::new(x as u64), (2, 3))));
+            let weight_map : HashMap<VarLabel, (f64, f64)> = HashMap::from_iter(
+                (0..16).map(|x| (VarLabel::new(x as u64), (0.2, 0.8))));
             let cnf1 = mgr.from_cnf(&c1);
-            let bddwmc = super::repr::wmc::WmcParams::new_with_default(0, 1, weight_map.clone());
-            let bddres = cnf1.wmc(mgr.get_order(), &bddwmc);
+            let bddwmc = super::repr::wmc::WmcParams::new_with_default(0.0, 1.0, weight_map.clone());
+            let bddres = cnf1.wmc(&bddwmc);
             let cnfres = c1.wmc(&weight_map);
-            if bddres != cnfres {
-              println!("error on input {}: bddres {}, cnfres {}", c1.to_string(), bddres, cnfres);
-            }
-            TestResult::from_bool(bddres == cnfres)
+            TestResult::from_bool(abs(bddres - cnfres) < 0.00001)
         }
     }
 
     quickcheck! {
         fn wmc_bdd_dnnf_eq(c1: Cnf) -> TestResult {
             // constrain the size
-            panic!("not implemented");
             if c1.num_vars() == 0 || c1.num_vars() > 8 { return TestResult::discard() }
             if c1.clauses().len() > 16 { return TestResult::discard() }
 
@@ -440,13 +438,14 @@ mod test_bdd_manager {
             let dnnf = mgr2.from_cnf_topdown(&VarOrder::linear_order(c1.num_vars()), &c1);
 
             let bddwmc = super::repr::wmc::WmcParams::new_with_default(0.0, 1.0, weight_map);
-            let bddres = cnf1.wmc(mgr.get_order(), &bddwmc);
-            // let dnnfres = dnnf.unsmsoothed_wmc(&bddwmc);
-            // let eps = f64::abs(bddres - dnnfres) < 0.0001;
-            // if !eps {
-            //   println!("error on input {}: bddres {}, cnfres {}\n topdown bdd: {}\nbottom-up bdd: {}", c1.to_string(), bddres, dnnfres, mgr2.to_string_debug(dnnf), mgr.to_string_debug(cnf1));
-            // }
-            // TestResult::from_bool(eps)
+            let bddres = cnf1.wmc(&bddwmc);
+            let dnnfres = dnnf.wmc(&bddwmc);
+            let eps = f64::abs(bddres - dnnfres) < 0.0001;
+            if !eps {
+              println!("error on input {}: bddres {}, cnfres {}\n topdown bdd: {}\nbottom-up bdd: {}", 
+                c1.to_string(), bddres, dnnfres, dnnf.to_string_debug(), cnf1.to_string_debug());
+            }
+            TestResult::from_bool(eps)
         }
     }
 
@@ -476,7 +475,7 @@ mod test_bdd_manager {
                 let mut conj = mgr.and(x, y);
                 conj = mgr.and(conj, z);
                 conj = mgr.and(conj, cnf);
-                let poss_max = conj.wmc(mgr.get_order(), &wmc);
+                let poss_max = conj.wmc(&wmc);
                 if poss_max > max {
                     max = poss_max;
                     max_assgn.set(VarLabel::new(0), *v1);

@@ -1,16 +1,19 @@
 //! Top-down decision DNNF compiler and manipulator
 
+use crate::backing_store::*;
+use bumpalo::Bump;
 use num::Num;
 use rand::Rng;
 use std::collections::HashMap;
-use crate::backing_store::*;
 
 use crate::{
+    backing_store::bump_table::BumpTable,
     repr::{
+        bdd::{BddNode, BddPtr},
         cnf::*,
         var_label::{Literal, VarLabel},
-        var_order::VarOrder, bdd::{BddPtr, BddNode}
-    }, backing_store::bump_table::BumpTable,
+        var_order::VarOrder,
+    },
 };
 
 use crate::repr::sat_solver::SATSolver;
@@ -26,12 +29,11 @@ impl DecisionNNFBuilder {
         }
     }
 
-
     /// Normalizes and fetches a node from the store
     fn get_or_insert(&mut self, bdd: BddNode) -> BddPtr {
         if bdd.high.is_compl() {
             let bdd = BddNode::new(bdd.var, bdd.low.compl(), bdd.high.compl());
-            BddPtr::new_compl(self.compute_table.get_or_insert(bdd)) 
+            BddPtr::new_compl(self.compute_table.get_or_insert(bdd))
         } else {
             let bdd = BddNode::new(bdd.var, bdd.low, bdd.high);
             BddPtr::new_reg(self.compute_table.get_or_insert(bdd))
@@ -198,8 +200,7 @@ impl DecisionNNFBuilder {
 
     /// Compute the Boolean function `f | var = value`
     pub fn condition(&mut self, bdd: BddPtr, lbl: VarLabel, value: bool) -> BddPtr {
-        let n = bdd.unique_label_nodes(0);
-        let r = self.cond_helper(bdd, lbl, value, &mut vec![None; n]);
+        let r = self.cond_helper(bdd, lbl, value, &mut Bump::new());
         bdd.clear_scratch();
         r
     }
@@ -209,7 +210,7 @@ impl DecisionNNFBuilder {
         bdd: BddPtr,
         lbl: VarLabel,
         value: bool,
-        cache: &mut Vec<Option<BddPtr>>,
+        alloc: &mut Bump,
     ) -> BddPtr {
         if bdd.is_const() {
             bdd
@@ -223,16 +224,15 @@ impl DecisionNNFBuilder {
             }
         } else {
             // check cache
-            let idx = bdd.get_scratch().unwrap();
-            match cache[idx] {
+            let idx = match bdd.get_scratch::<BddPtr>() {
                 None => (),
-                Some(v) => return if bdd.is_compl() { v.compl() } else { v },
+                Some(v) => return if bdd.is_compl() { v.compl() } else { *v },
             };
 
             // recurse on the children
             let n = bdd.into_node();
-            let l = self.cond_helper(n.low, lbl, value, cache);
-            let h = self.cond_helper(n.high, lbl, value, cache);
+            let l = self.cond_helper(n.low, lbl, value, alloc);
+            let h = self.cond_helper(n.high, lbl, value, alloc);
             if l == h {
                 if bdd.is_compl() {
                     return l.compl();
@@ -253,7 +253,7 @@ impl DecisionNNFBuilder {
                 // nothing changed
                 bdd
             };
-            cache[idx] = Some(if bdd.is_compl() { res.compl() } else { res });
+            bdd.set_scratch(alloc, if bdd.is_compl() { res.compl() } else { res });
             res
         }
     }

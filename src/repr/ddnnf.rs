@@ -1,0 +1,46 @@
+//! Implementing of a generic decision decomposable deterministic negation normal form
+//! (d-DNNF) pointer type
+use core::fmt::Debug;
+use num::Num;
+
+use super::{var_label::VarLabel, var_order::VarOrder, wmc::WmcParams};
+
+/// A base d-DNNF type
+pub enum DDNNF<T> {
+    Or(T, T),
+    And(T, T),
+    Lit(VarLabel, bool),
+    True,
+    False,
+}
+
+pub trait DDNNFPtr {
+    /// performs an amortized bottom-up pass with aggregating function `f` calls
+    /// `f` on every node and caches and reuses the results
+    /// `f` has type `cur_label -> low_value -> high_value -> aggregated_value`
+    fn bottomup_pass<T: Clone + Copy + Debug, F: Fn(DDNNF<T>) -> T>(&self, f: F) -> T;
+
+    /// Weighted-model count
+    fn wmc<T: Num + Clone + Debug + Copy>(&self, params: &WmcParams<T>) -> T {
+        self.bottomup_pass(|ddnnf| {
+            use DDNNF::*;
+            match ddnnf {
+                Or(l, r) => l + r,
+                And(l, r) => l * r,
+                True => params.one,
+                False => params.zero,
+                Lit(lbl, polarity) => {
+                    let (low_w, high_w) = params.get_var_weight(lbl);
+                    if polarity {
+                        *high_w
+                    } else {
+                        *low_w
+                    }
+                }
+            }
+        })
+    }
+
+    /// count the number of nodes in this representation
+    fn count_nodes(&self) -> usize;
+}

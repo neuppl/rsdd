@@ -7,18 +7,13 @@ use criterion::black_box;
 use rsdd::builder::sdd_builder;
 use rsdd::repr::vtree::VTree;
 
-use std::collections::HashMap;
-use std::time::{Duration, Instant};
+use rsdd::repr::cnf::Cnf;
 use rsdd::repr::dtree::DTree;
 use rsdd::repr::var_order::VarOrder;
-use rsdd::repr::cnf::Cnf;
+use std::collections::HashMap;
+use std::time::{Duration, Instant};
 
-
-use rsdd::{
-    repr::{
-        var_label::{Literal, VarLabel},
-    },
-};
+use rsdd::repr::var_label::{Literal, VarLabel};
 use rsgm::bayesian_network::BayesianNetwork;
 
 /// Test driver for comparing canonicalize implementations

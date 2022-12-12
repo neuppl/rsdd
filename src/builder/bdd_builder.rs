@@ -2,22 +2,23 @@
 //! manager, which manages the global state necessary for constructing canonical
 //! binary decision diagrams.
 
-use crate::repr::bdd::{BddPtr, BddNode};
+use bumpalo::Bump;
+
+use crate::repr::bdd::{BddNode, BddPtr};
+use crate::repr::ddnnf::DDNNFPtr;
 use crate::repr::dtree;
 use crate::repr::model::PartialModel;
 use crate::repr::sat_solver::SATSolver;
 use crate::repr::var_order::VarOrder;
 use crate::{
-    backing_store::bump_table::BumpTable,
-    builder::cache::bdd_lru_app::*,
-    repr::cnf::*, repr::logical_expr::LogicalExpr, repr::model,
-    repr::var_label::Literal, repr::var_label::VarLabel,
+    backing_store::bump_table::BumpTable, repr::cnf::*, repr::logical_expr::LogicalExpr,
+    repr::model, repr::var_label::Literal, repr::var_label::VarLabel,
 };
 
-use crate::backing_store::*;
-use super::cache::*;
 use super::cache::bdd_all_app::BddAllTable;
 use super::cache::ite::Ite;
+use super::cache::*;
+use crate::backing_store::*;
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::collections::{BinaryHeap, HashSet};
@@ -39,9 +40,7 @@ impl Ord for CompiledCNF {
         // Notice that the we flip the ordering on costs.
         // In case of a tie we compare positions - this step is necessary
         // to make implementations of `PartialEq` and `Ord` consistent.
-        other
-            .sz
-            .cmp(&self.sz)
+        other.sz.cmp(&self.sz)
     }
 }
 
@@ -66,7 +65,6 @@ impl Assignment {
         self.assignments[var.value() as usize]
     }
 }
-
 
 /// An auxiliary data structure for tracking statistics about BDD manager
 /// performance (for fine-tuning)
@@ -143,7 +141,7 @@ impl<T: LruTable> BddManager<T> {
     fn get_or_insert(&mut self, bdd: BddNode) -> BddPtr {
         if bdd.high.is_compl() || bdd.high.is_false() {
             let bdd = BddNode::new(bdd.var, bdd.low.compl(), bdd.high.compl());
-            BddPtr::new_compl(self.compute_table.get_or_insert(bdd)) 
+            BddPtr::new_compl(self.compute_table.get_or_insert(bdd))
         } else {
             let bdd = BddNode::new(bdd.var, bdd.low, bdd.high);
             BddPtr::new_reg(self.compute_table.get_or_insert(bdd))
@@ -179,14 +177,13 @@ impl<T: LruTable> BddManager<T> {
         let ite = Ite::new(self.get_order(), f, g, h);
         match ite {
             Ite::IteConst(f) => return f,
-            _ => ()
+            _ => (),
         };
 
         match self.apply_table.get(ite) {
             Some(v) => return v,
             None => (),
         };
-
 
         // ok the work!
         // find the first essential variable for f, g, or h
@@ -267,10 +264,10 @@ impl<T: LruTable> BddManager<T> {
         bdd: BddPtr,
         lbl: VarLabel,
         value: bool,
-        cache: &mut Vec<Option<BddPtr>>,
+        alloc: &mut Bump,
     ) -> BddPtr {
         self.stats.num_recursive_calls += 1;
-        if bdd.is_const() || self.get_order().lt(lbl, bdd.var())  {
+        if bdd.is_const() || self.get_order().lt(lbl, bdd.var()) {
             // we passed the variable in the order, we will never find it
             bdd
         } else if bdd.var() == lbl {
@@ -282,15 +279,14 @@ impl<T: LruTable> BddManager<T> {
             }
         } else {
             // check cache
-            let idx = bdd.get_scratch().unwrap();
-            match cache[idx] {
+            let idx = match bdd.get_scratch::<BddPtr>() {
                 None => (),
-                Some(v) => return if bdd.is_compl() { v.compl() } else { v },
+                Some(v) => return if bdd.is_compl() { v.compl() } else { *v },
             };
 
             // recurse on the children
-            let l = self.cond_helper(bdd.low(), lbl, value, cache);
-            let h = self.cond_helper(bdd.high(), lbl, value, cache);
+            let l = self.cond_helper(bdd.low(), lbl, value, alloc);
+            let h = self.cond_helper(bdd.high(), lbl, value, alloc);
 
             if l == h {
                 // reduce the BDD -- two children identical
@@ -313,24 +309,26 @@ impl<T: LruTable> BddManager<T> {
                 // nothing changed
                 bdd
             };
-            cache[idx] = Some(if bdd.is_compl() { res.compl() } else { res });
+            bdd.set_scratch(alloc, if bdd.is_compl() { res.compl() } else { res });
             res
         }
     }
 
+
+
     /// Compute the Boolean function `f | var = value`
     pub fn condition(&mut self, bdd: BddPtr, lbl: VarLabel, value: bool) -> BddPtr {
-        let n = bdd.unique_label_nodes(0);
-        let r = self.cond_helper(bdd, lbl, value, &mut vec![None; n]);
+        let r = self.cond_helper(bdd, lbl, value, &mut Bump::new());
         bdd.clear_scratch();
         r
     }
+
 
     fn cond_model_h(
         &mut self,
         bdd: BddPtr,
         m: &PartialModel,
-        cache: &mut Vec<Option<BddPtr>>,
+        alloc: &mut Bump
     ) -> BddPtr {
         self.stats.num_recursive_calls += 1;
         if bdd.is_const() {
@@ -340,9 +338,9 @@ impl<T: LruTable> BddManager<T> {
             Some(value) => {
                 let node = bdd.into_node();
                 let r = if value {
-                    self.cond_model_h(node.high, m, cache)
+                    self.cond_model_h(node.high, m, alloc)
                 } else {
-                    self.cond_model_h(node.low, m, cache)
+                    self.cond_model_h(node.low, m, alloc)
                 };
                 if bdd.is_compl() {
                     r.compl()
@@ -352,16 +350,15 @@ impl<T: LruTable> BddManager<T> {
             }
             None => {
                 // check cache
-                let idx = bdd.get_scratch().unwrap();
-                match cache[idx] {
+                let idx = match bdd.get_scratch::<BddPtr>() {
                     None => (),
-                    Some(v) => return if bdd.is_compl() { v.compl() } else { v },
+                    Some(v) => return if bdd.is_compl() { v.compl() } else { *v },
                 };
 
                 // recurse on the children
                 let n = bdd.into_node();
-                let l = self.cond_model_h(n.low, m, cache);
-                let h = self.cond_model_h(n.high, m, cache);
+                let l = self.cond_model_h(n.low, m, alloc);
+                let h = self.cond_model_h(n.high, m, alloc);
                 if l == h {
                     if bdd.is_compl() {
                         return l.compl();
@@ -382,7 +379,7 @@ impl<T: LruTable> BddManager<T> {
                     // nothing changed
                     bdd
                 };
-                cache[idx] = Some(if bdd.is_compl() { res.compl() } else { res });
+                bdd.set_scratch(alloc, if bdd.is_compl() { res.compl() } else { res });
                 res
             }
         }
@@ -390,9 +387,11 @@ impl<T: LruTable> BddManager<T> {
 
     /// Compute the Boolean function `f | var = value` for every set value in
     /// the partial model `m`
+    /// 
+    /// Pre-condition: scratch cleared
     pub fn condition_model(&mut self, bdd: BddPtr, m: &PartialModel) -> BddPtr {
-        let n = bdd.unique_label_nodes(0);
-        let r = self.cond_model_h(bdd, m, &mut vec![None; n]);
+        let mut alloc = Bump::new();
+        let r = self.cond_model_h(bdd, m, &mut alloc);
         bdd.clear_scratch();
         r
     }
@@ -405,14 +404,11 @@ impl<T: LruTable> BddManager<T> {
         self.or(v1, v2)
     }
 
-
-
     /// Returns true if `a` == `b`
     pub fn eq_bdd(&self, a: BddPtr, b: BddPtr) -> bool {
         // the magic of BDDs!
         a == b
     }
-
 
     pub fn from_cnf_with_assignments(&mut self, cnf: &Cnf, assgn: &model::PartialModel) -> BddPtr {
         let clauses = cnf.clauses();
@@ -794,15 +790,18 @@ impl<T: LruTable> BddManager<T> {
 #[cfg(test)]
 mod tests {
 
-    use maplit::*;
-    use crate::builder::cache::bdd_all_app::BddAllTable;
+    use crate::{builder::cache::bdd_all_app::BddAllTable, repr::ddnnf::DDNNFPtr};
     use crate::repr::wmc::WmcParams;
+    use maplit::*;
+    use num::abs;
 
     use crate::{
+        builder::bdd_builder::BddManager,
         repr::{
+            bdd::BddPtr,
             cnf::Cnf,
-            var_label::{Literal, VarLabel}, bdd::BddPtr,
-        }, builder::bdd_builder::BddManager,
+            var_label::{Literal, VarLabel},
+        },
     };
 
     // check that (a \/ b) /\ a === a
@@ -859,39 +858,11 @@ mod tests {
         let v1 = man.var(VarLabel::new(0), true);
         let v2 = man.var(VarLabel::new(1), true);
         let r1 = man.or(v1, v2);
-        let weights = hashmap! {VarLabel::new(0) => (2,3),
-        VarLabel::new(1) => (5,7)};
-        let params = WmcParams::new_with_default(0, 1, weights);
-        let wmc = r1.wmc(&man.order, &params);
-        assert_eq!(wmc, 50);
-    }
-
-    #[test]
-    fn test_wmc_smooth() {
-        let mut man = BddManager::<BddAllTable>::new_default_order(3);
-        let v1 = man.var(VarLabel::new(0), true);
-        let v2 = man.var(VarLabel::new(2), true);
-        let r1 = man.or(v1, v2);
-        let weights = hashmap! {
-        VarLabel::new(0) => (2,3),
-        VarLabel::new(1) => (5,7),
-        VarLabel::new(2) => (11,13)};
-        let params = WmcParams::new_with_default(0, 1, weights);
-        let wmc = r1.wmc(&man.order, &params);
-        assert_eq!(wmc, 1176);
-    }
-
-    #[test]
-    fn test_wmc_smooth2() {
-        let mut man = BddManager::<BddAllTable>::new_default_order(3);
-        let r1 = BddPtr::true_ptr();
-        let weights = hashmap! {
-        VarLabel::new(0) => (2,3),
-        VarLabel::new(1) => (5,7),
-        VarLabel::new(2) => (11,13)};
-        let params = WmcParams::new_with_default(0, 1, weights);
-        let wmc = r1.wmc(&man.order, &params);
-        assert_eq!(wmc, 1440);
+        let weights = hashmap! {VarLabel::new(0) => (0.2,0.8),
+        VarLabel::new(1) => (0.1,0.9)};
+        let params = WmcParams::new_with_default(0.0, 1.0, weights);
+        let wmc = r1.wmc(&params);
+        assert!(abs(wmc - (1.0 - 0.2*0.1)) < 0.000001);
     }
 
     #[test]
@@ -933,7 +904,7 @@ mod tests {
         assert!(
             man.eq_bdd(r_expected, res),
             "Got:\nOne: {}\nExpected: {}",
-            res.to_string_debug(), 
+            res.to_string_debug(),
             r_expected.to_string_debug()
         );
     }
@@ -970,7 +941,7 @@ mod tests {
         assert!(
             man.eq_bdd(res, v0_and_v2),
             "\nGot: {}\nExpected: {}",
-            res.to_string_debug(), 
+            res.to_string_debug(),
             v0_and_v2.to_string_debug()
         );
     }
@@ -989,7 +960,7 @@ mod tests {
         assert!(
             man.eq_bdd(res, v0v2v3),
             "\nGot: {}\nExpected: {}",
-            res.to_string_debug(), 
+            res.to_string_debug(),
             v0v2v3.to_string_debug()
         );
     }
@@ -1103,7 +1074,7 @@ mod tests {
         let obs = man.or(x, y);
         let and1 = man.and(iff1, iff2);
         let f = man.and(and1, obs);
-        assert_eq!(f.wmc(&man.order, &wmc), 0.2 * 0.3 + 0.2 * 0.7 + 0.8 * 0.3);
+        assert_eq!(f.wmc(&wmc), 0.2 * 0.3 + 0.2 * 0.7 + 0.8 * 0.3);
     }
 
     #[test]

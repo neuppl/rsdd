@@ -7,10 +7,18 @@ use crate::repr::{bdd::BddPtr, var_order::VarOrder};
 #[derive(Debug, Clone, Hash, PartialEq, Eq, Copy)]
 pub enum Ite {
     /// a standard ite
-    IteChoice {f: BddPtr, g: BddPtr, h: BddPtr },
+    IteChoice {
+        f: BddPtr,
+        g: BddPtr,
+        h: BddPtr,
+    },
     /// an ite that is complemented
-    IteComplChoice {f: BddPtr, g: BddPtr, h: BddPtr },
-    IteConst(BddPtr)
+    IteComplChoice {
+        f: BddPtr,
+        g: BddPtr,
+        h: BddPtr,
+    },
+    IteConst(BddPtr),
 }
 use Ite::*;
 
@@ -23,7 +31,7 @@ fn lt_safe(order: &VarOrder, a: BddPtr, b: BddPtr) -> bool {
     if b.is_const() {
         return false;
     }
-    return order.lt(a.var(), b.var())
+    return order.lt(a.var(), b.var());
 }
 
 impl Ite {
@@ -49,7 +57,7 @@ impl Ite {
             (f, g, h) if g.is_true() && h.is_false() => return IteConst(f),
             (f, g, h) if g.is_false() && h.is_true() => return IteConst(f.compl()),
             (_, g, h) if h == g => return IteConst(g),
-            _ => ()
+            _ => (),
         };
 
         // now, attempt to reorder the ITE to place the top-most node first in the order
@@ -59,22 +67,40 @@ impl Ite {
             (f, g, h) if h.is_true() && lt_safe(order, g, f) => (g.compl(), f.compl(), h),
             (f, g, h) if g.is_false() && lt_safe(order, h, f) => (h.compl(), g, f.compl()),
             (f, g, h) if g == h.compl() && lt_safe(order, g, f) => (g, f, f.compl()),
-            _ => (f, g, h)
+            _ => (f, g, h),
         };
 
         // now, standardize for negation: ensure f and g are non-negated
         match (f, g, h) {
-            (f, g, h) if f.is_compl() && !h.is_compl() => return IteComplChoice { f: f.compl(), g: h, h: g },
-            (f, g, h) if !f.is_compl() && g.is_compl() => return IteComplChoice { f, g: g.compl(), h: h.compl() },
-            (f, g, h) if f.is_compl() && h.is_compl() => return IteComplChoice { f: f.compl(), g: h.compl(), h: g.compl() },
+            (f, g, h) if f.is_compl() && !h.is_compl() => {
+                return IteComplChoice {
+                    f: f.compl(),
+                    g: h,
+                    h: g,
+                }
+            }
+            (f, g, h) if !f.is_compl() && g.is_compl() => {
+                return IteComplChoice {
+                    f,
+                    g: g.compl(),
+                    h: h.compl(),
+                }
+            }
+            (f, g, h) if f.is_compl() && h.is_compl() => {
+                return IteComplChoice {
+                    f: f.compl(),
+                    g: h.compl(),
+                    h: g.compl(),
+                }
+            }
             _ => return IteChoice { f, g, h },
         }
     }
 
     pub fn is_compl_choice(&self) -> bool {
         match &self {
-            IteComplChoice { f:_, g:_, h:_ } => true, 
-            _ => false
+            IteComplChoice { f: _, g: _, h: _ } => true,
+            _ => false,
         }
     }
 }

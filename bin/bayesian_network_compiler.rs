@@ -3,21 +3,20 @@ extern crate rsgm;
 
 use clap::Parser;
 use rsdd::builder::cache::bdd_all_app::BddAllTable;
+use rsdd::builder::decision_nnf_builder::DecisionNNFBuilder;
+use rsdd::builder::sdd_builder;
 use rsdd::repr::bdd::BddPtr;
+use rsdd::repr::ddnnf::DDNNFPtr;
+use rsdd::repr::dtree::DTree;
 use rsdd::repr::var_order::VarOrder;
 use rsdd::{builder::bdd_builder::BddManager, repr::wmc::WmcParams};
-use rsdd::builder::sdd_builder;
-use rsdd::repr::dtree::DTree;
-use rsdd::builder::decision_nnf_builder::DecisionNNFBuilder;
 
 use std::collections::HashMap;
 use std::time::Instant;
 
-use rsdd::{
-    repr::{
-        cnf::Cnf,
-        var_label::{Literal, VarLabel},
-    },
+use rsdd::repr::{
+    cnf::Cnf,
+    var_label::{Literal, VarLabel},
 };
 use rsgm::bayesian_network::BayesianNetwork;
 
@@ -182,8 +181,8 @@ fn compile_bdd_cnf(args: &Args, network: BayesianNetwork) {
             // let cond = compiler.condition(r, indic, true);
             let v = compiler.var(indic, true);
             let cond = compiler.and(r, v);
-            let p = cond.wmc(compiler.get_order(), &bn.params);
-            let z = cond.wmc(compiler.get_order(), &bn.params);
+            let p = cond.wmc(&bn.params);
+            let z = cond.wmc(&bn.params);
             println!(
                 "Marginal query: Pr({query_var} = {query_val}) = {p}, z = {z}, p / z = {}",
                 p / z
