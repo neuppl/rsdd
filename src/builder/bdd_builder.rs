@@ -181,7 +181,9 @@ impl<T: LruTable> BddManager<T> {
         };
 
         match self.apply_table.get(ite) {
-            Some(v) => return v,
+            Some(v) => { 
+                return v
+            },
             None => (),
         };
 
@@ -1176,5 +1178,26 @@ mod tests {
             c2.to_string_debug(),
             c1.to_string_debug()
         );
+    }
+
+    #[test]
+    fn test_ite_1() {
+        let mut mgr = BddManager::<BddAllTable>::new_default_order(16);
+        let c1= Cnf::from_string(String::from("(1 || 2) && (0 || -2)"));
+        let c2= Cnf::from_string(String::from("(0 || 1) && (-4 || -7)"));
+        let cnf1 = mgr.from_cnf(&c1);
+        let cnf2 = mgr.from_cnf(&c2);
+        let iff1 = mgr.iff(cnf1, cnf2);
+
+        let clause1 = mgr.and(cnf1, cnf2);
+        let clause2 = mgr.and(cnf1.compl(), cnf2.compl());
+        let and = mgr.or(clause1, clause2);
+
+        if and != iff1 {
+            println!("cnf1: {}", c1.to_string());
+            println!("cnf2: {}", c2.to_string());
+            println!("not equal:\nBdd1: {}\nBdd2: {}", and.to_string_debug(), iff1.to_string_debug());
+        }
+        assert_eq!(and, iff1);
     }
 }

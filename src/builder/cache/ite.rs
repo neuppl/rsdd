@@ -73,7 +73,7 @@ impl Ite {
         // now, standardize for negation: ensure f and g are non-negated
         match (f, g, h) {
             (f, g, h) if f.is_compl() && !h.is_compl() => {
-                return IteComplChoice {
+                return IteChoice {
                     f: f.compl(),
                     g: h,
                     h: g,

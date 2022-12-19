@@ -533,49 +533,6 @@ impl<'a> SddManager {
         self.print_sdd_internal(ptr)
     }
 
-    /// Evaluate an SDD on a set of input Boolean variable values
-    /// TODO: This is *highly* inefficient, fix it
-    pub fn eval_sdd(&self, ptr: SddPtr, assgn: &HashMap<VarLabel, bool>) -> bool {
-        panic!("not impl")
-        // fn helper(man: &SddManager, sdd: SddPtr, assgn: &HashMap<VarLabel, bool>) -> bool {
-        //     if sdd.is_false() {
-        //         false
-        //     } else if sdd.is_true() {
-        //         true
-        //     } else if sdd.is_bdd() {
-        //         let mut labels: HashSet<VarLabel> = HashSet::new();
-        //         for lbl in man.tbl.bdd_conv(sdd.vtree().value()).values() {
-        //             labels.insert(*lbl);
-        //         }
-        //         let mut new_m: HashMap<VarLabel, bool> = HashMap::new();
-        //         for (key, value) in assgn.iter() {
-        //             if labels.contains(key) {
-        //                 let translated = man.tbl.sdd_to_bdd.get(key).unwrap();
-        //                 new_m.insert(*translated, *value);
-        //             }
-        //         }
-        //         let bdd_ptr = sdd.as_bdd_ptr();
-        //         man.tbl
-        //             .bdd_man(sdd.vtree().value())
-        //             .eval_bdd(bdd_ptr, &new_m)
-        //     } else {
-        //         let mut res = false;
-        //         let sl = man.tbl.sdd_get_or(sdd);
-        //         for &(ref p, ref s) in sl.iter() {
-        //             let v1 = helper(man, *p, assgn);
-        //             let v2 = helper(man, *s, assgn);
-        //             res = res || (v1 && v2)
-        //         }
-        //         if sdd.is_compl() {
-        //             !res
-        //         } else {
-        //             res
-        //         }
-        //     }
-        // }
-        // helper(self, ptr, assgn)
-    }
-
     pub fn sdd_eq(&self, a: SddPtr, b: SddPtr) -> bool {
         a == b
     }

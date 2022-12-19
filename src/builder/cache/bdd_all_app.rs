@@ -5,10 +5,7 @@ use crate::repr::bdd::BddPtr;
 
 use super::{ite::Ite, LruTable};
 
-const INITIAL_CAPACITY: usize = 8; // given as a power of two
-
 /// An Ite structure, assumed to be in standard form.
-
 /// The top-level data structure that caches applications
 pub struct BddAllTable {
     /// a vector of applications, indexed by the top label of the first pointer.

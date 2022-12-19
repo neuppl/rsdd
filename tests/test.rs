@@ -340,6 +340,11 @@ mod test_bdd_manager {
             let clause2 = mgr.and(cnf1.compl(), cnf2.compl());
             let and = mgr.or(clause1, clause2);
 
+            if and != iff1 {
+                println!("cnf1: {}", c1.to_string());
+                println!("cnf2: {}", c2.to_string());
+                println!("not equal: Bdd1: {}, Bdd2: {}", and.to_string_debug(), iff1.to_string_debug());
+            }
             TestResult::from_bool(and == iff1)
         }
     }
@@ -577,7 +582,6 @@ mod test_sdd_manager {
 
             let order : Vec<VarLabel> = (0..cnf.num_vars()).map(|x| VarLabel::new(x as u64)).collect();
             let mut mgr = super::SddManager::new(VTree::even_split(&order, 3));
-            // let mut mgr = super::SddManager::new(VTree::right_linear(&order));
             let cnf_sdd = mgr.from_cnf(&cnf);
             let sdd_wmc = WmcParams::new_with_default(0.0, 1.0, weight_map);
             let sdd_res = cnf_sdd.wmc(&sdd_wmc);
