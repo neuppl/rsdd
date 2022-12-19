@@ -1,9 +1,10 @@
 //! Implementing of a generic decision decomposable deterministic negation normal form
 //! (d-DNNF) pointer type
 use core::fmt::Debug;
+use std::collections::HashMap;
 use num::Num;
 
-use super::{var_label::VarLabel, var_order::VarOrder, wmc::WmcParams};
+use super::{var_label::VarLabel, wmc::WmcParams};
 
 /// A base d-DNNF type
 pub enum DDNNF<T> {
@@ -15,14 +16,13 @@ pub enum DDNNF<T> {
 }
 
 pub trait DDNNFPtr {
-    /// performs an amortized bottom-up pass with aggregating function `f` calls
-    /// `f` on every node and caches and reuses the results
-    /// `f` has type `cur_label -> low_value -> high_value -> aggregated_value`
-    fn bottomup_pass<T: Clone + Copy + Debug, F: Fn(DDNNF<T>) -> T>(&self, f: F) -> T;
+    /// performs a memoized bottom-up pass with aggregating function `f` calls
+    fn fold<T: Clone + Copy + Debug, F: Fn(DDNNF<T>) -> T>(&self, f: F) -> T;
+
 
     /// Weighted-model count
     fn wmc<T: Num + Clone + Debug + Copy>(&self, params: &WmcParams<T>) -> T {
-        self.bottomup_pass(|ddnnf| {
+        self.fold(|ddnnf| {
             use DDNNF::*;
             match ddnnf {
                 Or(l, r) => l + r,
@@ -39,6 +39,10 @@ pub trait DDNNFPtr {
                 }
             }
         })
+    }
+
+    fn eval(&self, assgn: &HashMap<VarLabel, bool>) -> bool {
+        todo!()
     }
 
     /// count the number of nodes in this representation

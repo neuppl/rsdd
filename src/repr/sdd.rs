@@ -1,11 +1,9 @@
 //! Defines the internal representations for a trimmed and compressed SDD with
 //! complemented edges.
 
-use crate::repr::var_label::VarLabel;
-use crate::repr::vtree::VTree;
-use num::Num;
-use std::mem;
-use tinyvec::TinyVec;
+use crate::repr::{var_label::VarLabel, ddnnf::DDNNF};
+use std::fmt::Debug;
+use bumpalo::Bump;
 
 /// An SddPtr is either (1) a BDD pointer, or (2) a pointer to an SDD node.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Ord, PartialOrd, Copy)]
@@ -24,7 +22,7 @@ use SddPtr::*;
 pub struct SddOr {
     index: VTreeIndex,
     pub nodes: Vec<(SddPtr, SddPtr)>,
-    pub scratch: Option<usize>,
+    pub scratch: usize,
 }
 
 impl SddOr {
@@ -32,7 +30,7 @@ impl SddOr {
         SddOr {
             nodes,
             index,
-            scratch: None,
+            scratch: 0,
         }
     }
 }
@@ -44,11 +42,10 @@ impl PartialEq for SddOr {
 }
 
 use std::{
-    collections::HashMap,
     hash::{Hash, Hasher},
 };
 
-use super::{vtree::VTreeIndex, wmc::WmcParams};
+use super::{vtree::VTreeIndex, ddnnf::DDNNFPtr, var_label::Literal};
 impl Hash for SddOr {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.index.hash(state);
@@ -64,20 +61,69 @@ impl SddPtr {
     /// negate an SDD pointer
     pub fn neg(&self) -> SddPtr {
         match &self {
-            TruePtr => PtrFalse,
-            FalsePtr => PtrTrue,
+            PtrTrue => PtrFalse,
+            PtrFalse => PtrTrue,
             Var(x, p) => Var(*x, !p),
             Compl(x) => Reg(*x),
             Reg(x) => Compl(*x),
         }
     }
 
+    /// Gets the scratch value stored in `&self`
+    /// 
+    /// Panics if not node.
+    pub fn get_scratch<T>(&self) -> Option<&T> {
+        unsafe {
+            let ptr = self.node_ref().scratch;
+            if ptr == 0 {
+                return None
+            } else {
+                return Some(&*(self.node_ref().scratch as *const T))
+            }
+        }
+    }
+
+    /// Set the scratch in this node to the value `v`. 
+    /// 
+    /// Panics if not a node.
+    /// 
+    /// Invariant: values stored in `set_scratch` must not outlive 
+    /// the provided allocator `alloc` (i.e., calling `get_scratch` 
+    /// involves dereferencing a pointer stored in `alloc`)
+    pub fn set_scratch<T>(&self, alloc: &mut Bump, v: T) -> () {
+        self.mut_node_ref().scratch = (alloc.alloc(v) as *const T) as usize;
+    }
+
+    /// recursively traverses the SDD and clears all scratch
+    pub fn clear_scratch(&self) -> () {
+        if self.is_const() || self.is_var() {
+            return;
+        }
+        let n = self.node_ref_mut();
+        if n.scratch == 0 {
+            return;
+        } else {
+            n.scratch = 0;
+            for (prime, sub) in &n.nodes {
+                prime.clear_scratch();
+                sub.clear_scratch();
+            }
+        }
+    }
+
     /// true if the node is complemented
     pub fn is_compl(&self) -> bool {
         match &self {
-            PtrTrue | Reg(_) => false,
-            Var(_, _) => false,
-            PtrFalse | Compl(_) => true,
+            Compl(_) => true,
+            _ => false
+        }
+    }
+
+
+    pub fn is_or(&self) -> bool {
+        match &self {
+            Compl(_) | Reg(_) => true,
+            _ => false
         }
     }
 
@@ -93,26 +139,46 @@ impl SddPtr {
         Var(lbl, polarity)
     }
 
-    /// convert a BddPtr into a regular (non-complemented) pointer
+    /// uncomplement a pointer
     pub fn to_reg(&self) -> SddPtr {
         match &self {
             Compl(x) => Reg(*x),
-            Reg(x) => Reg(*x),
-            Var(x, p) => Var(*x, true),
-            PtrTrue => PtrTrue,
-            PtrFalse => PtrTrue,
+            _ => *self
         }
     }
 
     pub fn is_const(&self) -> bool {
         match &self {
-            Compl(x) => false,
-            Reg(x) => false,
+            Compl(_) => false,
+            Reg(_) => false,
             Var(_, _) => false,
             PtrTrue => true,
             PtrFalse => true,
         }
     }
+
+    pub fn is_var(&self) -> bool {
+        match &self {
+            Var(_, _) => true,
+            _ => false
+        }
+    }
+
+    pub fn is_neg_var(&self) -> bool {
+        match &self {
+            Var(_, false) => true,
+            _ => false
+        }
+    }
+
+
+    pub fn get_var(&self) -> Literal {
+        match &self {
+            Var(v, b) => Literal::new(*v, *b),
+            _ => panic!("called get_var on non var")
+        }
+    }
+
 
     pub fn is_true(&self) -> bool {
         match &self {
@@ -131,7 +197,7 @@ impl SddPtr {
     /// Get a mutable reference to the node that &self points to
     ///
     /// Panics if not a node pointer
-    pub fn mut_node_ref(&mut self) -> &mut SddOr {
+    pub fn mut_node_ref(&self) -> &mut SddOr {
         unsafe {
             match &self {
                 Reg(x) => &mut (**x),
@@ -139,6 +205,10 @@ impl SddPtr {
                 _ => panic!("Dereferencing constant in deref_or_panic"),
             }
         }
+    }
+
+    pub fn node_list(&self) -> &Vec<(SddPtr, SddPtr)> {
+        &self.node_ref().nodes
     }
 
     /// Get an immutable reference to the node that &self points to
@@ -149,7 +219,20 @@ impl SddPtr {
             match &self {
                 Reg(x) => &(**x),
                 Compl(x) => &(**x),
-                _ => panic!("Dereferencing constant in deref_or_panic"),
+                _ => panic!("Called node_ref on non-node {:?}", self),
+            }
+        }
+    }
+
+    /// Get a mutable reference to the node that &self points to
+    ///
+    /// Panics if not a node pointer
+    pub fn node_ref_mut(&self) -> &mut SddOr {
+        unsafe {
+            match &self {
+                Reg(x) => &mut (**x),
+                Compl(x) => &mut (**x),
+                _ => panic!("Called node_ref on non-node {:?}", self),
             }
         }
     }
@@ -161,58 +244,65 @@ impl SddPtr {
         &self.node_ref().nodes
     }
 
-    // // Walks the Sdd, caching results of previously computed values
-    // fn unsmoothed_wmc_h<T: Num + Clone + Debug + Copy>(
-    //     &mut self,
-    //     ptr: SddPtr,
-    //     weights: &SddWmc<T>,
-    //     tbl: &mut HashMap<SddPtr, T>,
-    // ) -> T {
-    //     match tbl.get(&ptr.regular()) {
-    //         Some(v) => *v,
-    //         None => {
-    //             if ptr.is_false() {
-    //                 return weights.zero;
-    //             }
-    //             if ptr.is_true() {
-    //                 return weights.one;
-    //             }
-    //             if ptr.is_bdd() {
-    //                 let mgr = self.get_bdd_mgr_mut(ptr);
-    //                 let bdd_ptr = ptr.as_bdd_ptr();
-    //                 let pot_wmc = &weights.wmc_structs[ptr.vtree().value()];
-    //                 let bdd_wmc = match pot_wmc {
-    //                     WmcStruct::Bdd(wmc) => wmc,
-    //                     WmcStruct::Dummy(_) => panic!("Oh the humanity!"),
-    //                 };
-    //                 let wmc_val = mgr.wmc(bdd_ptr, bdd_wmc);
-    //                 tbl.insert(ptr.regular(), wmc_val);
-    //                 return wmc_val;
-    //             }
-    //             // TODO remove this allocation
-    //             let or = Vec::from(self.tbl.sdd_get_or(ptr));
-    //             or.iter().fold(weights.zero, |acc, (p, s)| {
-    //                 let s = if ptr.is_compl() { s.neg() } else { *s };
-    //                 acc + (self.unsmoothed_wmc_h(*p, weights, tbl)
-    //                     * self.unsmoothed_wmc_h(s, weights, tbl))
-    //             })
-    //         }
-    //     }
-    // }
-
-    pub fn unsmoothed_wmc<T: Num + Clone + std::fmt::Debug + Copy>(
-        &mut self,
-        ptr: SddPtr,
-        weights: &WmcParams<T>,
-    ) -> T {
-        panic!("not implementd")
-        // self.unsmoothed_wmc_h(ptr, weights, &mut HashMap::new())
-    }
 
     /// retrieve the vtree index (as its index in a left-first depth-first traversal)
     ///
     /// panics if this is a constant
     pub fn vtree(&self) -> VTreeIndex {
         self.node_ref().index
+    }
+}
+
+type DDNNFCache<T> = (Option<T>, Option<T>);
+
+impl DDNNFPtr for SddPtr {
+    fn fold<T: Clone + Copy + std::fmt::Debug, F: Fn(super::ddnnf::DDNNF<T>) -> T>(&self, f: F) -> T {
+        fn bottomup_pass_h<T: Clone + Copy + Debug, F: Fn(DDNNF<T>) -> T>(ptr: SddPtr, f: &F, alloc: &mut Bump) -> T {
+            match ptr {
+                PtrTrue => f(DDNNF::True),
+                PtrFalse => f(DDNNF::False),
+                Var(v, polarity) => f(DDNNF::Lit(v, polarity)),
+                Compl(_) | Reg(_) => {
+                    // inside the cache, store a (compl, non_compl) pair corresponding to the 
+                    // complemented and uncomplemented pass over this node
+                    if ptr.get_scratch::<DDNNFCache<T>>().is_none() {
+                        ptr.set_scratch::<DDNNFCache<T>>(alloc, (None, None));
+                    }
+                    match ptr.get_scratch::<DDNNFCache<T>>() {
+                        Some((Some(v), _)) if ptr.is_compl() => return v.clone(),
+                        Some((_, Some(v))) if !ptr.is_compl() => return v.clone(),
+                        Some((None, cached)) | Some((cached, None)) => {
+                            // no cached value found, compute it
+                            let mut or_v = f(DDNNF::False);
+                            for (p,s) in ptr.node_list() {
+                                let s = if ptr.is_compl() { s.neg() } else { *s };
+                                let p_sub = bottomup_pass_h(*p, f, alloc);
+                                let s_sub = bottomup_pass_h(s, f, alloc);
+                                let a = f(DDNNF::And(p_sub, s_sub));
+                                or_v = f(DDNNF::Or(or_v, a));
+                            }
+
+                            // cache and return or_v
+                            if ptr.is_compl() { 
+                                ptr.set_scratch::<DDNNFCache<T>>(alloc, (Some(or_v), *cached));
+                            } else {
+                                ptr.set_scratch::<DDNNFCache<T>>(alloc, (*cached, Some(or_v)));
+                            }
+                            return or_v
+                        },
+                        _ => panic!("unreachable")
+                    }
+                }
+            }
+        }
+
+        let mut alloc = Bump::new();
+        let r = bottomup_pass_h(*self, &f, &mut alloc);
+        self.clear_scratch();
+        r
+    }
+
+    fn count_nodes(&self) -> usize {
+        todo!()
     }
 }

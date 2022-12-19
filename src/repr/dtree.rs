@@ -223,12 +223,12 @@ impl DTree {
             (&[], None) => panic!("invalid vtree: no vars"),
             (&[], Some(v)) => v.clone(),
             (&[v1], Some(v2)) => {
-                VTree::new_node(Box::new(VTree::new_leaf(vec![v1])), Box::new(v2.clone()))
+                VTree::new_node(Box::new(VTree::new_leaf(v1)), Box::new(v2.clone()))
             }
-            (&[v1], None) => VTree::new_leaf(vec![v1]),
+            (&[v1], None) => VTree::new_leaf(v1),
             (&[v, ref vars @ ..], _) => {
                 let sub = DTree::right_linear(vars, continuation);
-                VTree::new_node(Box::new(VTree::new_leaf(vec![v])), Box::new(sub))
+                VTree::new_node(Box::new(VTree::new_leaf(v)), Box::new(sub))
             }
         }
     }

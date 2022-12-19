@@ -14,8 +14,7 @@ where
     Node(N, Box<BTree<N, L>>, Box<BTree<N, L>>),
 }
 
-/// A depth-first iterator for a tree
-/// Visits each node in depth-first order
+
 pub struct BreadthFirstIter<'a, N: 'a, L: 'a>
 where
     N: PartialEq + Eq + Clone,
@@ -47,15 +46,21 @@ where
     }
 }
 
-pub struct DepthFirstIter<'a, N: 'a, L: 'a>
+/// A depth-first iterator for a tree
+/// Visits each node in depth-first post-order
+/// i.e., visits in order:
+///        6
+///    2       5
+///  0  1    3   4
+pub struct InOrderDepthFirstIter<'a, N: 'a, L: 'a>
 where
     N: PartialEq + Eq + Clone,
     L: PartialEq + Eq + Clone,
 {
-    stack: Vec<&'a BTree<N, L>>,
+    v: VecDeque<&'a BTree<N, L>>,
 }
 
-impl<'a, N, L> Iterator for DepthFirstIter<'a, N, L>
+impl<'a, N, L> Iterator for InOrderDepthFirstIter<'a, N, L>
 where
     N: PartialEq + Eq + Clone,
     L: PartialEq + Eq + Clone,
@@ -63,29 +68,7 @@ where
     type Item = &'a BTree<N, L>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        use self::BTree::*;
-        match self.stack.pop() {
-            None => None,
-            Some(v) => match v {
-                &Leaf(_) => Some(v),
-                &Node(_, _, ref r) => {
-                    let mut cur: &'a BTree<N, L> = r;
-                    loop {
-                        match cur {
-                            &BTree::Leaf(_) => {
-                                self.stack.push(cur);
-                                break;
-                            }
-                            &BTree::Node(_, ref l, _) => {
-                                self.stack.push(cur);
-                                cur = l;
-                            }
-                        }
-                    }
-                    Some(v)
-                }
-            },
-        }
+        self.v.pop_front()
     }
 }
 
@@ -94,21 +77,21 @@ where
     N: PartialEq + Eq + Clone,
     L: PartialEq + Eq + Clone,
 {
-    pub fn dfs_iter<'a>(&'a self) -> DepthFirstIter<'a, N, L> {
-        let mut v = Vec::new();
-        let mut cur = self;
-        loop {
-            match cur {
-                &BTree::Leaf(_) => {
-                    v.push(cur);
-                    return DepthFirstIter { stack: v };
-                }
-                &BTree::Node(_, ref l, _) => {
-                    v.push(cur);
-                    cur = l;
-                }
+    fn dfs_recurse<'a>(&'a self, v: &mut VecDeque<&'a Self>) -> () {
+        match self {
+            BTree::Leaf(_) => v.push_back(self),
+            BTree::Node(_, l, r) => { 
+                l.dfs_recurse(v);
+                v.push_back(self);
+                r.dfs_recurse(v);
             }
         }
+    }
+
+    pub fn inorder_dfs_iter<'a>(&'a self) -> InOrderDepthFirstIter<'a, N, L> {
+        let mut v = VecDeque::new();
+        self.dfs_recurse(&mut v);
+        InOrderDepthFirstIter { v }
     }
 
     pub fn bfs_iter<'a>(&'a self) -> BreadthFirstIter<'a, N, L> {
@@ -133,7 +116,7 @@ where
     where
         F: Fn(&L) -> bool,
     {
-        for (idx, i) in self.dfs_iter().enumerate() {
+        for (idx, i) in self.inorder_dfs_iter().enumerate() {
             match i {
                 &BTree::Node(_, _, _) => (),
                 &BTree::Leaf(ref l) => {
@@ -155,6 +138,14 @@ where
         }
     }
 
+    /// Attempt to extract the data from a node; panics if not a node
+    pub fn extract_node(&self) -> &N {
+        match self {
+            Self::Node(ref v, _, _) => v,
+            _ => panic!("extracting non-node"),
+        }
+    }
+
     pub fn is_leaf(&self) -> bool {
         match self {
             Self::Leaf(_) => true,
@@ -165,7 +156,7 @@ where
     /// Flatten a BTree into a breadth-first iteration
     pub fn flatten(&self) -> Vec<&BTree<N, L>> {
         let mut v = Vec::new();
-        for i in self.dfs_iter() {
+        for i in self.inorder_dfs_iter() {
             v.push(i)
         }
         v
@@ -173,7 +164,7 @@ where
 
     /// Generates a mapping from DFS indexing to BFS indexing
     /// For instance, a tree can have the following DFS and BFS orderings:
-    /// DFS:
+    /// DFS (TODO this mapping is wrong fix it):
     ///    0
     ///  1    4
     /// 2 3  5 6
@@ -186,7 +177,7 @@ where
     pub fn dfs_to_bfs_mapping(&self) -> Vec<usize> {
         let mut r = Vec::new();
         let bfs_map = self.bfs_labeling();
-        for i in self.dfs_iter() {
+        for i in self.inorder_dfs_iter() {
             let p: *const Self = i;
             r.push(bfs_map[&p]);
         }
@@ -205,7 +196,7 @@ where
 
     pub fn dfs_labeling(&self) -> HashMap<*const Self, usize> {
         let mut h: HashMap<*const Self, usize> = HashMap::new();
-        for (idx, itm) in self.dfs_iter().enumerate() {
+        for (idx, itm) in self.inorder_dfs_iter().enumerate() {
             let p: *const Self = itm;
             h.insert(p, idx);
         }
@@ -223,26 +214,8 @@ where
     }
 }
 
-#[test]
-fn test_traversal() {
-    use self::BTree::*;
-    let vtree: BTree<i32, i32> = Node(
-        4,
-        Box::new(Node(2, Box::new(Leaf(1)), Box::new(Leaf(3)))),
-        Box::new(Node(6, Box::new(Leaf(5)), Box::new(Leaf(7)))),
-    );
-
-    for (idx, v) in vtree.dfs_iter().enumerate() {
-        let value = match v {
-            &Node(ref v, _, _) => *v,
-            &Leaf(ref v) => *v,
-        };
-        assert_eq!((idx + 1) as i32, value);
-    }
-}
-
 #[derive(Debug, Clone)]
-/// A helper structure for efficiently computing the LCA of a tree
+/// A helper structure for efficiently computing the least-common ancestor (LCA) of a tree
 pub struct LeastCommonAncestor {
     seg_tree: SegmentPoint<usize, Min>,
     /// maps BFS-ordered tree indices into their first occurrence in the Euler tour
@@ -284,7 +257,7 @@ impl LeastCommonAncestor {
         LeastCommonAncestor::build_euler_vec(tree, &bfs_map, &mut euler_vec);
 
         // build the node lookup map
-        let n = tree.dfs_iter().count();
+        let n = tree.inorder_dfs_iter().count();
         let mut lookup = vec![None; n];
         for i in 0..(euler_vec.len()) {
             let cur_var = euler_vec[i];
@@ -330,3 +303,24 @@ fn test_lca() {
     assert_eq!(lca.lca(1, 1), 1);
     assert_eq!(lca.lca(5, 6), 2);
 }
+
+#[test]
+fn test_inorder_dfs() {
+    use self::BTree::*;
+    //       3 
+    //    1       5
+    //  0  2    4   6
+    let vtree: BTree<usize, usize> = Node(
+        3,
+        Box::new(Node(1, Box::new(Leaf(0)), Box::new(Leaf(2)))),
+        Box::new(Node(5, Box::new(Leaf(4)), Box::new(Leaf(6)))),
+    );
+    for (idx, n) in vtree.inorder_dfs_iter().enumerate() {
+        if n.is_leaf() {
+            assert_eq!(idx, *n.extract_leaf())
+        } else {
+            assert_eq!(idx, *n.extract_node())
+        }
+    }
+}
+

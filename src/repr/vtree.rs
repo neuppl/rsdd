@@ -3,62 +3,61 @@
 use super::var_label::VarLabel;
 use crate::util::btree::{BTree, LeastCommonAncestor};
 
-pub type VTree = BTree<(), Vec<VarLabel>>;
+pub type VTree = BTree<(), VarLabel>;
 
 impl VTree {
     pub fn new_node(l: Box<VTree>, r: Box<VTree>) -> VTree {
         VTree::Node((), l, r)
     }
-    pub fn new_leaf(v: Vec<VarLabel>) -> VTree {
+    pub fn new_leaf(v: VarLabel) -> VTree {
         VTree::Leaf(v)
     }
-
     pub fn num_vars(&self) -> usize {
         match self {
-            BTree::Leaf(v) => v.len(),
+            BTree::Leaf(v) => 1,
             BTree::Node((), l, r) => l.num_vars() + r.num_vars(),
+        }
+    }
+
+    /// produces a right-linear vtree with the variable order given by `order`
+    pub fn right_linear(order: &[VarLabel]) -> VTree {
+        match order {
+            [x] => BTree::Leaf(*x),
+            [cur, rest @ ..] => {
+                let l_tree = BTree::Leaf(*cur);
+                let r_tree = Self::right_linear(rest);
+                BTree::Node((), Box::new(l_tree), Box::new(r_tree))
+            }
+            [] => panic!("invalid right_linear on empty list")
+        }
+    }
+
+    /// generate an even vtree by splitting a variable ordering in half repeatedly
+    /// times; then reverts to a right-linear vtree for the remainder
+    pub fn even_split(order: &[VarLabel], num_splits: usize) -> VTree {
+        if num_splits <= 0 {
+            Self::right_linear(order)
+        } else {
+            let (l_s, r_s) = order.split_at(order.len() / 2);
+            let l_tree = Self::even_split(l_s, num_splits - 1);
+            let r_tree = Self::even_split(r_s, num_splits - 1);
+            BTree::Node((), Box::new(l_tree), Box::new(r_tree))
         }
     }
 }
 
+/// A vtree index uniquely identifies a node in a vtree via a left-first 
+/// depth-first traversal. For example, each node in vtree is 
+/// given the following indexing structure:
+///        6
+///    2       5
+///  0  1    3   4
 #[derive(Debug, Clone, Copy, Eq, PartialEq, PartialOrd, Ord, Hash)]
 pub struct VTreeIndex(usize);
 
 impl VTreeIndex {
     pub fn value(&self) -> usize {
         self.0
-    }
-}
-
-/// holds metadata for an SDD pointer as a packed u32. It has the following fields:
-/// `vtree`: holds the index into a depth-first left-first traversal of the SDD vtree
-/// `is_bdd`: true if this SDD pointer points to a BDD
-/// `is_const`: true if this SDD pointer is a constant (true or false)
-///
-/// There is some redundant information that occurs between SddPtr and BddPtr (for instance,
-/// whether or not an edge is complemented, or true or false); whenever possible, this
-/// information is "pushed inside" the BddPtr
-#[repr(C)]
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Ord, PartialOrd, Copy)]
-struct PackedInternalData {
-    data: u32,
-}
-
-BITFIELD!(PackedInternalData data : u32 [
-    vtree set_vtree[0..16],
-    is_bdd set_is_bdd[16..17],
-    is_const set_is_const[17..18],
-    compl set_compl[18..19],
-]);
-
-impl PackedInternalData {
-    fn new(vtree: u16, is_bdd: u32, is_const: u32, compl: u32) -> PackedInternalData {
-        let mut n = PackedInternalData { data: 0 };
-        n.set_vtree(vtree as u32);
-        n.set_is_bdd(is_bdd);
-        n.set_is_const(is_const);
-        n.set_compl(compl);
-        n
     }
 }
 
@@ -79,11 +78,9 @@ pub struct VTreeManager {
 impl VTreeManager {
     pub fn new(tree: VTree) -> VTreeManager {
         let mut vtree_lookup = vec![0; tree.num_vars()];
-        for (idx, v) in tree.dfs_iter().enumerate() {
+        for (idx, v) in tree.inorder_dfs_iter().enumerate() {
             if v.is_leaf() {
-                for label in v.extract_leaf().iter() {
-                    vtree_lookup[label.value_usize()] = idx;
-                }
+                vtree_lookup[v.extract_leaf().value_usize()] = idx;
             }
         }
         VTreeManager {
@@ -107,8 +104,9 @@ impl VTreeManager {
         VTreeIndex(self.bfs_to_dfs[bfs_idx])
     }
 
+    /// Given a vtree index, produce a pointer to the vtree this corresponds with
     pub fn get_idx(&self, idx: VTreeIndex) -> &VTree {
-        return self.tree.dfs_iter().nth(idx.0).unwrap();
+        return self.tree.inorder_dfs_iter().nth(idx.0).unwrap();
     }
 
     /// Find the index into self.vtree that contains the label `lbl`
@@ -119,6 +117,9 @@ impl VTreeManager {
 
     /// true if `l` is prime to `r`
     pub fn is_prime(&self, l: VTreeIndex, r: VTreeIndex) -> bool {
+        // due to our indexing scheme, checking if a node is prime is 
+        // as simple as comparing their indices (see Figure 1 from 
+        // 'SDD: A New Canonical Representation of Propositional Knowledge Bases'
         l.0 < r.0
     }
 }

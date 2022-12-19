@@ -140,31 +140,6 @@ impl BddPtr {
         }
     }
 
-    /// evaluates the top element of the data stack on the values found in
-    /// `vars`
-    pub fn eval(&self, assgn: &HashMap<VarLabel, bool>) -> bool {
-        fn eval_bdd_helper(ptr: BddPtr, assgn: &HashMap<VarLabel, bool>) -> bool {
-            if ptr.is_true() {
-                return true;
-            } else if ptr.is_false() {
-                return false;
-            }
-            let bdd = ptr.into_node();
-            let value = assgn.get(&bdd.var).unwrap();
-            let r = if *value {
-                eval_bdd_helper(bdd.high, assgn)
-            } else {
-                eval_bdd_helper(bdd.low, assgn)
-            };
-            if ptr.is_compl() {
-                !r
-            } else {
-                r
-            }
-        }
-        eval_bdd_helper(*self, assgn)
-    }
-
     /// true if the BddPtr points to a constant (i.e., True or False)
     pub fn is_const(&self) -> bool {
         match &self {
@@ -199,7 +174,9 @@ impl BddPtr {
         }
     }
 
-    /// gets scratch (panics if not node)
+    /// Gets the scratch value stored in `&self`
+    /// 
+    /// Panics if not node.
     pub fn get_scratch<T>(&self) -> Option<&T> {
         unsafe {
             let ptr = self.mut_node_ref().data;
@@ -211,6 +188,13 @@ impl BddPtr {
         }
     }
 
+    /// Set the scratch in this node to the value `v`. 
+    /// 
+    /// Panics if not a node.
+    /// 
+    /// Invariant: values stored in `set_scratch` must not outlive 
+    /// the provided allocator `alloc` (i.e., calling `get_scratch` 
+    /// involves dereferencing a pointer stored in `alloc`)
     pub fn set_scratch<T>(&self, alloc: &mut Bump, v: T) -> () {
         self.mut_node_ref().data = (alloc.alloc(v) as *const T) as usize;
     }
@@ -411,7 +395,7 @@ impl BddPtr {
 type DDNNFCache<T> = (Option<T>, Option<T>);
 
 impl DDNNFPtr for BddPtr {
-    fn bottomup_pass<T: Clone + Copy + Debug, F: Fn(DDNNF<T>) -> T>(&self, f: F) -> T {
+    fn fold<T: Clone + Copy + Debug, F: Fn(DDNNF<T>) -> T>(&self, f: F) -> T {
         fn bottomup_pass_h<T: Clone + Copy + Debug, F: Fn(DDNNF<T>) -> T>(ptr: BddPtr, f: &F, alloc: &mut Bump) -> T {
             match ptr {
                 PtrTrue => f(DDNNF::True),

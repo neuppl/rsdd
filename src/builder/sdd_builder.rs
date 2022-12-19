@@ -3,8 +3,10 @@
 
 use crate::backing_store::bump_table::BumpTable;
 use crate::backing_store::UniqueTable;
+use crate::repr::ddnnf::DDNNFPtr;
 use crate::repr::sdd::{SddOr, SddPtr};
 use crate::repr::vtree::{VTree, VTreeIndex, VTreeManager};
+use crate::repr::wmc::WmcParams;
 use crate::{
     repr::cnf::Cnf, repr::logical_expr::LogicalExpr, repr::var_label::VarLabel, util::btree::*,
     util::lru::Lru,
@@ -25,18 +27,6 @@ impl SddStats {
     }
 }
 
-/// generate an even vtree by splitting a variable ordering in half `num_splits`
-/// times
-pub fn even_split(order: &[VarLabel], num_splits: usize) -> VTree {
-    if num_splits <= 0 {
-        BTree::Leaf(order.to_vec())
-    } else {
-        let (l_s, r_s) = order.split_at(order.len() / 2);
-        let l_tree = even_split(l_s, num_splits - 1);
-        let r_tree = even_split(r_s, num_splits - 1);
-        BTree::Node((), Box::new(l_tree), Box::new(r_tree))
-    }
-}
 
 pub struct SddManager {
     tbl: BumpTable<SddOr>,
@@ -51,7 +41,7 @@ pub struct SddManager {
 impl<'a> SddManager {
     pub fn new(vtree: VTree) -> SddManager {
         let mut app_cache = Vec::new();
-        for _ in vtree.dfs_iter() {
+        for _ in vtree.inorder_dfs_iter() {
             app_cache.push(Lru::new(8));
         }
 
@@ -66,23 +56,6 @@ impl<'a> SddManager {
 
     pub fn set_compression(&mut self, b: bool) {
         self.use_compression = b
-    }
-
-    /// Find the index into self.vtree that contains the label `lbl`
-    /// panics if this does not exist.
-    fn get_vtree_idx(&self, lbl: VarLabel) -> VTreeIndex {
-        self.vtree.get_varlabel_idx(lbl)
-    }
-
-    /// Logically negate an SddPtr
-    pub fn negate(&self, a: SddPtr) -> SddPtr {
-        a.neg()
-    }
-
-    /// Get a pointer to the vtree for `f`
-    /// Equivalent to finding the variable order of a variable in a BDD
-    fn get_vtree(&self, f: SddPtr) -> &VTree {
-        self.vtree.get_idx(f.vtree())
     }
 
     pub fn get_vtree_root(&self) -> &VTree {
@@ -116,6 +89,28 @@ impl<'a> SddManager {
         SddPtr::or(p)
     }
 
+    pub fn get_vtree(&self, ptr: SddPtr) -> &VTree {
+        if ptr.is_var() {
+            let idx = self.vtree.get_varlabel_idx(ptr.get_var().get_label());
+            self.vtree.get_idx(idx) 
+        } else if ptr.is_or() {
+            self.vtree.get_idx(ptr.vtree()) 
+        } else {
+            panic!("called vtree on constant")
+        }
+    }
+
+    pub fn get_vtree_idx(&self, ptr: SddPtr) -> VTreeIndex {
+        if ptr.is_var() {
+            self.vtree.get_varlabel_idx(ptr.get_var().get_label())
+        } else if ptr.is_or() {
+            ptr.vtree()
+        } else {
+            panic!("called vtree on constant")
+        }
+    }
+
+
     /// Returns a canonicalized SDD pointer from a list of (prime, sub) pairs
     fn canonicalize(&mut self, mut node: Vec<(SddPtr, SddPtr)>, table: VTreeIndex) -> SddPtr {
         if self.use_compression {
@@ -141,14 +136,16 @@ impl<'a> SddManager {
         // we have a fresh SDD pointer, uniqify it
         node.sort_by(|a, b| a.0.cmp(&b.0));
 
-        if node[0].1.is_compl() {
+        // normalize: ensure that the first sub is not false and non-negated
+        let r = if node[0].1.is_compl() || node[0].1.is_false() || node[0].1.is_neg_var() {
             for i in 0..node.len() {
                 node[i].1 = node[i].1.neg();
             }
             self.get_or_insert(SddOr::new(node, table)).neg()
         } else {
             self.get_or_insert(SddOr::new(node, table))
-        }
+        };
+        r
     }
 
     pub fn or_internal(&mut self, a: SddPtr, b: SddPtr) -> SddPtr {
@@ -156,6 +153,7 @@ impl<'a> SddManager {
     }
 
     fn and_rec(&mut self, a: SddPtr, b: SddPtr) -> SddPtr {
+        // println!("and a: {}\nb: {}", self.print_sdd(a), self.print_sdd(b));
         self.stats.num_rec += 1;
         // first, check for a base case
         match (a, b) {
@@ -169,14 +167,14 @@ impl<'a> SddManager {
         };
 
         // normalize so `a` is always prime if possible
-        let (a, b) = if a.vtree() == b.vtree() || self.vtree.is_prime(a.vtree(), b.vtree()) {
+        let (a, b) = if self.get_vtree_idx(a) == self.get_vtree_idx(b) || self.vtree.is_prime(self.get_vtree_idx(a), self.get_vtree_idx(b)) {
             (a, b)
         } else {
             (b, a)
         };
 
-        let av = a.vtree();
-        let bv = b.vtree();
+        let av = self.get_vtree_idx(a);
+        let bv = self.get_vtree_idx(b);
         let lca = self.vtree.lca(av, bv);
 
         // check if we have this application cached
@@ -186,64 +184,77 @@ impl<'a> SddManager {
         }
 
         // now we determine the current iterator for primes and subs
+        // consider the following example vtree:
+        //       3 
+        //    1       5
+        //  0  2    4   6
         // 4 cases:
-        //   1. `a` and `b` have the same vtree
-        //   2. The lca is the prime `a`
-        //   3. The lca is the sub `b`
+        //   1. `a` and `b` have the same vtree 
+        //   2. The lca is `a`
+        //   3. The lca is `b`
         //   4. The lca is a shared parent equal to neither
+        // we can only conjoin two SDD nodes if they are normalized with respect
+        // to the same vtree; the following code does this for each of the 
+        // above cases. 
+        // 
         // TODO this to_vec is probably very bad for perf
-        let (outer_v, inner_v) = if av == bv {
+        let (prime_iter, sub_iter) = if av == bv {
+            // shared vtree, no normalization necessary
             let outer = a.or_ref().to_vec();
             let inner = b.or_ref().to_vec();
             (outer, inner)
         } else if lca == av {
+            // least common ancestor is `a`, so normalize by 
+            // creating a or-node
+            //   o
+            //   |
+            // [T,b]
             let outer = a.or_ref().to_vec();
             let inner_v = vec![(SddPtr::true_ptr(), b.to_reg())];
             (outer, inner_v)
         } else if lca == bv {
-            // the sub must always be true
-            let v = if a.is_compl() {
-                SddPtr::false_ptr()
-            } else {
-                SddPtr::true_ptr()
-            };
+            // least common ancestor is b
+            // normalize by creating an or-node 
+            //       o 
+            //   /      \ 
+            // [a,T]  [!a, F]
+            let v = if a.is_compl() { SddPtr::false_ptr() } else { SddPtr::true_ptr() };
             let outer_v = vec![(a, v), (a.neg(), v.neg())];
             let inner = b.or_ref().to_vec();
             (outer_v, inner)
         } else {
-            // avoid double-negations by checking to see if `a` is already
-            // negated
-            let v = if a.is_compl() {
-                SddPtr::false_ptr()
-            } else {
-                SddPtr::true_ptr()
-            };
+            // shared least common-ancestor
+            // normalize by creating both of the above SDDs
+            let v = if a.is_compl() { SddPtr::false_ptr() } else { SddPtr::true_ptr() };
             let outer_v = vec![(a, v), (a.neg(), v.neg())];
             let inner_v = vec![(SddPtr::true_ptr(), b.to_reg())];
             (outer_v, inner_v)
         };
+
+        // now the SDDs are normalized with respect to the same vtree, so we can 
+        // apply the prime/sub pairs
 
         // iterate over each prime/sub pair and do the relevant application
         // there are 2 simplifying cases:
         // (1) if p1i = p2j or if p1i => p2j, then p1k x p2j = false for all k<>i
         // (2) if p1i = !p2j, then p1k x p2j = p1k for all k<>i
         let mut r: Vec<(SddPtr, SddPtr)> = Vec::new();
-        for &(ref p1, ref s1) in outer_v.iter() {
-            // check if there exists an equal prime
-            let eq_itm = inner_v
-                .iter()
-                .find(|(ref p2, ref _s2)| self.sdd_eq(*p1, *p2));
+        for &(ref p1, ref s1) in prime_iter.iter() {
+            // // check if there exists an equal prime
+            // let eq_itm = sub_iter
+            //     .iter()
+            //     .find(|(ref p2, ref _s2)| self.sdd_eq(*p1, *p2));
             let s1 = if a.is_compl() { s1.neg() } else { *s1 };
-            if eq_itm.is_some() {
-                let (_, s2) = eq_itm.unwrap();
-                let s2 = if b.is_compl() { s2.neg() } else { *s2 };
-                // this sub is the only one with a non-false prime, so no need to iterate
-                r.push((*p1, self.and_rec(s1, s2)));
-                continue;
-            }
+            // if eq_itm.is_some() {
+            //     let (_, s2) = eq_itm.unwrap();
+            //     let s2 = if b.is_compl() { s2.neg() } else { *s2 };
+            //     // this sub is the only one with a non-false prime, so no need to iterate
+            //     r.push((*p1, self.and_rec(s1, s2)));
+            //     continue;
+            // }
 
             // no special case
-            for &(ref p2, ref s2) in inner_v.iter() {
+            for &(ref p2, ref s2) in sub_iter.iter() {
                 let s2 = if b.is_compl() { s2.neg() } else { *s2 };
                 let p = self.and_rec(*p1, *p2);
                 if p.is_false() {
@@ -253,7 +264,7 @@ impl<'a> SddManager {
                 // check if one of the nodes is true; if it is, we can
                 // return a `true` SddPtr here, for trimming
                 if p.is_true() && s.is_true() {
-                    let new_v = SddPtr::false_ptr();
+                    let new_v = SddPtr::true_ptr();
                     self.app_cache[lca.value()].insert((a, b), new_v);
                     return new_v;
                 }
@@ -261,9 +272,9 @@ impl<'a> SddManager {
                 // check if p1 => p2 (which is true iff (p1 && p2) == p1); if it
                 // does we can stop early because the rest of the primes will be
                 // false
-                if self.sdd_eq(*p1, p) {
-                    break;
-                }
+                // if self.sdd_eq(*p1, p) {
+                //     break;
+                // }
             }
         }
 
@@ -282,43 +293,43 @@ impl<'a> SddManager {
     }
 
     /// Computes `f | var = value`
+    /// TODO: This is highly inefficient, will re-traverse nodes, needs a cache
     pub fn condition(&mut self, f: SddPtr, lbl: VarLabel, value: bool) -> SddPtr {
-        panic!("not implementd")
-        // self.stats.num_rec += 1;
-        // // TODO : this can bail out early by checking the vtree
-        // // check base case
-        // if f.is_const() {
-        //     return f;
-        // } else if f.is_bdd() {
-        //     // check if this BDD contains the label
-        //     if self.get_vtree(f).extract_leaf().contains(&lbl) {
-        //         // it does; condition and return
-        //         let mapped = *self.tbl.sdd_to_bdd_label(&lbl);
-        //         let bdd = self.tbl.bdd_man_mut(f.vtree().value()).condition(
-        //             f.as_bdd_ptr(),
-        //             mapped,
-        //             value,
-        //         );
-        //         return SddPtr::new_bdd(bdd, f.vtree().value() as u16);
-        //     } else {
-        //         // do nothing
-        //         return f;
-        //     }
-        // };
+        self.stats.num_rec += 1;
+        // TODO : this can bail out early by checking the vtree
+        // check base case
+        if f.is_const() {
+            return f;
+        };
+        if f.is_var() {
+            let l = f.get_var();
+            if l.get_label() == lbl {
+                // condition this var
+                if l.get_polarity() == value {
+                    return SddPtr::true_ptr()
+                } else {
+                    return SddPtr::false_ptr()
+                }
+            } else {
+                return f;
+            }
+        }
 
-        // let mut v = Vec::new();
-        // // f is a node; recurse and compress the result
-        // for (prime, sub) in self.tbl.sdd_get_or(f).to_vec().iter() {
-        //     let newp = self.condition(*prime, lbl, value);
-        //     let news = self.condition(*sub, lbl, value);
-        //     v.push((newp, news));
-        // }
-        // let r = self.canonicalize(v, f.vtree());
-        // if f.is_compl() {
-        //     r.neg()
-        // } else {
-        //     r
-        // }
+        let mut v = Vec::new();
+        // f is a node; recurse and compress the result
+        for (prime, sub) in f.node_list().to_vec().iter() {
+            let newp = self.condition(*prime, lbl, value);
+            let sub = if f.is_compl() { sub.neg() } else { *sub };
+            if newp.is_false() {
+                continue;
+            };
+            let news = self.condition(sub, lbl, value);
+            if newp.is_true() {
+                return news;
+            }
+            v.push((newp, news));
+        }
+        self.canonicalize(v, f.vtree())
     }
 
     /// Computes the SDD representing the logical function `if f then g else h`
@@ -342,8 +353,11 @@ impl<'a> SddManager {
     /// Existentially quantifies out the variable `lbl` from `f`
     pub fn exists(&mut self, sdd: SddPtr, lbl: VarLabel) -> SddPtr {
         // TODO this can be optimized by specializing it
+        println!("sdd: {}", self.print_sdd(sdd));
         let v1 = self.condition(sdd, lbl, true);
+        println!("conditioned true: {}", self.print_sdd(v1));
         let v2 = self.condition(sdd, lbl, false);
+        println!("conditioned false: {}", self.print_sdd(v2));
         self.or(v1, v2)
     }
 
@@ -482,44 +496,37 @@ impl<'a> SddManager {
     }
 
     fn print_sdd_internal(&self, ptr: SddPtr) -> String {
-        panic!("not impl")
-        // use pretty::*;
-        // fn helper(man: &SddManager, ptr: SddPtr) -> Doc<BoxDoc> {
-        //     if ptr.is_bdd() {
-        //         let bdd_ptr = ptr.as_bdd_ptr();
-        //         let m = man.tbl.bdd_conv(ptr.vtree().value());
-        //         let s = man
-        //             .tbl
-        //             .bdd_man(ptr.vtree().value())
-        //             .print_bdd_lbl(bdd_ptr, m);
-        //         Doc::from(s)
-        //     } else {
-        //         if ptr.is_true() {
-        //             return Doc::from("T");
-        //         } else if ptr.is_false() {
-        //             return Doc::from("F");
-        //         }
+        use pretty::*;
+        fn helper(man: &SddManager, ptr: SddPtr) -> Doc<BoxDoc> {
+                if ptr.is_true() {
+                    return Doc::from("T");
+                } else if ptr.is_false() {
+                    return Doc::from("F");
+                } else if ptr.is_var() {
+                    let l = ptr.get_var();
+                    return Doc::from(format!("{}{}", if l.get_polarity() { "" } else {"!"}, l.get_label().value()));
+                }
 
-        //         let mut doc: Doc<BoxDoc> = Doc::from("");
-        //         let sl = man.tbl.sdd_get_or(ptr);
-        //         for &(ref prime, ref sub) in sl.iter() {
-        //             let new_s1 = helper(man, *prime);
-        //             let new_s2 = helper(man, *sub);
-        //             doc = doc.append(Doc::newline()).append(
-        //                 (Doc::from("/\\")
-        //                     .append(Doc::newline())
-        //                     .append(new_s1.append(Doc::newline()).append(new_s2)))
-        //                 .nest(2),
-        //             );
-        //         }
-        //         let d = Doc::from(format!("{}\\/", if ptr.is_compl() { "!" } else { "" }));
-        //         d.append(doc.nest(2))
-        //     }
-        // }
-        // let d = helper(self, ptr);
-        // let mut w = Vec::new();
-        // d.render(10, &mut w).unwrap();
-        // String::from_utf8(w).unwrap()
+                let mut doc: Doc<BoxDoc> = Doc::from("");
+                let sl = ptr.node_list();
+                for &(ref prime, ref sub) in sl.iter() {
+                    let s = if ptr.is_compl() { sub.neg() } else { *sub };
+                    let new_s1 = helper(man, *prime);
+                    let new_s2 = helper(man, s);
+                    doc = doc.append(Doc::newline()).append(
+                        (Doc::from("/\\")
+                            .append(Doc::newline())
+                            .append(new_s1.append(Doc::newline()).append(new_s2)))
+                        .nest(2),
+                    );
+                }
+                let d = Doc::from(format!("\\/"));
+                d.append(doc.nest(2))
+        }
+        let d = helper(self, ptr);
+        let mut w = Vec::new();
+        d.render(10, &mut w).unwrap();
+        String::from_utf8(w).unwrap()
     }
 
     pub fn print_sdd(&self, ptr: SddPtr) -> String {
@@ -582,37 +589,36 @@ impl<'a> SddManager {
     }
 
     pub fn from_cnf(&mut self, cnf: &Cnf) -> SddPtr {
-        panic!("not impl")
-        // let mut cvec: Vec<SddPtr> = Vec::with_capacity(cnf.clauses().len());
-        // for lit_vec in cnf.clauses().iter() {
-        //     assert!(!lit_vec.is_empty(), "empty cnf");
-        //     let (vlabel, val) = (lit_vec[0].get_label(), lit_vec[0].get_polarity());
-        //     let mut sdd = self.var(vlabel, val);
-        //     for i in 1..lit_vec.len() {
-        //         let (vlabel, val) = (lit_vec[i].get_label(), lit_vec[i].get_polarity());
-        //         let var = self.var(vlabel, val);
-        //         sdd = self.or(sdd, var);
-        //     }
-        //     cvec.push(sdd);
-        // }
-        // // now cvec has a list of all the clauses; collapse it down
-        // fn helper(vec: &[SddPtr], man: &mut SddManager) -> Option<SddPtr> {
-        //     if vec.is_empty() {
-        //         None
-        //     } else if vec.len() == 1 {
-        //         Some(vec[0])
-        //     } else {
-        //         let (l, r) = vec.split_at(vec.len() / 2);
-        //         let sub_l = helper(l, man);
-        //         let sub_r = helper(r, man);
-        //         match (sub_l, sub_r) {
-        //             (None, None) => None,
-        //             (Some(v), None) | (None, Some(v)) => Some(v),
-        //             (Some(l), Some(r)) => Some(man.and(l, r)),
-        //         }
-        //     }
-        // }
-        // helper(&cvec, self).unwrap()
+        let mut cvec: Vec<SddPtr> = Vec::with_capacity(cnf.clauses().len());
+        for lit_vec in cnf.clauses().iter() {
+            assert!(!lit_vec.is_empty(), "empty cnf");
+            let (vlabel, val) = (lit_vec[0].get_label(), lit_vec[0].get_polarity());
+            let mut sdd = SddPtr::var(vlabel, val);
+            for i in 1..lit_vec.len() {
+                let (vlabel, val) = (lit_vec[i].get_label(), lit_vec[i].get_polarity());
+                let var = SddPtr::var(vlabel, val);
+                sdd = self.or(sdd, var);
+            }
+            cvec.push(sdd);
+        }
+        // now cvec has a list of all the clauses; collapse it down
+        fn helper(vec: &[SddPtr], man: &mut SddManager) -> Option<SddPtr> {
+            if vec.is_empty() {
+                None
+            } else if vec.len() == 1 {
+                Some(vec[0])
+            } else {
+                let (l, r) = vec.split_at(vec.len() / 2);
+                let sub_l = helper(l, man);
+                let sub_r = helper(r, man);
+                match (sub_l, sub_r) {
+                    (None, None) => None,
+                    (Some(v), None) | (None, Some(v)) => Some(v),
+                    (Some(l), Some(r)) => Some(man.and(l, r)),
+                }
+            }
+        }
+        helper(&cvec, self).unwrap()
     }
 
     pub fn from_logical_expr(&mut self, expr: &LogicalExpr) -> SddPtr {
@@ -667,198 +673,260 @@ impl<'a> SddManager {
 }
 
 // check that (a \/ b) /\ a === a
-// #[test]
-// fn simple_equality() {
-//     let mut mgr = SddManager::new(even_split(
-//         &[
-//             VarLabel::new(0),
-//             VarLabel::new(1),
-//             VarLabel::new(2),
-//             VarLabel::new(3),
-//             VarLabel::new(4),
-//         ],
-//         2,
-//     ));
-//     let a = mgr.var(VarLabel::new(0), true);
-//     let d = mgr.var(VarLabel::new(3), true);
-//     let inner = mgr.or(a, d);
-//     let term = mgr.and(inner, a);
-//     assert_eq!(a, term);
-// }
+#[test]
+fn simple_equality() {
+    let mut mgr = SddManager::new(VTree::even_split(
+        &[
+            VarLabel::new(0),
+            VarLabel::new(1),
+            VarLabel::new(2),
+            VarLabel::new(3),
+            VarLabel::new(4),
+        ],
+        2,
+    ));
+    let a = SddPtr::var(VarLabel::new(0), true);
+    let d = SddPtr::var(VarLabel::new(3), true);
+    let inner = mgr.or(a, d);
+    let term = mgr.and(inner, a);
+    assert_eq!(a, term);
+}
 
-// // check that (a \/ b) | !b === a
-// #[test]
-// fn sdd_simple_cond() {
-//     let mut mgr = SddManager::new(even_split(
-//         &[
-//             VarLabel::new(0),
-//             VarLabel::new(1),
-//             VarLabel::new(2),
-//             VarLabel::new(3),
-//             VarLabel::new(4),
-//         ],
-//         2,
-//     ));
-//     let a = mgr.var(VarLabel::new(0), true);
-//     let d = mgr.var(VarLabel::new(3), true);
-//     let inner = mgr.or(a, d);
-//     let term = mgr.condition(inner, VarLabel::new(3), false);
-//     assert_eq!(
-//         a,
-//         term,
-//         "Got:\n{}\nexpected:\n{}\n",
-//         mgr.print_sdd(term),
-//         mgr.print_sdd(a)
-//     );
-// }
+// check that (a \/ b) | !b === a
+#[test]
+fn sdd_simple_cond() {
+    let mut mgr = SddManager::new(VTree::even_split(
+        &[
+            VarLabel::new(0),
+            VarLabel::new(1),
+            VarLabel::new(2),
+            VarLabel::new(3),
+            VarLabel::new(4),
+        ],
+        2,
+    ));
+    let a = SddPtr::var(VarLabel::new(0), true);
+    let d = SddPtr::var(VarLabel::new(3), true);
+    let inner = mgr.or(a, d);
+    println!("0 || 3: {}", mgr.print_sdd(inner));
+    let term = mgr.condition(inner, VarLabel::new(3), false);
+    assert_eq!(
+        a,
+        term,
+        "Got:\n{}\nexpected:\n{}\n",
+        mgr.print_sdd(term),
+        mgr.print_sdd(a)
+    );
+}
 
-// #[test]
-// fn sdd_test_exist() {
-//     let mut man = SddManager::new(even_split(
-//         &[
-//             VarLabel::new(0),
-//             VarLabel::new(1),
-//             VarLabel::new(2),
-//             VarLabel::new(3),
-//             VarLabel::new(4),
-//         ],
-//         2,
-//     ));
-//     // 1 /\ 2 /\ 3
-//     let v1 = man.var(VarLabel::new(0), true);
-//     let v2 = man.var(VarLabel::new(1), true);
-//     let v3 = man.var(VarLabel::new(2), true);
-//     let a1 = man.and(v1, v2);
-//     let r1 = man.and(a1, v3);
-//     let r_expected = man.and(v1, v3);
-//     let res = man.exists(r1, VarLabel::new(1));
-//     assert!(
-//         man.sdd_eq(r_expected, res),
-//         "Got:\nOne: {}\nExpected: {}",
-//         man.print_sdd(res),
-//         man.print_sdd(r_expected)
-//     );
-// }
+#[test]
+fn sdd_test_exist() {
+    let mut man = SddManager::new(VTree::even_split(
+        &[
+            VarLabel::new(0),
+            VarLabel::new(1),
+            VarLabel::new(2),
+            VarLabel::new(3),
+            VarLabel::new(4),
+        ],
+        2,
+    ));
+    // 1 /\ 2 /\ 3
+    let v1 = SddPtr::var(VarLabel::new(0), true);
+    let v2 = SddPtr::var(VarLabel::new(1), true);
+    let v3 = SddPtr::var(VarLabel::new(2), true);
+    let a1 = man.and(v1, v2);
+    let r1 = man.and(a1, v3);
+    let r_expected = man.and(v1, v3);
+    let res = man.exists(r1, VarLabel::new(1));
+    assert!(
+        man.sdd_eq(r_expected, res),
+        "Got:\n{}\nExpected:\n{}",
+        man.print_sdd(res),
+        man.print_sdd(r_expected)
+    );
+}
 
-// #[test]
-// fn sdd_ite1() {
-//     let mut man = SddManager::new(even_split(
-//         &[
-//             VarLabel::new(0),
-//             VarLabel::new(1),
-//             VarLabel::new(2),
-//             VarLabel::new(3),
-//             VarLabel::new(4),
-//         ],
-//         2,
-//     ));
-//     let v1 = man.var(VarLabel::new(0), true);
-//     let v2 = man.var(VarLabel::new(1), true);
-//     let r1 = man.or(v1, v2);
-//     let r2 = man.ite(r1, v1, SddPtr::new_const(false));
-//     assert!(
-//         man.sdd_eq(v1, r2),
-//         "Not eq:\n {}\n{}",
-//         man.print_sdd(v1),
-//         man.print_sdd(r2)
-//     );
-// }
 
-// #[test]
-// fn sdd_circuit1() {
-//     let mut man = SddManager::new(even_split(
-//         &[
-//             VarLabel::new(0),
-//             VarLabel::new(1),
-//             VarLabel::new(2),
-//             VarLabel::new(3),
-//             VarLabel::new(4),
-//         ],
-//         2,
-//     ));
-//     let x = man.var(VarLabel::new(0), false);
-//     let y = man.var(VarLabel::new(1), true);
-//     let delta = man.and(x, y);
-//     let yp = man.var(VarLabel::new(2), true);
-//     let inner = man.iff(yp, y);
-//     let conj = man.and(inner, delta);
-//     let res = man.exists(conj, VarLabel::new(1));
+#[test]
+fn sdd_bigand() {
+    let mut man = SddManager::new(VTree::even_split(
+        &[
+            VarLabel::new(0),
+            VarLabel::new(1),
+            VarLabel::new(2),
+            VarLabel::new(3),
+            VarLabel::new(4),
+        ],
+        2,
+    ));
+    // 1 /\ 2 /\ 3
+    let v1 = SddPtr::var(VarLabel::new(0), true);
+    let v2 = SddPtr::var(VarLabel::new(1), true);
+    let v3 = SddPtr::var(VarLabel::new(2), true);
+    let a1 = man.and(v1, v2);
+    let r1 = man.and(a1, v3);
+    let f = man.and(r1, SddPtr::var(VarLabel::new(0), false));
+    println!("{}", man.print_sdd(r1));
+    assert_eq!(f, SddPtr::false_ptr(), "Expected False, got {}", man.print_sdd(f));
+}
 
-//     let expected = man.and(x, yp);
-//     assert!(
-//         man.sdd_eq(res, expected),
-//         "Not eq:\nGot: {}\nExpected: {}",
-//         man.print_sdd(res),
-//         man.print_sdd(expected)
-//     );
-// }
 
-// #[test]
-// fn sdd_circuit2() {
-//     // same as circuit1, but with a different variable order
-//     let mut man = SddManager::new(even_split(
-//         &[
-//             VarLabel::new(0),
-//             VarLabel::new(1),
-//             VarLabel::new(2),
-//             VarLabel::new(3),
-//             VarLabel::new(4),
-//         ],
-//         2,
-//     ));
-//     let x = man.var(VarLabel::new(3), false);
-//     let y = man.var(VarLabel::new(1), true);
-//     let delta = man.and(x, y);
-//     let yp = man.var(VarLabel::new(4), true);
-//     let inner = man.iff(yp, y);
-//     let conj = man.and(inner, delta);
-//     let res = man.exists(conj, VarLabel::new(1));
+#[test]
+fn sdd_ite1() {
+    let mut man = SddManager::new(VTree::even_split(
+        &[
+            VarLabel::new(0),
+            VarLabel::new(1),
+            VarLabel::new(2),
+            VarLabel::new(3),
+            VarLabel::new(4),
+        ],
+        2,
+    ));
+    let v1 = SddPtr::var(VarLabel::new(0), true);
+    let v2 = SddPtr::var(VarLabel::new(1), true);
+    println!("v1: {}", man.print_sdd(v1));
+    println!("v2: {}", man.print_sdd(v2));
+    let r1 = man.or(v1, v2);
+    let r2 = man.and(r1, v1);
+    assert!(
+        man.sdd_eq(v1, r2),
+        "Not eq:\n {}\n{}",
+        man.print_sdd(v1),
+        man.print_sdd(r2)
+    );
+}
 
-//     let expected = man.and(x, yp);
-//     assert!(
-//         man.sdd_eq(res, expected),
-//         "Not eq:\nGot: {}\nExpected: {}",
-//         man.print_sdd(res),
-//         man.print_sdd(expected)
-//     );
-// }
+#[test]
+fn sdd_demorgan() {
+    let mut man = SddManager::new(VTree::even_split(
+        &[
+            VarLabel::new(0),
+            VarLabel::new(1),
+            VarLabel::new(2),
+            VarLabel::new(3),
+            VarLabel::new(4),
+        ],
+        1,
+    ));
+    let x = SddPtr::var(VarLabel::new(0), true);
+    let y = SddPtr::var(VarLabel::new(3), true);
+    let res = man.or(x, y).neg();
+    let expected = man.and(x.neg(), y.neg());
+    assert!(
+        man.sdd_eq(res, expected),
+        "Not eq:\nGot: {}\nExpected: {}",
+        man.print_sdd(res),
+        man.print_sdd(expected)
+    );
+}
 
-// #[test]
-// fn sdd_wmc1() {
-//     // modeling the formula (x<=>fx) && (y<=>fy), with f weight of 0.5
+#[test]
+fn sdd_circuit1() {
+    let mut man = SddManager::new(VTree::even_split(
+        &[
+            VarLabel::new(0),
+            VarLabel::new(1),
+            VarLabel::new(2),
+            VarLabel::new(3),
+            VarLabel::new(4),
+        ],
+        2,
+    ));
+    let x = SddPtr::var(VarLabel::new(0), false);
+    let y = SddPtr::var(VarLabel::new(1), true);
+    let delta = man.and(x, y);
+    let yp = SddPtr::var(VarLabel::new(2), true);
+    let inner = man.iff(yp, y);
+    let conj = man.and(inner, delta);
+    let res = man.exists(conj, VarLabel::new(1));
 
-//     let vtree = even_split(
-//         &[
-//             VarLabel::new(0),
-//             VarLabel::new(1),
-//             VarLabel::new(2),
-//             VarLabel::new(3),
-//         ],
-//         2,
-//     );
-//     let mut man = SddManager::new(vtree.clone());
-//     let mut wmc_map = SddWmc::new(0.0, 1.0, vtree);
-//     let x = man.var(VarLabel::new(0), true);
-//     wmc_map.set_weight(&mut man, VarLabel::new(0), 1.0, 1.0);
-//     let y = man.var(VarLabel::new(1), true);
-//     wmc_map.set_weight(&mut man, VarLabel::new(1), 1.0, 1.0);
-//     let fx = man.var(VarLabel::new(2), true);
-//     wmc_map.set_weight(&mut man, VarLabel::new(2), 0.5, 0.5);
-//     let fy = man.var(VarLabel::new(3), true);
-//     wmc_map.set_weight(&mut man, VarLabel::new(3), 0.5, 0.5);
-//     let x_fx = man.iff(x, fx);
-//     let y_fy = man.iff(y, fy);
-//     let ptr = man.and(x_fx, y_fy);
-//     let wmc_res: f64 = man.unsmoothed_wmc(ptr, &wmc_map);
-//     let expected: f64 = 1.0;
-//     let diff = (wmc_res - expected).abs();
-//     assert!(
-//         (diff < 0.0001),
-//         "Not eq: \n Diff: {:?} \n WMC: {:?}",
-//         diff,
-//         wmc_res
-//     );
-// }
+    let expected = man.and(x, yp);
+    assert!(
+        man.sdd_eq(res, expected),
+        "Not eq:\nGot: {}\nExpected: {}",
+        man.print_sdd(res),
+        man.print_sdd(expected)
+    );
+}
+
+#[test]
+fn sdd_circuit2() {
+    // same as circuit1, but with a different variable order
+    let mut man = SddManager::new(VTree::even_split(
+        &[
+            VarLabel::new(0),
+            VarLabel::new(1),
+            VarLabel::new(2),
+            VarLabel::new(3),
+            VarLabel::new(4),
+        ],
+        2,
+    ));
+    let x = SddPtr::var(VarLabel::new(3), false);
+    let y = SddPtr::var(VarLabel::new(1), true);
+    let delta = man.and(x, y);
+    let yp = SddPtr::var(VarLabel::new(4), true);
+    let inner = man.iff(yp, y);
+    let conj = man.and(inner, delta);
+    let res = man.exists(conj, VarLabel::new(1));
+
+    let expected = man.and(x, yp);
+    assert!(
+        man.sdd_eq(res, expected),
+        "Not eq:\nGot: {}\nExpected: {}",
+        man.print_sdd(res),
+        man.print_sdd(expected)
+    );
+}
+
+#[test]
+fn sdd_wmc1() {
+    // modeling the formula (x<=>fx) && (y<=>fy), with f weight of 0.5
+
+    // let vtree = VTree::right_linear(
+    //     &[
+    //         VarLabel::new(0),
+    //         VarLabel::new(1),
+    //         VarLabel::new(2),
+    //         VarLabel::new(3),
+    //     ],
+    // );
+
+    let vtree = VTree::even_split(
+        &[
+            VarLabel::new(0),
+            VarLabel::new(1),
+            VarLabel::new(2),
+            VarLabel::new(3),
+        ],
+        1,
+    );
+    let mut man = SddManager::new(vtree.clone());
+    let mut wmc_map = WmcParams::new(0.0, 1.0);
+    let x = SddPtr::var(VarLabel::new(0), true);
+    wmc_map.set_weight(VarLabel::new(0), 1.0, 1.0);
+    let y = SddPtr::var(VarLabel::new(1), true);
+    wmc_map.set_weight(VarLabel::new(1), 1.0, 1.0);
+    let fx = SddPtr::var(VarLabel::new(2), true);
+    wmc_map.set_weight(VarLabel::new(2), 0.5, 0.5);
+    let fy = SddPtr::var(VarLabel::new(3), true);
+    wmc_map.set_weight(VarLabel::new(3), 0.5, 0.5);
+    let x_fx = man.iff(x, fx);
+    let y_fy = man.iff(y, fy);
+    let ptr = man.and(x_fx, y_fy);
+    let wmc_res: f64 = ptr.wmc(&wmc_map);
+    let expected: f64 = 1.0;
+    let diff = (wmc_res - expected).abs();
+    println!("sdd: {}", man.print_sdd(ptr));
+    assert!(
+        (diff < 0.0001),
+        "Not eq: \n Expected: {:?} \n WMC: {:?}",
+        expected,
+        wmc_res
+    );
+}
 
 // #[test]
 // fn sdd_wmc2() {
