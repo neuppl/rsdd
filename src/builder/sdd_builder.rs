@@ -5,14 +5,13 @@ use crate::backing_store::bump_table::BumpTable;
 use crate::backing_store::UniqueTable;
 use crate::repr::ddnnf::DDNNFPtr;
 use crate::repr::sdd::{SddOr, SddPtr};
-use crate::repr::vtree::{VTree, VTreeIndex, VTreeManager};
-use crate::repr::wmc::WmcParams;
+use crate::repr::vtree::{VTreeBuilder, VTreeManager, VTree};
 use crate::{
-    repr::cnf::Cnf, repr::logical_expr::LogicalExpr, repr::var_label::VarLabel, util::btree::*,
+    repr::cnf::Cnf, repr::logical_expr::LogicalExpr, repr::var_label::VarLabel,
     util::lru::Lru,
 };
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::fmt::Debug;
 
 #[derive(Debug, Clone)]
@@ -39,7 +38,7 @@ pub struct SddManager {
 }
 
 impl<'a> SddManager {
-    pub fn new(vtree: VTree) -> SddManager {
+    pub fn new(vtree: VTreeBuilder) -> SddManager {
         let mut app_cache = Vec::new();
         for _ in vtree.inorder_dfs_iter() {
             app_cache.push(Lru::new(8));
@@ -89,30 +88,9 @@ impl<'a> SddManager {
         SddPtr::or(p)
     }
 
-    pub fn get_vtree(&self, ptr: SddPtr) -> &VTree {
-        if ptr.is_var() {
-            let idx = self.vtree.get_varlabel_idx(ptr.get_var().get_label());
-            self.vtree.get_idx(idx) 
-        } else if ptr.is_or() {
-            self.vtree.get_idx(ptr.vtree()) 
-        } else {
-            panic!("called vtree on constant")
-        }
-    }
-
-    pub fn get_vtree_idx(&self, ptr: SddPtr) -> VTreeIndex {
-        if ptr.is_var() {
-            self.vtree.get_varlabel_idx(ptr.get_var().get_label())
-        } else if ptr.is_or() {
-            ptr.vtree()
-        } else {
-            panic!("called vtree on constant")
-        }
-    }
-
 
     /// Returns a canonicalized SDD pointer from a list of (prime, sub) pairs
-    fn canonicalize(&mut self, mut node: Vec<(SddPtr, SddPtr)>, table: VTreeIndex) -> SddPtr {
+    fn canonicalize(&mut self, mut node: Vec<(SddPtr, SddPtr)>, vtree: *const VTree) -> SddPtr {
         if self.use_compression {
             // first compress
             self.compress(&mut node);
@@ -141,9 +119,9 @@ impl<'a> SddManager {
             for i in 0..node.len() {
                 node[i].1 = node[i].1.neg();
             }
-            self.get_or_insert(SddOr::new(node, table)).neg()
+            self.get_or_insert(SddOr::new(node, vtree)).neg()
         } else {
-            self.get_or_insert(SddOr::new(node, table))
+            self.get_or_insert(SddOr::new(node, vtree))
         };
         r
     }
@@ -153,7 +131,6 @@ impl<'a> SddManager {
     }
 
     fn and_rec(&mut self, a: SddPtr, b: SddPtr) -> SddPtr {
-        // println!("and a: {}\nb: {}", self.print_sdd(a), self.print_sdd(b));
         self.stats.num_rec += 1;
         // first, check for a base case
         match (a, b) {
@@ -167,18 +144,18 @@ impl<'a> SddManager {
         };
 
         // normalize so `a` is always prime if possible
-        let (a, b) = if self.get_vtree_idx(a) == self.get_vtree_idx(b) || self.vtree.is_prime(self.get_vtree_idx(a), self.get_vtree_idx(b)) {
+        let (a, b) = if a.is_prime(b) {
             (a, b)
         } else {
             (b, a)
         };
 
-        let av = self.get_vtree_idx(a);
-        let bv = self.get_vtree_idx(b);
+        let av = a.vtree();
+        let bv = b.vtree();
         let lca = self.vtree.lca(av, bv);
 
         // check if we have this application cached
-        let c = self.app_cache[lca.value()].get((a, b));
+        let c = self.app_cache[unsafe { (*lca).index_usize() }].get((a, b));
         if c.is_some() {
             return c.unwrap();
         }
@@ -241,17 +218,17 @@ impl<'a> SddManager {
         let mut r: Vec<(SddPtr, SddPtr)> = Vec::new();
         for &(ref p1, ref s1) in prime_iter.iter() {
             // // check if there exists an equal prime
-            // let eq_itm = sub_iter
-            //     .iter()
-            //     .find(|(ref p2, ref _s2)| self.sdd_eq(*p1, *p2));
+            let eq_itm = sub_iter
+                .iter()
+                .find(|(ref p2, ref _s2)| self.sdd_eq(*p1, *p2));
             let s1 = if a.is_compl() { s1.neg() } else { *s1 };
-            // if eq_itm.is_some() {
-            //     let (_, s2) = eq_itm.unwrap();
-            //     let s2 = if b.is_compl() { s2.neg() } else { *s2 };
-            //     // this sub is the only one with a non-false prime, so no need to iterate
-            //     r.push((*p1, self.and_rec(s1, s2)));
-            //     continue;
-            // }
+            if eq_itm.is_some() {
+                let (_, s2) = eq_itm.unwrap();
+                let s2 = if b.is_compl() { s2.neg() } else { *s2 };
+                // this sub is the only one with a non-false prime, so no need to iterate
+                r.push((*p1, self.and_rec(s1, s2)));
+                continue;
+            }
 
             // no special case
             for &(ref p2, ref s2) in sub_iter.iter() {
@@ -265,22 +242,22 @@ impl<'a> SddManager {
                 // return a `true` SddPtr here, for trimming
                 if p.is_true() && s.is_true() {
                     let new_v = SddPtr::true_ptr();
-                    self.app_cache[lca.value()].insert((a, b), new_v);
+                    self.app_cache[unsafe { (*lca).index_usize() }].insert((a, b), new_v);
                     return new_v;
                 }
                 r.push((p, s));
                 // check if p1 => p2 (which is true iff (p1 && p2) == p1); if it
                 // does we can stop early because the rest of the primes will be
                 // false
-                // if self.sdd_eq(*p1, p) {
-                //     break;
-                // }
+                if self.sdd_eq(*p1, p) {
+                    break;
+                }
             }
         }
 
         // canonicalize
         let ptr = self.canonicalize(r, lca);
-        self.app_cache[lca.value()].insert((a, b), ptr);
+        self.app_cache[unsafe { (*lca).index_usize() }].insert((a, b), ptr);
         ptr
     }
 
@@ -623,6 +600,10 @@ impl<'a> SddManager {
         &self.stats
     }
 
+    pub fn num_recursive_calls(&self) -> usize {
+        self.stats.num_rec
+    }
+
     pub fn print_stats(&self) {
         println!("***************[ SDD Stats ]***************");
         println!("\tNumber of recursive calls: {}", self.stats.num_rec);
@@ -632,7 +613,7 @@ impl<'a> SddManager {
 // check that (a \/ b) /\ a === a
 #[test]
 fn simple_equality() {
-    let mut mgr = SddManager::new(VTree::even_split(
+    let mut mgr = SddManager::new(VTreeBuilder::even_split(
         &[
             VarLabel::new(0),
             VarLabel::new(1),
@@ -652,7 +633,7 @@ fn simple_equality() {
 // check that (a \/ b) | !b === a
 #[test]
 fn sdd_simple_cond() {
-    let mut mgr = SddManager::new(VTree::even_split(
+    let mut mgr = SddManager::new(VTreeBuilder::even_split(
         &[
             VarLabel::new(0),
             VarLabel::new(1),
@@ -678,7 +659,7 @@ fn sdd_simple_cond() {
 
 #[test]
 fn sdd_test_exist() {
-    let mut man = SddManager::new(VTree::even_split(
+    let mut man = SddManager::new(VTreeBuilder::even_split(
         &[
             VarLabel::new(0),
             VarLabel::new(1),
@@ -707,7 +688,7 @@ fn sdd_test_exist() {
 
 #[test]
 fn sdd_bigand() {
-    let mut man = SddManager::new(VTree::even_split(
+    let mut man = SddManager::new(VTreeBuilder::even_split(
         &[
             VarLabel::new(0),
             VarLabel::new(1),
@@ -731,7 +712,7 @@ fn sdd_bigand() {
 
 #[test]
 fn sdd_ite1() {
-    let mut man = SddManager::new(VTree::even_split(
+    let mut man = SddManager::new(VTreeBuilder::even_split(
         &[
             VarLabel::new(0),
             VarLabel::new(1),
@@ -757,7 +738,7 @@ fn sdd_ite1() {
 
 #[test]
 fn sdd_demorgan() {
-    let mut man = SddManager::new(VTree::even_split(
+    let mut man = SddManager::new(VTreeBuilder::even_split(
         &[
             VarLabel::new(0),
             VarLabel::new(1),
@@ -781,7 +762,7 @@ fn sdd_demorgan() {
 
 #[test]
 fn sdd_circuit1() {
-    let mut man = SddManager::new(VTree::even_split(
+    let mut man = SddManager::new(VTreeBuilder::even_split(
         &[
             VarLabel::new(0),
             VarLabel::new(1),
@@ -811,7 +792,7 @@ fn sdd_circuit1() {
 #[test]
 fn sdd_circuit2() {
     // same as circuit1, but with a different variable order
-    let mut man = SddManager::new(VTree::even_split(
+    let mut man = SddManager::new(VTreeBuilder::even_split(
         &[
             VarLabel::new(0),
             VarLabel::new(1),
@@ -851,7 +832,7 @@ fn sdd_wmc1() {
     //     ],
     // );
 
-    let vtree = VTree::even_split(
+    let vtree = VTreeBuilder::even_split(
         &[
             VarLabel::new(0),
             VarLabel::new(1),

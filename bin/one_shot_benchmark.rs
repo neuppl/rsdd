@@ -9,7 +9,9 @@ use rsdd::builder::cache::bdd_all_app::BddAllTable;
 use rsdd::repr::cnf::Cnf;
 use rsdd::repr::ddnnf::DDNNFPtr;
 use rsdd::repr::dtree::DTree;
+use rsdd::repr::var_label::VarLabel;
 use rsdd::repr::var_order::VarOrder;
+use rsdd::repr::vtree::VTreeBuilder;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::collections::HashMap;
@@ -64,9 +66,12 @@ fn compile_topdown_nnf(str: String, debug: bool) {
 fn compile_sdd(str: String, debug: bool) {
     use rsdd::builder::sdd_builder::*;
     let cnf = Cnf::from_file(str);
-    let dtree = DTree::from_cnf(&cnf, &VarOrder::linear_order(cnf.num_vars()));
-    let mut man = SddManager::new(dtree.to_vtree().unwrap());
+    // let dtree = DTree::from_cnf(&cnf, &VarOrder::linear_order(cnf.num_vars()));
+    // let mut man = SddManager::new(dtree.to_vtree().unwrap());
+    let v : Vec<VarLabel> = (0..cnf.num_vars()).map(|x| VarLabel::new(x as u64)).collect();
+    let mut man = SddManager::new(VTreeBuilder::right_linear(&v));
     let _sdd = man.from_cnf(&cnf);
+    println!("num recursive: {}", man.num_recursive_calls());
 }
 
 // TODO: resolve unused
@@ -104,16 +109,16 @@ fn main() {
         //     "grid-50-10-1-q",
         //     String::from(include_str!("../cnf/50-10-1-q.cnf")),
         // ),
-        // ("tiny1", String::from(include_str!("../cnf/tiny1.cnf"))),
-        // ("tiny2", String::from(include_str!("../cnf/tiny2.cnf"))),
-        // (
-        //     "bench-01",
-        //     String::from(include_str!("../cnf/bench-01.cnf")),
-        // ),
-        // (
-        //     "bench-02",
-        //     String::from(include_str!("../cnf/bench-02.cnf")),
-        // ),
+        ("tiny1", String::from(include_str!("../cnf/tiny1.cnf"))),
+        ("tiny2", String::from(include_str!("../cnf/tiny2.cnf"))),
+        (
+            "bench-01",
+            String::from(include_str!("../cnf/bench-01.cnf")),
+        ),
+        (
+            "bench-02",
+            String::from(include_str!("../cnf/bench-02.cnf")),
+        ),
         // (
         //     "bench-03",
         //     String::from(include_str!("../cnf/bench-03.cnf")),
@@ -121,34 +126,34 @@ fn main() {
         // ("php-4-6", String::from(include_str!("../cnf/php-4-6.cnf"))),
         // ("php-5-4", String::from(include_str!("../cnf/php-5-4.cnf"))),
         // ("php-12-14", String::from(include_str!("../cnf/php-12-14.cnf"))),
-        // (
-        //     "rand-3-25-75-1",
-        //     String::from(include_str!("../cnf/rand-3-25-75-1.cnf")),
-        // ),
-        // (
-        //     "rand-3-25-100-1",
-        //     String::from(include_str!("../cnf/rand-3-25-100-1.cnf")),
-        // ),
-        // (
-        //     "rand-3-25-100-2",
-        //     String::from(include_str!("../cnf/rand-3-25-100-2.cnf")),
-        // ),
-        // (
-        //     "rand-3-25-100-3",
-        //     String::from(include_str!("../cnf/rand-3-25-100-3.cnf")),
-        // ),
-        // (
-        //     "rand-3-37-75-1",
-        //     String::from(include_str!("../cnf/rand-3-37-75-1.cnf")),
-        // ),
-        // (
-        //     "rand-3-37-75-2",
-        //     String::from(include_str!("../cnf/rand-3-37-75-2.cnf")),
-        // ),
-        // (
-        //     "rand-3-37-75-3",
-        //     String::from(include_str!("../cnf/rand-3-37-75-3.cnf")),
-        // ),
+        (
+            "rand-3-25-75-1",
+            String::from(include_str!("../cnf/rand-3-25-75-1.cnf")),
+        ),
+        (
+            "rand-3-25-100-1",
+            String::from(include_str!("../cnf/rand-3-25-100-1.cnf")),
+        ),
+        (
+            "rand-3-25-100-2",
+            String::from(include_str!("../cnf/rand-3-25-100-2.cnf")),
+        ),
+        (
+            "rand-3-25-100-3",
+            String::from(include_str!("../cnf/rand-3-25-100-3.cnf")),
+        ),
+        (
+            "rand-3-37-75-1",
+            String::from(include_str!("../cnf/rand-3-37-75-1.cnf")),
+        ),
+        (
+            "rand-3-37-75-2",
+            String::from(include_str!("../cnf/rand-3-37-75-2.cnf")),
+        ),
+        (
+            "rand-3-37-75-3",
+            String::from(include_str!("../cnf/rand-3-37-75-3.cnf")),
+        ),
         // (
         //     "rand-3-37-75-4",
         //     String::from(include_str!("../cnf/rand-3-37-75-4.cnf")),
@@ -169,10 +174,10 @@ fn main() {
         //     "rand-3-37-75-8",
         //     String::from(include_str!("../cnf/rand-3-37-75-8.cnf")),
         // ),
-        // (
-        //     "rand-3-50-200-1",
-        //     String::from(include_str!("../cnf/rand-3-50-200-1.cnf")),
-        // ),
+        (
+            "rand-3-50-200-1",
+            String::from(include_str!("../cnf/rand-3-50-200-1.cnf")),
+        ),
         // (
         //     "rand-3-50-200-2",
         //     String::from(include_str!("../cnf/rand-3-50-200-2.cnf")),
@@ -187,7 +192,7 @@ fn main() {
         //     "rand-3-100-400-1",
         //     String::from(include_str!("../cnf/rand-3-100-400-1.cnf")),
         // ),
-        ("s298", String::from(include_str!("../cnf/s298.cnf"))),
+        // ("s298", String::from(include_str!("../cnf/s298.cnf"))),
         // ("grid-75-18-6-q", String::from(include_str!("../cnf/75-18-6-q.cnf"))),
         // ("grid-90-42-1-q", String::from(include_str!("../cnf/90-42-1-q.cnf"))),
         // ("grid-90-16-2-q", String::from(include_str!("../cnf/90-16-2-q.cnf"))),
@@ -197,10 +202,10 @@ fn main() {
         // ("s510", String::from(include_str!("../cnf/s510.cnf"))),
         // ("s641", String::from(include_str!("../cnf/s641.cnf"))),
         // ("count", String::from(include_str!("../cnf/count.cnf"))),
-        (
-            "c8-very-easy",
-            String::from(include_str!("../cnf/c8-very-easy.cnf")),
-        ),
+        // (
+        //     "c8-very-easy",
+        //     String::from(include_str!("../cnf/c8-very-easy.cnf")),
+        // ),
         // ("log1", String::from(include_str!("../cnf/log1.cnf"))),
         // ("c8", String::from(include_str!("../cnf/c8.cnf"))),
     ];

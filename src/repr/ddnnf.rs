@@ -1,14 +1,20 @@
 //! Implementing of a generic decision decomposable deterministic negation normal form
 //! (d-DNNF) pointer type
+//! 
+//! A decision-DNNF is a DNNF where every or-node is a *decision node*, i.e. the high-path
+//! for each disjunction is uniquely given by the configuration of some set of decision
+//! variables
 use core::fmt::Debug;
 use std::collections::HashMap;
 use num::Num;
 
-use super::{var_label::VarLabel, wmc::WmcParams};
+use super::{var_label::{VarLabel, VarSet}, wmc::WmcParams};
 
 /// A base d-DNNF type
 pub enum DDNNF<T> {
-    Or(T, T),
+    /// A tuple (left result, right result, decision set)
+    /// The decision set is the set of variables that are decided by this disjunction
+    Or(T, T, VarSet),
     And(T, T),
     Lit(VarLabel, bool),
     True,
@@ -25,7 +31,7 @@ pub trait DDNNFPtr {
         self.fold(|ddnnf| {
             use DDNNF::*;
             match ddnnf {
-                Or(l, r) => l + r,
+                Or(l, r, _) => l + r,
                 And(l, r) => l * r,
                 True => params.one,
                 False => params.zero,
