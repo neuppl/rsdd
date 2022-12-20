@@ -10,7 +10,7 @@ use rsdd::builder::bdd_builder::BddManager;
 use rsdd::builder::cache::bdd_all_app::BddAllTable;
 use rsdd::builder::sdd_builder::SddManager;
 use rsdd::*;
-use rsdd::repr::vtree::VTreeBuilder;
+use rsdd::repr::vtree::VTree;
 extern crate rand;
 
 /// A list of canonical forms in DIMACS form. The goal of these tests is to ensure that caching
@@ -269,7 +269,7 @@ fn test_sdd_canonicity() {
         let v: Vec<VarLabel> = (0..cnf1.num_vars())
             .map(|x| VarLabel::new(x as u64))
             .collect();
-        let vtree = VTreeBuilder::even_split(&v, 1);
+        let vtree = VTree::even_split(&v, 1);
         let mut man = SddManager::new(vtree);
         let r1 = man.from_cnf(&cnf1);
         let r2 = man.from_cnf(&cnf2);
@@ -502,7 +502,7 @@ mod test_sdd_manager {
     use quickcheck::TestResult;
     use rsdd::builder::cache::bdd_all_app::BddAllTable;
     use rsdd::repr::ddnnf::DDNNFPtr;
-    use rsdd::repr::vtree::VTreeBuilder;
+    use rsdd::repr::vtree::VTree;
     use rsdd::repr::wmc::WmcParams;
     use std::collections::HashMap;
     use std::iter::FromIterator;
@@ -510,7 +510,7 @@ mod test_sdd_manager {
     quickcheck! {
         fn test_cond_and(c: Cnf) -> bool {
             let order : Vec<VarLabel> = (0..16).map(VarLabel::new).collect();
-            let mut mgr = super::SddManager::new(VTreeBuilder::even_split(&order, 4));
+            let mut mgr = super::SddManager::new(VTree::even_split(&order, 4));
             let cnf = mgr.from_cnf(&c);
             let v1 = VarLabel::new(0);
             let bdd1 = mgr.exists(cnf, v1);
@@ -524,8 +524,10 @@ mod test_sdd_manager {
 
     quickcheck! {
         fn ite_iff_rightlinear(c1: Cnf, c2: Cnf) -> bool {
+            // println!("testing with cnf {:?}, {:?}", c1, c2);
             let order : Vec<VarLabel> = (0..16).map(VarLabel::new).collect();
-            let vtree = VTreeBuilder::right_linear(&order);
+            // let vtree = VTree::even_split(&order, 4);
+            let vtree = VTree::right_linear(&order);
             let mut mgr = super::SddManager::new(vtree);
             let cnf1 = mgr.from_cnf(&c1);
             let cnf2 = mgr.from_cnf(&c2);
@@ -545,8 +547,10 @@ mod test_sdd_manager {
 
     quickcheck! {
         fn ite_iff_split(c1: Cnf, c2: Cnf) -> bool {
+            // println!("testing with cnf {:?}, {:?}", c1, c2);
             let order : Vec<VarLabel> = (0..16).map(VarLabel::new).collect();
-            let vtree = VTreeBuilder::even_split(&order, 4);
+            let vtree = VTree::even_split(&order, 4);
+            // let vtree = VTree::right_linear(&order);
             let mut mgr = super::SddManager::new(vtree);
             let cnf1 = mgr.from_cnf(&c1);
             let cnf2 = mgr.from_cnf(&c2);
@@ -577,7 +581,7 @@ mod test_sdd_manager {
                 (0..cnf.num_vars()).map(|x| (VarLabel::new(x as u64), (0.5, 0.5))));
 
             let order : Vec<VarLabel> = (0..cnf.num_vars()).map(|x| VarLabel::new(x as u64)).collect();
-            let mut mgr = super::SddManager::new(VTreeBuilder::even_split(&order, 3));
+            let mut mgr = super::SddManager::new(VTree::even_split(&order, 3));
             let cnf_sdd = mgr.from_cnf(&cnf);
             let sdd_wmc = WmcParams::new_with_default(0.0, 1.0, weight_map);
             let sdd_res = cnf_sdd.wmc(&sdd_wmc);

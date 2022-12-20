@@ -3,7 +3,6 @@
 pub mod btree;
 pub mod hypergraph;
 pub mod lru;
-pub mod semiring;
 
 use std::ptr;
 

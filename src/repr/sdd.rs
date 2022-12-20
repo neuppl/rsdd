@@ -1,36 +1,35 @@
 //! Defines the internal representations for a trimmed and compressed SDD with
 //! complemented edges.
 
-use crate::repr::{var_label::{VarLabel, VarSet}, ddnnf::DDNNF};
-use super::{vtree::{VTreeIndex, VTree}, ddnnf::DDNNFPtr, var_label::Literal};
+use crate::repr::{var_label::VarLabel, ddnnf::DDNNF};
 use std::fmt::Debug;
 use bumpalo::Bump;
-use SddPtr::*;
 
 /// An SddPtr is either (1) a BDD pointer, or (2) a pointer to an SDD node.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Ord, PartialOrd, Copy)]
 pub enum SddPtr {
     PtrTrue,
     PtrFalse,
-    Var(VarLabel, bool, *const VTree),
+    Var(VarLabel, bool),
     Compl(*mut SddOr),
     Reg(*mut SddOr),
 }
 
+use SddPtr::*;
 
 /// An SddOr node is a vector of (prime, sub) pairs.
 #[derive(Debug, Clone, Eq, Ord, PartialOrd)]
 pub struct SddOr {
-    vtree: *const VTree,
+    index: VTreeIndex,
     pub nodes: Vec<(SddPtr, SddPtr)>,
     pub scratch: usize,
 }
 
 impl SddOr {
-    pub fn new(nodes: Vec<(SddPtr, SddPtr)>, vtree: *const VTree) -> SddOr {
+    pub fn new(nodes: Vec<(SddPtr, SddPtr)>, index: VTreeIndex) -> SddOr {
         SddOr {
             nodes,
-            vtree,
+            index,
             scratch: 0,
         }
     }
@@ -38,7 +37,7 @@ impl SddOr {
 
 impl PartialEq for SddOr {
     fn eq(&self, other: &Self) -> bool {
-        self.vtree == other.vtree && self.nodes == other.nodes
+        self.index == other.index && self.nodes == other.nodes
     }
 }
 
@@ -46,9 +45,10 @@ use std::{
     hash::{Hash, Hasher},
 };
 
+use super::{vtree::VTreeIndex, ddnnf::DDNNFPtr, var_label::Literal};
 impl Hash for SddOr {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.vtree.hash(state);
+        self.index.hash(state);
         self.nodes.hash(state);
     }
 }
@@ -63,7 +63,7 @@ impl SddPtr {
         match &self {
             PtrTrue => PtrFalse,
             PtrFalse => PtrTrue,
-            Var(x, p, t) => Var(*x, !p, *t),
+            Var(x, p) => Var(*x, !p),
             Compl(x) => Reg(*x),
             Reg(x) => Compl(*x),
         }
@@ -135,8 +135,8 @@ impl SddPtr {
         PtrTrue
     }
 
-    pub fn var(lbl: VarLabel, polarity: bool, vtree: *const VTree) -> SddPtr {
-        Var(lbl, polarity, vtree)
+    pub fn var(lbl: VarLabel, polarity: bool) -> SddPtr {
+        Var(lbl, polarity)
     }
 
     /// uncomplement a pointer
@@ -151,7 +151,7 @@ impl SddPtr {
         match &self {
             Compl(_) => false,
             Reg(_) => false,
-            Var(_, _, _) => false,
+            Var(_, _) => false,
             PtrTrue => true,
             PtrFalse => true,
         }
@@ -159,14 +159,14 @@ impl SddPtr {
 
     pub fn is_var(&self) -> bool {
         match &self {
-            Var(_, _, _) => true,
+            Var(_, _) => true,
             _ => false
         }
     }
 
     pub fn is_neg_var(&self) -> bool {
         match &self {
-            Var(_, false, _) => true,
+            Var(_, false) => true,
             _ => false
         }
     }
@@ -174,7 +174,7 @@ impl SddPtr {
 
     pub fn get_var(&self) -> Literal {
         match &self {
-            Var(v, b, _) => Literal::new(*v, *b),
+            Var(v, b) => Literal::new(*v, *b),
             _ => panic!("called get_var on non var")
         }
     }
@@ -182,14 +182,14 @@ impl SddPtr {
 
     pub fn is_true(&self) -> bool {
         match &self {
-            Compl(_) | Reg(_) | PtrFalse | Var(_, _, _) => false,
+            Compl(_) | Reg(_) | PtrFalse | Var(_, _) => false,
             PtrTrue => true,
         }
     }
 
     pub fn is_false(&self) -> bool {
         match &self {
-            Compl(_) | Reg(_) | PtrTrue | Var(_, _, _) => false,
+            Compl(_) | Reg(_) | PtrTrue | Var(_, _) => false,
             PtrFalse => true,
         }
     }
@@ -244,37 +244,12 @@ impl SddPtr {
         &self.node_ref().nodes
     }
 
-    /// gets a reference to the vtree for the node `ptr`
-    /// 
-    /// Panics if not a node pointer
-    pub fn deref_vtree(&self) -> &VTree {
-        match self {
-            Var(_, _, t) => unsafe { &(**t) },
-            Compl(v) | Reg(v) => unsafe {
-                &(*(*(*v)).vtree)
-            },
-            _ => panic!("calling deref_vtree on constant")
-        }
-    }
-
-    pub fn get_vtree_index(&self) -> VTreeIndex {
-        self.deref_vtree().index()
-    }
-
-    /// true if `self` is prime to `other`
-    /// 
-    /// panics if either `self` or `other` is constant
-    pub fn is_prime(&self, other: SddPtr) -> bool {
-        self.deref_vtree().index() < other.deref_vtree().index()
-    }
 
     /// retrieve the vtree index (as its index in a left-first depth-first traversal)
     ///
-    /// Panics if this is a constant
-    /// 
-    /// Invariant: The returned &VTree ref cannot outlive the VTree manager
-    pub fn vtree(&self) -> *const VTree {
-        self.node_ref().vtree
+    /// panics if this is a constant
+    pub fn vtree(&self) -> VTreeIndex {
+        self.node_ref().index
     }
 }
 
@@ -286,7 +261,7 @@ impl DDNNFPtr for SddPtr {
             match ptr {
                 PtrTrue => f(DDNNF::True),
                 PtrFalse => f(DDNNF::False),
-                Var(v, polarity, _) => f(DDNNF::Lit(v, polarity)),
+                Var(v, polarity) => f(DDNNF::Lit(v, polarity)),
                 Compl(_) | Reg(_) => {
                     // inside the cache, store a (compl, non_compl) pair corresponding to the 
                     // complemented and uncomplemented pass over this node
@@ -298,14 +273,13 @@ impl DDNNFPtr for SddPtr {
                         Some((_, Some(v))) if !ptr.is_compl() => return v.clone(),
                         Some((None, cached)) | Some((cached, None)) => {
                             // no cached value found, compute it
-                            let decisions = VarSet::new();
                             let mut or_v = f(DDNNF::False);
                             for (p,s) in ptr.node_list() {
                                 let s = if ptr.is_compl() { s.neg() } else { *s };
                                 let p_sub = bottomup_pass_h(*p, f, alloc);
                                 let s_sub = bottomup_pass_h(s, f, alloc);
                                 let a = f(DDNNF::And(p_sub, s_sub));
-                                or_v = f(DDNNF::Or(or_v, a, decisions.clone()));
+                                or_v = f(DDNNF::Or(or_v, a));
                             }
 
                             // cache and return or_v

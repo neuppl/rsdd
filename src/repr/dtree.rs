@@ -11,7 +11,7 @@ use crate::repr::{
     var_label::{Literal, VarLabel},
 };
 
-use super::{var_order::VarOrder, vtree::VTreeBuilder};
+use super::{var_order::VarOrder, vtree::VTree};
 
 type VarSet = BitSet;
 
@@ -217,18 +217,18 @@ impl DTree {
 
     /// construct a right-linear vtree that has an optional continuation
     /// a continuation is a sub-tree that the right-linear vtree terminates to
-    fn right_linear(vars: &[VarLabel], continuation: &Option<VTreeBuilder>) -> VTreeBuilder {
+    fn right_linear(vars: &[VarLabel], continuation: &Option<VTree>) -> VTree {
         // slice patterns are great!
         match (vars, continuation) {
             (&[], None) => panic!("invalid vtree: no vars"),
             (&[], Some(v)) => v.clone(),
             (&[v1], Some(v2)) => {
-                VTreeBuilder::new_node(Box::new(VTreeBuilder::new_leaf(v1)), Box::new(v2.clone()))
+                VTree::new_node(Box::new(VTree::new_leaf(v1)), Box::new(v2.clone()))
             }
-            (&[v1], None) => VTreeBuilder::new_leaf(v1),
+            (&[v1], None) => VTree::new_leaf(v1),
             (&[v, ref vars @ ..], _) => {
                 let sub = DTree::right_linear(vars, continuation);
-                VTreeBuilder::new_node(Box::new(VTreeBuilder::new_leaf(v)), Box::new(sub))
+                VTree::new_node(Box::new(VTree::new_leaf(v)), Box::new(sub))
             }
         }
     }
@@ -238,7 +238,7 @@ impl DTree {
     /// Oztok, Umut, and Adnan Darwiche. "On compiling CNF into decision-DNNF."
     /// International Conference on Principles and Practice of Constraint
     /// Programming. Springer, Cham, 2014.
-    pub fn to_vtree(&self) -> Option<VTreeBuilder> {
+    pub fn to_vtree(&self) -> Option<VTree> {
         match &self {
             // TODO: resolve unused
             #[allow(unused)]
@@ -276,7 +276,7 @@ impl DTree {
                     (Some(l), None) => Some(DTree::right_linear(cutset_v.as_slice(), &Some(l))),
                     (None, Some(r)) => Some(DTree::right_linear(cutset_v.as_slice(), &Some(r))),
                     (Some(l), Some(r)) => {
-                        let subtree = VTreeBuilder::new_node(Box::new(l), Box::new(r));
+                        let subtree = VTree::new_node(Box::new(l), Box::new(r));
                         Some(DTree::right_linear(cutset_v.as_slice(), &Some(subtree)))
                     }
                 }

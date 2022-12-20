@@ -27,7 +27,7 @@ pub mod repr;
 pub mod sample;
 pub mod unique_table;
 
-use repr::vtree::VTreeBuilder;
+use repr::vtree::VTree;
 
 use crate::builder::bdd_builder::BddManager;
 use crate::builder::bdd_plan::BddPlan;

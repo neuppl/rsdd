@@ -1,6 +1,4 @@
 //! Binary decision diagram representation
-use crate::repr::var_label::VarSet;
-
 use super::{
     model::PartialModel,
     var_label::{Literal, VarLabel},
@@ -426,10 +424,7 @@ impl DDNNFPtr for BddPtr {
                             let and_low = f(DDNNF::And(lit_low, low_v));
                             let and_high = f(DDNNF::And(lit_high, high_v));
 
-                            let mut s = VarSet::new();
-                            s.insert(top);
-
-                            let or_v = f(DDNNF::Or(and_low, and_high, s));
+                            let or_v = f(DDNNF::Or(and_low, and_high));
 
                             // cache and return or_v
                             if ptr.is_compl() { 

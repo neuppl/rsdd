@@ -5,7 +5,7 @@ extern crate rsgm;
 use clap::Parser;
 use criterion::black_box;
 use rsdd::builder::sdd_builder;
-use rsdd::repr::vtree::VTreeBuilder;
+use rsdd::repr::vtree::VTree;
 
 use rsdd::repr::cnf::Cnf;
 use rsdd::repr::dtree::DTree;
@@ -116,7 +116,7 @@ fn build_dtree(cnf: &Cnf) -> DTree {
     dtree
 }
 
-fn compile_sdd_benchmark(cnf: &Cnf, vtree: VTreeBuilder, modified: bool) -> Duration {
+fn compile_sdd_benchmark(cnf: &Cnf, vtree: VTree, modified: bool) -> Duration {
     let mut compiler = sdd_builder::SddManager::new(vtree);
     compiler.set_compression(!modified);
 
