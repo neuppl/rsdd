@@ -4,10 +4,12 @@ use core::fmt::Debug;
 use std::collections::HashMap;
 use num::Num;
 
-use super::{var_label::VarLabel, wmc::WmcParams};
+use super::{var_label::{VarLabel, VarSet}, wmc::WmcParams};
 
 /// A base d-DNNF type
 pub enum DDNNF<T> {
+    /// contains the cached values for the children, and the VarSet that
+    /// contains the set of decision variables that this Or node was made with
     Or(T, T),
     And(T, T),
     Lit(VarLabel, bool),
@@ -18,7 +20,6 @@ pub enum DDNNF<T> {
 pub trait DDNNFPtr {
     /// performs a memoized bottom-up pass with aggregating function `f` calls
     fn fold<T: Clone + Copy + Debug, F: Fn(DDNNF<T>) -> T>(&self, f: F) -> T;
-
 
     /// Weighted-model count
     fn wmc<T: Num + Clone + Debug + Copy>(&self, params: &WmcParams<T>) -> T {

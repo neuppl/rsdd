@@ -4,7 +4,7 @@
 use crate::backing_store::bump_table::BumpTable;
 use crate::backing_store::UniqueTable;
 use crate::repr::ddnnf::DDNNFPtr;
-use crate::repr::sdd::{SddOr, SddPtr};
+use crate::repr::sdd::{SddOr, SddPtr, SddAnd};
 use crate::repr::vtree::{VTree, VTreeIndex, VTreeManager};
 use crate::repr::wmc::WmcParams;
 use crate::{
@@ -64,7 +64,7 @@ impl<'a> SddManager {
 
     /// Canonicalizes the list of (prime, sub) terms in-place
     /// `node`: a list of (prime, sub) pairs
-    fn compress(&mut self, node: &mut Vec<(SddPtr, SddPtr)>) {
+    fn compress(&mut self, node: &mut Vec<SddAnd>) {
         if !self.use_compression {
             panic!("compress called when disabled")
         }
@@ -72,9 +72,9 @@ impl<'a> SddManager {
             // see if we can compress i
             let mut j = i + 1;
             while j < node.len() {
-                if self.sdd_eq(node[i].1, node[j].1) {
+                if self.sdd_eq(node[i].sub(), node[j].sub()) {
                     // compress j into i and remove j from the node list
-                    node[i].0 = self.or(node[i].0, node[j].0);
+                    node[i] = SddAnd::new(self.or(node[i].prime(), node[j].prime()), node[i].sub());
                     node.swap_remove(j);
                 } else {
                     j += 1;
@@ -110,46 +110,182 @@ impl<'a> SddManager {
         }
     }
 
-
-    /// Returns a canonicalized SDD pointer from a list of (prime, sub) pairs
-    fn canonicalize(&mut self, mut node: Vec<(SddPtr, SddPtr)>, table: VTreeIndex) -> SddPtr {
-        if self.use_compression {
-            // first compress
-            self.compress(&mut node);
-        }
-        // check for a base case
-        if node.is_empty() {
-            return SddPtr::true_ptr();
-        }
-        if node.len() == 1 {
-            if node[0].0.is_true() {
-                return node[0].1;
-            }
-        } else if node.len() == 2 {
-            if node[0].1.is_true() && node[1].1.is_false() {
-                return node[0].0;
-            } else if node[0].1.is_false() && node[1].1.is_true() {
-                return node[1].0;
-            }
-        }
-
-        // we have a fresh SDD pointer, uniqify it
-        node.sort_by(|a, b| a.0.cmp(&b.0));
-
-        // normalize: ensure that the first sub is not false and non-negated
-        let r = if node[0].1.is_compl() || node[0].1.is_false() || node[0].1.is_neg_var() {
+    fn unique_or(&mut self, mut node: Vec<SddAnd>, table: VTreeIndex) -> SddPtr {
+        node.sort_by(|a, b| a.prime().cmp(&b.prime()));
+        if node[0].sub().is_compl() || node[0].sub().is_false() || node[0].sub().is_neg_var() {
             for i in 0..node.len() {
-                node[i].1 = node[i].1.neg();
+                node[i] = SddAnd::new(node[i].prime(), node[i].sub().neg());
             }
             self.get_or_insert(SddOr::new(node, table)).neg()
         } else {
             self.get_or_insert(SddOr::new(node, table))
-        };
-        r
+        }
+    }
+
+    /// Returns a canonicalized SDD pointer from a list of (prime, sub) pairs
+    fn canonicalize(&mut self, mut node: Vec<SddAnd>, table: VTreeIndex) -> SddPtr {
+        // check for base cases before compression
+        if node.is_empty() {
+            return SddPtr::true_ptr();
+        }
+        if node.len() == 1 {
+            if node[0].prime().is_true() {
+                return node[0].sub();
+            }
+        } else if node.len() == 2 {
+            if node[0].sub().is_true() && node[1].sub().is_false() {
+                return node[0].prime();
+            } else if node[0].sub().is_false() && node[1].sub().is_true() {
+                return node[1].prime();
+            }
+        }
+
+        if self.use_compression {
+            // first compress
+            self.compress(&mut node);
+        }
+
+        // check for a base case after compression (compression can sometimes
+        // reduce node counts to a base case)
+        if node.is_empty() {
+            return SddPtr::true_ptr();
+        }
+        if node.len() == 1 {
+            if node[0].prime().is_true() {
+                return node[0].sub();
+            }
+        } else if node.len() == 2 {
+            if node[0].sub().is_true() && node[1].sub().is_false() {
+                return node[0].prime();
+            } else if node[0].sub().is_false() && node[1].sub().is_true() {
+                return node[1].prime();
+            }
+        }
+        self.unique_or(node, table)
     }
 
     pub fn or_internal(&mut self, a: SddPtr, b: SddPtr) -> SddPtr {
         self.and_rec(a.neg(), b.neg()).neg()
+    }
+
+    /// conjoin two SDDs that are in independent vtrees
+    /// a is prime to b
+    fn and_indep(&mut self, a: SddPtr, b: SddPtr, lca: VTreeIndex) -> SddPtr {
+        let mut node = vec![SddAnd::new(a, b), SddAnd::new(a.neg(), SddPtr::false_ptr())];
+        // no need to canonicalize, guaranteed canonical by construction
+        self.unique_or(node, lca)
+    }
+
+    /// conjoin SDDs where `d` is a descendent of `r`, and `d` is sub to `r`
+    /// i.e. for vtree
+    ///       3 
+    ///    1       5
+    ///  0  2    4   6
+    /// r might be wrt. node 3, and d wrt. node 5
+    fn and_sub_desc(&mut self, r: SddPtr, d: SddPtr) -> SddPtr {
+        let mut v : Vec<SddAnd> = Vec::with_capacity(r.num_nodes());
+        for a in r.node_iter() {
+            let root_p = a.prime();
+            let root_s = a.sub();
+            let root_s = if r.is_compl() { root_s.neg() } else { root_s };
+            let new_s = self.and(root_s, d);
+            v.push(SddAnd::new(root_p, new_s));
+        }
+        return self.canonicalize(v, r.vtree())
+    }
+
+
+    /// conjoin SDDs where `d` is a descendent of `r`, and `r` is sub to `d`
+    /// i.e. for vtree
+    ///       3 
+    ///    1       5
+    ///  0  2    4   6
+    /// r might be wrt. node 3, and d wrt. node 1
+    fn and_prime_desc(&mut self, r: SddPtr, d: SddPtr) -> SddPtr {
+        // normalized structure:
+        //       o 
+        //   /      \ 
+        // [d,T]  [!d, F]
+
+        // first, trim by seeing if any primes in `r` are equal to `d` or its negation
+        // for a in r.node_iter() {
+        //     let s = if r.is_compl() { a.sub().neg() } else { a.sub() };
+        //     if s == d {
+        //         // all other primes are false; return this sub
+        //         return s;
+        //     } else if s == d.neg() {
+        //         // all other primes are 
+        //     }
+        // }
+
+        // no need to canonicalize -- cannot introduce new subs
+        // return self.unique_or(v, r.vtree());
+
+        // TODO optimize this for special cases
+        let mut v : Vec<SddAnd> = Vec::with_capacity(r.num_nodes());
+        for a in r.node_iter() {
+            v.push(SddAnd::new(self.and(a.prime(), d), a.sub()));
+        }
+        return self.canonicalize(v, r.vtree());
+    }
+
+    /// conjoin SDDs where `a` and `b` are wrt. the same vtree node
+    fn and_cartesian(&mut self, a: SddPtr, b: SddPtr, lca: VTreeIndex) -> SddPtr {
+        // now the SDDs are normalized with respect to the same vtree, so we can 
+        // apply the prime/sub pairs
+
+        // iterate over each prime/sub pair and do the relevant application
+        // there are 2 simplifying cases:
+        // (1) if p1i = p2j or if p1i => p2j, then p1k x p2j = false for all k<>i
+        // (2) if p1i = !p2j, then p1k x p2j = p1k for all k<>i
+        let mut r: Vec<SddAnd> = Vec::new();
+        for a1 in a.node_iter() {
+            let p1 = a1.prime();
+            let s1 = a1.sub();
+            // // check if there exists an equal prime
+            // let eq_itm = sub_iter
+            //     .iter()
+            //     .find(|(ref p2, ref _s2)| self.sdd_eq(*p1, *p2));
+            let s1 = if a.is_compl() { s1.neg() } else { s1 };
+            // if eq_itm.is_some() {
+            //     let (_, s2) = eq_itm.unwrap();
+            //     let s2 = if b.is_compl() { s2.neg() } else { *s2 };
+            //     // this sub is the only one with a non-false prime, so no need to iterate
+            //     r.push((*p1, self.and_rec(s1, s2)));
+            //     continue;
+            // }
+
+            // no special case
+            for a2 in b.node_iter() {
+                let p2 = a2.prime();
+                let s2 = a2.sub();
+                let s2 = if b.is_compl() { s2.neg() } else { s2 };
+                let p = self.and_rec(p1, p2);
+                if p.is_false() {
+                    continue;
+                }
+                let s = self.and_rec(s1, s2);
+                // check if one of the nodes is true; if it is, we can
+                // return a `true` SddPtr here, for trimming
+                if p.is_true() && s.is_true() {
+                    let new_v = SddPtr::true_ptr();
+                    self.app_cache[lca.value()].insert((a, b), new_v);
+                    return new_v;
+                }
+                r.push(SddAnd::new(p, s));
+                // check if p1 => p2 (which is true iff (p1 && p2) == p1); if it
+                // does we can stop early because the rest of the primes will be
+                // false
+                // if self.sdd_eq(*p1, p) {
+                //     break;
+                // }
+            }
+        }
+
+        // canonicalize
+        let ptr = self.canonicalize(r, lca);
+        self.app_cache[lca.value()].insert((a, b), ptr);
+        ptr
     }
 
     fn and_rec(&mut self, a: SddPtr, b: SddPtr) -> SddPtr {
@@ -196,92 +332,15 @@ impl<'a> SddManager {
         // we can only conjoin two SDD nodes if they are normalized with respect
         // to the same vtree; the following code does this for each of the 
         // above cases. 
-        // 
-        // TODO this to_vec is probably very bad for perf
-        let (prime_iter, sub_iter) = if av == bv {
-            // shared vtree, no normalization necessary
-            let outer = a.or_ref().to_vec();
-            let inner = b.or_ref().to_vec();
-            (outer, inner)
+        if av == bv {
+            return self.and_cartesian(a, b, lca);
         } else if lca == av {
-            // least common ancestor is `a`, so normalize by 
-            // creating a or-node
-            //   o
-            //   |
-            // [T,b]
-            let outer = a.or_ref().to_vec();
-            let inner_v = vec![(SddPtr::true_ptr(), b.to_reg())];
-            (outer, inner_v)
+            return self.and_sub_desc(a, b)
         } else if lca == bv {
-            // least common ancestor is b
-            // normalize by creating an or-node 
-            //       o 
-            //   /      \ 
-            // [a,T]  [!a, F]
-            let v = if a.is_compl() { SddPtr::false_ptr() } else { SddPtr::true_ptr() };
-            let outer_v = vec![(a, v), (a.neg(), v.neg())];
-            let inner = b.or_ref().to_vec();
-            (outer_v, inner)
+            return self.and_prime_desc(a, b);
         } else {
-            // shared least common-ancestor
-            // normalize by creating both of the above SDDs
-            let v = if a.is_compl() { SddPtr::false_ptr() } else { SddPtr::true_ptr() };
-            let outer_v = vec![(a, v), (a.neg(), v.neg())];
-            let inner_v = vec![(SddPtr::true_ptr(), b.to_reg())];
-            (outer_v, inner_v)
+            return self.and_indep(a, b, lca)
         };
-
-        // now the SDDs are normalized with respect to the same vtree, so we can 
-        // apply the prime/sub pairs
-
-        // iterate over each prime/sub pair and do the relevant application
-        // there are 2 simplifying cases:
-        // (1) if p1i = p2j or if p1i => p2j, then p1k x p2j = false for all k<>i
-        // (2) if p1i = !p2j, then p1k x p2j = p1k for all k<>i
-        let mut r: Vec<(SddPtr, SddPtr)> = Vec::new();
-        for &(ref p1, ref s1) in prime_iter.iter() {
-            // // check if there exists an equal prime
-            // let eq_itm = sub_iter
-            //     .iter()
-            //     .find(|(ref p2, ref _s2)| self.sdd_eq(*p1, *p2));
-            let s1 = if a.is_compl() { s1.neg() } else { *s1 };
-            // if eq_itm.is_some() {
-            //     let (_, s2) = eq_itm.unwrap();
-            //     let s2 = if b.is_compl() { s2.neg() } else { *s2 };
-            //     // this sub is the only one with a non-false prime, so no need to iterate
-            //     r.push((*p1, self.and_rec(s1, s2)));
-            //     continue;
-            // }
-
-            // no special case
-            for &(ref p2, ref s2) in sub_iter.iter() {
-                let s2 = if b.is_compl() { s2.neg() } else { *s2 };
-                let p = self.and_rec(*p1, *p2);
-                if p.is_false() {
-                    continue;
-                }
-                let s = self.and_rec(s1, s2);
-                // check if one of the nodes is true; if it is, we can
-                // return a `true` SddPtr here, for trimming
-                if p.is_true() && s.is_true() {
-                    let new_v = SddPtr::true_ptr();
-                    self.app_cache[lca.value()].insert((a, b), new_v);
-                    return new_v;
-                }
-                r.push((p, s));
-                // check if p1 => p2 (which is true iff (p1 && p2) == p1); if it
-                // does we can stop early because the rest of the primes will be
-                // false
-                // if self.sdd_eq(*p1, p) {
-                //     break;
-                // }
-            }
-        }
-
-        // canonicalize
-        let ptr = self.canonicalize(r, lca);
-        self.app_cache[lca.value()].insert((a, b), ptr);
-        ptr
     }
 
     pub fn and(&mut self, a: SddPtr, b: SddPtr) -> SddPtr {
@@ -317,9 +376,11 @@ impl<'a> SddManager {
 
         let mut v = Vec::new();
         // f is a node; recurse and compress the result
-        for (prime, sub) in f.node_list().to_vec().iter() {
-            let newp = self.condition(*prime, lbl, value);
-            let sub = if f.is_compl() { sub.neg() } else { *sub };
+        for a in f.node_iter() {
+            let prime = a.prime();
+            let sub = a.sub();
+            let newp = self.condition(prime, lbl, value);
+            let sub = if f.is_compl() { sub.neg() } else { sub };
             if newp.is_false() {
                 continue;
             };
@@ -327,7 +388,7 @@ impl<'a> SddManager {
             if newp.is_true() {
                 return news;
             }
-            v.push((newp, news));
+            v.push(SddAnd::new(newp, news));
         }
         self.canonicalize(v, f.vtree())
     }
@@ -353,11 +414,8 @@ impl<'a> SddManager {
     /// Existentially quantifies out the variable `lbl` from `f`
     pub fn exists(&mut self, sdd: SddPtr, lbl: VarLabel) -> SddPtr {
         // TODO this can be optimized by specializing it
-        println!("sdd: {}", self.print_sdd(sdd));
         let v1 = self.condition(sdd, lbl, true);
-        println!("conditioned true: {}", self.print_sdd(v1));
         let v2 = self.condition(sdd, lbl, false);
-        println!("conditioned false: {}", self.print_sdd(v2));
         self.or(v1, v2)
     }
 
@@ -508,10 +566,11 @@ impl<'a> SddManager {
                 }
 
                 let mut doc: Doc<BoxDoc> = Doc::from("");
-                let sl = ptr.node_list();
-                for &(ref prime, ref sub) in sl.iter() {
-                    let s = if ptr.is_compl() { sub.neg() } else { *sub };
-                    let new_s1 = helper(man, *prime);
+                for a in ptr.node_iter() {
+                    let sub = a.sub();
+                    let prime = a.prime();
+                    let s = if ptr.is_compl() { sub.neg() } else { sub };
+                    let new_s1 = helper(man, prime);
                     let new_s2 = helper(man, s);
                     doc = doc.append(Doc::newline()).append(
                         (Doc::from("/\\")

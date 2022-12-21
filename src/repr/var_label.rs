@@ -2,6 +2,8 @@
 use std::fmt;
 use std::mem;
 extern crate quickcheck;
+use bit_set::BitSet;
+
 use self::quickcheck::{Arbitrary, Gen};
 
 /// a label for each distinct variable in the BDD
@@ -82,5 +84,30 @@ impl Arbitrary for Literal {
     fn arbitrary(g: &mut Gen) -> Literal {
         let varlbl = u64::arbitrary(g) % 16;
         Literal::new(VarLabel::new(varlbl), bool::arbitrary(g))
+    }
+}
+
+/// A structure that contains sets of variables
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct VarSet {
+    b: BitSet
+}
+
+impl VarSet {
+    pub fn new() -> VarSet {
+        VarSet { b: BitSet::new() }
+    }
+
+    /// unions self with other
+    pub fn union_with(&mut self, other: &VarSet) -> () {
+        self.b.union_with(&other.b);
+    }
+
+    pub fn insert(&mut self, v: VarLabel) -> () {
+        self.b.insert(v.value_usize());
+    }
+
+    pub fn contains(&self, v: VarLabel) -> bool {
+        self.b.contains(v.value_usize())
     }
 }

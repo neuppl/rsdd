@@ -86,8 +86,8 @@ fn bench_cnf_bdd(cnf_str: String, debug: bool) -> Duration {
     let start = Instant::now();
     // compile_topdown_nnf(black_box(cnf_str), debug);
     // compile_topdown_nnf_sample(black_box(cnf_str), debug);
+    // compile_sdd(cnf_str, debug);
     // compile_bdd(cnf_str, debug);
-    compile_bdd(cnf_str, debug);
     start.elapsed()
 }
 

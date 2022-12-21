@@ -4,8 +4,8 @@
 use crate::repr::{var_label::VarLabel, ddnnf::DDNNF};
 use std::fmt::Debug;
 use bumpalo::Bump;
+use SddPtr::*;
 
-/// An SddPtr is either (1) a BDD pointer, or (2) a pointer to an SDD node.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Ord, PartialOrd, Copy)]
 pub enum SddPtr {
     PtrTrue,
@@ -15,18 +15,35 @@ pub enum SddPtr {
     Reg(*mut SddOr),
 }
 
-use SddPtr::*;
+
+#[derive(Debug, Clone, Hash, PartialEq, Eq, Ord, PartialOrd, Copy)]
+pub struct SddAnd {
+    prime: SddPtr,
+    sub: SddPtr
+}
+
+impl SddAnd {
+    pub fn prime(&self) -> SddPtr {
+        self.prime
+    }
+    pub fn sub(&self) -> SddPtr {
+        self.sub
+    }
+    pub fn new(prime: SddPtr, sub: SddPtr) -> SddAnd {
+        SddAnd { prime, sub }
+    }
+}
 
 /// An SddOr node is a vector of (prime, sub) pairs.
 #[derive(Debug, Clone, Eq, Ord, PartialOrd)]
 pub struct SddOr {
     index: VTreeIndex,
-    pub nodes: Vec<(SddPtr, SddPtr)>,
+    pub nodes: Vec<SddAnd>,
     pub scratch: usize,
 }
 
 impl SddOr {
-    pub fn new(nodes: Vec<(SddPtr, SddPtr)>, index: VTreeIndex) -> SddOr {
+    pub fn new(nodes: Vec<SddAnd>, index: VTreeIndex) -> SddOr {
         SddOr {
             nodes,
             index,
@@ -34,6 +51,7 @@ impl SddOr {
         }
     }
 }
+
 
 impl PartialEq for SddOr {
     fn eq(&self, other: &Self) -> bool {
@@ -104,9 +122,9 @@ impl SddPtr {
             return;
         } else {
             n.scratch = 0;
-            for (prime, sub) in &n.nodes {
-                prime.clear_scratch();
-                sub.clear_scratch();
+            for a in &n.nodes {
+                a.prime().clear_scratch();
+                a.sub().clear_scratch();
             }
         }
     }
@@ -207,8 +225,16 @@ impl SddPtr {
         }
     }
 
-    pub fn node_list(&self) -> &Vec<(SddPtr, SddPtr)> {
-        &self.node_ref().nodes
+    /// get an iterator to all the (prime, sub) pairs this node points to
+    /// panics if not an or-node
+    pub fn node_iter<'a>(&'a self) -> impl Iterator<Item = &'a SddAnd> {
+        self.node_ref().nodes.iter()
+    }
+
+    /// returns number of (prime, sub) pairs this node points to
+    /// panics if not an or-node
+    pub fn num_nodes<'a>(&'a self) -> usize {
+        self.node_ref().nodes.len()
     }
 
     /// Get an immutable reference to the node that &self points to
@@ -236,14 +262,6 @@ impl SddPtr {
             }
         }
     }
-
-    /// Get a reference to the slice &[(prime, sub)] that &self points to
-    ///
-    /// Panics if not a node pointer
-    pub fn or_ref(&self) -> &[(SddPtr, SddPtr)] {
-        &self.node_ref().nodes
-    }
-
 
     /// retrieve the vtree index (as its index in a left-first depth-first traversal)
     ///
@@ -274,9 +292,9 @@ impl DDNNFPtr for SddPtr {
                         Some((None, cached)) | Some((cached, None)) => {
                             // no cached value found, compute it
                             let mut or_v = f(DDNNF::False);
-                            for (p,s) in ptr.node_list() {
-                                let s = if ptr.is_compl() { s.neg() } else { *s };
-                                let p_sub = bottomup_pass_h(*p, f, alloc);
+                            for and in ptr.node_iter() {
+                                let s = if ptr.is_compl() { and.sub().neg() } else { and.sub() };
+                                let p_sub = bottomup_pass_h(and.prime(), f, alloc);
                                 let s_sub = bottomup_pass_h(s, f, alloc);
                                 let a = f(DDNNF::And(p_sub, s_sub));
                                 or_v = f(DDNNF::Or(or_v, a));
