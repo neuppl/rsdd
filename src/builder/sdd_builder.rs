@@ -210,11 +210,8 @@ impl<'a> SddManager {
         // first, trim by seeing if any primes in `r` are equal to `d` or its negation
         // for a in r.node_iter() {
         //     let s = if r.is_compl() { a.sub().neg() } else { a.sub() };
-        //     if s == d {
-        //         // all other primes are false; return this sub
+        //     if a.prime() == d {
         //         return s;
-        //     } else if s == d.neg() {
-        //         // all other primes are 
         //     }
         // }
 
@@ -223,10 +220,47 @@ impl<'a> SddManager {
 
         // TODO optimize this for special cases
         let mut v : Vec<SddAnd> = Vec::with_capacity(r.num_nodes());
-        for a in r.node_iter() {
-            v.push(SddAnd::new(self.and(a.prime(), d), a.sub()));
+        let mut b = vec![SddAnd::new(d, SddPtr::true_ptr()), SddAnd::new(d.neg(), SddPtr::false_ptr())];
+
+        let mut new_n: Vec<SddAnd> = Vec::new();
+        for a1 in r.node_iter() {
+            let p1 = a1.prime();
+            let s1 = a1.sub();
+            let s1 = if r.is_compl() { s1.neg() } else { s1 };
+            // no special case
+            for a2 in b.iter() {
+                let p2 = a2.prime();
+                let s2 = a2.sub();
+                let p = self.and_rec(p1, p2);
+                if p.is_false() {
+                    continue;
+                }
+                let s = self.and_rec(s1, s2);
+                // check if one of the nodes is true; if it is, we can
+                // return a `true` SddPtr here, for trimming
+                if p.is_true() && s.is_true() {
+                    let new_v = SddPtr::true_ptr();
+                    // self.app_cache[lca.value()].insert((a, b), new_v);
+                    return new_v;
+                }
+                new_n.push(SddAnd::new(p, s));
+            }
         }
-        return self.canonicalize(v, r.vtree());
+
+        // canonicalize
+        let ptr = self.canonicalize(new_n, r.vtree());
+        // self.app_cache[lca.value()].insert((a, b), ptr);
+        ptr
+ 
+        // for a in r.node_iter() {
+        //     let p = self.and(a.prime(), d);
+        //     let s = if r.is_compl() { a.sub().neg() } else { a.sub() };
+        //     if p.is_false() {
+        //         continue;
+        //     }
+        //     v.push(SddAnd::new(p, s));
+        // }
+        // return self.canonicalize(v, r.vtree());
     }
 
     /// conjoin SDDs where `a` and `b` are wrt. the same vtree node
@@ -337,7 +371,7 @@ impl<'a> SddManager {
         } else if lca == av {
             return self.and_sub_desc(a, b)
         } else if lca == bv {
-            return self.and_prime_desc(a, b);
+            return self.and_prime_desc(b, a);
         } else {
             return self.and_indep(a, b, lca)
         };
@@ -704,6 +738,7 @@ fn simple_equality() {
     let a = SddPtr::var(VarLabel::new(0), true);
     let d = SddPtr::var(VarLabel::new(3), true);
     let inner = mgr.or(a, d);
+    println!("0 || 3:\n{}", mgr.print_sdd(inner));
     let term = mgr.and(inner, a);
     assert_eq!(a, term);
 }
@@ -766,7 +801,7 @@ fn sdd_test_exist() {
 
 #[test]
 fn sdd_bigand() {
-    let mut man = SddManager::new(VTree::even_split(
+    let mut man = SddManager::new(VTree::right_linear(
         &[
             VarLabel::new(0),
             VarLabel::new(1),
@@ -774,8 +809,18 @@ fn sdd_bigand() {
             VarLabel::new(3),
             VarLabel::new(4),
         ],
-        2,
     ));
+
+    // let mut man = SddManager::new(VTree::even_split(
+    //     &[
+    //         VarLabel::new(0),
+    //         VarLabel::new(1),
+    //         VarLabel::new(2),
+    //         VarLabel::new(3),
+    //         VarLabel::new(4),
+    //     ],
+    //     2,
+    // ));
     // 1 /\ 2 /\ 3
     let v1 = SddPtr::var(VarLabel::new(0), true);
     let v2 = SddPtr::var(VarLabel::new(1), true);

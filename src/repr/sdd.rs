@@ -265,7 +265,7 @@ impl SddPtr {
 
     /// retrieve the vtree index (as its index in a left-first depth-first traversal)
     ///
-    /// panics if this is a constant
+    /// panics if this is not a node
     pub fn vtree(&self) -> VTreeIndex {
         self.node_ref().index
     }
