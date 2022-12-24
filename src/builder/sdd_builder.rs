@@ -4,7 +4,7 @@
 use crate::backing_store::bump_table::BumpTable;
 use crate::backing_store::UniqueTable;
 use crate::repr::ddnnf::DDNNFPtr;
-use crate::repr::sdd::{SddOr, SddPtr, SddAnd};
+use crate::repr::sdd::{SddOr, SddPtr, SddAnd, BinarySDD};
 use crate::repr::vtree::{VTree, VTreeIndex, VTreeManager};
 use crate::repr::wmc::WmcParams;
 use crate::{
@@ -13,7 +13,7 @@ use crate::{
 };
 
 use std::collections::{HashMap, HashSet};
-use std::fmt::Debug;
+use std::fmt::{Debug, Binary};
 
 #[derive(Debug, Clone)]
 pub struct SddStats {
@@ -29,7 +29,8 @@ impl SddStats {
 
 
 pub struct SddManager {
-    tbl: BumpTable<SddOr>,
+    sdd_tbl: BumpTable<SddOr>,
+    bdd_tbl: BumpTable<BinarySDD>,
     vtree: VTreeManager,
     stats: SddStats,
     /// the apply cache
@@ -46,7 +47,8 @@ impl<'a> SddManager {
         }
 
         SddManager {
-            tbl: BumpTable::new(),
+            sdd_tbl: BumpTable::new(),
+            bdd_tbl: BumpTable::new(),
             stats: SddStats::new(),
             vtree: VTreeManager::new(vtree),
             app_cache,
@@ -60,6 +62,10 @@ impl<'a> SddManager {
 
     pub fn get_vtree_root(&self) -> &VTree {
         self.vtree.vtree_root()
+    }
+
+    pub fn get_vtree_manager(&self) -> &VTreeManager {
+        &self.vtree
     }
 
     /// Canonicalizes the list of (prime, sub) terms in-place
@@ -85,7 +91,7 @@ impl<'a> SddManager {
 
     /// Normalizes and fetches a node from the store
     pub fn get_or_insert(&mut self, sdd: SddOr) -> SddPtr {
-        let p = self.tbl.get_or_insert(sdd);
+        let p = self.sdd_tbl.get_or_insert(sdd);
         SddPtr::or(p)
     }
 
@@ -105,6 +111,8 @@ impl<'a> SddManager {
             self.vtree.get_varlabel_idx(ptr.get_var().get_label())
         } else if ptr.is_or() {
             ptr.vtree()
+        } else if ptr.is_bdd() {
+            self.vtree.get_bdd_vtree(ptr.topvar())
         } else {
             panic!("called vtree on constant")
         }
@@ -119,6 +127,27 @@ impl<'a> SddManager {
             self.get_or_insert(SddOr::new(node, table)).neg()
         } else {
             self.get_or_insert(SddOr::new(node, table))
+        }
+    }
+
+    fn unique_bdd(&mut self, bdd: BinarySDD) -> SddPtr {
+        if bdd.high() == bdd.low() {
+            return bdd.high();
+        }
+        if bdd.high().is_false() && bdd.low().is_true() {
+            return SddPtr::var(bdd.label(), false);
+        }
+        if bdd.high().is_true() && bdd.low().is_false() {
+            return SddPtr::var(bdd.label(), true);
+        }
+
+        // TODO this is probably wrong
+        // uniqify BDD
+        if bdd.low().is_compl() { 
+            let neg_bdd = BinarySDD::new(bdd.label(), bdd.low().neg(), bdd.high().neg());
+            SddPtr::bdd(self.bdd_tbl.get_or_insert(neg_bdd)).neg()
+        } else {
+            SddPtr::bdd(self.bdd_tbl.get_or_insert(bdd))
         }
     }
 
@@ -153,6 +182,10 @@ impl<'a> SddManager {
         if node.len() == 1 {
             if node[0].prime().is_true() {
                 return node[0].sub();
+            } else if node[0].sub().is_false() {
+                return SddPtr::false_ptr();
+            } else {
+                panic!("internal error: encountered untrimmed SDD")
             }
         } else if node.len() == 2 {
             if node[0].sub().is_true() && node[1].sub().is_false() {
@@ -171,9 +204,20 @@ impl<'a> SddManager {
     /// conjoin two SDDs that are in independent vtrees
     /// a is prime to b
     fn and_indep(&mut self, a: SddPtr, b: SddPtr, lca: VTreeIndex) -> SddPtr {
-        let mut node = vec![SddAnd::new(a, b), SddAnd::new(a.neg(), SddPtr::false_ptr())];
-        // no need to canonicalize, guaranteed canonical by construction
-        self.unique_or(node, lca)
+        // check if this is a right-linear fragment and construct the relevant SDD type
+        if self.vtree.get_idx(lca).is_right_linear() {
+            // a is a right-linear decision for b; construct a binary decision
+            let bdd = if a.is_neg_var() {
+                BinarySDD::new(a.get_var_label(), b, SddPtr::false_ptr())
+            } else {
+                BinarySDD::new(a.get_var_label(), SddPtr::false_ptr(), b)
+            };
+            self.unique_bdd(bdd)
+        } else {
+            let node = vec![SddAnd::new(a, b), SddAnd::new(a.neg(), SddPtr::false_ptr())];
+            // no need to canonicalize, guaranteed canonical by construction
+            self.unique_or(node, lca)
+        }
     }
 
     /// conjoin SDDs where `d` is a descendent of `r`, and `d` is sub to `r`
@@ -183,6 +227,13 @@ impl<'a> SddManager {
     ///  0  2    4   6
     /// r might be wrt. node 3, and d wrt. node 5
     fn and_sub_desc(&mut self, r: SddPtr, d: SddPtr) -> SddPtr {
+        // check if `r` is a bdd and handle that case
+        if r.is_bdd() {
+            let l = self.and(r.low(), d);
+            let h = self.and(r.high(), d);
+            return self.unique_bdd(BinarySDD::new(r.topvar(), l, h));
+        }
+
         let mut v : Vec<SddAnd> = Vec::with_capacity(r.num_nodes());
         for a in r.node_iter() {
             let root_p = a.prime();
@@ -202,6 +253,22 @@ impl<'a> SddManager {
     ///  0  2    4   6
     /// r might be wrt. node 3, and d wrt. node 1
     fn and_prime_desc(&mut self, r: SddPtr, d: SddPtr) -> SddPtr {
+        // first handle the BDD case
+        if r.is_bdd() {
+            // d is the topvar of r
+            assert!(d.is_var());
+            let n = if d.is_neg_var() {
+                // d's low edge is True and high edge is False
+                // conjoin these with r
+                BinarySDD::new(r.topvar(), r.low(), SddPtr::false_ptr())
+            } else {
+                // d's high edge is True and low edge is False
+                BinarySDD::new(r.topvar(), SddPtr::false_ptr(), r.high())
+            };
+
+            return self.unique_bdd(n);
+        }
+
         // normalized structure:
         //       o 
         //   /      \ 
@@ -219,8 +286,7 @@ impl<'a> SddManager {
         // return self.unique_or(v, r.vtree());
 
         // TODO optimize this for special cases
-        let mut v : Vec<SddAnd> = Vec::with_capacity(r.num_nodes());
-        let mut b = vec![SddAnd::new(d, SddPtr::true_ptr()), SddAnd::new(d.neg(), SddPtr::false_ptr())];
+        let b = vec![SddAnd::new(d, SddPtr::true_ptr()), SddAnd::new(d.neg(), SddPtr::false_ptr())];
 
         let mut new_n: Vec<SddAnd> = Vec::new();
         for a1 in r.node_iter() {
@@ -228,28 +294,32 @@ impl<'a> SddManager {
             let s1 = a1.sub();
             let s1 = if r.is_compl() { s1.neg() } else { s1 };
             // no special case
+            // println!("b: {:?}", b);
             for a2 in b.iter() {
                 let p2 = a2.prime();
                 let s2 = a2.sub();
                 let p = self.and_rec(p1, p2);
+                // println!("(PRIME) result of {} && {}: {}", self.print_sdd(p1), self.print_sdd(p2), self.print_sdd(p));
                 if p.is_false() {
                     continue;
                 }
                 let s = self.and_rec(s1, s2);
+                // println!("(SUB) result of {} && {}: {}", self.print_sdd(s1), self.print_sdd(s2), self.print_sdd(s));
                 // check if one of the nodes is true; if it is, we can
                 // return a `true` SddPtr here, for trimming
                 if p.is_true() && s.is_true() {
                     let new_v = SddPtr::true_ptr();
-                    // self.app_cache[lca.value()].insert((a, b), new_v);
                     return new_v;
                 }
                 new_n.push(SddAnd::new(p, s));
             }
         }
 
+
+        // println!("new_n: {:?}", new_n);
+
         // canonicalize
         let ptr = self.canonicalize(new_n, r.vtree());
-        // self.app_cache[lca.value()].insert((a, b), ptr);
         ptr
  
         // for a in r.node_iter() {
@@ -265,6 +335,13 @@ impl<'a> SddManager {
 
     /// conjoin SDDs where `a` and `b` are wrt. the same vtree node
     fn and_cartesian(&mut self, a: SddPtr, b: SddPtr, lca: VTreeIndex) -> SddPtr {
+        // check if a and b are both binary SDDs; if so, we apply BDD conjunction here
+        if a.is_bdd() {
+            let l = self.and(a.low(), b.low());
+            let h = self.and(a.high(), b.high());
+            return self.unique_bdd(BinarySDD::new(a.topvar(), l, h));
+        }
+
         // now the SDDs are normalized with respect to the same vtree, so we can 
         // apply the prime/sub pairs
 
@@ -277,17 +354,16 @@ impl<'a> SddManager {
             let p1 = a1.prime();
             let s1 = a1.sub();
             // // check if there exists an equal prime
-            // let eq_itm = sub_iter
-            //     .iter()
-            //     .find(|(ref p2, ref _s2)| self.sdd_eq(*p1, *p2));
+            let eq_itm = b.node_iter()
+                .find(|a| self.sdd_eq(a.prime(), p1));
             let s1 = if a.is_compl() { s1.neg() } else { s1 };
-            // if eq_itm.is_some() {
-            //     let (_, s2) = eq_itm.unwrap();
-            //     let s2 = if b.is_compl() { s2.neg() } else { *s2 };
-            //     // this sub is the only one with a non-false prime, so no need to iterate
-            //     r.push((*p1, self.and_rec(s1, s2)));
-            //     continue;
-            // }
+            if eq_itm.is_some() {
+                let andb = eq_itm.unwrap();
+                let s2 = if b.is_compl() { andb.sub().neg() } else { andb.sub() };
+                // this sub is the only one with a non-false prime, so no need to iterate
+                r.push(SddAnd::new(p1, self.and_rec(s1, s2)));
+                continue;
+            }
 
             // no special case
             for a2 in b.node_iter() {
@@ -303,24 +379,24 @@ impl<'a> SddManager {
                 // return a `true` SddPtr here, for trimming
                 if p.is_true() && s.is_true() {
                     let new_v = SddPtr::true_ptr();
-                    self.app_cache[lca.value()].insert((a, b), new_v);
                     return new_v;
                 }
                 r.push(SddAnd::new(p, s));
                 // check if p1 => p2 (which is true iff (p1 && p2) == p1); if it
                 // does we can stop early because the rest of the primes will be
                 // false
-                // if self.sdd_eq(*p1, p) {
-                //     break;
-                // }
+                if self.sdd_eq(p1, p) {
+                    break;
+                }
             }
         }
 
+
         // canonicalize
         let ptr = self.canonicalize(r, lca);
-        self.app_cache[lca.value()].insert((a, b), ptr);
         ptr
     }
+
 
     fn and_rec(&mut self, a: SddPtr, b: SddPtr) -> SddPtr {
         // println!("and a: {}\nb: {}", self.print_sdd(a), self.print_sdd(b));
@@ -366,15 +442,18 @@ impl<'a> SddManager {
         // we can only conjoin two SDD nodes if they are normalized with respect
         // to the same vtree; the following code does this for each of the 
         // above cases. 
-        if av == bv {
-            return self.and_cartesian(a, b, lca);
+        let r = if av == bv {
+            self.and_cartesian(a, b, lca)
         } else if lca == av {
-            return self.and_sub_desc(a, b)
+            self.and_sub_desc(a, b)
         } else if lca == bv {
-            return self.and_prime_desc(b, a);
+            self.and_prime_desc(b, a)
         } else {
-            return self.and_indep(a, b, lca)
+            self.and_indep(a, b, lca)
         };
+        // cache and return
+        self.app_cache[lca.value()].insert((a, b), r);
+        return r;
     }
 
     pub fn and(&mut self, a: SddPtr, b: SddPtr) -> SddPtr {
@@ -405,6 +484,19 @@ impl<'a> SddManager {
                 }
             } else {
                 return f;
+            }
+        }
+        if f.is_bdd() {
+            if f.topvar() == lbl {
+                if !f.is_compl() == value {
+                    return f.high();
+                } else {
+                    return f.low();
+                }
+            } else {
+                let l = self.condition(f.low(), lbl, value);
+                let h = self.condition(f.high(), lbl, value);
+                return self.unique_bdd(BinarySDD::new(f.topvar(), l, h));
             }
         }
 
@@ -464,36 +556,6 @@ impl<'a> SddManager {
         // self.exists(a, lbl)
     }
 
-    fn count_nodes_h(&self, f: SddPtr, sddcache: &mut HashSet<SddPtr>) -> u64 {
-        panic!("not impl")
-        // if sddcache.contains(&f.regular()) {
-        //     return 0;
-        // }
-        // sddcache.insert(f.regular());
-        // if f.is_const() {
-        //     return 1;
-        // }
-        // if f.is_bdd() {
-        //     // traverse down the BDD
-        //     let mgr = self.get_bdd_mgr(f);
-        //     let fbdd = f.as_bdd_ptr();
-        //     let l = SddPtr::new_bdd(mgr.low(fbdd), f.vtree().value() as u16);
-        //     let h = SddPtr::new_bdd(mgr.high(fbdd), f.vtree().value() as u16);
-        //     return 1 + self.count_nodes_h(l, sddcache) + self.count_nodes_h(h, sddcache);
-        // };
-        // // it's an SDD node; iterate for each node
-        // self.tbl
-        //     .sdd_get_or(f)
-        //     .iter()
-        //     .fold(0, |acc, (ref p, ref s)| {
-        //         acc + 1 + self.count_nodes_h(*p, sddcache) + self.count_nodes_h(*s, sddcache)
-        //     })
-    }
-
-    /// Counts the number of unique nodes in `f`
-    pub fn count_nodes(&self, f: SddPtr) -> u64 {
-        self.count_nodes_h(f, &mut HashSet::new())
-    }
 
     fn is_canonical_h(&self, f: SddPtr) -> bool {
         self.is_compressed(f) && self.is_trimmed(f)
@@ -597,6 +659,17 @@ impl<'a> SddManager {
                 } else if ptr.is_var() {
                     let l = ptr.get_var();
                     return Doc::from(format!("{}{}", if l.get_polarity() { "" } else {"!"}, l.get_label().value()));
+                } else if ptr.is_bdd() {
+                    let l = helper(man, ptr.low());
+                    let h = helper(man, ptr.high());
+                    let mut doc: Doc<BoxDoc> = Doc::from("");
+                    doc = doc.append(Doc::newline()).append(
+                        (Doc::from(format!("ITE {:?}", ptr.topvar()))
+                            .append(Doc::newline())
+                            .append(h.append(Doc::newline()).append(l)))
+                        .nest(2),
+                    );
+                    return doc;
                 }
 
                 let mut doc: Doc<BoxDoc> = Doc::from("");
@@ -850,7 +923,10 @@ fn sdd_ite1() {
     println!("v1: {}", man.print_sdd(v1));
     println!("v2: {}", man.print_sdd(v2));
     let r1 = man.or(v1, v2);
+    // r1: 0 \/ 1
+    println!("0 || 1: {}", man.print_sdd(r1));
     let r2 = man.and(r1, v1);
+    // r2: (0 \/ 1) && 1
     assert!(
         man.sdd_eq(v1, r2),
         "Not eq:\n {}\n{}",
@@ -900,7 +976,10 @@ fn sdd_circuit1() {
     let delta = man.and(x, y);
     let yp = SddPtr::var(VarLabel::new(2), true);
     let inner = man.iff(yp, y);
+    println!("(2 <=> 1): \n{}", man.print_sdd(inner));
+    println!("(0 && 1): \n{}", man.print_sdd(delta));
     let conj = man.and(inner, delta);
+    println!("((!0 && 1) && (2 <=> 1)): \n{}", man.print_sdd(conj));
     let res = man.exists(conj, VarLabel::new(1));
 
     let expected = man.and(x, yp);
@@ -942,7 +1021,7 @@ fn sdd_circuit2() {
     );
 }
 
-#[test]
+// #[test]
 fn sdd_wmc1() {
     // modeling the formula (x<=>fx) && (y<=>fy), with f weight of 0.5
 
@@ -977,7 +1056,7 @@ fn sdd_wmc1() {
     let x_fx = man.iff(x, fx);
     let y_fy = man.iff(y, fy);
     let ptr = man.and(x_fx, y_fy);
-    let wmc_res: f64 = ptr.wmc(&wmc_map);
+    let wmc_res: f64 = ptr.wmc(man.get_vtree_manager(), &wmc_map);
     let expected: f64 = 1.0;
     let diff = (wmc_res - expected).abs();
     println!("sdd: {}", man.print_sdd(ptr));

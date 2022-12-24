@@ -9,7 +9,9 @@ use rsdd::builder::cache::bdd_all_app::BddAllTable;
 use rsdd::repr::cnf::Cnf;
 use rsdd::repr::ddnnf::DDNNFPtr;
 use rsdd::repr::dtree::DTree;
+use rsdd::repr::var_label::VarLabel;
 use rsdd::repr::var_order::VarOrder;
+use rsdd::repr::vtree::VTree;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::collections::HashMap;
@@ -64,9 +66,13 @@ fn compile_topdown_nnf(str: String, debug: bool) {
 fn compile_sdd(str: String, debug: bool) {
     use rsdd::builder::sdd_builder::*;
     let cnf = Cnf::from_file(str);
-    let dtree = DTree::from_cnf(&cnf, &VarOrder::linear_order(cnf.num_vars()));
-    let mut man = SddManager::new(dtree.to_vtree().unwrap());
+    // let dtree = DTree::from_cnf(&cnf, &VarOrder::linear_order(cnf.num_vars()));
+    // let mut man = SddManager::new(dtree.to_vtree().unwrap());
+    let o : Vec<VarLabel> = (0..cnf.num_vars()).map(|x| VarLabel::new(x as u64)).collect();
+    let mut man = SddManager::new(VTree::right_linear(&o));
     let _sdd = man.from_cnf(&cnf);
+    println!("size: {}", _sdd.count_nodes());
+    println!("num recursive: {}", man.get_stats().num_rec);
 }
 
 // TODO: resolve unused
@@ -86,7 +92,7 @@ fn bench_cnf_bdd(cnf_str: String, debug: bool) -> Duration {
     let start = Instant::now();
     // compile_topdown_nnf(black_box(cnf_str), debug);
     // compile_topdown_nnf_sample(black_box(cnf_str), debug);
-    // compile_sdd(cnf_str, debug);
+    compile_sdd(cnf_str, debug);
     // compile_bdd(cnf_str, debug);
     start.elapsed()
 }

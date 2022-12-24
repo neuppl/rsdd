@@ -130,6 +130,22 @@ where
         None
     }
 
+    /// attempts to return left child; panics if not a node
+    pub fn left(&self) -> &Self {
+        match self {
+            Self::Node(_, l, _) => l,
+            _ => panic!("extracting non-node"),
+        }
+    }
+
+    /// attempts to return right child; panics if not a node
+    pub fn right(&self) -> &Self {
+        match self {
+            Self::Node(_, _, r) => r,
+            _ => panic!("extracting non-node"),
+        }
+    }
+
     /// Attempt to extract the data from a leaf node; panics if not a leaf
     pub fn extract_leaf(&self) -> &L {
         match self {

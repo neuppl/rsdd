@@ -1,8 +1,8 @@
 //! Defines the internal representations for a trimmed and compressed SDD with
 //! complemented edges.
 
-use crate::repr::{var_label::VarLabel, ddnnf::DDNNF};
-use std::fmt::Debug;
+use crate::repr::{var_label::{VarLabel, VarSet}, ddnnf::DDNNF};
+use std::fmt::{Debug, Binary};
 use bumpalo::Bump;
 use SddPtr::*;
 
@@ -10,9 +10,39 @@ use SddPtr::*;
 pub enum SddPtr {
     PtrTrue,
     PtrFalse,
+    BDD(*mut BinarySDD),
+    ComplBDD(*mut BinarySDD),
     Var(VarLabel, bool),
     Compl(*mut SddOr),
     Reg(*mut SddOr),
+}
+
+/// Specialized SDD node for a right-linear sub-vtree
+/// SDDs for these fragments are binary decisions
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Ord, PartialOrd, Copy)]
+pub struct BinarySDD {
+    label: VarLabel,
+    low: SddPtr,
+    high: SddPtr,
+    scratch: usize
+}
+
+impl BinarySDD {
+    pub fn new(label: VarLabel, low: SddPtr, high: SddPtr) -> BinarySDD {
+        BinarySDD { label, low, high, scratch: 0 }
+    }
+
+    pub fn low(&self) -> SddPtr {
+        self.low
+    }
+
+    pub fn high(&self) -> SddPtr {
+        self.high
+    }
+
+    pub fn label(&self) -> VarLabel {
+        self.label
+    }
 }
 
 
@@ -63,7 +93,7 @@ use std::{
     hash::{Hash, Hasher},
 };
 
-use super::{vtree::VTreeIndex, ddnnf::DDNNFPtr, var_label::Literal};
+use super::{vtree::{VTreeIndex, VTreeManager}, ddnnf::DDNNFPtr, var_label::Literal};
 impl Hash for SddOr {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.index.hash(state);
@@ -76,6 +106,10 @@ impl SddPtr {
         Reg(ptr)
     }
 
+    pub fn bdd(ptr: *mut BinarySDD) -> SddPtr {
+        Self::BDD(ptr)
+    }
+
     /// negate an SDD pointer
     pub fn neg(&self) -> SddPtr {
         match &self {
@@ -84,6 +118,8 @@ impl SddPtr {
             Var(x, p) => Var(*x, !p),
             Compl(x) => Reg(*x),
             Reg(x) => Compl(*x),
+            BDD(x) => ComplBDD(*x),
+            ComplBDD(x) => BDD(*x),
         }
     }
 
@@ -133,6 +169,7 @@ impl SddPtr {
     pub fn is_compl(&self) -> bool {
         match &self {
             Compl(_) => true,
+            ComplBDD(_) => true,
             _ => false
         }
     }
@@ -161,17 +198,16 @@ impl SddPtr {
     pub fn to_reg(&self) -> SddPtr {
         match &self {
             Compl(x) => Reg(*x),
+            ComplBDD(x) => BDD(*x),
             _ => *self
         }
     }
 
     pub fn is_const(&self) -> bool {
         match &self {
-            Compl(_) => false,
-            Reg(_) => false,
-            Var(_, _) => false,
             PtrTrue => true,
             PtrFalse => true,
+            _ => false
         }
     }
 
@@ -189,6 +225,12 @@ impl SddPtr {
         }
     }
 
+    pub fn get_var_label(&self) -> VarLabel {
+        match &self {
+            Var(v, b) => *v,
+            _ => panic!("called get_var on non var")
+        }
+    }
 
     pub fn get_var(&self) -> Literal {
         match &self {
@@ -200,17 +242,84 @@ impl SddPtr {
 
     pub fn is_true(&self) -> bool {
         match &self {
-            Compl(_) | Reg(_) | PtrFalse | Var(_, _) => false,
             PtrTrue => true,
+            _ => false,
         }
     }
 
     pub fn is_false(&self) -> bool {
         match &self {
-            Compl(_) | Reg(_) | PtrTrue | Var(_, _) => false,
             PtrFalse => true,
+            _ => false
         }
     }
+
+    pub fn is_bdd(&self) -> bool {
+        match &self {
+            BDD(_) => true,
+            ComplBDD(_) => true,
+            _ => false
+        }
+    }
+
+    /// Get a mutable reference to the node that &self points to
+    ///
+    /// Panics if not a bdd pointer
+    pub fn mut_bdd_ref(&self) -> &mut BinarySDD {
+        unsafe {
+            match &self {
+                BDD(x) => &mut (**x),
+                ComplBDD(x) => &mut (**x),
+                _ => panic!("Dereferencing constant in deref_or_panic"),
+            }
+        }
+    }
+
+    /// gets the top variable of a BDD
+    /// 
+    /// panics if not a bdd pointer
+    pub fn topvar(&self) -> VarLabel {
+        self.mut_bdd_ref().label
+    }
+    
+    /// gets the low pointer of a BDD
+    /// negates the returned pointer if the root is negated
+    /// 
+    /// panics if not a bdd pointer
+    pub fn low(&self) -> SddPtr {
+        if self.is_compl() {
+            self.mut_bdd_ref().low.neg()
+        } else {
+            self.mut_bdd_ref().low
+        }
+    }
+
+    /// gets the low pointer of a BDD
+    /// 
+    /// panics if not a bdd pointer
+    pub fn low_raw(&self) -> SddPtr {
+        self.mut_bdd_ref().low
+    }
+
+    /// gets the low pointer of a BDD
+    /// negates the returned pointer if the root is negated
+    /// 
+    /// panics if not a bdd pointer
+    pub fn high(&self) -> SddPtr {
+        if self.is_compl() {
+            self.mut_bdd_ref().high.neg()
+        } else {
+            self.mut_bdd_ref().high
+        }
+    }
+
+    /// gets the low pointer of a BDD
+    /// 
+    /// panics if not a bdd pointer
+    pub fn high_raw(&self) -> SddPtr {
+        self.mut_bdd_ref().high
+    }
+ 
 
     /// Get a mutable reference to the node that &self points to
     ///
@@ -274,7 +383,9 @@ impl SddPtr {
 type DDNNFCache<T> = (Option<T>, Option<T>);
 
 impl DDNNFPtr for SddPtr {
-    fn fold<T: Clone + Copy + std::fmt::Debug, F: Fn(super::ddnnf::DDNNF<T>) -> T>(&self, f: F) -> T {
+    type Order = VTreeManager;
+
+    fn fold<T: Clone + Copy + std::fmt::Debug, F: Fn(super::ddnnf::DDNNF<T>) -> T>(&self, v: &VTreeManager, f: F) -> T {
         fn bottomup_pass_h<T: Clone + Copy + Debug, F: Fn(DDNNF<T>) -> T>(ptr: SddPtr, f: &F, alloc: &mut Bump) -> T {
             match ptr {
                 PtrTrue => f(DDNNF::True),
@@ -297,7 +408,8 @@ impl DDNNFPtr for SddPtr {
                                 let p_sub = bottomup_pass_h(and.prime(), f, alloc);
                                 let s_sub = bottomup_pass_h(s, f, alloc);
                                 let a = f(DDNNF::And(p_sub, s_sub));
-                                or_v = f(DDNNF::Or(or_v, a));
+                                let v = VarSet::new();
+                                or_v = f(DDNNF::Or(or_v, a, v));
                             }
 
                             // cache and return or_v
@@ -311,6 +423,8 @@ impl DDNNFPtr for SddPtr {
                         _ => panic!("unreachable")
                     }
                 }
+                BDD(_) => todo!(),
+                ComplBDD(_) => todo!(),
             }
         }
 
@@ -321,6 +435,26 @@ impl DDNNFPtr for SddPtr {
     }
 
     fn count_nodes(&self) -> usize {
-        todo!()
+        fn count_h(ptr: SddPtr, alloc: &mut Bump) -> usize {
+            if ptr.is_const() || ptr.is_var() {
+                return 0;
+            } else {
+                match ptr.get_scratch::<usize>() {
+                    Some(_) => 0,
+                    None => {
+                        // found a new node
+                        ptr.set_scratch::<usize>(alloc, 0);
+                        let mut c = 0;
+                        for a in ptr.node_iter() {
+                            c += count_h(a.sub(), alloc);                          
+                            c += count_h(a.prime(), alloc);
+                            c += 1;
+                        }
+                        return c;
+                    }
+                }
+            }
+        }
+        count_h(*self, &mut Bump::new())
     }
 }

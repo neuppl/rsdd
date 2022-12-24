@@ -14,8 +14,8 @@ impl VTree {
     }
     pub fn num_vars(&self) -> usize {
         match self {
-            BTree::Leaf(v) => 1,
-            BTree::Node((), l, r) => l.num_vars() + r.num_vars(),
+            BTree::Leaf(v) => v.value_usize() + 1,
+            BTree::Node((), l, r) => usize::max(l.num_vars(), r.num_vars()),
         }
     }
 
@@ -29,6 +29,14 @@ impl VTree {
                 BTree::Node((), Box::new(l_tree), Box::new(r_tree))
             }
             [] => panic!("invalid right_linear on empty list")
+        }
+    }
+
+    /// true if this vtree is a right-linear fragment
+    pub fn is_right_linear(&self) -> bool {
+        match &self {
+            BTree::Node((), l, _) => l.is_leaf(),
+            _ => false
         }
     }
 
@@ -72,15 +80,24 @@ pub struct VTreeManager {
     bfs_to_dfs: Vec<usize>,
     /// maps an Sdd VarLabel into its vtree index in the depth-first order
     vtree_idx: Vec<usize>,
+    /// bdd_lookup[var_label] gives the vtree index for a BDD with that label as
+    /// its root
+    bdd_lookup: Vec<usize>,
     lca: LeastCommonAncestor,
 }
 
 impl VTreeManager {
     pub fn new(tree: VTree) -> VTreeManager {
         let mut vtree_lookup = vec![0; tree.num_vars()];
+        let mut bdd_lookup = vec![0; tree.num_vars()];
         for (idx, v) in tree.inorder_dfs_iter().enumerate() {
             if v.is_leaf() {
                 vtree_lookup[v.extract_leaf().value_usize()] = idx;
+            }
+            if v.is_right_linear() {
+                // this node is a bdd root; put it in the bdd_lookup table
+                let var = v.left().extract_leaf().value_usize();
+                bdd_lookup[var] = idx;
             }
         }
         VTreeManager {
@@ -88,12 +105,18 @@ impl VTreeManager {
             bfs_to_dfs: tree.bfs_to_dfs_mapping(),
             vtree_idx: vtree_lookup,
             lca: LeastCommonAncestor::new(&tree),
+            bdd_lookup,
             tree,
         }
     }
 
     pub fn vtree_root(&self) -> &VTree {
         &self.tree
+    }
+
+    /// fetch the vtree node corresponding to the bdd with top variable `label`
+    pub fn get_bdd_vtree(&self, label: VarLabel) -> VTreeIndex {
+        VTreeIndex(self.bdd_lookup[label.value_usize()])
     }
 
     /// Computes the least-common ancestor between `l` and `r`

@@ -423,7 +423,7 @@ mod test_bdd_manager {
                 (0..16).map(|x| (VarLabel::new(x as u64), (0.2, 0.8))));
             let cnf1 = mgr.from_cnf(&c1);
             let bddwmc = super::repr::wmc::WmcParams::new_with_default(0.0, 1.0, weight_map.clone());
-            let bddres = cnf1.wmc(&bddwmc);
+            let bddres = cnf1.wmc(mgr.get_order(), &bddwmc);
             let cnfres = c1.wmc(&weight_map);
             TestResult::from_bool(abs(bddres - cnfres) < 0.00001)
         }
@@ -444,8 +444,8 @@ mod test_bdd_manager {
             let dnnf = mgr2.from_cnf_topdown(&VarOrder::linear_order(c1.num_vars()), &c1);
 
             let bddwmc = super::repr::wmc::WmcParams::new_with_default(0.0, 1.0, weight_map);
-            let bddres = cnf1.wmc(&bddwmc);
-            let dnnfres = dnnf.wmc(&bddwmc);
+            let bddres = cnf1.wmc(mgr.get_order(),  &bddwmc);
+            let dnnfres = dnnf.wmc(mgr.get_order(), &bddwmc);
             let eps = f64::abs(bddres - dnnfres) < 0.0001;
             if !eps {
               println!("error on input {}: bddres {}, cnfres {}\n topdown bdd: {}\nbottom-up bdd: {}", 
@@ -481,7 +481,7 @@ mod test_bdd_manager {
                 let mut conj = mgr.and(x, y);
                 conj = mgr.and(conj, z);
                 conj = mgr.and(conj, cnf);
-                let poss_max = conj.wmc(&wmc);
+                let poss_max = conj.wmc(mgr.get_order(), &wmc);
                 if poss_max > max {
                     max = poss_max;
                     max_assgn.set(VarLabel::new(0), *v1);
@@ -584,12 +584,12 @@ mod test_sdd_manager {
             let mut mgr = super::SddManager::new(VTree::even_split(&order, 3));
             let cnf_sdd = mgr.from_cnf(&cnf);
             let sdd_wmc = WmcParams::new_with_default(0.0, 1.0, weight_map);
-            let sdd_res = cnf_sdd.wmc(&sdd_wmc);
+            let sdd_res = cnf_sdd.wmc(mgr.get_vtree_manager(), &sdd_wmc);
 
 
             let mut bddmgr = BddManager::<BddAllTable>::new_default_order(cnf.num_vars());
             let cnf_bdd = bddmgr.from_cnf(&cnf);
-            let bdd_res = cnf_bdd.wmc(&sdd_wmc);
+            let bdd_res = cnf_bdd.wmc(bddmgr.get_order(), &sdd_wmc);
 
             if f64::abs(sdd_res - bdd_res) > 0.00001 {
                 println!("not equal for cnf {}: sdd_res:{sdd_res}, bdd_res: {bdd_res}", cnf.to_string());

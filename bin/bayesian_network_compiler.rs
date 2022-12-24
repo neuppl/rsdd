@@ -181,8 +181,8 @@ fn compile_bdd_cnf(args: &Args, network: BayesianNetwork) {
             // let cond = compiler.condition(r, indic, true);
             let v = compiler.var(indic, true);
             let cond = compiler.and(r, v);
-            let p = cond.wmc(&bn.params);
-            let z = cond.wmc(&bn.params);
+            let p = cond.wmc(compiler.get_order(), &bn.params);
+            let z = cond.wmc(compiler.get_order(), &bn.params);
             println!(
                 "Marginal query: Pr({query_var} = {query_val}) = {p}, z = {z}, p / z = {}",
                 p / z
@@ -289,7 +289,7 @@ fn compile_sdd_cnf(network: BayesianNetwork) {
     let start = Instant::now();
     let r = compiler.from_cnf(&bn.cnf);
     let duration = start.elapsed();
-    let sz = compiler.count_nodes(r);
+    let sz = r.count_nodes();
     println!("Compiled\n\tCompile time: {:?}\n\tSize: {sz}", duration);
 }
 

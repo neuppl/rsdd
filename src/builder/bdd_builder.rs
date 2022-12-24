@@ -863,7 +863,7 @@ mod tests {
         let weights = hashmap! {VarLabel::new(0) => (0.2,0.8),
         VarLabel::new(1) => (0.1,0.9)};
         let params = WmcParams::new_with_default(0.0, 1.0, weights);
-        let wmc = r1.wmc(&params);
+        let wmc = r1.wmc(man.get_order(), &params);
         assert!(abs(wmc - (1.0 - 0.2*0.1)) < 0.000001);
     }
 
@@ -1076,7 +1076,7 @@ mod tests {
         let obs = man.or(x, y);
         let and1 = man.and(iff1, iff2);
         let f = man.and(and1, obs);
-        assert_eq!(f.wmc(&wmc), 0.2 * 0.3 + 0.2 * 0.7 + 0.8 * 0.3);
+        assert_eq!(f.wmc(man.get_order(), &wmc), 0.2 * 0.3 + 0.2 * 0.7 + 0.8 * 0.3);
     }
 
     #[test]

@@ -1,4 +1,6 @@
 //! Binary decision diagram representation
+use crate::repr::var_label::VarSet;
+
 use super::{
     model::PartialModel,
     var_label::{Literal, VarLabel},
@@ -395,7 +397,9 @@ impl BddPtr {
 type DDNNFCache<T> = (Option<T>, Option<T>);
 
 impl DDNNFPtr for BddPtr {
-    fn fold<T: Clone + Copy + Debug, F: Fn(DDNNF<T>) -> T>(&self, f: F) -> T {
+    type Order = VarOrder;
+
+    fn fold<T: Clone + Copy + Debug, F: Fn(DDNNF<T>) -> T>(&self, o: &VarOrder, f: F) -> T {
         fn bottomup_pass_h<T: Clone + Copy + Debug, F: Fn(DDNNF<T>) -> T>(ptr: BddPtr, f: &F, alloc: &mut Bump) -> T {
             match ptr {
                 PtrTrue => f(DDNNF::True),
@@ -424,7 +428,11 @@ impl DDNNFPtr for BddPtr {
                             let and_low = f(DDNNF::And(lit_low, low_v));
                             let and_high = f(DDNNF::And(lit_high, high_v));
 
-                            let or_v = f(DDNNF::Or(and_low, and_high));
+                            // in a BDD, each decision only depends on the topvar
+                            let mut varset = VarSet::new();
+                            varset.insert(top);
+
+                            let or_v = f(DDNNF::Or(and_low, and_high, varset));
 
                             // cache and return or_v
                             if ptr.is_compl() { 
@@ -449,7 +457,7 @@ impl DDNNFPtr for BddPtr {
     fn count_nodes(&self) -> usize {
         fn count_h(ptr: BddPtr, alloc: &mut Bump) -> usize {
             if ptr.is_const() {
-                return 1;
+                return 0;
             } else {
                 match ptr.get_scratch::<usize>() {
                     Some(_) => 0,
