@@ -1,21 +1,22 @@
-//! Apply cache for BDD operations that stores all ITEs
-use fnv::FnvHashMap;
-
-use crate::repr::bdd::BddPtr;
+//! Apply cache for ITEs that uses a dynamically-expanding LRU cache
+use crate::{repr::{bdd::BddPtr, ddnnf::DDNNFPtr}, util::lru::*};
 
 use super::{ite::Ite, LruTable};
 
+const INITIAL_CAPACITY: usize = 8; // given as a power of two
+
 /// An Ite structure, assumed to be in standard form.
+
 /// The top-level data structure that caches applications
-pub struct BddAllTable {
+pub struct BddApplyTable {
     /// a vector of applications, indexed by the top label of the first pointer.
-    table: Vec<FnvHashMap<(BddPtr, BddPtr, BddPtr), BddPtr>>,
+    table: Vec<Lru<(BddPtr, BddPtr, BddPtr), BddPtr>>,
 }
 
-impl LruTable for BddAllTable {
+impl LruTable for BddApplyTable {
     /// Push a new apply table for a new variable
     fn push_table(&mut self) {
-        self.table.push(FnvHashMap::default());
+        self.table.push(Lru::new(INITIAL_CAPACITY));
     }
 
     /// Insert an ite (f, g, h) into the apply table
@@ -28,7 +29,7 @@ impl LruTable for BddAllTable {
                 }
                 let compl = ite.is_compl_choice();
                 self.table[f.var().value() as usize]
-                    .insert((f, g, h), if compl { res.compl() } else { res });
+                    .insert((f, g, h), if compl { res.neg() } else { res });
             }
             Ite::IteConst(_) => (), // do not cache base-cases
         }
@@ -40,12 +41,12 @@ impl LruTable for BddAllTable {
                 while f.var().value_usize() >= self.table.len() {
                     self.push_table();
                 }
-                let r = self.table[f.var().value() as usize].get(&(f, g, h));
+                let r = self.table[f.var().value() as usize].get((f, g, h));
                 let compl = ite.is_compl_choice();
                 if compl {
-                    r.map(|v| v.compl())
+                    r.map(|v| v.neg())
                 } else {
-                    r.cloned()
+                    r
                 }
             }
             Ite::IteConst(f) => Some(f),
@@ -53,10 +54,10 @@ impl LruTable for BddAllTable {
     }
 }
 
-impl BddAllTable {
-    pub fn new(num_vars: usize) -> BddAllTable {
-        BddAllTable {
-            table: (0..num_vars).map(|_| FnvHashMap::default()).collect(),
+impl BddApplyTable {
+    pub fn new(num_vars: usize) -> BddApplyTable {
+        BddApplyTable {
+            table: (0..num_vars).map(|_| Lru::new(INITIAL_CAPACITY)).collect(),
         }
     }
 }

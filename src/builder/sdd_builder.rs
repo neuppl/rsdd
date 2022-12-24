@@ -344,11 +344,11 @@ impl<'a> SddManager {
     /// conjoin SDDs where `a` and `b` are wrt. the same vtree node
     fn and_cartesian(&mut self, a: SddPtr, b: SddPtr, lca: VTreeIndex) -> SddPtr {
         // check if a and b are both binary SDDs; if so, we apply BDD conjunction here
-        // if a.is_bdd() {
-        //     let l = self.and(a.low(), b.low());
-        //     let h = self.and(a.high(), b.high());
-        //     return self.unique_bdd(BinarySDD::new(a.topvar(), l, h));
-        // }
+        if a.is_bdd() && self.vtree.get_idx(lca).is_right_linear() {
+            let l = self.and(a.low(), b.low());
+            let h = self.and(a.high(), b.high());
+            return self.unique_bdd(BinarySDD::new(a.topvar(), l, h, lca));
+        }
 
         // now the SDDs are normalized with respect to the same vtree, so we can 
         // apply the prime/sub pairs

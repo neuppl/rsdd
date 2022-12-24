@@ -78,8 +78,8 @@ impl BddPtr {
                     } = **x;
                     BddNode {
                         var,
-                        low: low.compl(),
-                        high: high.compl(),
+                        low: low.neg(),
+                        high: high.neg(),
                         data,
                     }
                 }
@@ -98,15 +98,6 @@ impl BddPtr {
         }
     }
 
-    /// Returns a complemented version of &self
-    pub fn compl(&self) -> BddPtr {
-        match &self {
-            Compl(x) => Reg(*x),
-            Reg(x) => Compl(*x),
-            PtrTrue => PtrFalse,
-            PtrFalse => PtrTrue,
-        }
-    }
 
     pub fn low(&self) -> BddPtr {
         unsafe {
@@ -209,12 +200,12 @@ impl BddPtr {
                 return String::from("F");
             } else {
                 let l_p = if ptr.is_compl() {
-                    ptr.low().compl()
+                    ptr.low().neg()
                 } else {
                     ptr.low()
                 };
                 let h_p = if ptr.is_compl() {
-                    ptr.high().compl()
+                    ptr.high().neg()
                 } else {
                     ptr.high()
                 };
@@ -415,8 +406,8 @@ impl DDNNFPtr for BddPtr {
                         Some((_, Some(v))) if !ptr.is_compl() => return v.clone(),
                         Some((None, cached)) | Some((cached, None)) => {
                             // no cached value found, compute it 
-                            let l = if ptr.is_compl() { ptr.low().compl() } else { ptr.low() };
-                            let h = if ptr.is_compl() { ptr.high().compl() } else { ptr.high() };
+                            let l = if ptr.is_compl() { ptr.low().neg() } else { ptr.low() };
+                            let h = if ptr.is_compl() { ptr.high().neg() } else { ptr.high() };
 
                             let low_v = bottomup_pass_h(l, f, alloc);
                             let high_v = bottomup_pass_h(h, f, alloc);
@@ -472,6 +463,15 @@ impl DDNNFPtr for BddPtr {
             }
         }
         count_h(*self, &mut Bump::new())
+    }
+
+    fn neg(&self) -> Self {
+        match &self {
+            Compl(x) => Reg(*x),
+            Reg(x) => Compl(*x),
+            PtrTrue => PtrFalse,
+            PtrFalse => PtrTrue,
+        }
     }
 }
 

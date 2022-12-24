@@ -15,7 +15,8 @@ use crate::{
     repr::model, repr::var_label::Literal, repr::var_label::VarLabel,
 };
 
-use super::cache::bdd_all_app::BddAllTable;
+use super::cache::all_app::BddAllTable;
+use super::cache::lru_app::BddApplyTable;
 use super::cache::ite::Ite;
 use super::cache::*;
 use crate::backing_store::*;
@@ -98,6 +99,11 @@ impl<T: LruTable> BddManager<T> {
         BddManager::new(default_order, BddAllTable::new(n))
     }
 
+    pub fn new_default_order_lru(num_vars: usize) -> BddManager<BddApplyTable> {
+        let default_order = VarOrder::linear_order(num_vars);
+        BddManager::new(default_order, BddApplyTable::new(num_vars))
+    }
+
     /// Creates a new variable manager with the specified order
     pub fn new(order: VarOrder, table: T) -> BddManager<T> {
         BddManager {
@@ -133,14 +139,14 @@ impl<T: LruTable> BddManager<T> {
         if polarity {
             r
         } else {
-            r.compl()
+            r.neg()
         }
     }
 
     /// Normalizes and fetches a node from the store
     fn get_or_insert(&mut self, bdd: BddNode) -> BddPtr {
         if bdd.high.is_compl() || bdd.high.is_false() {
-            let bdd = BddNode::new(bdd.var, bdd.low.compl(), bdd.high.compl());
+            let bdd = BddNode::new(bdd.var, bdd.low.neg(), bdd.high.neg());
             BddPtr::new_compl(self.compute_table.get_or_insert(bdd))
         } else {
             let bdd = BddNode::new(bdd.var, bdd.low, bdd.high);
@@ -166,7 +172,7 @@ impl<T: LruTable> BddManager<T> {
         };
         let r = if v { f.high() } else { f.low() };
         if f.is_compl() {
-            r.compl()
+            r.neg()
         } else {
             r
         }
@@ -231,7 +237,7 @@ impl<T: LruTable> BddManager<T> {
 
     /// Compute the Boolean function `f || g`
     pub fn or(&mut self, f: BddPtr, g: BddPtr) -> BddPtr {
-        self.and(f.compl(), g.compl()).compl()
+        self.and(f.neg(), g.neg()).neg()
     }
 
     /// disjoins a list of BDDs
@@ -254,11 +260,11 @@ impl<T: LruTable> BddManager<T> {
 
     /// Compute the Boolean function `f iff g`
     pub fn iff(&mut self, f: BddPtr, g: BddPtr) -> BddPtr {
-        self.ite(f, g, g.compl())
+        self.ite(f, g, g.neg())
     }
 
     pub fn xor(&mut self, f: BddPtr, g: BddPtr) -> BddPtr {
-        self.ite(f, g.compl(), g)
+        self.ite(f, g.neg(), g)
     }
 
     fn cond_helper(
@@ -275,7 +281,7 @@ impl<T: LruTable> BddManager<T> {
         } else if bdd.var() == lbl {
             let r = if value { bdd.high() } else { bdd.low() };
             if bdd.is_compl() {
-                r.compl()
+                r.neg()
             } else {
                 r
             }
@@ -283,7 +289,7 @@ impl<T: LruTable> BddManager<T> {
             // check cache
             let idx = match bdd.get_scratch::<BddPtr>() {
                 None => (),
-                Some(v) => return if bdd.is_compl() { v.compl() } else { *v },
+                Some(v) => return if bdd.is_compl() { v.neg() } else { *v },
             };
 
             // recurse on the children
@@ -293,7 +299,7 @@ impl<T: LruTable> BddManager<T> {
             if l == h {
                 // reduce the BDD -- two children identical
                 if bdd.is_compl() {
-                    return l.compl();
+                    return l.neg();
                 } else {
                     return l;
                 };
@@ -303,7 +309,7 @@ impl<T: LruTable> BddManager<T> {
                 let new_bdd = BddNode::new(bdd.var(), l, h);
                 let r = self.get_or_insert(new_bdd);
                 if bdd.is_compl() {
-                    r.compl()
+                    r.neg()
                 } else {
                     r
                 }
@@ -311,7 +317,7 @@ impl<T: LruTable> BddManager<T> {
                 // nothing changed
                 bdd
             };
-            bdd.set_scratch(alloc, if bdd.is_compl() { res.compl() } else { res });
+            bdd.set_scratch(alloc, if bdd.is_compl() { res.neg() } else { res });
             res
         }
     }
@@ -345,7 +351,7 @@ impl<T: LruTable> BddManager<T> {
                     self.cond_model_h(node.low, m, alloc)
                 };
                 if bdd.is_compl() {
-                    r.compl()
+                    r.neg()
                 } else {
                     r
                 }
@@ -354,7 +360,7 @@ impl<T: LruTable> BddManager<T> {
                 // check cache
                 let idx = match bdd.get_scratch::<BddPtr>() {
                     None => (),
-                    Some(v) => return if bdd.is_compl() { v.compl() } else { *v },
+                    Some(v) => return if bdd.is_compl() { v.neg() } else { *v },
                 };
 
                 // recurse on the children
@@ -363,7 +369,7 @@ impl<T: LruTable> BddManager<T> {
                 let h = self.cond_model_h(n.high, m, alloc);
                 if l == h {
                     if bdd.is_compl() {
-                        return l.compl();
+                        return l.neg();
                     } else {
                         return l;
                     };
@@ -373,7 +379,7 @@ impl<T: LruTable> BddManager<T> {
                     let new_bdd = BddNode::new(bdd.var(), l, h);
                     let r = self.get_or_insert(new_bdd);
                     if bdd.is_compl() {
-                        r.compl()
+                        r.neg()
                     } else {
                         r
                     }
@@ -381,7 +387,7 @@ impl<T: LruTable> BddManager<T> {
                     // nothing changed
                     bdd
                 };
-                bdd.set_scratch(alloc, if bdd.is_compl() { res.compl() } else { res });
+                bdd.set_scratch(alloc, if bdd.is_compl() { res.neg() } else { res });
                 res
             }
         }
@@ -572,7 +578,7 @@ impl<T: LruTable> BddManager<T> {
                 let r2 = self.from_boolexpr(r);
                 self.or(r1, r2)
             }
-            &LogicalExpr::Not(ref e) => self.from_boolexpr(e).compl(),
+            &LogicalExpr::Not(ref e) => self.from_boolexpr(e).neg(),
             &LogicalExpr::Iff(ref l, ref r) => {
                 let r1 = self.from_boolexpr(l);
                 let r2 = self.from_boolexpr(r);
@@ -623,7 +629,7 @@ impl<T: LruTable> BddManager<T> {
             }
             &BddPlan::Not(ref f) => {
                 let f = self.compile_plan(f);
-                f.compl()
+                f.neg()
             }
             &BddPlan::ConstTrue => BddPtr::true_ptr(),
             &BddPlan::ConstFalse => BddPtr::false_ptr(),
@@ -792,7 +798,7 @@ impl<T: LruTable> BddManager<T> {
 #[cfg(test)]
 mod tests {
 
-    use crate::{builder::cache::bdd_all_app::BddAllTable, repr::ddnnf::DDNNFPtr};
+    use crate::{builder::cache::all_app::BddAllTable, repr::ddnnf::DDNNFPtr};
     use crate::repr::wmc::WmcParams;
     use maplit::*;
     use num::abs;
@@ -1190,7 +1196,7 @@ mod tests {
         let iff1 = mgr.iff(cnf1, cnf2);
 
         let clause1 = mgr.and(cnf1, cnf2);
-        let clause2 = mgr.and(cnf1.compl(), cnf2.compl());
+        let clause2 = mgr.and(cnf1.neg(), cnf2.neg());
         let and = mgr.or(clause1, clause2);
 
         if and != iff1 {

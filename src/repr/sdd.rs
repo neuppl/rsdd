@@ -19,7 +19,7 @@ pub enum SddPtr {
 
 /// Specialized SDD node for a right-linear sub-vtree
 /// SDDs for these fragments are binary decisions
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Ord, PartialOrd, Copy)]
+#[derive(Debug, Clone, Eq, Ord, PartialOrd, Copy)]
 pub struct BinarySDD {
     label: VarLabel,
     vtree: VTreeIndex,
@@ -50,19 +50,20 @@ impl BinarySDD {
     }
 }
 
-// impl Hash for BinarySDD {
-//     fn hash<H: Hasher>(&self, state: &mut H) {
-//         self.vtree.hash(state);
-//         self.low.hash(state);
-//         self.high.hash(state);
-//     }
-// }
+impl Hash for BinarySDD {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.vtree.hash(state);
+        self.label.hash(state);
+        self.low.hash(state);
+        self.high.hash(state);
+    }
+}
 
-// impl Eq for BinarySDD {
-//     fn eq(&self, other: &Self) -> bool {
-//         self.vtree == other.vtree && self.low == other.low && self.high == other.high
-//     }
-// }
+impl PartialEq for BinarySDD {
+    fn eq(&self, other: &Self) -> bool {
+        self.vtree == other.vtree && self.low == other.low && self.high == other.high && self.label == other.label
+    }
+}
 
 
 
@@ -168,19 +169,6 @@ impl SddPtr {
 
     pub fn bdd(ptr: *mut BinarySDD) -> SddPtr {
         Self::BDD(ptr)
-    }
-
-    /// negate an SDD pointer
-    pub fn neg(&self) -> SddPtr {
-        match &self {
-            PtrTrue => PtrFalse,
-            PtrFalse => PtrTrue,
-            Var(x, p) => Var(*x, !p),
-            Compl(x) => Reg(*x),
-            Reg(x) => Compl(*x),
-            BDD(x) => ComplBDD(*x),
-            ComplBDD(x) => BDD(*x),
-        }
     }
 
     /// Gets the scratch value stored in `&self`
@@ -537,5 +525,17 @@ impl DDNNFPtr for SddPtr {
             }
         }
         count_h(*self, &mut Bump::new())
+    }
+
+    fn neg(&self) -> Self {
+        match &self {
+            PtrTrue => PtrFalse,
+            PtrFalse => PtrTrue,
+            Var(x, p) => Var(*x, !p),
+            Compl(x) => Reg(*x),
+            Reg(x) => Compl(*x),
+            BDD(x) => ComplBDD(*x),
+            ComplBDD(x) => BDD(*x),
+        }
     }
 }

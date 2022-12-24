@@ -7,7 +7,7 @@ extern crate quickcheck;
 use crate::repr::cnf::Cnf;
 use crate::repr::var_label::VarLabel;
 use rsdd::builder::bdd_builder::BddManager;
-use rsdd::builder::cache::bdd_all_app::BddAllTable;
+use rsdd::builder::cache::all_app::BddAllTable;
 use rsdd::builder::sdd_builder::SddManager;
 use rsdd::*;
 use rsdd::repr::vtree::VTree;
@@ -291,7 +291,7 @@ mod test_bdd_manager {
     use crate::repr::var_label::VarLabel;
     use num::abs;
     use quickcheck::TestResult;
-    use rsdd::builder::cache::bdd_all_app::BddAllTable;
+    use rsdd::builder::cache::all_app::BddAllTable;
     use rsdd::repr::bdd::BddPtr;
     use rsdd::repr::ddnnf::DDNNFPtr;
     use rsdd::repr::model::PartialModel;
@@ -337,7 +337,7 @@ mod test_bdd_manager {
             let iff1 = mgr.iff(cnf1, cnf2);
 
             let clause1 = mgr.and(cnf1, cnf2);
-            let clause2 = mgr.and(cnf1.compl(), cnf2.compl());
+            let clause2 = mgr.and(cnf1.neg(), cnf2.neg());
             let and = mgr.or(clause1, clause2);
 
             if and != iff1 {
@@ -500,7 +500,7 @@ mod test_sdd_manager {
     use crate::repr::cnf::Cnf;
     use crate::repr::var_label::{Literal, VarLabel};
     use quickcheck::TestResult;
-    use rsdd::builder::cache::bdd_all_app::BddAllTable;
+    use rsdd::builder::cache::all_app::BddAllTable;
     use rsdd::repr::ddnnf::DDNNFPtr;
     use rsdd::repr::vtree::VTree;
     use rsdd::repr::wmc::WmcParams;

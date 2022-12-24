@@ -1,6 +1,6 @@
 //! Top-down decision DNNF compiler and manipulator
 
-use crate::backing_store::*;
+use crate::{backing_store::*, repr::ddnnf::DDNNFPtr};
 use bumpalo::Bump;
 use num::Num;
 use rand::Rng;
@@ -32,7 +32,7 @@ impl DecisionNNFBuilder {
     /// Normalizes and fetches a node from the store
     fn get_or_insert(&mut self, bdd: BddNode) -> BddPtr {
         if bdd.high.is_compl() {
-            let bdd = BddNode::new(bdd.var, bdd.low.compl(), bdd.high.compl());
+            let bdd = BddNode::new(bdd.var, bdd.low.neg(), bdd.high.neg());
             BddPtr::new_compl(self.compute_table.get_or_insert(bdd))
         } else {
             let bdd = BddNode::new(bdd.var, bdd.low, bdd.high);
@@ -47,7 +47,7 @@ impl DecisionNNFBuilder {
         if polarity {
             r
         } else {
-            r.compl()
+            r.neg()
         }
     }
 
@@ -218,7 +218,7 @@ impl DecisionNNFBuilder {
             let node = bdd.into_node();
             let r = if value { node.high } else { node.low };
             if bdd.is_compl() {
-                r.compl()
+                r.neg()
             } else {
                 r
             }
@@ -226,7 +226,7 @@ impl DecisionNNFBuilder {
             // check cache
             let idx = match bdd.get_scratch::<BddPtr>() {
                 None => (),
-                Some(v) => return if bdd.is_compl() { v.compl() } else { *v },
+                Some(v) => return if bdd.is_compl() { v.neg() } else { *v },
             };
 
             // recurse on the children
@@ -235,7 +235,7 @@ impl DecisionNNFBuilder {
             let h = self.cond_helper(n.high, lbl, value, alloc);
             if l == h {
                 if bdd.is_compl() {
-                    return l.compl();
+                    return l.neg();
                 } else {
                     return l;
                 };
@@ -245,7 +245,7 @@ impl DecisionNNFBuilder {
                 let new_bdd = BddNode::new(bdd.var(), l, h);
                 let r = self.get_or_insert(new_bdd);
                 if bdd.is_compl() {
-                    r.compl()
+                    r.neg()
                 } else {
                     r
                 }
@@ -253,7 +253,7 @@ impl DecisionNNFBuilder {
                 // nothing changed
                 bdd
             };
-            bdd.set_scratch(alloc, if bdd.is_compl() { res.compl() } else { res });
+            bdd.set_scratch(alloc, if bdd.is_compl() { res.neg() } else { res });
             res
         }
     }

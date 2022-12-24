@@ -80,7 +80,7 @@ pub struct VTreeManager {
     bfs_to_dfs: Vec<usize>,
     /// maps an Sdd VarLabel into its vtree index in the depth-first order
     vtree_idx: Vec<usize>,
-    index_lookup: Vec<*const VTree>,
+    index_lookup: Vec<Box<VTree>>,
     lca: LeastCommonAncestor,
 }
 
@@ -89,7 +89,7 @@ impl VTreeManager {
         let mut vtree_lookup = vec![0; tree.num_vars()];
         let mut index_lookup = Vec::new();
         for (idx, v) in tree.inorder_dfs_iter().enumerate() {
-            index_lookup.push(v as *const VTree);
+            index_lookup.push(Box::new(v.clone()));
             if v.is_leaf() {
                 vtree_lookup[v.extract_leaf().value_usize()] = idx;
             }
@@ -118,13 +118,7 @@ impl VTreeManager {
 
     /// Given a vtree index, produce a pointer to the vtree this corresponds with
     pub fn get_idx(&self, idx: VTreeIndex) -> &VTree {
-    //     return unsafe { 
-    //         // println!("about to deref");
-    //         let r = &*self.index_lookup[idx.0] ;
-    //         // println!("success");
-    //         r
-    //     }
-        return self.vtree_root().inorder_dfs_iter().nth(idx.0).unwrap()
+        &*(self.index_lookup[idx.0])
     }
 
     /// Find the index into self.vtree that contains the label `lbl`

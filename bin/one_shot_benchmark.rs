@@ -5,7 +5,8 @@ extern crate serde_json;
 
 use clap::Parser;
 use rayon::prelude::*;
-use rsdd::builder::cache::bdd_all_app::BddAllTable;
+use rsdd::builder::cache::all_app::BddAllTable;
+use rsdd::builder::cache::lru_app::BddApplyTable;
 use rsdd::repr::cnf::Cnf;
 use rsdd::repr::ddnnf::DDNNFPtr;
 use rsdd::repr::dtree::DTree;
@@ -81,7 +82,7 @@ fn compile_bdd(str: String, debug: bool) {
     use rsdd::builder::bdd_builder::*;
     let cnf = Cnf::from_file(str);
     // let order : VarOrder = cnf.force_order();
-    let mut man = BddManager::<BddAllTable>::new_default_order(cnf.num_vars());
+    let mut man = BddManager::<BddApplyTable>::new_default_order_lru(cnf.num_vars());
     // let mut man = BddManager::new(order);
     let _bdd = man.from_cnf(&cnf);
     println!("recursive: {}", man.num_recursive_calls());
@@ -92,8 +93,8 @@ fn bench_cnf_bdd(cnf_str: String, debug: bool) -> Duration {
     let start = Instant::now();
     // compile_topdown_nnf(black_box(cnf_str), debug);
     // compile_topdown_nnf_sample(black_box(cnf_str), debug);
-    compile_sdd(cnf_str, debug);
-    // compile_bdd(cnf_str, debug);
+    // compile_sdd(cnf_str, debug);
+    compile_bdd(cnf_str, debug);
     start.elapsed()
 }
 

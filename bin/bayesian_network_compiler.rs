@@ -2,7 +2,7 @@ extern crate rsdd;
 extern crate rsgm;
 
 use clap::Parser;
-use rsdd::builder::cache::bdd_all_app::BddAllTable;
+use rsdd::builder::cache::all_app::BddAllTable;
 use rsdd::builder::decision_nnf_builder::DecisionNNFBuilder;
 use rsdd::builder::sdd_builder;
 use rsdd::repr::bdd::BddPtr;

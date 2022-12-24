@@ -62,6 +62,8 @@ pub trait DDNNFPtr {
         todo!()
     }
 
+    fn neg(&self) -> Self;
+
     /// count the number of nodes in this representation
     fn count_nodes(&self) -> usize;
 }

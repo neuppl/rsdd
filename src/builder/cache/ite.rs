@@ -1,7 +1,7 @@
 //! Data-structure for representing ITEs in a standard form
 //! Follows Section 7.1.5, "Standard Triples", in
 //! 'Algorithms and Datastructures in VLSI Design' pages 115-117
-use crate::repr::{bdd::BddPtr, var_order::VarOrder};
+use crate::repr::{bdd::BddPtr, var_order::VarOrder, ddnnf::DDNNFPtr};
 
 /// Core ITE representation
 #[derive(Debug, Clone, Hash, PartialEq, Eq, Copy)]
@@ -45,8 +45,8 @@ impl Ite {
         // introduce constants
         let (f, g, h) = match (f, g, h) {
             (f, g, h) if f == h => (f, g, BddPtr::false_ptr()),
-            (f, g, h) if f == h.compl() => (f, g, BddPtr::true_ptr()),
-            (f, g, h) if f == g.compl() => (f, BddPtr::false_ptr(), h),
+            (f, g, h) if f == h.neg() => (f, g, BddPtr::true_ptr()),
+            (f, g, h) if f == g.neg() => (f, BddPtr::false_ptr(), h),
             _ => (f, g, h),
         };
 
@@ -55,7 +55,7 @@ impl Ite {
             (f, g, _) if f.is_true() => return IteConst(g),
             (f, _, h) if f.is_false() => return IteConst(h),
             (f, g, h) if g.is_true() && h.is_false() => return IteConst(f),
-            (f, g, h) if g.is_false() && h.is_true() => return IteConst(f.compl()),
+            (f, g, h) if g.is_false() && h.is_true() => return IteConst(f.neg()),
             (_, g, h) if h == g => return IteConst(g),
             _ => (),
         };
@@ -64,9 +64,9 @@ impl Ite {
         let (f, g, h) = match (f, g, h) {
             (f, g, h) if g.is_true() && lt_safe(order, h, f) => (h, g, f),
             (f, g, h) if h.is_false() && lt_safe(order, g, f) => (g, f, h),
-            (f, g, h) if h.is_true() && lt_safe(order, g, f) => (g.compl(), f.compl(), h),
-            (f, g, h) if g.is_false() && lt_safe(order, h, f) => (h.compl(), g, f.compl()),
-            (f, g, h) if g == h.compl() && lt_safe(order, g, f) => (g, f, f.compl()),
+            (f, g, h) if h.is_true() && lt_safe(order, g, f) => (g.neg(), f.neg(), h),
+            (f, g, h) if g.is_false() && lt_safe(order, h, f) => (h.neg(), g, f.neg()),
+            (f, g, h) if g == h.neg() && lt_safe(order, g, f) => (g, f, f.neg()),
             _ => (f, g, h),
         };
 
@@ -74,7 +74,7 @@ impl Ite {
         match (f, g, h) {
             (f, g, h) if f.is_compl() && !h.is_compl() => {
                 return IteChoice {
-                    f: f.compl(),
+                    f: f.neg(),
                     g: h,
                     h: g,
                 }
@@ -82,15 +82,15 @@ impl Ite {
             (f, g, h) if !f.is_compl() && g.is_compl() => {
                 return IteComplChoice {
                     f,
-                    g: g.compl(),
-                    h: h.compl(),
+                    g: g.neg(),
+                    h: h.neg(),
                 }
             }
             (f, g, h) if f.is_compl() && h.is_compl() => {
                 return IteComplChoice {
-                    f: f.compl(),
-                    g: h.compl(),
-                    h: g.compl(),
+                    f: f.neg(),
+                    g: h.neg(),
+                    h: g.neg(),
                 }
             }
             _ => return IteChoice { f, g, h },
