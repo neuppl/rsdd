@@ -80,43 +80,32 @@ pub struct VTreeManager {
     bfs_to_dfs: Vec<usize>,
     /// maps an Sdd VarLabel into its vtree index in the depth-first order
     vtree_idx: Vec<usize>,
-    /// bdd_lookup[var_label] gives the vtree index for a BDD with that label as
-    /// its root
-    bdd_lookup: Vec<usize>,
+    index_lookup: Vec<*const VTree>,
     lca: LeastCommonAncestor,
 }
 
 impl VTreeManager {
     pub fn new(tree: VTree) -> VTreeManager {
         let mut vtree_lookup = vec![0; tree.num_vars()];
-        let mut bdd_lookup = vec![0; tree.num_vars()];
+        let mut index_lookup = Vec::new();
         for (idx, v) in tree.inorder_dfs_iter().enumerate() {
+            index_lookup.push(v as *const VTree);
             if v.is_leaf() {
                 vtree_lookup[v.extract_leaf().value_usize()] = idx;
-            }
-            if v.is_right_linear() {
-                // this node is a bdd root; put it in the bdd_lookup table
-                let var = v.left().extract_leaf().value_usize();
-                bdd_lookup[var] = idx;
             }
         }
         VTreeManager {
             dfs_to_bfs: tree.dfs_to_bfs_mapping(),
             bfs_to_dfs: tree.bfs_to_dfs_mapping(),
+            index_lookup,
             vtree_idx: vtree_lookup,
             lca: LeastCommonAncestor::new(&tree),
-            bdd_lookup,
             tree,
         }
     }
 
     pub fn vtree_root(&self) -> &VTree {
         &self.tree
-    }
-
-    /// fetch the vtree node corresponding to the bdd with top variable `label`
-    pub fn get_bdd_vtree(&self, label: VarLabel) -> VTreeIndex {
-        VTreeIndex(self.bdd_lookup[label.value_usize()])
     }
 
     /// Computes the least-common ancestor between `l` and `r`
@@ -129,7 +118,13 @@ impl VTreeManager {
 
     /// Given a vtree index, produce a pointer to the vtree this corresponds with
     pub fn get_idx(&self, idx: VTreeIndex) -> &VTree {
-        return self.tree.inorder_dfs_iter().nth(idx.0).unwrap();
+    //     return unsafe { 
+    //         // println!("about to deref");
+    //         let r = &*self.index_lookup[idx.0] ;
+    //         // println!("success");
+    //         r
+    //     }
+        return self.vtree_root().inorder_dfs_iter().nth(idx.0).unwrap()
     }
 
     /// Find the index into self.vtree that contains the label `lbl`

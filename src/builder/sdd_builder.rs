@@ -109,24 +109,32 @@ impl<'a> SddManager {
     pub fn get_vtree_idx(&self, ptr: SddPtr) -> VTreeIndex {
         if ptr.is_var() {
             self.vtree.get_varlabel_idx(ptr.get_var().get_label())
-        } else if ptr.is_or() {
+        } else if ptr.is_or() || ptr.is_bdd() {
             ptr.vtree()
-        } else if ptr.is_bdd() {
-            self.vtree.get_bdd_vtree(ptr.topvar())
         } else {
             panic!("called vtree on constant")
         }
     }
 
     fn unique_or(&mut self, mut node: Vec<SddAnd>, table: VTreeIndex) -> SddPtr {
-        node.sort_by(|a, b| a.prime().cmp(&b.prime()));
-        if node[0].sub().is_compl() || node[0].sub().is_false() || node[0].sub().is_neg_var() {
-            for i in 0..node.len() {
-                node[i] = SddAnd::new(node[i].prime(), node[i].sub().neg());
-            }
-            self.get_or_insert(SddOr::new(node, table)).neg()
+        // check if it is a BDD; if it is, return that
+        if node.len() == 2 && node[0].prime().is_var() && node[1].prime().is_var() {
+            // this SDD may be unsorted, so extract the low and high value 
+            // based on whether or not node[0]'s prime is negated
+            let v = node[1].prime().get_var().get_label();
+            let low = if node[0].prime().is_neg_var() { node[0].sub() } else { node[1].sub() };
+            let high = if node[0].prime().is_pos_var() { node[0].sub() } else { node[1].sub() };
+            return self.unique_bdd(BinarySDD::new(v, low, high, table));
         } else {
-            self.get_or_insert(SddOr::new(node, table))
+            node.sort_by(|a, b| a.prime().cmp(&b.prime()));
+            if node[0].sub().is_compl() || node[0].sub().is_false() || node[0].sub().is_neg_var() {
+                for i in 0..node.len() {
+                    node[i] = SddAnd::new(node[i].prime(), node[i].sub().neg());
+                }
+                self.get_or_insert(SddOr::new(node, table)).neg()
+            } else {
+                self.get_or_insert(SddOr::new(node, table))
+            }
         }
     }
 
@@ -143,8 +151,8 @@ impl<'a> SddManager {
 
         // TODO this is probably wrong
         // uniqify BDD
-        if bdd.low().is_compl() { 
-            let neg_bdd = BinarySDD::new(bdd.label(), bdd.low().neg(), bdd.high().neg());
+        if bdd.high().is_compl() || bdd.high().is_false() { 
+            let neg_bdd = BinarySDD::new(bdd.label(), bdd.low().neg(), bdd.high().neg(), bdd.vtree());
             SddPtr::bdd(self.bdd_tbl.get_or_insert(neg_bdd)).neg()
         } else {
             SddPtr::bdd(self.bdd_tbl.get_or_insert(bdd))
@@ -208,9 +216,9 @@ impl<'a> SddManager {
         if self.vtree.get_idx(lca).is_right_linear() {
             // a is a right-linear decision for b; construct a binary decision
             let bdd = if a.is_neg_var() {
-                BinarySDD::new(a.get_var_label(), b, SddPtr::false_ptr())
+                BinarySDD::new(a.get_var_label(), b, SddPtr::false_ptr(), lca)
             } else {
-                BinarySDD::new(a.get_var_label(), SddPtr::false_ptr(), b)
+                BinarySDD::new(a.get_var_label(), SddPtr::false_ptr(), b, lca)
             };
             self.unique_bdd(bdd)
         } else {
@@ -231,7 +239,7 @@ impl<'a> SddManager {
         if r.is_bdd() {
             let l = self.and(r.low(), d);
             let h = self.and(r.high(), d);
-            return self.unique_bdd(BinarySDD::new(r.topvar(), l, h));
+            return self.unique_bdd(BinarySDD::new(r.topvar(), l, h, r.vtree()));
         }
 
         let mut v : Vec<SddAnd> = Vec::with_capacity(r.num_nodes());
@@ -254,20 +262,20 @@ impl<'a> SddManager {
     /// r might be wrt. node 3, and d wrt. node 1
     fn and_prime_desc(&mut self, r: SddPtr, d: SddPtr) -> SddPtr {
         // first handle the BDD case
-        if r.is_bdd() {
-            // d is the topvar of r
-            assert!(d.is_var());
-            let n = if d.is_neg_var() {
-                // d's low edge is True and high edge is False
-                // conjoin these with r
-                BinarySDD::new(r.topvar(), r.low(), SddPtr::false_ptr())
-            } else {
-                // d's high edge is True and low edge is False
-                BinarySDD::new(r.topvar(), SddPtr::false_ptr(), r.high())
-            };
+        // if r.is_bdd() {
+        //     // d is the topvar of r
+        //     assert!(d.is_var());
+        //     let n = if d.is_neg_var() {
+        //         // d's low edge is True and high edge is False
+        //         // conjoin these with r
+        //         BinarySDD::new(r.topvar(), r.low(), SddPtr::false_ptr())
+        //     } else {
+        //         // d's high edge is True and low edge is False
+        //         BinarySDD::new(r.topvar(), SddPtr::false_ptr(), r.high())
+        //     };
 
-            return self.unique_bdd(n);
-        }
+        //     return self.unique_bdd(n);
+        // }
 
         // normalized structure:
         //       o 
@@ -336,11 +344,11 @@ impl<'a> SddManager {
     /// conjoin SDDs where `a` and `b` are wrt. the same vtree node
     fn and_cartesian(&mut self, a: SddPtr, b: SddPtr, lca: VTreeIndex) -> SddPtr {
         // check if a and b are both binary SDDs; if so, we apply BDD conjunction here
-        if a.is_bdd() {
-            let l = self.and(a.low(), b.low());
-            let h = self.and(a.high(), b.high());
-            return self.unique_bdd(BinarySDD::new(a.topvar(), l, h));
-        }
+        // if a.is_bdd() {
+        //     let l = self.and(a.low(), b.low());
+        //     let h = self.and(a.high(), b.high());
+        //     return self.unique_bdd(BinarySDD::new(a.topvar(), l, h));
+        // }
 
         // now the SDDs are normalized with respect to the same vtree, so we can 
         // apply the prime/sub pairs
@@ -486,19 +494,19 @@ impl<'a> SddManager {
                 return f;
             }
         }
-        if f.is_bdd() {
-            if f.topvar() == lbl {
-                if !f.is_compl() == value {
-                    return f.high();
-                } else {
-                    return f.low();
-                }
-            } else {
-                let l = self.condition(f.low(), lbl, value);
-                let h = self.condition(f.high(), lbl, value);
-                return self.unique_bdd(BinarySDD::new(f.topvar(), l, h));
-            }
-        }
+        // if f.is_bdd() {
+        //     if f.topvar() == lbl {
+        //         if !f.is_compl() == value {
+        //             return f.high();
+        //         } else {
+        //             return f.low();
+        //         }
+        //     } else {
+        //         let l = self.condition(f.low(), lbl, value);
+        //         let h = self.condition(f.high(), lbl, value);
+        //         return self.unique_bdd(BinarySDD::new(f.topvar(), l, h));
+        //     }
+        // }
 
         let mut v = Vec::new();
         // f is a node; recurse and compress the result
@@ -664,7 +672,7 @@ impl<'a> SddManager {
                     let h = helper(man, ptr.high());
                     let mut doc: Doc<BoxDoc> = Doc::from("");
                     doc = doc.append(Doc::newline()).append(
-                        (Doc::from(format!("ITE {:?}", ptr.topvar()))
+                        (Doc::from(format!("ITE {:?} ", ptr))
                             .append(Doc::newline())
                             .append(h.append(Doc::newline()).append(l)))
                         .nest(2),
