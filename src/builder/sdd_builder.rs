@@ -15,6 +15,8 @@ use crate::{
 use std::collections::{HashMap, HashSet};
 use std::fmt::{Debug, Binary};
 
+use super::cache::sdd_apply_cache::SddApply;
+
 #[derive(Debug, Clone)]
 pub struct SddStats {
     /// total number of recursive calls
@@ -34,24 +36,19 @@ pub struct SddManager {
     vtree: VTreeManager,
     stats: SddStats,
     /// the apply cache
-    app_cache: Vec<Lru<(SddPtr, SddPtr), SddPtr>>,
+    app_cache: SddApply,
     // disabling compression for testing purposes, eventual experimentation
     use_compression: bool,
 }
 
 impl<'a> SddManager {
     pub fn new(vtree: VTree) -> SddManager {
-        let mut app_cache = Vec::new();
-        for _ in vtree.inorder_dfs_iter() {
-            app_cache.push(Lru::new(8));
-        }
-
         SddManager {
             sdd_tbl: BumpTable::new(),
             bdd_tbl: BumpTable::new(),
             stats: SddStats::new(),
             vtree: VTreeManager::new(vtree),
-            app_cache,
+            app_cache: SddApply::new(),
             use_compression: true,
         }
     }
@@ -127,7 +124,7 @@ impl<'a> SddManager {
             return self.unique_bdd(BinarySDD::new(v, low, high, table));
         } else {
             node.sort_by(|a, b| a.prime().cmp(&b.prime()));
-            if node[0].sub().is_compl() || node[0].sub().is_false() || node[0].sub().is_neg_var() {
+            if node[0].sub().is_neg() || node[0].sub().is_false() || node[0].sub().is_neg_var() {
                 for i in 0..node.len() {
                     node[i] = SddAnd::new(node[i].prime(), node[i].sub().neg());
                 }
@@ -151,7 +148,7 @@ impl<'a> SddManager {
 
         // TODO this is probably wrong
         // uniqify BDD
-        if bdd.high().is_compl() || bdd.high().is_false() { 
+        if bdd.high().is_neg() || bdd.high().is_false() { 
             let neg_bdd = BinarySDD::new(bdd.label(), bdd.low().neg(), bdd.high().neg(), bdd.vtree());
             SddPtr::bdd(self.bdd_tbl.get_or_insert(neg_bdd)).neg()
         } else {
@@ -246,7 +243,7 @@ impl<'a> SddManager {
         for a in r.node_iter() {
             let root_p = a.prime();
             let root_s = a.sub();
-            let root_s = if r.is_compl() { root_s.neg() } else { root_s };
+            let root_s = if r.is_neg() { root_s.neg() } else { root_s };
             let new_s = self.and(root_s, d);
             v.push(SddAnd::new(root_p, new_s));
         }
@@ -300,7 +297,7 @@ impl<'a> SddManager {
         for a1 in r.node_iter() {
             let p1 = a1.prime();
             let s1 = a1.sub();
-            let s1 = if r.is_compl() { s1.neg() } else { s1 };
+            let s1 = if r.is_neg() { s1.neg() } else { s1 };
             // no special case
             // println!("b: {:?}", b);
             for a2 in b.iter() {
@@ -364,10 +361,10 @@ impl<'a> SddManager {
             // // check if there exists an equal prime
             let eq_itm = b.node_iter()
                 .find(|a| self.sdd_eq(a.prime(), p1));
-            let s1 = if a.is_compl() { s1.neg() } else { s1 };
+            let s1 = if a.is_neg() { s1.neg() } else { s1 };
             if eq_itm.is_some() {
                 let andb = eq_itm.unwrap();
-                let s2 = if b.is_compl() { andb.sub().neg() } else { andb.sub() };
+                let s2 = if b.is_neg() { andb.sub().neg() } else { andb.sub() };
                 // this sub is the only one with a non-false prime, so no need to iterate
                 r.push(SddAnd::new(p1, self.and_rec(s1, s2)));
                 continue;
@@ -377,7 +374,7 @@ impl<'a> SddManager {
             for a2 in b.node_iter() {
                 let p2 = a2.prime();
                 let s2 = a2.sub();
-                let s2 = if b.is_compl() { s2.neg() } else { s2 };
+                let s2 = if b.is_neg() { s2.neg() } else { s2 };
                 let p = self.and_rec(p1, p2);
                 if p.is_false() {
                     continue;
@@ -432,7 +429,7 @@ impl<'a> SddManager {
         let lca = self.vtree.lca(av, bv);
 
         // check if we have this application cached
-        let c = self.app_cache[lca.value()].get((a, b));
+        let c = self.app_cache.get(SddAnd::new(a, b));
         if c.is_some() {
             return c.unwrap();
         }
@@ -460,7 +457,7 @@ impl<'a> SddManager {
             self.and_indep(a, b, lca)
         };
         // cache and return
-        self.app_cache[lca.value()].insert((a, b), r);
+        self.app_cache.insert(SddAnd::new(a, b), r);
         return r;
     }
 
@@ -514,7 +511,7 @@ impl<'a> SddManager {
             let prime = a.prime();
             let sub = a.sub();
             let newp = self.condition(prime, lbl, value);
-            let sub = if f.is_compl() { sub.neg() } else { sub };
+            let sub = if f.is_neg() { sub.neg() } else { sub };
             if newp.is_false() {
                 continue;
             };
@@ -684,7 +681,7 @@ impl<'a> SddManager {
                 for a in ptr.node_iter() {
                     let sub = a.sub();
                     let prime = a.prime();
-                    let s = if ptr.is_compl() { sub.neg() } else { sub };
+                    let s = if ptr.is_neg() { sub.neg() } else { sub };
                     let new_s1 = helper(man, prime);
                     let new_s2 = helper(man, s);
                     doc = doc.append(Doc::newline()).append(

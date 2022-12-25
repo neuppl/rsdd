@@ -5,8 +5,9 @@ extern crate serde_json;
 
 use clap::Parser;
 use rayon::prelude::*;
-use rsdd::builder::cache::all_app::BddAllTable;
+use rsdd::builder::cache::all_app::AllTable;
 use rsdd::builder::cache::lru_app::BddApplyTable;
+use rsdd::repr::bdd::BddPtr;
 use rsdd::repr::cnf::Cnf;
 use rsdd::repr::ddnnf::DDNNFPtr;
 use rsdd::repr::dtree::DTree;
@@ -82,7 +83,7 @@ fn compile_bdd(str: String, debug: bool) {
     use rsdd::builder::bdd_builder::*;
     let cnf = Cnf::from_file(str);
     // let order : VarOrder = cnf.force_order();
-    let mut man = BddManager::<BddApplyTable>::new_default_order_lru(cnf.num_vars());
+    let mut man = BddManager::<BddApplyTable<BddPtr>>::new_default_order(cnf.num_vars());
     // let mut man = BddManager::new(order);
     let _bdd = man.from_cnf(&cnf);
     println!("recursive: {}", man.num_recursive_calls());

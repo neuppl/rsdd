@@ -31,7 +31,7 @@ impl DecisionNNFBuilder {
 
     /// Normalizes and fetches a node from the store
     fn get_or_insert(&mut self, bdd: BddNode) -> BddPtr {
-        if bdd.high.is_compl() {
+        if bdd.high.is_neg() {
             let bdd = BddNode::new(bdd.var, bdd.low.neg(), bdd.high.neg());
             BddPtr::new_compl(self.compute_table.get_or_insert(bdd))
         } else {
@@ -217,7 +217,7 @@ impl DecisionNNFBuilder {
         } else if bdd.var() == lbl {
             let node = bdd.into_node();
             let r = if value { node.high } else { node.low };
-            if bdd.is_compl() {
+            if bdd.is_neg() {
                 r.neg()
             } else {
                 r
@@ -226,7 +226,7 @@ impl DecisionNNFBuilder {
             // check cache
             let idx = match bdd.get_scratch::<BddPtr>() {
                 None => (),
-                Some(v) => return if bdd.is_compl() { v.neg() } else { *v },
+                Some(v) => return if bdd.is_neg() { v.neg() } else { *v },
             };
 
             // recurse on the children
@@ -234,7 +234,7 @@ impl DecisionNNFBuilder {
             let l = self.cond_helper(n.low, lbl, value, alloc);
             let h = self.cond_helper(n.high, lbl, value, alloc);
             if l == h {
-                if bdd.is_compl() {
+                if bdd.is_neg() {
                     return l.neg();
                 } else {
                     return l;
@@ -244,7 +244,7 @@ impl DecisionNNFBuilder {
                 // cache and return the new BDD
                 let new_bdd = BddNode::new(bdd.var(), l, h);
                 let r = self.get_or_insert(new_bdd);
-                if bdd.is_compl() {
+                if bdd.is_neg() {
                     r.neg()
                 } else {
                     r
@@ -253,7 +253,7 @@ impl DecisionNNFBuilder {
                 // nothing changed
                 bdd
             };
-            bdd.set_scratch(alloc, if bdd.is_compl() { res.neg() } else { res });
+            bdd.set_scratch(alloc, if bdd.is_neg() { res.neg() } else { res });
             res
         }
     }

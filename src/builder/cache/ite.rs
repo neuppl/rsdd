@@ -5,48 +5,37 @@ use crate::repr::{bdd::BddPtr, var_order::VarOrder, ddnnf::DDNNFPtr};
 
 /// Core ITE representation
 #[derive(Debug, Clone, Hash, PartialEq, Eq, Copy)]
-pub enum Ite {
+pub enum Ite<T: DDNNFPtr> {
     /// a standard ite
     IteChoice {
-        f: BddPtr,
-        g: BddPtr,
-        h: BddPtr,
+        f: T,
+        g: T,
+        h: T,
     },
     /// an ite that is complemented
     IteComplChoice {
-        f: BddPtr,
-        g: BddPtr,
-        h: BddPtr,
+        f: T,
+        g: T,
+        h: T,
     },
-    IteConst(BddPtr),
+    IteConst(T),
 }
 use Ite::*;
 
-/// check if a < b in the variable order
-/// in the case that one is a constant, place the constant first in the order
-fn lt_safe(order: &VarOrder, a: BddPtr, b: BddPtr) -> bool {
-    if a.is_const() {
-        return true;
-    }
-    if b.is_const() {
-        return false;
-    }
-    return order.lt(a.var(), b.var());
-}
-
-impl Ite {
+impl<T: DDNNFPtr> Ite<T> {
     /// Returns a new Ite in standard form and a Bool indicating whether to complement the Ite
     /// Arguments are ITE(f, g, h), i.e. if f then g else h
-    pub fn new(order: &VarOrder, f: BddPtr, g: BddPtr, h: BddPtr) -> Ite {
+    /// `order(a,b)` is true if a is before b in the decision order
+    pub fn new(order: impl Fn(T, T) -> bool, f: T, g: T, h: T) -> Ite<T> {
         // a wise man once said: there are parts of the code that are easier to
         // prove correct than they are to debug or test. This is one of those
         // parts.  Is it proven correct? Unfortunately, no.
 
         // introduce constants
         let (f, g, h) = match (f, g, h) {
-            (f, g, h) if f == h => (f, g, BddPtr::false_ptr()),
-            (f, g, h) if f == h.neg() => (f, g, BddPtr::true_ptr()),
-            (f, g, h) if f == g.neg() => (f, BddPtr::false_ptr(), h),
+            (f, g, h) if f == h => (f, g, T::false_ptr()),
+            (f, g, h) if f == h.neg() => (f, g, T::true_ptr()),
+            (f, g, h) if f == g.neg() => (f, T::false_ptr(), h),
             _ => (f, g, h),
         };
 
@@ -62,31 +51,31 @@ impl Ite {
 
         // now, attempt to reorder the ITE to place the top-most node first in the order
         let (f, g, h) = match (f, g, h) {
-            (f, g, h) if g.is_true() && lt_safe(order, h, f) => (h, g, f),
-            (f, g, h) if h.is_false() && lt_safe(order, g, f) => (g, f, h),
-            (f, g, h) if h.is_true() && lt_safe(order, g, f) => (g.neg(), f.neg(), h),
-            (f, g, h) if g.is_false() && lt_safe(order, h, f) => (h.neg(), g, f.neg()),
-            (f, g, h) if g == h.neg() && lt_safe(order, g, f) => (g, f, f.neg()),
+            (f, g, h) if g.is_true() && order(h, f) => (h, g, f),
+            (f, g, h) if h.is_false() && order(g, f) => (g, f, h),
+            (f, g, h) if h.is_true() && order(g, f) => (g.neg(), f.neg(), h),
+            (f, g, h) if g.is_false() && order(h, f) => (h.neg(), g, f.neg()),
+            (f, g, h) if g == h.neg() && order(g, f) => (g, f, f.neg()),
             _ => (f, g, h),
         };
 
         // now, standardize for negation: ensure f and g are non-negated
         match (f, g, h) {
-            (f, g, h) if f.is_compl() && !h.is_compl() => {
+            (f, g, h) if f.is_neg() && !h.is_neg() => {
                 return IteChoice {
                     f: f.neg(),
                     g: h,
                     h: g,
                 }
             }
-            (f, g, h) if !f.is_compl() && g.is_compl() => {
+            (f, g, h) if !f.is_neg() && g.is_neg() => {
                 return IteComplChoice {
                     f,
                     g: g.neg(),
                     h: h.neg(),
                 }
             }
-            (f, g, h) if f.is_compl() && h.is_compl() => {
+            (f, g, h) if f.is_neg() && h.is_neg() => {
                 return IteComplChoice {
                     f: f.neg(),
                     g: h.neg(),

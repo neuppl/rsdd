@@ -1,13 +1,13 @@
-use crate::repr::bdd::BddPtr;
+use crate::repr::{bdd::BddPtr, ddnnf::DDNNFPtr};
 
 use self::ite::Ite;
 
 pub mod all_app;
 pub mod lru_app;
 pub mod ite;
+pub mod sdd_apply_cache;
 
-pub trait LruTable {
-    fn push_table(&mut self);
-    fn insert(&mut self, ite: Ite, res: BddPtr);
-    fn get(&mut self, ite: Ite) -> Option<BddPtr>;
+pub trait LruTable<T: DDNNFPtr> {
+    fn insert(&mut self, ite: Ite<T>, res: T);
+    fn get(&mut self, ite: Ite<T>) -> Option<T>;
 }

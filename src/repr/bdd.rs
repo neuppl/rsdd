@@ -33,13 +33,6 @@ impl BddPtr {
         Compl(n)
     }
 
-    pub fn true_ptr() -> BddPtr {
-        PtrTrue
-    }
-
-    pub fn false_ptr() -> BddPtr {
-        PtrFalse
-    }
 
     /// Gets the varlabel of &self
     /// Panics if not a node
@@ -143,29 +136,7 @@ impl BddPtr {
         }
     }
 
-    pub fn is_true(&self) -> bool {
-        match &self {
-            Compl(_) | Reg(_) | PtrFalse => false,
-            PtrTrue => true,
-        }
-    }
 
-    pub fn is_false(&self) -> bool {
-        match &self {
-            Compl(_) | Reg(_) | PtrTrue => false,
-            PtrFalse => true,
-        }
-    }
-
-    /// True is this is a complemented edge pointer
-    pub fn is_compl(&self) -> bool {
-        match &self {
-            Compl(_) => true,
-            Reg(_) => false,
-            PtrTrue => false,
-            PtrFalse => false,
-        }
-    }
 
     /// Gets the scratch value stored in `&self`
     /// 
@@ -199,12 +170,12 @@ impl BddPtr {
             } else if ptr.is_false() {
                 return String::from("F");
             } else {
-                let l_p = if ptr.is_compl() {
+                let l_p = if ptr.is_neg() {
                     ptr.low().neg()
                 } else {
                     ptr.low()
                 };
-                let h_p = if ptr.is_compl() {
+                let h_p = if ptr.is_neg() {
                     ptr.high().neg()
                 } else {
                     ptr.high()
@@ -390,6 +361,40 @@ type DDNNFCache<T> = (Option<T>, Option<T>);
 impl DDNNFPtr for BddPtr {
     type Order = VarOrder;
 
+    fn true_ptr() -> BddPtr {
+        PtrTrue
+    }
+
+    fn false_ptr() -> BddPtr {
+        PtrFalse
+    }
+
+
+    /// True is this is a complemented edge pointer
+    fn is_neg(&self) -> bool {
+        match &self {
+            Compl(_) => true,
+            Reg(_) => false,
+            PtrTrue => false,
+            PtrFalse => false,
+        }
+    }
+
+    fn is_true(&self) -> bool {
+        match &self {
+            Compl(_) | Reg(_) | PtrFalse => false,
+            PtrTrue => true,
+        }
+    }
+
+    fn is_false(&self) -> bool {
+        match &self {
+            Compl(_) | Reg(_) | PtrTrue => false,
+            PtrFalse => true,
+        }
+    }
+
+
     fn fold<T: Clone + Copy + Debug, F: Fn(DDNNF<T>) -> T>(&self, o: &VarOrder, f: F) -> T {
         fn bottomup_pass_h<T: Clone + Copy + Debug, F: Fn(DDNNF<T>) -> T>(ptr: BddPtr, f: &F, alloc: &mut Bump) -> T {
             match ptr {
@@ -402,12 +407,12 @@ impl DDNNFPtr for BddPtr {
                         ptr.set_scratch::<DDNNFCache<T>>(alloc, (None, None));
                     }
                     match ptr.get_scratch::<DDNNFCache<T>>() {
-                        Some((Some(v), _)) if ptr.is_compl() => return v.clone(),
-                        Some((_, Some(v))) if !ptr.is_compl() => return v.clone(),
+                        Some((Some(v), _)) if ptr.is_neg() => return v.clone(),
+                        Some((_, Some(v))) if !ptr.is_neg() => return v.clone(),
                         Some((None, cached)) | Some((cached, None)) => {
                             // no cached value found, compute it 
-                            let l = if ptr.is_compl() { ptr.low().neg() } else { ptr.low() };
-                            let h = if ptr.is_compl() { ptr.high().neg() } else { ptr.high() };
+                            let l = if ptr.is_neg() { ptr.low().neg() } else { ptr.low() };
+                            let h = if ptr.is_neg() { ptr.high().neg() } else { ptr.high() };
 
                             let low_v = bottomup_pass_h(l, f, alloc);
                             let high_v = bottomup_pass_h(h, f, alloc);
@@ -426,7 +431,7 @@ impl DDNNFPtr for BddPtr {
                             let or_v = f(DDNNF::Or(and_low, and_high, varset));
 
                             // cache and return or_v
-                            if ptr.is_compl() { 
+                            if ptr.is_neg() { 
                                 ptr.set_scratch::<DDNNFCache<T>>(alloc, (Some(or_v), *cached));
                             } else {
                                 ptr.set_scratch::<DDNNFCache<T>>(alloc, (*cached, Some(or_v)));

@@ -234,28 +234,11 @@ impl SddPtr {
         }
     }
 
-    /// true if the node is complemented
-    pub fn is_compl(&self) -> bool {
-        match &self {
-            Compl(_) => true,
-            ComplBDD(_) => true,
-            _ => false
-        }
-    }
-
     pub fn is_or(&self) -> bool {
         match &self {
             Compl(_) | Reg(_) => true,
             _ => false
         }
-    }
-
-    pub fn false_ptr() -> SddPtr {
-        PtrFalse
-    }
-
-    pub fn true_ptr() -> SddPtr {
-        PtrTrue
     }
 
     pub fn var(lbl: VarLabel, polarity: bool) -> SddPtr {
@@ -316,19 +299,6 @@ impl SddPtr {
     }
 
 
-    pub fn is_true(&self) -> bool {
-        match &self {
-            PtrTrue => true,
-            _ => false,
-        }
-    }
-
-    pub fn is_false(&self) -> bool {
-        match &self {
-            PtrFalse => true,
-            _ => false
-        }
-    }
 
     pub fn is_bdd(&self) -> bool {
         match &self {
@@ -363,7 +333,7 @@ impl SddPtr {
     /// 
     /// panics if not a bdd pointer
     pub fn low(&self) -> SddPtr {
-        if self.is_compl() {
+        if self.is_neg() {
             self.mut_bdd_ref().low.neg()
         } else {
             self.mut_bdd_ref().low
@@ -382,7 +352,7 @@ impl SddPtr {
     /// 
     /// panics if not a bdd pointer
     pub fn high(&self) -> SddPtr {
-        if self.is_compl() {
+        if self.is_neg() {
             self.mut_bdd_ref().high.neg()
         } else {
             self.mut_bdd_ref().high
@@ -469,13 +439,13 @@ impl DDNNFPtr for SddPtr {
                         ptr.set_scratch::<DDNNFCache<T>>(alloc, (None, None));
                     }
                     match ptr.get_scratch::<DDNNFCache<T>>() {
-                        Some((Some(v), _)) if ptr.is_compl() => return v.clone(),
-                        Some((_, Some(v))) if !ptr.is_compl() => return v.clone(),
+                        Some((Some(v), _)) if ptr.is_neg() => return v.clone(),
+                        Some((_, Some(v))) if !ptr.is_neg() => return v.clone(),
                         Some((None, cached)) | Some((cached, None)) => {
                             // no cached value found, compute it
                             let mut or_v = f(DDNNF::False);
                             for and in ptr.node_iter() {
-                                let s = if ptr.is_compl() { and.sub().neg() } else { and.sub() };
+                                let s = if ptr.is_neg() { and.sub().neg() } else { and.sub() };
                                 let p_sub = bottomup_pass_h(and.prime(), f, alloc);
                                 let s_sub = bottomup_pass_h(s, f, alloc);
                                 let a = f(DDNNF::And(p_sub, s_sub));
@@ -484,7 +454,7 @@ impl DDNNFPtr for SddPtr {
                             }
 
                             // cache and return or_v
-                            if ptr.is_compl() { 
+                            if ptr.is_neg() { 
                                 ptr.set_scratch::<DDNNFCache<T>>(alloc, (Some(or_v), *cached));
                             } else {
                                 ptr.set_scratch::<DDNNFCache<T>>(alloc, (*cached, Some(or_v)));
@@ -526,6 +496,39 @@ impl DDNNFPtr for SddPtr {
         }
         count_h(*self, &mut Bump::new())
     }
+
+
+    fn false_ptr() -> SddPtr {
+        PtrFalse
+    }
+
+    fn true_ptr() -> SddPtr {
+        PtrTrue
+    }
+
+    /// true if the node is complemented
+    fn is_neg(&self) -> bool {
+        match &self {
+            Compl(_) => true,
+            ComplBDD(_) => true,
+            _ => false
+        }
+    }
+
+    fn is_true(&self) -> bool {
+        match &self {
+            PtrTrue => true,
+            _ => false,
+        }
+    }
+
+    fn is_false(&self) -> bool {
+        match &self {
+            PtrFalse => true,
+            _ => false
+        }
+    }
+
 
     fn neg(&self) -> Self {
         match &self {

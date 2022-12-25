@@ -7,7 +7,7 @@ use num::Num;
 use crate::repr::model::PartialModel;
 
 use super::{var_label::{VarLabel, VarSet}, wmc::WmcParams};
-
+use std::hash::Hash;
 /// A base d-DNNF type
 pub enum DDNNF<T> {
     /// contains the cached values for the children, and the VarSet that
@@ -19,7 +19,7 @@ pub enum DDNNF<T> {
     False,
 }
 
-pub trait DDNNFPtr {
+pub trait DDNNFPtr : Clone + Debug + PartialEq + Eq + Hash + Copy {
     /// A generic Ordering type 
     /// For BDDs, this is a VarOrder
     /// For SDDs, this is a VTree
@@ -63,6 +63,12 @@ pub trait DDNNFPtr {
     }
 
     fn neg(&self) -> Self;
+
+    fn false_ptr() -> Self;
+    fn true_ptr() -> Self;
+    fn is_true(&self) -> bool;
+    fn is_false(&self) -> bool;
+    fn is_neg(&self) -> bool;
 
     /// count the number of nodes in this representation
     fn count_nodes(&self) -> usize;
