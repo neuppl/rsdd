@@ -68,10 +68,10 @@ fn compile_topdown_nnf(str: String, debug: bool) {
 fn compile_sdd(str: String, debug: bool) {
     use rsdd::builder::sdd_builder::*;
     let cnf = Cnf::from_file(str);
-    // let dtree = DTree::from_cnf(&cnf, &VarOrder::linear_order(cnf.num_vars()));
-    // let mut man = SddManager::new(dtree.to_vtree().unwrap());
-    let o : Vec<VarLabel> = (0..cnf.num_vars()).map(|x| VarLabel::new(x as u64)).collect();
-    let mut man = SddManager::new(VTree::right_linear(&o));
+    let dtree = DTree::from_cnf(&cnf, &VarOrder::linear_order(cnf.num_vars()));
+    let mut man = SddManager::new(dtree.to_vtree().unwrap());
+    // let o : Vec<VarLabel> = (0..cnf.num_vars()).map(|x| VarLabel::new(x as u64)).collect();
+    // let mut man = SddManager::new(VTree::right_linear(&o));
     let _sdd = man.from_cnf(&cnf);
     println!("size: {}", _sdd.count_nodes());
     println!("num recursive: {}", man.get_stats().num_rec);
@@ -94,8 +94,8 @@ fn bench_cnf_bdd(cnf_str: String, debug: bool) -> Duration {
     let start = Instant::now();
     // compile_topdown_nnf(black_box(cnf_str), debug);
     // compile_topdown_nnf_sample(black_box(cnf_str), debug);
-    // compile_sdd(cnf_str, debug);
-    compile_bdd(cnf_str, debug);
+    compile_sdd(cnf_str, debug);
+    // compile_bdd(cnf_str, debug);
     start.elapsed()
 }
 
@@ -195,7 +195,7 @@ fn main() {
         //     "rand-3-100-400-1",
         //     String::from(include_str!("../cnf/rand-3-100-400-1.cnf")),
         // ),
-        ("s298", String::from(include_str!("../cnf/s298.cnf"))),
+        // ("s298", String::from(include_str!("../cnf/s298.cnf"))),
         // ("grid-75-18-6-q", String::from(include_str!("../cnf/75-18-6-q.cnf"))),
         // ("grid-90-42-1-q", String::from(include_str!("../cnf/90-42-1-q.cnf"))),
         // ("grid-90-16-2-q", String::from(include_str!("../cnf/90-16-2-q.cnf"))),
