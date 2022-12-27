@@ -28,7 +28,7 @@ impl VTree {
                 let r_tree = Self::right_linear(rest);
                 BTree::Node((), Box::new(l_tree), Box::new(r_tree))
             }
-            [] => panic!("invalid right_linear on empty list")
+            [] => panic!("invalid right_linear on empty list"),
         }
     }
 
@@ -36,7 +36,7 @@ impl VTree {
     pub fn is_right_linear(&self) -> bool {
         match &self {
             BTree::Node((), l, _) => l.is_leaf(),
-            _ => false
+            _ => false,
         }
     }
 
@@ -54,8 +54,8 @@ impl VTree {
     }
 }
 
-/// A vtree index uniquely identifies a node in a vtree via a left-first 
-/// depth-first traversal. For example, each node in vtree is 
+/// A vtree index uniquely identifies a node in a vtree via a left-first
+/// depth-first traversal. For example, each node in vtree is
 /// given the following indexing structure:
 ///        6
 ///    2       5
@@ -129,8 +129,8 @@ impl VTreeManager {
 
     /// true if `l` is prime to `r`
     pub fn is_prime(&self, l: VTreeIndex, r: VTreeIndex) -> bool {
-        // due to our indexing scheme, checking if a node is prime is 
-        // as simple as comparing their indices (see Figure 1 from 
+        // due to our indexing scheme, checking if a node is prime is
+        // as simple as comparing their indices (see Figure 1 from
         // 'SDD: A New Canonical Representation of Propositional Knowledge Bases'
         l.0 < r.0
     }

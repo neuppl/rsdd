@@ -14,7 +14,6 @@ where
     Node(N, Box<BTree<N, L>>, Box<BTree<N, L>>),
 }
 
-
 pub struct BreadthFirstIter<'a, N: 'a, L: 'a>
 where
     N: PartialEq + Eq + Clone,
@@ -80,7 +79,7 @@ where
     fn dfs_recurse<'a>(&'a self, v: &mut VecDeque<&'a Self>) -> () {
         match self {
             BTree::Leaf(_) => v.push_back(self),
-            BTree::Node(_, l, r) => { 
+            BTree::Node(_, l, r) => {
                 l.dfs_recurse(v);
                 v.push_back(self);
                 r.dfs_recurse(v);
@@ -323,7 +322,7 @@ fn test_lca() {
 #[test]
 fn test_inorder_dfs() {
     use self::BTree::*;
-    //       3 
+    //       3
     //    1       5
     //  0  2    4   6
     let vtree: BTree<usize, usize> = Node(
@@ -339,4 +338,3 @@ fn test_inorder_dfs() {
         }
     }
 }
-

@@ -1,12 +1,15 @@
 //! Implementing of a generic decision decomposable deterministic negation normal form
 //! (d-DNNF) pointer type
 use core::fmt::Debug;
-use std::collections::HashMap;
 use num::Num;
+use std::collections::HashMap;
 
 use crate::repr::model::PartialModel;
 
-use super::{var_label::{VarLabel, VarSet}, wmc::WmcParams};
+use super::{
+    var_label::{VarLabel, VarSet},
+    wmc::WmcParams,
+};
 use std::hash::Hash;
 /// A base d-DNNF type
 pub enum DDNNF<T> {
@@ -19,8 +22,8 @@ pub enum DDNNF<T> {
     False,
 }
 
-pub trait DDNNFPtr : Clone + Debug + PartialEq + Eq + Hash + Copy {
-    /// A generic Ordering type 
+pub trait DDNNFPtr: Clone + Debug + PartialEq + Eq + Hash + Copy {
+    /// A generic Ordering type
     /// For BDDs, this is a VarOrder
     /// For SDDs, this is a VTree
     /// For decisionDNNF, this is a DTree
@@ -50,10 +53,13 @@ pub trait DDNNFPtr : Clone + Debug + PartialEq + Eq + Hash + Copy {
         })
     }
 
-
-    fn marginal_map<T: Num + Clone + Debug + Copy>(&self, o: &Self::Order, params: &WmcParams<T>) -> T {
+    fn marginal_map<T: Num + Clone + Debug + Copy>(
+        &self,
+        o: &Self::Order,
+        params: &WmcParams<T>,
+    ) -> T {
         // fn marg_map_eval<T: Num + Clone + Debug + Copy>(ptr: &DDNNFPtr, partial_map_assgn: &PartialModel) -> T {
-            
+
         // }
         todo!()
     }

@@ -205,13 +205,7 @@ impl DecisionNNFBuilder {
         r
     }
 
-    fn cond_helper(
-        &mut self,
-        bdd: BddPtr,
-        lbl: VarLabel,
-        value: bool,
-        alloc: &mut Bump,
-    ) -> BddPtr {
+    fn cond_helper(&mut self, bdd: BddPtr, lbl: VarLabel, value: bool, alloc: &mut Bump) -> BddPtr {
         if bdd.is_const() {
             bdd
         } else if bdd.var() == lbl {

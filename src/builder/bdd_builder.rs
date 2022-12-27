@@ -16,8 +16,8 @@ use crate::{
 };
 
 use super::cache::all_app::AllTable;
-use super::cache::lru_app::BddApplyTable;
 use super::cache::ite::Ite;
+use super::cache::lru_app::BddApplyTable;
 use super::cache::*;
 use crate::backing_store::*;
 use std::cmp::Ordering;
@@ -195,9 +195,7 @@ impl<T: LruTable<BddPtr>> BddManager<T> {
         };
 
         match self.apply_table.get(ite) {
-            Some(v) => { 
-                return v
-            },
+            Some(v) => return v,
             None => (),
         };
 
@@ -275,13 +273,7 @@ impl<T: LruTable<BddPtr>> BddManager<T> {
         self.ite(f, g.neg(), g)
     }
 
-    fn cond_helper(
-        &mut self,
-        bdd: BddPtr,
-        lbl: VarLabel,
-        value: bool,
-        alloc: &mut Bump,
-    ) -> BddPtr {
+    fn cond_helper(&mut self, bdd: BddPtr, lbl: VarLabel, value: bool, alloc: &mut Bump) -> BddPtr {
         self.stats.num_recursive_calls += 1;
         if bdd.is_const() || self.get_order().lt(lbl, bdd.var()) {
             // we passed the variable in the order, we will never find it
@@ -330,8 +322,6 @@ impl<T: LruTable<BddPtr>> BddManager<T> {
         }
     }
 
-
-
     /// Compute the Boolean function `f | var = value`
     pub fn condition(&mut self, bdd: BddPtr, lbl: VarLabel, value: bool) -> BddPtr {
         let r = self.cond_helper(bdd, lbl, value, &mut Bump::new());
@@ -339,13 +329,7 @@ impl<T: LruTable<BddPtr>> BddManager<T> {
         r
     }
 
-
-    fn cond_model_h(
-        &mut self,
-        bdd: BddPtr,
-        m: &PartialModel,
-        alloc: &mut Bump
-    ) -> BddPtr {
+    fn cond_model_h(&mut self, bdd: BddPtr, m: &PartialModel, alloc: &mut Bump) -> BddPtr {
         self.stats.num_recursive_calls += 1;
         if bdd.is_const() {
             return bdd;
@@ -403,7 +387,7 @@ impl<T: LruTable<BddPtr>> BddManager<T> {
 
     /// Compute the Boolean function `f | var = value` for every set value in
     /// the partial model `m`
-    /// 
+    ///
     /// Pre-condition: scratch cleared
     pub fn condition_model(&mut self, bdd: BddPtr, m: &PartialModel) -> BddPtr {
         let mut alloc = Bump::new();
@@ -806,8 +790,8 @@ impl<T: LruTable<BddPtr>> BddManager<T> {
 #[cfg(test)]
 mod tests {
 
-    use crate::{builder::cache::all_app::AllTable, repr::ddnnf::DDNNFPtr};
     use crate::repr::wmc::WmcParams;
+    use crate::{builder::cache::all_app::AllTable, repr::ddnnf::DDNNFPtr};
     use maplit::*;
     use num::abs;
 
@@ -878,7 +862,7 @@ mod tests {
         VarLabel::new(1) => (0.1,0.9)};
         let params = WmcParams::new_with_default(0.0, 1.0, weights);
         let wmc = r1.wmc(man.get_order(), &params);
-        assert!(abs(wmc - (1.0 - 0.2*0.1)) < 0.000001);
+        assert!(abs(wmc - (1.0 - 0.2 * 0.1)) < 0.000001);
     }
 
     #[test]
@@ -1090,7 +1074,10 @@ mod tests {
         let obs = man.or(x, y);
         let and1 = man.and(iff1, iff2);
         let f = man.and(and1, obs);
-        assert_eq!(f.wmc(man.get_order(), &wmc), 0.2 * 0.3 + 0.2 * 0.7 + 0.8 * 0.3);
+        assert_eq!(
+            f.wmc(man.get_order(), &wmc),
+            0.2 * 0.3 + 0.2 * 0.7 + 0.8 * 0.3
+        );
     }
 
     #[test]
@@ -1197,8 +1184,8 @@ mod tests {
     #[test]
     fn test_ite_1() {
         let mut mgr = BddManager::<AllTable<BddPtr>>::new_default_order(16);
-        let c1= Cnf::from_string(String::from("(1 || 2) && (0 || -2)"));
-        let c2= Cnf::from_string(String::from("(0 || 1) && (-4 || -7)"));
+        let c1 = Cnf::from_string(String::from("(1 || 2) && (0 || -2)"));
+        let c2 = Cnf::from_string(String::from("(0 || 1) && (-4 || -7)"));
         let cnf1 = mgr.from_cnf(&c1);
         let cnf2 = mgr.from_cnf(&c2);
         let iff1 = mgr.iff(cnf1, cnf2);
@@ -1210,7 +1197,11 @@ mod tests {
         if and != iff1 {
             println!("cnf1: {}", c1.to_string());
             println!("cnf2: {}", c2.to_string());
-            println!("not equal:\nBdd1: {}\nBdd2: {}", and.to_string_debug(), iff1.to_string_debug());
+            println!(
+                "not equal:\nBdd1: {}\nBdd2: {}",
+                and.to_string_debug(),
+                iff1.to_string_debug()
+            );
         }
         assert_eq!(and, iff1);
     }

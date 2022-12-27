@@ -463,7 +463,7 @@ impl Cnf {
     /// Note: not efficient! this is exponential in #variables
     /// mostly for internal testing purposes
     pub fn wmc<T: Num + Copy>(&self, weights: &HashMap<VarLabel, (T, T)>) -> T {
-        let mut total : T = T::zero();
+        let mut total: T = T::zero();
         let mut weight_vec = Vec::new();
         for i in 0..self.num_vars() {
             weight_vec.push(weights[&VarLabel::new(i as u64)]);
@@ -473,10 +473,13 @@ impl Cnf {
                 break;
             };
             if self.eval(&assgn) {
-                let assgn_w = assgn.iter().enumerate().fold(T::one(), |v, (idx, &polarity)| {
-                    let (loww, highw) = weight_vec[idx];
-                    v * (if polarity { highw } else { loww })
-                });
+                let assgn_w = assgn
+                    .iter()
+                    .enumerate()
+                    .fold(T::one(), |v, (idx, &polarity)| {
+                        let (loww, highw) = weight_vec[idx];
+                        v * (if polarity { highw } else { loww })
+                    });
                 total = total + assgn_w;
             }
         }

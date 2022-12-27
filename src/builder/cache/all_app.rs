@@ -19,7 +19,8 @@ impl<T: DDNNFPtr> LruTable<T> for AllTable<T> {
             Ite::IteChoice { f, g, h } | Ite::IteComplChoice { f, g, h } => {
                 // convert the ITE into a canonical form
                 let compl = ite.is_compl_choice();
-                self.table.insert((f, g, h), if compl { res.neg() } else { res });
+                self.table
+                    .insert((f, g, h), if compl { res.neg() } else { res });
             }
             Ite::IteConst(_) => (), // do not cache base-cases
         }

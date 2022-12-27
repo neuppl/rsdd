@@ -2,11 +2,11 @@
 use crate::repr::var_label::VarSet;
 
 use super::{
+    ddnnf::*,
     model::PartialModel,
     var_label::{Literal, VarLabel},
     var_order::VarOrder,
     wmc::WmcParams,
-    ddnnf::*
 };
 use core::fmt::Debug;
 use std::iter::FromIterator;
@@ -32,7 +32,6 @@ impl BddPtr {
     pub fn new_compl(n: *mut BddNode) -> BddPtr {
         Compl(n)
     }
-
 
     /// Gets the varlabel of &self
     /// Panics if not a node
@@ -91,7 +90,6 @@ impl BddPtr {
         }
     }
 
-
     pub fn low(&self) -> BddPtr {
         unsafe {
             match &self {
@@ -136,28 +134,26 @@ impl BddPtr {
         }
     }
 
-
-
     /// Gets the scratch value stored in `&self`
-    /// 
+    ///
     /// Panics if not node.
     pub fn get_scratch<T>(&self) -> Option<&T> {
         unsafe {
             let ptr = self.mut_node_ref().data;
             if ptr == 0 {
-                return None
+                return None;
             } else {
-                return Some(&*(self.into_node().data as *const T))
+                return Some(&*(self.into_node().data as *const T));
             }
         }
     }
 
-    /// Set the scratch in this node to the value `v`. 
-    /// 
+    /// Set the scratch in this node to the value `v`.
+    ///
     /// Panics if not a node.
-    /// 
-    /// Invariant: values stored in `set_scratch` must not outlive 
-    /// the provided allocator `alloc` (i.e., calling `get_scratch` 
+    ///
+    /// Invariant: values stored in `set_scratch` must not outlive
+    /// the provided allocator `alloc` (i.e., calling `get_scratch`
     /// involves dereferencing a pointer stored in `alloc`)
     pub fn set_scratch<T>(&self, alloc: &mut Bump, v: T) -> () {
         self.mut_node_ref().data = (alloc.alloc(v) as *const T) as usize;
@@ -220,7 +216,6 @@ impl BddPtr {
         // let s = print_bdd_helper(self, ptr, map);
         // format!("{}{}", if ptr.is_compl() { "!" } else { "" }, s)
     }
-
 
     /// evaluates a circuit on a partial marginal MAP assignment to get an upper-bound on the wmc
     /// maxes over the `map_vars`, applies the `partial_map_assgn`
@@ -352,8 +347,6 @@ impl BddPtr {
             PartialModel::from_litvec(&[], order.num_vars()),
         )
     }
-
-
 }
 
 type DDNNFCache<T> = (Option<T>, Option<T>);
@@ -368,7 +361,6 @@ impl DDNNFPtr for BddPtr {
     fn false_ptr() -> BddPtr {
         PtrFalse
     }
-
 
     /// True is this is a complemented edge pointer
     fn is_neg(&self) -> bool {
@@ -394,14 +386,17 @@ impl DDNNFPtr for BddPtr {
         }
     }
 
-
     fn fold<T: Clone + Copy + Debug, F: Fn(DDNNF<T>) -> T>(&self, o: &VarOrder, f: F) -> T {
-        fn bottomup_pass_h<T: Clone + Copy + Debug, F: Fn(DDNNF<T>) -> T>(ptr: BddPtr, f: &F, alloc: &mut Bump) -> T {
+        fn bottomup_pass_h<T: Clone + Copy + Debug, F: Fn(DDNNF<T>) -> T>(
+            ptr: BddPtr,
+            f: &F,
+            alloc: &mut Bump,
+        ) -> T {
             match ptr {
                 PtrTrue => f(DDNNF::True),
                 PtrFalse => f(DDNNF::False),
                 Compl(_) | Reg(_) => {
-                    // inside the cache, store a (compl, non_compl) pair corresponding to the 
+                    // inside the cache, store a (compl, non_compl) pair corresponding to the
                     // complemented and uncomplemented pass over this node
                     if ptr.get_scratch::<DDNNFCache<T>>().is_none() {
                         ptr.set_scratch::<DDNNFCache<T>>(alloc, (None, None));
@@ -410,9 +405,17 @@ impl DDNNFPtr for BddPtr {
                         Some((Some(v), _)) if ptr.is_neg() => return v.clone(),
                         Some((_, Some(v))) if !ptr.is_neg() => return v.clone(),
                         Some((None, cached)) | Some((cached, None)) => {
-                            // no cached value found, compute it 
-                            let l = if ptr.is_neg() { ptr.low().neg() } else { ptr.low() };
-                            let h = if ptr.is_neg() { ptr.high().neg() } else { ptr.high() };
+                            // no cached value found, compute it
+                            let l = if ptr.is_neg() {
+                                ptr.low().neg()
+                            } else {
+                                ptr.low()
+                            };
+                            let h = if ptr.is_neg() {
+                                ptr.high().neg()
+                            } else {
+                                ptr.high()
+                            };
 
                             let low_v = bottomup_pass_h(l, f, alloc);
                             let high_v = bottomup_pass_h(h, f, alloc);
@@ -431,14 +434,14 @@ impl DDNNFPtr for BddPtr {
                             let or_v = f(DDNNF::Or(and_low, and_high, varset));
 
                             // cache and return or_v
-                            if ptr.is_neg() { 
+                            if ptr.is_neg() {
                                 ptr.set_scratch::<DDNNFCache<T>>(alloc, (Some(or_v), *cached));
                             } else {
                                 ptr.set_scratch::<DDNNFCache<T>>(alloc, (*cached, Some(or_v)));
                             }
-                            return or_v
-                        },
-                        _ => panic!("unreachable")
+                            return or_v;
+                        }
+                        _ => panic!("unreachable"),
                     }
                 }
             }

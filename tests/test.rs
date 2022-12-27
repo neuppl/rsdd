@@ -9,9 +9,9 @@ use crate::repr::var_label::VarLabel;
 use rsdd::builder::bdd_builder::BddManager;
 use rsdd::builder::cache::all_app::AllTable;
 use rsdd::builder::sdd_builder::SddManager;
-use rsdd::*;
 use rsdd::repr::bdd::BddPtr;
 use rsdd::repr::vtree::VTree;
+use rsdd::*;
 extern crate rand;
 
 /// A list of canonical forms in DIMACS form. The goal of these tests is to ensure that caching
@@ -449,7 +449,7 @@ mod test_bdd_manager {
             let dnnfres = dnnf.wmc(mgr.get_order(), &bddwmc);
             let eps = f64::abs(bddres - dnnfres) < 0.0001;
             if !eps {
-              println!("error on input {}: bddres {}, cnfres {}\n topdown bdd: {}\nbottom-up bdd: {}", 
+              println!("error on input {}: bddres {}, cnfres {}\n topdown bdd: {}\nbottom-up bdd: {}",
                 c1.to_string(), bddres, dnnfres, dnnf.to_string_debug(), cnf1.to_string_debug());
             }
             TestResult::from_bool(eps)
@@ -569,8 +569,6 @@ mod test_sdd_manager {
             and == iff1
         }
     }
-
-
 
     quickcheck! {
         fn sdd_wmc_eq(clauses: Vec<Vec<Literal>>) -> TestResult {

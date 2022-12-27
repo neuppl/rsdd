@@ -90,7 +90,7 @@ impl Arbitrary for Literal {
 /// A structure that contains sets of variables
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct VarSet {
-    b: BitSet
+    b: BitSet,
 }
 
 impl VarSet {
