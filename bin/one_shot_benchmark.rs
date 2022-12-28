@@ -103,7 +103,7 @@ fn compile_sdd_rightlinear(str: String, args: &Args) -> BenchResult {
 fn compile_bdd(str: String, args: &Args) -> BenchResult {
     use rsdd::builder::bdd_builder::*;
     let cnf = Cnf::from_file(str);
-    let mut man = BddManager::<BddApplyTable<BddPtr>>::new_default_order(cnf.num_vars());
+    let mut man = BddManager::<BddApplyTable<BddPtr>>::new_default_order_lru(cnf.num_vars());
     let _bdd = man.from_cnf(&cnf);
     BenchResult { num_recursive: man.num_recursive_calls(), size: _bdd.count_nodes() }
 }

@@ -1,6 +1,6 @@
 //! Defines the vtree datastructure used by SDDs for decomposition
 
-use super::var_label::VarLabel;
+use super::{var_label::VarLabel, sdd::SddPtr};
 use crate::util::btree::{BTree, LeastCommonAncestor};
 
 pub type VTree = BTree<(), VarLabel>;
@@ -127,8 +127,31 @@ impl VTreeManager {
         VTreeIndex(self.vtree_idx[lbl.value_usize()])
     }
 
-    /// true if `l` is prime to `r`
-    pub fn is_prime(&self, l: VTreeIndex, r: VTreeIndex) -> bool {
+    /// true if a is prime to b
+    /// panics if either is constant
+    pub fn is_prime(&self, a: SddPtr, b: SddPtr) -> bool {
+        let a_vtree = if a.is_var() {
+            self.get_varlabel_idx(a.get_var_label())
+        } else {
+            a.vtree()
+        };
+        let b_vtree = if b.is_var() {
+            self.get_varlabel_idx(b.get_var_label())
+        } else {
+            b.vtree()
+        };
+        self.is_prime_index(a_vtree, b_vtree)
+    }
+
+    /// true if a is prime to b
+    /// panics if either is constant
+    pub fn is_prime_var(&self, a: VarLabel, b: VarLabel) -> bool {
+        self.is_prime_index(self.get_varlabel_idx(a), self.get_varlabel_idx(b))
+    }
+
+
+    /// true if the vtree index `l` is prime to `r`
+    pub fn is_prime_index(&self, l: VTreeIndex, r: VTreeIndex) -> bool {
         // due to our indexing scheme, checking if a node is prime is
         // as simple as comparing their indices (see Figure 1 from
         // 'SDD: A New Canonical Representation of Propositional Knowledge Bases'

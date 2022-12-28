@@ -1,15 +1,15 @@
-use std::collections::HashMap;
+use fnv::FnvHashMap;
 
 use crate::repr::sdd::{SddAnd, SddPtr};
 
 pub struct SddApply {
-    table: HashMap<SddAnd, SddPtr>,
+    table: FnvHashMap<SddAnd, SddPtr>,
 }
 
 impl SddApply {
     pub fn new() -> SddApply {
         SddApply {
-            table: HashMap::default(),
+            table: FnvHashMap::default(),
         }
     }
     pub fn get(&self, and: SddAnd) -> Option<SddPtr> {

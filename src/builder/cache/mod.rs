@@ -8,6 +8,7 @@ pub mod lru_app;
 pub mod sdd_apply_cache;
 
 pub trait LruTable<T: DDNNFPtr> {
-    fn insert(&mut self, ite: Ite<T>, res: T);
-    fn get(&mut self, ite: Ite<T>) -> Option<T>;
+    fn hash(&self, ite: &Ite<T>) -> u64;
+    fn insert(&mut self, ite: Ite<T>, res: T, hash: u64);
+    fn get(&mut self, ite: Ite<T>, hash: u64) -> Option<T>;
 }

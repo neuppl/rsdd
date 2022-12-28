@@ -11,7 +11,7 @@ use crate::repr::model::PartialModel;
 use crate::repr::sat_solver::SATSolver;
 use crate::repr::var_order::VarOrder;
 use crate::{
-    backing_store::bump_table::BumpTable, repr::cnf::*, repr::logical_expr::LogicalExpr,
+    backing_store::bump_table::BackedRobinhoodTable, repr::cnf::*, repr::logical_expr::LogicalExpr,
     repr::model, repr::var_label::Literal, repr::var_label::VarLabel,
 };
 
@@ -85,7 +85,7 @@ impl BddManagerStats {
 }
 
 pub struct BddManager<T: LruTable<BddPtr>> {
-    compute_table: BumpTable<BddNode>,
+    compute_table: BackedRobinhoodTable<BddNode>,
     apply_table: T,
     stats: BddManagerStats,
     order: VarOrder,
@@ -95,19 +95,18 @@ impl<T: LruTable<BddPtr>> BddManager<T> {
     /// Make a BDD manager with a default variable ordering
     pub fn new_default_order(num_vars: usize) -> BddManager<AllTable<BddPtr>> {
         let default_order = VarOrder::linear_order(num_vars);
-        let n = default_order.num_vars();
         BddManager::new(default_order, AllTable::new())
     }
 
     pub fn new_default_order_lru(num_vars: usize) -> BddManager<BddApplyTable<BddPtr>> {
         let default_order = VarOrder::linear_order(num_vars);
-        BddManager::new(default_order, BddApplyTable::new(num_vars))
+        BddManager::new(default_order, BddApplyTable::new(21))
     }
 
     /// Creates a new variable manager with the specified order
     pub fn new(order: VarOrder, table: T) -> BddManager<T> {
         BddManager {
-            compute_table: BumpTable::new(),
+            compute_table: BackedRobinhoodTable::new(),
             order,
             apply_table: table,
             stats: BddManagerStats::new(),
@@ -194,7 +193,8 @@ impl<T: LruTable<BddPtr>> BddManager<T> {
             _ => (),
         };
 
-        match self.apply_table.get(ite) {
+        let hash = self.apply_table.hash(&ite);
+        match self.apply_table.get(ite, hash) {
             Some(v) => return v,
             None => (),
         };
@@ -218,7 +218,7 @@ impl<T: LruTable<BddPtr>> BddManager<T> {
         // now we have a new BDD
         let node = BddNode::new(lbl, f, t);
         let r = self.get_or_insert(node);
-        self.apply_table.insert(ite, r);
+        self.apply_table.insert(ite, r, hash);
         r
     }
 
@@ -287,7 +287,7 @@ impl<T: LruTable<BddPtr>> BddManager<T> {
             }
         } else {
             // check cache
-            let idx = match bdd.get_scratch::<BddPtr>() {
+            match bdd.get_scratch::<BddPtr>() {
                 None => (),
                 Some(v) => return if bdd.is_neg() { v.neg() } else { *v },
             };
@@ -350,7 +350,7 @@ impl<T: LruTable<BddPtr>> BddManager<T> {
             }
             None => {
                 // check cache
-                let idx = match bdd.get_scratch::<BddPtr>() {
+                match bdd.get_scratch::<BddPtr>() {
                     None => (),
                     Some(v) => return if bdd.is_neg() { v.neg() } else { *v },
                 };
@@ -479,8 +479,6 @@ impl<T: LruTable<BddPtr>> BddManager<T> {
 
     /// Compile a BDD from a CNF
     pub fn from_cnf(&mut self, cnf: &Cnf) -> BddPtr {
-        // let dtree = dtree::DTree::from_cnf(cnf, &self.order);
-        // return self.from_dtree(&dtree);
         let mut cvec: Vec<BddPtr> = Vec::with_capacity(cnf.clauses().len());
         if cnf.clauses().is_empty() {
             return BddPtr::true_ptr();

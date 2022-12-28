@@ -7,7 +7,7 @@ use rand::Rng;
 use std::collections::HashMap;
 
 use crate::{
-    backing_store::bump_table::BumpTable,
+    backing_store::bump_table::BackedRobinhoodTable,
     repr::{
         bdd::{BddNode, BddPtr},
         cnf::*,
@@ -19,13 +19,13 @@ use crate::{
 use crate::repr::sat_solver::SATSolver;
 
 pub struct DecisionNNFBuilder {
-    compute_table: BumpTable<BddNode>,
+    compute_table: BackedRobinhoodTable<BddNode>,
 }
 
 impl DecisionNNFBuilder {
     pub fn new(num_vars: usize) -> DecisionNNFBuilder {
         DecisionNNFBuilder {
-            compute_table: BumpTable::new(),
+            compute_table: BackedRobinhoodTable::new(),
         }
     }
 

@@ -292,7 +292,9 @@ mod test_bdd_manager {
     use crate::repr::var_label::VarLabel;
     use num::abs;
     use quickcheck::TestResult;
+    use rsdd::builder::cache::LruTable;
     use rsdd::builder::cache::all_app::AllTable;
+    use rsdd::builder::cache::lru_app::BddApplyTable;
     use rsdd::repr::bdd::BddPtr;
     use rsdd::repr::ddnnf::DDNNFPtr;
     use rsdd::repr::model::PartialModel;
@@ -456,6 +458,25 @@ mod test_bdd_manager {
         }
     }
 
+
+    quickcheck! {
+        /// test if the lru cache and the all cache give the same results
+        fn bdd_lru(c1: Cnf) -> TestResult {
+            let mut mgr1 = super::BddManager::<AllTable<BddPtr>>::new_default_order(16);
+            let mut mgr2 = super::BddManager::<BddApplyTable<BddPtr>>::new_default_order_lru(16);
+
+            let weight_map : HashMap<VarLabel, (f64, f64)> = HashMap::from_iter(
+                (0..16).map(|x| (VarLabel::new(x as u64), (0.3, 0.7))));
+
+            let bddwmc = super::repr::wmc::WmcParams::new_with_default(0.0, 1.0, weight_map);
+            let cnf1 = mgr1.from_cnf(&c1);
+            let cnf2 = mgr2.from_cnf(&c1);
+            let wmc1 = cnf1.wmc(mgr1.get_order(), &bddwmc);
+            let wmc2 = cnf2.wmc(mgr2.get_order(), &bddwmc);
+            TestResult::from_bool(f64::abs(wmc1 - wmc2) < 0.00001)
+        }
+    }
+
     quickcheck! {
         fn marginal_map(c1: Cnf) -> TestResult {
             use rsdd::repr::model::PartialModel;
@@ -524,6 +545,8 @@ mod test_sdd_manager {
         }
     }
 
+
+
     quickcheck! {
         fn ite_iff_rightlinear(c1: Cnf, c2: Cnf) -> bool {
             // println!("testing with cnf {:?}, {:?}", c1, c2);
@@ -569,6 +592,8 @@ mod test_sdd_manager {
             and == iff1
         }
     }
+
+
 
     quickcheck! {
         fn sdd_wmc_eq(clauses: Vec<Vec<Literal>>) -> TestResult {

@@ -1,20 +1,17 @@
 //! The main implementation of the SDD manager, the primary way of interacting
 //! with SDDs.
 
-use crate::backing_store::bump_table::BumpTable;
+use std::cmp::Ordering;
+
+use crate::backing_store::bump_table::BackedRobinhoodTable;
 use crate::backing_store::UniqueTable;
 use crate::repr::ddnnf::DDNNFPtr;
 use crate::repr::sdd::{BinarySDD, SddAnd, SddOr, SddPtr};
 use crate::repr::vtree::{VTree, VTreeIndex, VTreeManager};
 use crate::repr::wmc::WmcParams;
 use crate::{
-    repr::cnf::Cnf, repr::logical_expr::LogicalExpr, repr::var_label::VarLabel, util::btree::*,
-    util::lru::Lru,
+    repr::cnf::Cnf, repr::logical_expr::LogicalExpr, repr::var_label::VarLabel,
 };
-
-use std::collections::{HashMap, HashSet};
-use std::fmt::{Binary, Debug};
-
 use super::cache::LruTable;
 use super::cache::all_app::AllTable;
 use super::cache::ite::Ite;
@@ -33,8 +30,8 @@ impl SddStats {
 }
 
 pub struct SddManager {
-    sdd_tbl: BumpTable<SddOr>,
-    bdd_tbl: BumpTable<BinarySDD>,
+    sdd_tbl: BackedRobinhoodTable<SddOr>,
+    bdd_tbl: BackedRobinhoodTable<BinarySDD>,
     vtree: VTreeManager,
     stats: SddStats,
     /// the apply cache
@@ -47,8 +44,8 @@ pub struct SddManager {
 impl<'a> SddManager {
     pub fn new(vtree: VTree) -> SddManager {
         SddManager {
-            sdd_tbl: BumpTable::new(),
-            bdd_tbl: BumpTable::new(),
+            sdd_tbl: BackedRobinhoodTable::new(),
+            bdd_tbl: BackedRobinhoodTable::new(),
             stats: SddStats::new(),
             ite_cache: AllTable::new(),
             vtree: VTreeManager::new(vtree),
@@ -158,7 +155,6 @@ impl<'a> SddManager {
             return SddPtr::var(bdd.label(), true);
         }
 
-        // TODO this is probably wrong
         // uniqify BDD
         if bdd.high().is_neg() || bdd.high().is_false() {
             let neg_bdd =
@@ -432,7 +428,7 @@ impl<'a> SddManager {
         let (a, b) = if self.get_vtree_idx(a) == self.get_vtree_idx(b)
             || self
                 .vtree
-                .is_prime(self.get_vtree_idx(a), self.get_vtree_idx(b))
+                .is_prime_index(self.get_vtree_idx(a), self.get_vtree_idx(b))
         {
             (a, b)
         } else {
@@ -538,26 +534,14 @@ impl<'a> SddManager {
 
     /// Computes the SDD representing the logical function `if f then g else h`
     pub fn ite(&mut self, f: SddPtr, g: SddPtr, h: SddPtr) -> SddPtr {
-        let cmp = |a:SddPtr, b:SddPtr| {
-            let a_vtree = if a.is_var() {
-                self.vtree.get_varlabel_idx(a.get_var_label())
-            } else {
-                a.vtree()
-            };
-            let b_vtree = if b.is_var() {
-                self.vtree.get_varlabel_idx(b.get_var_label())
-            } else {
-                b.vtree()
-            };
-            self.vtree.is_prime(a_vtree, b_vtree)
-        };
-        let ite = Ite::new(cmp, f, g, h);
+        let ite = Ite::new(|a, b| self.vtree.is_prime(a, b), f, g, h);
         match ite {
             Ite::IteConst(f) => return f,
             _ => (),
         };
 
-        match self.ite_cache.get(ite) {
+        let hash = self.ite_cache.hash(&ite);
+        match self.ite_cache.get(ite, hash) {
             Some(v) => return v,
             None => (),
         };
@@ -566,7 +550,7 @@ impl<'a> SddManager {
         let fg = self.and(f, g);
         let negfh = self.and(f.neg(), h);
         let r = self.or(fg, negfh);
-        self.ite_cache.insert(ite, r);
+        self.ite_cache.insert(ite, r, hash);
         r
     }
 
@@ -757,18 +741,57 @@ impl<'a> SddManager {
         a.is_false()
     }
 
+    /// compile an SDD from an input CNF
     pub fn from_cnf(&mut self, cnf: &Cnf) -> SddPtr {
         let mut cvec: Vec<SddPtr> = Vec::with_capacity(cnf.clauses().len());
-        for lit_vec in cnf.clauses().iter() {
-            assert!(!lit_vec.is_empty(), "empty cnf");
+        if cnf.clauses().is_empty() {
+            return SddPtr::true_ptr();
+        }
+        // check if there is an empty clause -- if so, UNSAT
+        if cnf.clauses().iter().any(|x| x.is_empty()) {
+            return SddPtr::false_ptr();
+        }
+
+        // sort the clauses based on a best-effort bottom-up ordering of clauses
+        let mut cnf_sorted = cnf.clauses().to_vec();
+        cnf_sorted.sort_by(|c1, c2| {
+            // order the clause with the first-most variable last
+            let fst1 = c1
+                .iter()
+                .max_by(|l1, l2| {
+                    if self.vtree.is_prime_var(l1.get_label(), l2.get_label()) {
+                        Ordering::Less
+                    } else {
+                        Ordering::Equal
+                    }
+                })
+                .unwrap();
+            let fst2 = c2
+                .iter()
+                .max_by(|l1, l2| {
+                    if self.vtree.is_prime_var(l1.get_label(), l2.get_label()) {
+                        Ordering::Less
+                    } else {
+                        Ordering::Equal
+                    }
+                })
+                .unwrap();
+            if self.vtree.is_prime_var(fst1.get_label(), fst2.get_label()) {
+                Ordering::Less
+            } else {
+                Ordering::Equal
+            }
+        });
+
+        for lit_vec in cnf_sorted.iter() {
             let (vlabel, val) = (lit_vec[0].get_label(), lit_vec[0].get_polarity());
-            let mut sdd = SddPtr::var(vlabel, val);
+            let mut bdd = SddPtr::var(vlabel, val);
             for i in 1..lit_vec.len() {
                 let (vlabel, val) = (lit_vec[i].get_label(), lit_vec[i].get_polarity());
                 let var = SddPtr::var(vlabel, val);
-                sdd = self.or(sdd, var);
+                bdd = self.or(bdd, var);
             }
-            cvec.push(sdd);
+            cvec.push(bdd);
         }
         // now cvec has a list of all the clauses; collapse it down
         fn helper(vec: &[SddPtr], man: &mut SddManager) -> Option<SddPtr> {
@@ -787,7 +810,12 @@ impl<'a> SddManager {
                 }
             }
         }
-        helper(&cvec, self).unwrap()
+        let r = helper(&cvec, self);
+        if r.is_none() {
+            SddPtr::true_ptr()
+        } else {
+            r.unwrap()
+        }
     }
 
     pub fn from_logical_expr(&mut self, expr: &LogicalExpr) -> SddPtr {
