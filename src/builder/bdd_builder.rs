@@ -96,7 +96,7 @@ impl<T: LruTable<BddPtr>> BddManager<T> {
     pub fn new_default_order(num_vars: usize) -> BddManager<AllTable<BddPtr>> {
         let default_order = VarOrder::linear_order(num_vars);
         let n = default_order.num_vars();
-        BddManager::new(default_order, AllTable::new(n))
+        BddManager::new(default_order, AllTable::new())
     }
 
     pub fn new_default_order_lru(num_vars: usize) -> BddManager<BddApplyTable<BddPtr>> {

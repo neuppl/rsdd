@@ -16,6 +16,7 @@ parser = argparse.ArgumentParser(
 parser.add_argument('filename')
 parser.add_argument('-n', '--numthreads')
 parser.add_argument('-t', '--timeout')
+parser.add_argument('-r', '--renderpdf')
 
 cmdargs = parser.parse_args()
 
@@ -48,3 +49,15 @@ with ThreadPoolExecutor(max_workers=int(cmdargs.numthreads)) as executor:
     result = {"file": cmdargs.filename, "total_benchmarks": n,  \
         "num_completed": len(results_done), "timeout": cmdargs.timeout, "githash": sha, "result": results_done}
     print(json.dumps(result))
+
+    if cmdargs.renderpdf:
+        # render the cactus plot for the data
+        import matplotlib.pyplot as plt
+        result_lst = [r["time_in_sec"] for r in result["result"]]
+        result_lst.sort()
+        plt.plot(result_lst)
+        plt.ylabel('time (s)')
+        plt.xlabel('# solved')
+        plt.show()
+
+

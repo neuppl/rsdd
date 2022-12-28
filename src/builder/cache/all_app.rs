@@ -43,7 +43,7 @@ impl<T: DDNNFPtr> LruTable<T> for AllTable<T> {
 }
 
 impl<T: DDNNFPtr> AllTable<T> {
-    pub fn new(num_vars: usize) -> AllTable<T> {
+    pub fn new() -> AllTable<T> {
         AllTable {
             table: FnvHashMap::default(),
         }

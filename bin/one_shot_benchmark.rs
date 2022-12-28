@@ -59,6 +59,7 @@ struct BenchmarkLog {
     num_recursive: usize,
     time_in_sec: f64,
     circuit_size: usize,
+    mode: String,
 }
 
 struct BenchResult {
@@ -126,6 +127,7 @@ fn main() {
         name: args.file,
         time_in_sec: duration.as_secs_f64(),
         num_recursive: res.num_recursive,
+        mode: args.mode,
         circuit_size: res.size,
     };
 

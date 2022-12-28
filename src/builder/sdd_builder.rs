@@ -15,6 +15,9 @@ use crate::{
 use std::collections::{HashMap, HashSet};
 use std::fmt::{Binary, Debug};
 
+use super::cache::LruTable;
+use super::cache::all_app::AllTable;
+use super::cache::ite::Ite;
 use super::cache::sdd_apply_cache::SddApply;
 
 #[derive(Debug, Clone)]
@@ -36,6 +39,7 @@ pub struct SddManager {
     stats: SddStats,
     /// the apply cache
     app_cache: SddApply,
+    ite_cache: AllTable<SddPtr>,
     // disabling compression for testing purposes, eventual experimentation
     use_compression: bool,
 }
@@ -46,6 +50,7 @@ impl<'a> SddManager {
             sdd_tbl: BumpTable::new(),
             bdd_tbl: BumpTable::new(),
             stats: SddStats::new(),
+            ite_cache: AllTable::new(),
             vtree: VTreeManager::new(vtree),
             app_cache: SddApply::new(),
             use_compression: true,
@@ -210,10 +215,6 @@ impl<'a> SddManager {
         self.unique_or(node, table)
     }
 
-    pub fn or_internal(&mut self, a: SddPtr, b: SddPtr) -> SddPtr {
-        self.and_rec(a.neg(), b.neg()).neg()
-    }
-
     /// conjoin two SDDs that are in independent vtrees
     /// a is prime to b
     fn and_indep(&mut self, a: SddPtr, b: SddPtr, lca: VTreeIndex) -> SddPtr {
@@ -313,12 +314,12 @@ impl<'a> SddManager {
             for a2 in b.iter() {
                 let p2 = a2.prime();
                 let s2 = a2.sub();
-                let p = self.and_rec(p1, p2);
+                let p = self.and(p1, p2);
                 // println!("(PRIME) result of {} && {}: {}", self.print_sdd(p1), self.print_sdd(p2), self.print_sdd(p));
                 if p.is_false() {
                     continue;
                 }
-                let s = self.and_rec(s1, s2);
+                let s = self.and(s1, s2);
                 // println!("(SUB) result of {} && {}: {}", self.print_sdd(s1), self.print_sdd(s2), self.print_sdd(s));
                 // check if one of the nodes is true; if it is, we can
                 // return a `true` SddPtr here, for trimming
@@ -378,7 +379,7 @@ impl<'a> SddManager {
                     andb.sub()
                 };
                 // this sub is the only one with a non-false prime, so no need to iterate
-                r.push(SddAnd::new(p1, self.and_rec(s1, s2)));
+                r.push(SddAnd::new(p1, self.and(s1, s2)));
                 continue;
             }
 
@@ -387,11 +388,11 @@ impl<'a> SddManager {
                 let p2 = a2.prime();
                 let s2 = a2.sub();
                 let s2 = if b.is_neg() { s2.neg() } else { s2 };
-                let p = self.and_rec(p1, p2);
+                let p = self.and(p1, p2);
                 if p.is_false() {
                     continue;
                 }
-                let s = self.and_rec(s1, s2);
+                let s = self.and(s1, s2);
                 // check if one of the nodes is true; if it is, we can
                 // return a `true` SddPtr here, for trimming
                 if p.is_true() && s.is_true() {
@@ -413,7 +414,7 @@ impl<'a> SddManager {
         ptr
     }
 
-    fn and_rec(&mut self, a: SddPtr, b: SddPtr) -> SddPtr {
+    pub fn and(&mut self, a: SddPtr, b: SddPtr) -> SddPtr {
         // println!("and a: {}\nb: {}", self.print_sdd(a), self.print_sdd(b));
         self.stats.num_rec += 1;
         // first, check for a base case
@@ -475,12 +476,9 @@ impl<'a> SddManager {
         return r;
     }
 
-    pub fn and(&mut self, a: SddPtr, b: SddPtr) -> SddPtr {
-        self.and_rec(a, b)
-    }
 
     pub fn or(&mut self, a: SddPtr, b: SddPtr) -> SddPtr {
-        self.or_internal(a, b)
+        self.and(a.neg(), b.neg()).neg()
     }
 
     /// Computes `f | var = value`
@@ -540,10 +538,36 @@ impl<'a> SddManager {
 
     /// Computes the SDD representing the logical function `if f then g else h`
     pub fn ite(&mut self, f: SddPtr, g: SddPtr, h: SddPtr) -> SddPtr {
+        let cmp = |a:SddPtr, b:SddPtr| {
+            let a_vtree = if a.is_var() {
+                self.vtree.get_varlabel_idx(a.get_var_label())
+            } else {
+                a.vtree()
+            };
+            let b_vtree = if b.is_var() {
+                self.vtree.get_varlabel_idx(b.get_var_label())
+            } else {
+                b.vtree()
+            };
+            self.vtree.is_prime(a_vtree, b_vtree)
+        };
+        let ite = Ite::new(cmp, f, g, h);
+        match ite {
+            Ite::IteConst(f) => return f,
+            _ => (),
+        };
+
+        match self.ite_cache.get(ite) {
+            Some(v) => return v,
+            None => (),
+        };
+
         // TODO make this a primitive operation
         let fg = self.and(f, g);
         let negfh = self.and(f.neg(), h);
-        self.or(fg, negfh)
+        let r = self.or(fg, negfh);
+        self.ite_cache.insert(ite, r);
+        r
     }
 
     /// Computes the SDD representing the logical function `f <=> g`
