@@ -9,6 +9,7 @@ use bumpalo::Bump;
 use std::fmt::{Binary, Debug};
 use SddPtr::*;
 
+// This type is used a lot. Make sure it doesn't unintentionally get bigger.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Ord, PartialOrd, Copy)]
 pub enum SddPtr {
     PtrTrue,
@@ -19,6 +20,7 @@ pub enum SddPtr {
     Compl(*mut SddOr),
     Reg(*mut SddOr),
 }
+
 
 /// Specialized SDD node for a right-linear sub-vtree
 /// SDDs for these fragments are binary decisions
@@ -85,6 +87,7 @@ struct SddNodeIter {
 
 impl SddNodeIter {
     pub fn new(sdd: SddPtr) -> SddNodeIter {
+        // println!("new iter, len: {}", if sdd.is_bdd() { 2 } else { sdd.num_nodes() });
         SddNodeIter { sdd, count: 0 }
     }
 }

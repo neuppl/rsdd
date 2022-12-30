@@ -18,6 +18,7 @@ extern crate quickcheck;
 extern crate segment_tree;
 extern crate time_test;
 extern crate tinyvec;
+extern crate rustc_hash;
 
 #[macro_use]
 mod util;

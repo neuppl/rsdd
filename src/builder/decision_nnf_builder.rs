@@ -4,7 +4,7 @@ use crate::{backing_store::*, repr::ddnnf::DDNNFPtr};
 use bumpalo::Bump;
 use num::Num;
 use rand::Rng;
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 
 use crate::{
     backing_store::bump_table::BackedRobinhoodTable,
@@ -78,7 +78,7 @@ impl DecisionNNFBuilder {
         level: usize,
         order: &VarOrder,
         hasher: &mut CnfHasher,
-        cache: &mut HashMap<HashedCNF, BddPtr>,
+        cache: &mut FxHashMap<HashedCNF, BddPtr>,
     ) -> BddPtr {
         // check for base case
         let assgn = sat.get_implied_units();
@@ -183,7 +183,7 @@ impl DecisionNNFBuilder {
             0,
             order,
             &mut CnfHasher::new(cnf),
-            &mut HashMap::new(),
+            &mut FxHashMap::default(),
         );
 
         // conjoin in any initially implied literals

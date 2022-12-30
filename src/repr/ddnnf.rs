@@ -64,16 +64,17 @@ pub trait DDNNFPtr: Clone + Debug + PartialEq + Eq + Hash + Copy {
         todo!()
     }
 
-    fn eval(&self, assgn: &HashMap<VarLabel, bool>) -> bool {
-        todo!()
-    }
-
+    /// Negate the pointer
     fn neg(&self) -> Self;
-
+    /// Generate a pointer to the false constant
     fn false_ptr() -> Self;
+    /// Generate a pointer to the true constant
     fn true_ptr() -> Self;
+    /// True if `self` is a true constant, false otherwise
     fn is_true(&self) -> bool;
+    /// True if `self` is a false constant, false otherwise
     fn is_false(&self) -> bool;
+    /// True if `self` is a negated pointer, false otherwise
     fn is_neg(&self) -> bool;
 
     /// count the number of nodes in this representation

@@ -2,6 +2,7 @@
 use std::hash::Hash;
 
 use fnv::FnvHashMap;
+use rustc_hash::FxHashMap;
 
 use crate::repr::{bdd::BddPtr, ddnnf::DDNNFPtr};
 
@@ -11,7 +12,7 @@ use super::{ite::Ite, LruTable};
 /// The top-level data structure that caches applications
 pub struct AllTable<T: DDNNFPtr> {
     /// a vector of applications, indexed by the top label of the first pointer.
-    table: FnvHashMap<(T, T, T), T>,
+    table: FxHashMap<(T, T, T), T>,
 }
 
 impl<T: DDNNFPtr> LruTable<T> for AllTable<T> {
@@ -52,7 +53,7 @@ impl<T: DDNNFPtr> LruTable<T> for AllTable<T> {
 impl<T: DDNNFPtr> AllTable<T> {
     pub fn new() -> AllTable<T> {
         AllTable {
-            table: FnvHashMap::default(),
+            table: FxHashMap::default(),
         }
     }
 }

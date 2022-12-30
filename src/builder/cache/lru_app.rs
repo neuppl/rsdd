@@ -1,7 +1,7 @@
 //! Apply cache for ITEs that uses a dynamically-expanding LRU cache
 use std::hash::Hasher;
 
-use fnv::FnvHasher;
+use rustc_hash::FxHasher;
 
 use crate::{
     repr::{bdd::BddPtr, ddnnf::DDNNFPtr},
@@ -49,7 +49,7 @@ impl<T: DDNNFPtr> LruTable<T> for BddApplyTable<T> {
     fn hash(&self, ite: &Ite<T>) -> u64 {
         match ite {
             Ite::IteChoice { f, g, h } | Ite::IteComplChoice { f, g, h } => {
-                let mut hasher: FnvHasher = Default::default();
+                let mut hasher: FxHasher = Default::default();
                 f.hash(&mut hasher);
                 g.hash(&mut hasher);
                 h.hash(&mut hasher);

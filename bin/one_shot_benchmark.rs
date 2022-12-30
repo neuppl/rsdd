@@ -5,9 +5,7 @@ extern crate serde_json;
 
 use clap::Parser;
 use rsdd::repr::dtree::DTree;
-use std::env;
 use std::fs;
-use rayon::prelude::*;
 use rsdd::builder::cache::lru_app::BddApplyTable;
 use rsdd::repr::bdd::BddPtr;
 use rsdd::repr::cnf::Cnf;
@@ -17,8 +15,7 @@ use rsdd::repr::var_order::VarOrder;
 use rsdd::repr::vtree::VTree;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use std::collections::HashMap;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 /// Test driver for one-shot benchmark
 #[derive(Parser, Debug)]
@@ -76,7 +73,6 @@ fn compile_topdown_nnf(str: String, args: &Args) -> BenchResult {
     // let order = cnf.force_order();
     let ddnnf = man.from_cnf_topdown(&order, &cnf);
     BenchResult { num_recursive: 0, size: ddnnf.count_nodes() }
-
 }
 
 fn compile_sdd_dtree(str: String, args: &Args) -> BenchResult {
@@ -117,6 +113,7 @@ fn main() {
     let start = Instant::now();
     let res = match args.mode.as_str() {
         "bdd_topological" => compile_bdd(file, &args),
+        "dnnf_topdown" => compile_topdown_nnf(file, &args),
         "sdd_right_linear" => compile_sdd_rightlinear(file, &args),
         "sdd_dtree_topological" => compile_sdd_dtree(file, &args),
         x => panic!("Unknown mode option: {}", x)

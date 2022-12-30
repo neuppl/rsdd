@@ -7,6 +7,7 @@ use std::hash::{Hash, Hasher};
 use std::mem;
 
 use crate::util::*;
+use rustc_hash::FxHasher;
 use fnv::FnvHasher;
 
 /// The load factor of the table, i.e. how full the table will be when it
@@ -146,7 +147,7 @@ impl<T: Eq + PartialEq + Hash + Clone> UniqueTable<T> for BackedRobinhoodTable<T
         if (self.len + 1) as f64 > (self.cap as f64 * LOAD_FACTOR) {
             self.grow();
         }
-        let mut hasher = FnvHasher::default();
+        let mut hasher = FxHasher::default();
         elem.hash(&mut hasher);
         let elem_hash = hasher.finish();
 

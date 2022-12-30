@@ -1,15 +1,15 @@
-use fnv::FnvHashMap;
+use rustc_hash::FxHashMap;
 
 use crate::repr::sdd::{SddAnd, SddPtr};
 
 pub struct SddApply {
-    table: FnvHashMap<SddAnd, SddPtr>,
+    table: FxHashMap<SddAnd, SddPtr>,
 }
 
 impl SddApply {
     pub fn new() -> SddApply {
         SddApply {
-            table: FnvHashMap::default(),
+            table: FxHashMap::default(),
         }
     }
     pub fn get(&self, and: SddAnd) -> Option<SddPtr> {
