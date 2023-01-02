@@ -1,10 +1,11 @@
 //! Stores the variable order for a the BDD manager Variables that occur first
 //! in the order occur first in the BDD, starting from the root.
 //! Lower numbers occur first in the order (i.e., closer to the root)
-use crate::builder::repr::builder_bdd::*;
 use crate::repr::var_label::VarLabel;
 use crate::util;
 use std::slice::Iter;
+
+use super::bdd::BddPtr;
 
 #[derive(Debug, Clone)]
 pub struct VarOrder {
@@ -43,7 +44,7 @@ impl VarOrder {
 
     /// Gives the number of variables in the order
     /// ```
-    /// # use rsdd::builder::var_order::VarOrder;
+    /// # use rsdd::repr::var_order::VarOrder;
     /// let o = VarOrder::linear_order(10);
     /// assert_eq!(o.num_vars(), 10);
     /// ```
@@ -58,7 +59,7 @@ impl VarOrder {
 
     /// Fetches the variable that it as the specified position in the order
     /// ```
-    /// # use rsdd::builder::var_order::VarOrder;
+    /// # use rsdd::repr::var_order::VarOrder;
     /// # use rsdd::repr::var_label::VarLabel;
     /// let o = VarOrder::linear_order(10);
     /// assert_eq!(o.var_at_level(4), VarLabel::new(4));
@@ -69,7 +70,7 @@ impl VarOrder {
 
     /// True if `a` is before `b` in this ordering
     /// ```
-    /// # use rsdd::builder::var_order::VarOrder;
+    /// # use rsdd::repr::var_order::VarOrder;
     /// # use rsdd::repr::var_label::VarLabel;
     /// let o = VarOrder::linear_order(10);
     /// assert!(o.lt(VarLabel::new(3), VarLabel::new(4)));
@@ -91,8 +92,8 @@ impl VarOrder {
         } else if b.is_const() {
             a
         } else {
-            let pa = self.get(VarLabel::new(a.var()));
-            let pb = self.get(VarLabel::new(b.var()));
+            let pa = self.get(a.var());
+            let pb = self.get(b.var());
             if pa < pb {
                 a
             } else {
@@ -109,8 +110,8 @@ impl VarOrder {
         } else if b.is_const() {
             (a, b)
         } else {
-            let pa = self.get(VarLabel::new(a.var()));
-            let pb = self.get(VarLabel::new(b.var()));
+            let pa = self.get(a.var());
+            let pb = self.get(b.var());
             if pa < pb {
                 (a, b)
             } else {
@@ -166,7 +167,7 @@ impl VarOrder {
     pub fn first_essential(&self, a: BddPtr, b: BddPtr, c: BddPtr) -> VarLabel {
         let f1 = self.first(a, b);
         let f2 = self.first(f1, c);
-        f2.label()
+        f2.var()
     }
 
     /// Produces a vector of variable positions indexed by

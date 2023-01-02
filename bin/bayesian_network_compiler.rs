@@ -2,19 +2,21 @@ extern crate rsdd;
 extern crate rsgm;
 
 use clap::Parser;
-use rsdd::builder::bdd_builder::BddWmc;
+use rsdd::builder::cache::all_app::AllTable;
 use rsdd::builder::decision_nnf_builder::DecisionNNFBuilder;
-use rsdd::builder::repr::builder_bdd::BddPtr;
+use rsdd::builder::sdd_builder;
+use rsdd::repr::bdd::BddPtr;
+use rsdd::repr::ddnnf::DDNNFPtr;
+use rsdd::repr::dtree::DTree;
+use rsdd::repr::var_order::VarOrder;
+use rsdd::{builder::bdd_builder::BddManager, repr::wmc::WmcParams};
 
 use std::collections::HashMap;
 use std::time::Instant;
 
-use rsdd::{
-    builder::{bdd_builder::BddManager, dtree::DTree, sdd_builder, var_order::VarOrder},
-    repr::{
-        cnf::Cnf,
-        var_label::{Literal, VarLabel},
-    },
+use rsdd::repr::{
+    cnf::Cnf,
+    var_label::{Literal, VarLabel},
 };
 use rsgm::bayesian_network::BayesianNetwork;
 
@@ -24,7 +26,7 @@ pub struct BayesianNetworkCNF {
     cnf: Cnf,
     /// maps Variable Name -> (Variable Assignment -> Label)
     indicators: HashMap<String, HashMap<String, VarLabel>>,
-    params: BddWmc<f64>,
+    params: WmcParams<f64>,
 }
 
 impl BayesianNetworkCNF {
@@ -84,7 +86,7 @@ impl BayesianNetworkCNF {
         BayesianNetworkCNF {
             cnf: Cnf::new(clauses),
             indicators,
-            params: BddWmc::new_with_default(0.0, 1.0, wmc_params),
+            params: WmcParams::new_with_default(0.0, 1.0, wmc_params),
         }
     }
 
@@ -156,13 +158,13 @@ fn exactly_one(lits: Vec<Literal>) -> Vec<Vec<Literal>> {
 
 fn compile_bdd_cnf(args: &Args, network: BayesianNetwork) {
     let bn = BayesianNetworkCNF::new(&network);
-    let mut compiler = BddManager::new(VarOrder::linear_order(bn.cnf.num_vars()));
+    let mut compiler = BddManager::<AllTable<BddPtr>>::new_default_order(bn.cnf.num_vars());
 
     println!("Compiling...");
     let start = Instant::now();
     let r = compiler.from_cnf(&bn.cnf);
     let duration = start.elapsed();
-    let sz = compiler.count_nodes(r);
+    let sz = r.count_nodes();
     println!("Compiled\n\tTime: {:?}\n\tSize: {sz}", duration);
 
     match &args.query {
@@ -179,8 +181,8 @@ fn compile_bdd_cnf(args: &Args, network: BayesianNetwork) {
             // let cond = compiler.condition(r, indic, true);
             let v = compiler.var(indic, true);
             let cond = compiler.and(r, v);
-            let p = compiler.wmc(cond, &bn.params);
-            let z = compiler.wmc(r, &bn.params);
+            let p = cond.wmc(compiler.get_order(), &bn.params);
+            let z = cond.wmc(compiler.get_order(), &bn.params);
             println!(
                 "Marginal query: Pr({query_var} = {query_val}) = {p}, z = {z}, p / z = {}",
                 p / z
@@ -191,7 +193,7 @@ fn compile_bdd_cnf(args: &Args, network: BayesianNetwork) {
 }
 
 fn compile_bdd(_args: &Args, network: BayesianNetwork) {
-    let mut compiler = BddManager::new_default_order(1);
+    let mut compiler = BddManager::<AllTable<BddPtr>>::new_default_order(1);
 
     // let mut clauses : Vec<Vec<Literal>> = Vec::new();
     let mut wmc_params: HashMap<VarLabel, (f64, f64)> = HashMap::new();
@@ -204,7 +206,7 @@ fn compile_bdd(_args: &Args, network: BayesianNetwork) {
 
     for v in network.topological_sort() {
         // create this variable's indicators and parameter clauses
-        let mut cur_cpt = compiler.true_ptr();
+        let mut cur_cpt = BddPtr::true_ptr();
 
         let mut cur_indic: Vec<Literal> = Vec::new();
         indicators.insert(v.clone(), HashMap::new());
@@ -228,7 +230,7 @@ fn compile_bdd(_args: &Args, network: BayesianNetwork) {
                 let mut indic: BddPtr =
                     passgn
                         .iter()
-                        .fold(compiler.true_ptr(), |acc, (varname, varval)| {
+                        .fold(BddPtr::true_ptr(), |acc, (varname, varval)| {
                             let varlabel = indicators[varname][varval];
                             let v = compiler.var(varlabel, true);
                             compiler.and(acc, v)
@@ -242,7 +244,7 @@ fn compile_bdd(_args: &Args, network: BayesianNetwork) {
         }
 
         // build exactly-one for indicator clause
-        let mut exactly_one = compiler.true_ptr();
+        let mut exactly_one = BddPtr::true_ptr();
         for x in 0..(cur_indic.len()) {
             for y in (x + 1)..(cur_indic.len()) {
                 let v1 = compiler.var(cur_indic[x].get_label(), false);
@@ -251,7 +253,7 @@ fn compile_bdd(_args: &Args, network: BayesianNetwork) {
                 exactly_one = compiler.and(exactly_one, or);
             }
         }
-        let o2 = cur_indic.iter().fold(compiler.false_ptr(), |acc, i| {
+        let o2 = cur_indic.iter().fold(BddPtr::false_ptr(), |acc, i| {
             let v = compiler.var(i.get_label(), true);
             compiler.or(acc, v)
         });
@@ -259,15 +261,15 @@ fn compile_bdd(_args: &Args, network: BayesianNetwork) {
         let new = compiler.and(cur_cpt, o2);
         cpts.push(new);
     }
-    let r = cpts.iter().fold(compiler.true_ptr(), |acc, cpt| {
+    let r = cpts.iter().fold(BddPtr::true_ptr(), |acc, cpt| {
         println!(
             "cur size: {}, cpt size: {}",
-            compiler.count_nodes(acc),
-            compiler.count_nodes(*cpt)
+            acc.count_nodes(),
+            cpt.count_nodes()
         );
         compiler.and(acc, *cpt)
     });
-    println!("final size: {}", compiler.count_nodes(r));
+    println!("final size: {}", r.count_nodes());
 }
 
 fn compile_sdd_cnf(network: BayesianNetwork) {
@@ -287,7 +289,7 @@ fn compile_sdd_cnf(network: BayesianNetwork) {
     let start = Instant::now();
     let r = compiler.from_cnf(&bn.cnf);
     let duration = start.elapsed();
-    let sz = compiler.count_nodes(r);
+    let sz = r.count_nodes();
     println!("Compiled\n\tCompile time: {:?}\n\tSize: {sz}", duration);
 }
 
@@ -300,7 +302,7 @@ fn compile_topdown(network: BayesianNetwork) {
     let start = Instant::now();
     let r = compiler.from_cnf_topdown(&VarOrder::linear_order(bn.cnf.num_vars()), &bn.cnf);
     let duration = start.elapsed();
-    let sz = compiler.count_nodes(r);
+    let sz = r.count_nodes();
     println!("Compiled\n\tCompile time: {:?}\n\tSize: {sz}", duration);
 }
 

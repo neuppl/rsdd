@@ -2,21 +2,19 @@
 use std::fmt;
 use std::mem;
 extern crate quickcheck;
+use bit_set::BitSet;
+use bit_set::Intersection;
+
 use self::quickcheck::{Arbitrary, Gen};
 
-/// number of bits allocated for variable label (limit on total number of
-/// variables)
-pub const VAR_BITS: usize = 18;
-pub const MAX_VAR_SIZE: usize = 1 << VAR_BITS;
-
 /// a label for each distinct variable in the BDD
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Hash, Copy)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Hash, Copy, PartialOrd, Ord)]
 pub struct VarLabel(u64);
 
 impl VarLabel {
     #[inline]
     pub fn new(v: u64) -> VarLabel {
-        assert!(v < 1 << VAR_BITS, "Variable identifier overflow");
+        // assert!(v < 1 << VAR_BITS, "Variable identifier overflow");
         VarLabel(v)
     }
 
@@ -87,5 +85,34 @@ impl Arbitrary for Literal {
     fn arbitrary(g: &mut Gen) -> Literal {
         let varlbl = u64::arbitrary(g) % 16;
         Literal::new(VarLabel::new(varlbl), bool::arbitrary(g))
+    }
+}
+
+/// A structure that contains sets of variables
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct VarSet {
+    b: BitSet,
+}
+
+impl VarSet {
+    pub fn new() -> VarSet {
+        VarSet { b: BitSet::new() }
+    }
+
+    /// unions self with other
+    pub fn union_with(&mut self, other: &VarSet) -> () {
+        self.b.union_with(&other.b);
+    }
+
+    pub fn insert(&mut self, v: VarLabel) -> () {
+        self.b.insert(v.value_usize());
+    }
+
+    pub fn contains(&self, v: VarLabel) -> bool {
+        self.b.contains(v.value_usize())
+    }
+
+    pub fn intersect<'a>(&'a self, other: &'a VarSet) -> bit_set::Intersection<'a, u32> {
+        return self.b.intersection(&other.b);
     }
 }

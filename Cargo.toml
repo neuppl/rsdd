@@ -8,7 +8,6 @@ authors = ["Steven Holtzen <sholtzen@gmail.com>"]
 [dependencies]
 fnv = "1.0.3"
 rand = "0.8.5"
-twox-hash = "1.1.0"
 dimacs = "0.2.0"
 im = "15.1.0"
 primal = "0.3.0"
@@ -22,10 +21,13 @@ serde = { version = "1.0", features = ["derive"] }
 clap = { version = "3.2.14", features = ["derive"] }
 criterion = "0.3"
 rayon = "1.5.3"
+rustc-hash = "1.1.0"
 serde_json = "1.0.81"
 bit-set = "0.5.3"
 segment-tree = "2.0.0"
 dot = "0.1.4"
+tinyvec = { version = "1.6.0", features = ["alloc"] }
+bumpalo = "3.11.1"
 petgraph = "0.6.2"
 rsgm = { git = "https://github.com/pmall-neu/rsgm" }
 
@@ -39,13 +41,16 @@ crate-type = ["staticlib", "rlib", "dylib"]
 [build]
 rustflags = ["-C", "link-args=-Wl,-undefined,dynamic_lookup,-export-dynamic"]
 
-
-[[bench]]
-name = "rsdd_benchmark"
-harness = false
-
 [profile.release]
-debug = true
+opt-level = 3
+debug = false
+debug-assertions = false
+overflow-checks = false
+lto = true
+panic = 'abort'
+incremental = false
+codegen-units = 16
+rpath = false
 
 [[bin]]
 name = "one_shot_benchmark"
