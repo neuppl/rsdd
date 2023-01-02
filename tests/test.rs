@@ -4,10 +4,13 @@
 extern crate rsdd;
 #[macro_use]
 extern crate quickcheck;
-use crate::builder::bdd_builder::{BddManager, BddWmc};
-use crate::builder::sdd_builder::{even_split, SddManager, SddWmc};
 use crate::repr::cnf::Cnf;
 use crate::repr::var_label::VarLabel;
+use rsdd::builder::bdd_builder::BddManager;
+use rsdd::builder::cache::all_app::AllTable;
+use rsdd::builder::sdd_builder::SddManager;
+use rsdd::repr::bdd::BddPtr;
+use rsdd::repr::vtree::VTree;
 use rsdd::*;
 extern crate rand;
 
@@ -247,7 +250,7 @@ fn get_canonical_forms() -> Vec<(Cnf, Cnf)> {
 #[test]
 fn test_bdd_canonicity() {
     for (cnf1, cnf2) in get_canonical_forms().into_iter() {
-        let mut man = BddManager::new_default_order(cnf1.num_vars());
+        let mut man = BddManager::<AllTable<BddPtr>>::new_default_order(cnf1.num_vars());
         let r1 = man.from_cnf(&cnf1);
         let r2 = man.from_cnf(&cnf2);
         assert!(
@@ -255,8 +258,8 @@ fn test_bdd_canonicity() {
             "Not eq\nCNF 1: {:?}\nCNF 2: {:?}\nBDD 1:{}\n BDD 2: {}",
             cnf1,
             cnf2,
-            man.to_string_debug(r1),
-            man.to_string_debug(r2)
+            r1.to_string_debug(),
+            r2.to_string_debug()
         );
     }
 }
@@ -267,7 +270,7 @@ fn test_sdd_canonicity() {
         let v: Vec<VarLabel> = (0..cnf1.num_vars())
             .map(|x| VarLabel::new(x as u64))
             .collect();
-        let vtree = even_split(&v, 3);
+        let vtree = VTree::even_split(&v, 1);
         let mut man = SddManager::new(vtree);
         let r1 = man.from_cnf(&cnf1);
         let r2 = man.from_cnf(&cnf2);
@@ -287,16 +290,22 @@ mod test_bdd_manager {
     use crate::builder::decision_nnf_builder::DecisionNNFBuilder;
     use crate::repr::cnf::Cnf;
     use crate::repr::var_label::VarLabel;
+    use num::abs;
     use quickcheck::TestResult;
-    use rsdd::builder::bdd_builder::BddWmc;
+    use rsdd::builder::cache::all_app::AllTable;
+    use rsdd::builder::cache::lru_app::BddApplyTable;
+    use rsdd::builder::cache::LruTable;
+    use rsdd::repr::bdd::BddPtr;
+    use rsdd::repr::ddnnf::DDNNFPtr;
     use rsdd::repr::model::PartialModel;
     use rsdd::repr::var_order::VarOrder;
+    use rsdd::repr::wmc::WmcParams;
     use std::collections::HashMap;
     use std::iter::FromIterator;
 
     quickcheck! {
         fn test_cond_and(c: Cnf) -> bool {
-            let mut mgr = super::BddManager::new_default_order(16);
+            let mut mgr = super::BddManager::<AllTable<BddPtr>>::new_default_order(16);
             let cnf = mgr.from_cnf(&c);
             let v1 = VarLabel::new(0);
             let bdd1 = mgr.exists(cnf, v1);
@@ -310,11 +319,11 @@ mod test_bdd_manager {
 
     quickcheck! {
         fn test_ite_and(c1: Cnf, c2: Cnf) -> bool {
-            let mut mgr = super::BddManager::new_default_order(16);
+            let mut mgr = super::BddManager::<AllTable<BddPtr>>::new_default_order(16);
             let cnf1 = mgr.from_cnf(&c1);
             let cnf2 = mgr.from_cnf(&c2);
 
-            let itebdd = mgr.ite(cnf1, cnf2, mgr.false_ptr());
+            let itebdd = mgr.ite(cnf1, cnf2, BddPtr::false_ptr());
             let andbdd = mgr.and(cnf1, cnf2);
 
             andbdd == itebdd
@@ -325,7 +334,7 @@ mod test_bdd_manager {
         fn bdd_ite_iff(c1: Cnf, c2: Cnf) -> TestResult {
             if c1.num_vars() == 0 || c1.num_vars() > 8 { return TestResult::discard() }
             if c1.clauses().len() > 12 { return TestResult::discard() }
-            let mut mgr = super::BddManager::new_default_order(16);
+            let mut mgr = super::BddManager::<AllTable<BddPtr>>::new_default_order(16);
             let cnf1 = mgr.from_cnf(&c1);
             let cnf2 = mgr.from_cnf(&c2);
             let iff1 = mgr.iff(cnf1, cnf2);
@@ -334,6 +343,11 @@ mod test_bdd_manager {
             let clause2 = mgr.and(cnf1.neg(), cnf2.neg());
             let and = mgr.or(clause1, clause2);
 
+            if and != iff1 {
+                println!("cnf1: {}", c1.to_string());
+                println!("cnf2: {}", c2.to_string());
+                println!("not equal: Bdd1: {}, Bdd2: {}", and.to_string_debug(), iff1.to_string_debug());
+            }
             TestResult::from_bool(and == iff1)
         }
     }
@@ -342,7 +356,7 @@ mod test_bdd_manager {
         fn bdd_topdown(c1: Cnf) -> TestResult {
             if c1.num_vars() == 0 || c1.num_vars() > 8 { return TestResult::discard() }
             if c1.clauses().len() > 12 { return TestResult::discard() }
-            let mut mgr = super::BddManager::new_default_order(c1.num_vars());
+            let mut mgr = super::BddManager::<AllTable<BddPtr>>::new_default_order(c1.num_vars());
             let cnf1 = mgr.from_cnf(&c1);
             let cnf2 = mgr.from_cnf_topdown(&c1);
             // println!("bdd 1: {}, bdd 2: {}", mgr.to_string_debug(cnf1), mgr.to_string_debug(cnf2));
@@ -355,7 +369,7 @@ mod test_bdd_manager {
         fn compile_with_assignments(c1: Cnf) -> TestResult {
             if c1.num_vars() < 3 || c1.num_vars() > 8 { return TestResult::discard() }
             if c1.clauses().len() > 12 { return TestResult::discard() }
-            let mut mgr = super::BddManager::new_default_order(c1.num_vars());
+            let mut mgr = super::BddManager::<AllTable<BddPtr>>::new_default_order(c1.num_vars());
             let mut pm = PartialModel::from_litvec(&Vec::new(), c1.num_vars());
             pm.set(VarLabel::new(0), true);
             pm.set(VarLabel::new(1), true);
@@ -372,7 +386,7 @@ mod test_bdd_manager {
         fn compile_topdown_with_assignments(c1: Cnf) -> TestResult {
             if c1.num_vars() < 3 || c1.num_vars() > 8 { return TestResult::discard() }
             if c1.clauses().len() > 12 { return TestResult::discard() }
-            let mut mgr = super::BddManager::new_default_order(c1.num_vars());
+            let mut mgr = super::BddManager::<AllTable<BddPtr>>::new_default_order(c1.num_vars());
             let mut pm = PartialModel::from_litvec(&Vec::new(), c1.num_vars());
             pm.set(VarLabel::new(0), true);
             pm.set(VarLabel::new(1), true);
@@ -389,7 +403,7 @@ mod test_bdd_manager {
         fn bdd_partial_topdown(c1: Cnf) -> TestResult {
             if c1.num_vars() < 3 || c1.num_vars() > 8 { return TestResult::discard() }
             if c1.clauses().len() > 12 { return TestResult::discard() }
-            let mut mgr = super::BddManager::new_default_order(c1.num_vars());
+            let mut mgr = super::BddManager::<AllTable<BddPtr>>::new_default_order(c1.num_vars());
             let mut pm = PartialModel::from_litvec(&Vec::new(), c1.num_vars());
             pm.set(VarLabel::new(0), true);
             pm.set(VarLabel::new(1), true);
@@ -407,17 +421,14 @@ mod test_bdd_manager {
             if c1.num_vars() == 0 || c1.num_vars() > 8 { return TestResult::discard() }
             if c1.clauses().len() > 16 { return TestResult::discard() }
 
-            let mut mgr = super::BddManager::new_default_order(c1.num_vars());
-            let weight_map : HashMap<VarLabel, (usize, usize)> = HashMap::from_iter(
-                (0..16).map(|x| (VarLabel::new(x as u64), (2, 3))));
+            let mut mgr = super::BddManager::<AllTable<BddPtr>>::new_default_order(c1.num_vars());
+            let weight_map : HashMap<VarLabel, (f64, f64)> = HashMap::from_iter(
+                (0..16).map(|x| (VarLabel::new(x as u64), (0.2, 0.8))));
             let cnf1 = mgr.from_cnf(&c1);
-            let bddwmc = super::BddWmc::new_with_default(0, 1, weight_map.clone());
-            let bddres = mgr.wmc(cnf1, &bddwmc);
+            let bddwmc = super::repr::wmc::WmcParams::new_with_default(0.0, 1.0, weight_map.clone());
+            let bddres = cnf1.wmc(mgr.get_order(), &bddwmc);
             let cnfres = c1.wmc(&weight_map);
-            if bddres != cnfres {
-              println!("error on input {}: bddres {}, cnfres {}", c1.to_string(), bddres, cnfres);
-            }
-            TestResult::from_bool(bddres == cnfres)
+            TestResult::from_bool(abs(bddres - cnfres) < 0.00001)
         }
     }
 
@@ -427,7 +438,7 @@ mod test_bdd_manager {
             if c1.num_vars() == 0 || c1.num_vars() > 8 { return TestResult::discard() }
             if c1.clauses().len() > 16 { return TestResult::discard() }
 
-            let mut mgr = super::BddManager::new_default_order(c1.num_vars());
+            let mut mgr = super::BddManager::<AllTable<BddPtr>>::new_default_order(c1.num_vars());
             let weight_map : HashMap<VarLabel, (f64, f64)> = HashMap::from_iter(
                 (0..16).map(|x| (VarLabel::new(x as u64), (0.3, 0.7))));
             let cnf1 = mgr.from_cnf(&c1);
@@ -435,14 +446,33 @@ mod test_bdd_manager {
             let mut mgr2 = DecisionNNFBuilder::new(c1.num_vars());
             let dnnf = mgr2.from_cnf_topdown(&VarOrder::linear_order(c1.num_vars()), &c1);
 
-            let bddwmc = super::BddWmc::new_with_default(0.0, 1.0, weight_map);
-            let bddres = mgr.wmc(cnf1, &bddwmc);
-            let dnnfres = mgr2.unsmsoothed_wmc(dnnf, &bddwmc);
+            let bddwmc = super::repr::wmc::WmcParams::new_with_default(0.0, 1.0, weight_map);
+            let bddres = cnf1.wmc(mgr.get_order(),  &bddwmc);
+            let dnnfres = dnnf.wmc(mgr.get_order(), &bddwmc);
             let eps = f64::abs(bddres - dnnfres) < 0.0001;
             if !eps {
-              println!("error on input {}: bddres {}, cnfres {}\n topdown bdd: {}\nbottom-up bdd: {}", c1.to_string(), bddres, dnnfres, mgr2.to_string_debug(dnnf), mgr.to_string_debug(cnf1));
+              println!("error on input {}: bddres {}, cnfres {}\n topdown bdd: {}\nbottom-up bdd: {}",
+                c1.to_string(), bddres, dnnfres, dnnf.to_string_debug(), cnf1.to_string_debug());
             }
             TestResult::from_bool(eps)
+        }
+    }
+
+    quickcheck! {
+        /// test if the lru cache and the all cache give the same results
+        fn bdd_lru(c1: Cnf) -> TestResult {
+            let mut mgr1 = super::BddManager::<AllTable<BddPtr>>::new_default_order(16);
+            let mut mgr2 = super::BddManager::<BddApplyTable<BddPtr>>::new_default_order_lru(16);
+
+            let weight_map : HashMap<VarLabel, (f64, f64)> = HashMap::from_iter(
+                (0..16).map(|x| (VarLabel::new(x as u64), (0.3, 0.7))));
+
+            let bddwmc = super::repr::wmc::WmcParams::new_with_default(0.0, 1.0, weight_map);
+            let cnf1 = mgr1.from_cnf(&c1);
+            let cnf2 = mgr2.from_cnf(&c1);
+            let wmc1 = cnf1.wmc(mgr1.get_order(), &bddwmc);
+            let wmc2 = cnf2.wmc(mgr2.get_order(), &bddwmc);
+            TestResult::from_bool(f64::abs(wmc1 - wmc2) < 0.00001)
         }
     }
 
@@ -453,13 +483,13 @@ mod test_bdd_manager {
             if c1.num_vars() < 5 || c1.num_vars() > 8 { return TestResult::discard() }
             if c1.clauses().len() > 14 { return TestResult::discard() }
 
-            let mut mgr = super::BddManager::new_default_order(c1.num_vars());
+            let mut mgr = super::BddManager::<AllTable<BddPtr>>::new_default_order(c1.num_vars());
             let weight_map : HashMap<VarLabel, (f64, f64)> = HashMap::from_iter(
                 (0..16).map(|x| (VarLabel::new(x as u64), (0.3, 0.7))));
             let cnf = mgr.from_cnf(&c1);
             let vars = vec![VarLabel::new(0), VarLabel::new(2), VarLabel::new(4)];
-            let wmc = BddWmc::new_with_default(0.0, 1.0, weight_map);
-            let (marg_prob, _marg_assgn) = mgr.marginal_map(cnf, mgr.true_ptr(), &vars, &wmc);
+            let wmc = WmcParams::new_with_default(0.0, 1.0, weight_map);
+            let (marg_prob, _marg_assgn) = cnf.marginal_map(&vars, mgr.num_vars(), &wmc);
             let assignments = vec![(true, true, true), (true, true, false), (true, false, true), (true, false, false),
                                    (false, true, true), (false, true, false), (false, false, true), (false, false, false)];
 
@@ -472,13 +502,17 @@ mod test_bdd_manager {
                 let mut conj = mgr.and(x, y);
                 conj = mgr.and(conj, z);
                 conj = mgr.and(conj, cnf);
-                let poss_max = mgr.wmc(conj, &wmc);
+                let poss_max = conj.wmc(mgr.get_order(), &wmc);
                 if poss_max > max {
                     max = poss_max;
                     max_assgn.set(VarLabel::new(0), *v1);
                     max_assgn.set(VarLabel::new(2), *v2);
                     max_assgn.set(VarLabel::new(4), *v3);
                 }
+            }
+            if f64::abs(max - marg_prob) > 0.00001 {
+                println!("cnf: {}", c1.to_string());
+                println!("true map probability: {max}\nGot map probability: {marg_prob} with assignment {:?}", _marg_assgn);
             }
             TestResult::from_bool(f64::abs(max - marg_prob) < 0.00001)
         }
@@ -487,17 +521,22 @@ mod test_bdd_manager {
 
 #[cfg(test)]
 mod test_sdd_manager {
-    use crate::builder::bdd_builder::{BddManager, BddWmc};
+    use crate::builder::bdd_builder::BddManager;
     use crate::repr::cnf::Cnf;
     use crate::repr::var_label::{Literal, VarLabel};
     use quickcheck::TestResult;
+    use rsdd::builder::cache::all_app::AllTable;
+    use rsdd::repr::bdd::BddPtr;
+    use rsdd::repr::ddnnf::DDNNFPtr;
+    use rsdd::repr::vtree::VTree;
+    use rsdd::repr::wmc::WmcParams;
     use std::collections::HashMap;
     use std::iter::FromIterator;
 
     quickcheck! {
         fn test_cond_and(c: Cnf) -> bool {
             let order : Vec<VarLabel> = (0..16).map(VarLabel::new).collect();
-            let mut mgr = super::SddManager::new(super::even_split(&order, 4));
+            let mut mgr = super::SddManager::new(VTree::even_split(&order, 4));
             let cnf = mgr.from_cnf(&c);
             let v1 = VarLabel::new(0);
             let bdd1 = mgr.exists(cnf, v1);
@@ -510,16 +549,46 @@ mod test_sdd_manager {
     }
 
     quickcheck! {
-        fn ite_iff(c1: Cnf, c2: Cnf) -> bool {
+        fn ite_iff_rightlinear(c1: Cnf, c2: Cnf) -> bool {
+            // println!("testing with cnf {:?}, {:?}", c1, c2);
             let order : Vec<VarLabel> = (0..16).map(VarLabel::new).collect();
-            let mut mgr = super::SddManager::new(super::even_split(&order, 4));
+            // let vtree = VTree::even_split(&order, 4);
+            let vtree = VTree::right_linear(&order);
+            let mut mgr = super::SddManager::new(vtree);
             let cnf1 = mgr.from_cnf(&c1);
             let cnf2 = mgr.from_cnf(&c2);
             let iff1 = mgr.iff(cnf1, cnf2);
 
-            let clause1 = mgr.or(cnf1, cnf2.neg());
-            let clause2 = mgr.or(cnf1.neg(), cnf2);
-            let and = mgr.and(clause1, clause2);
+            let clause1 = mgr.and(cnf1, cnf2);
+            let clause2 = mgr.and(cnf1.neg(), cnf2.neg());
+            let and = mgr.or(clause1, clause2);
+
+            if and != iff1 {
+                println!("Not equal:\n{}\n{}", mgr.print_sdd(and), mgr.print_sdd(iff1));
+            }
+
+            and == iff1
+        }
+    }
+
+    quickcheck! {
+        fn ite_iff_split(c1: Cnf, c2: Cnf) -> bool {
+            // println!("testing with cnf {:?}, {:?}", c1, c2);
+            let order : Vec<VarLabel> = (0..16).map(VarLabel::new).collect();
+            let vtree = VTree::even_split(&order, 4);
+            // let vtree = VTree::right_linear(&order);
+            let mut mgr = super::SddManager::new(vtree);
+            let cnf1 = mgr.from_cnf(&c1);
+            let cnf2 = mgr.from_cnf(&c2);
+            let iff1 = mgr.iff(cnf1, cnf2);
+
+            let clause1 = mgr.and(cnf1, cnf2);
+            let clause2 = mgr.and(cnf1.neg(), cnf2.neg());
+            let and = mgr.or(clause1, clause2);
+
+            if and != iff1 {
+                println!("Not equal:\n{}\n{}", mgr.print_sdd(and), mgr.print_sdd(iff1));
+            }
 
             and == iff1
         }
@@ -536,17 +605,23 @@ mod test_sdd_manager {
                 (0..cnf.num_vars()).map(|x| (VarLabel::new(x as u64), (0.5, 0.5))));
 
             let order : Vec<VarLabel> = (0..cnf.num_vars()).map(|x| VarLabel::new(x as u64)).collect();
-            let mut mgr = super::SddManager::new(super::even_split(&order, 3));
+            let mut mgr = super::SddManager::new(VTree::even_split(&order, 3));
             let cnf_sdd = mgr.from_cnf(&cnf);
-            let sdd_wmc = super::SddWmc::new_with_default(0.0, 1.0, &mut mgr, &weight_map);
-            let sdd_res = mgr.unsmoothed_wmc(cnf_sdd, &sdd_wmc);
+            let sdd_wmc = WmcParams::new_with_default(0.0, 1.0, weight_map);
+            let sdd_res = cnf_sdd.wmc(mgr.get_vtree_manager(), &sdd_wmc);
 
 
-            let mut bddmgr = BddManager::new_default_order(cnf.num_vars());
+            let mut bddmgr = BddManager::<AllTable<BddPtr>>::new_default_order(cnf.num_vars());
             let cnf_bdd = bddmgr.from_cnf(&cnf);
-            let bdd_res = bddmgr.wmc(cnf_bdd, &BddWmc::new_with_default(0.0, 1.0, weight_map));
+            let bdd_res = cnf_bdd.wmc(bddmgr.get_order(), &sdd_wmc);
 
-            TestResult::from_bool(sdd_res == bdd_res)
+            if f64::abs(sdd_res - bdd_res) > 0.00001 {
+                println!("not equal for cnf {}: sdd_res:{sdd_res}, bdd_res: {bdd_res}", cnf.to_string());
+                println!("sdd: {}", mgr.print_sdd(cnf_sdd));
+                TestResult::from_bool(false)
+            } else {
+                TestResult::from_bool(true)
+            }
         }
     }
 }
