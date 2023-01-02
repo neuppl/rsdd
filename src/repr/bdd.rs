@@ -90,7 +90,17 @@ impl BddPtr {
         }
     }
 
-    pub fn low(&self) -> BddPtr {
+pub fn low(&self) -> BddPtr {
+        unsafe {
+            match &self {
+                Compl(x) => (**x).low.neg(),
+                Reg(x) => (**x).low,
+                PtrTrue | PtrFalse => panic!("deref constant BDD"),
+            }
+        }
+    }
+
+    pub fn low_raw(&self) -> BddPtr {
         unsafe {
             match &self {
                 Compl(x) => (**x).low,
@@ -100,7 +110,7 @@ impl BddPtr {
         }
     }
 
-    pub fn high(&self) -> BddPtr {
+    pub fn high_raw(&self) -> BddPtr {
         unsafe {
             match &self {
                 Compl(x) => (**x).high,
@@ -109,6 +119,17 @@ impl BddPtr {
             }
         }
     }
+
+    pub fn high(&self) -> BddPtr {
+        unsafe {
+            match &self {
+                Compl(x) => (**x).high.neg(),
+                Reg(x) => (**x).high,
+                PtrTrue | PtrFalse => panic!("deref constant BDD"),
+            }
+        }
+    }
+
 
     /// Traverses the BDD and clears all scratch memory (sets it equal to 0)
     pub fn clear_scratch(&self) -> () {
@@ -167,14 +188,14 @@ impl BddPtr {
                 return String::from("F");
             } else {
                 let l_p = if ptr.is_neg() {
-                    ptr.low().neg()
+                    ptr.low_raw().neg()
                 } else {
-                    ptr.low()
+                    ptr.low_raw()
                 };
                 let h_p = if ptr.is_neg() {
-                    ptr.high().neg()
+                    ptr.high_raw().neg()
                 } else {
-                    ptr.high()
+                    ptr.high_raw()
                 };
                 let l_s = print_bdd_helper(l_p);
                 let h_s = print_bdd_helper(h_p);
@@ -217,40 +238,92 @@ impl BddPtr {
         // format!("{}{}", if ptr.is_compl() { "!" } else { "" }, s)
     }
 
+    fn bdd_fold_h<T: Clone + Copy + Debug, F: Fn(VarLabel, T, T) -> T>(
+        &self,
+        f: &F,
+        low_v: T,
+        high_v: T,
+        alloc: &mut Bump
+    ) -> T {
+        if self.is_true() {
+            return high_v;
+        } else if self.is_false() {
+            return low_v;
+        } else {
+            if self.get_scratch::<(Option<T>, Option<T>)>().is_none() {
+                self.set_scratch::<(Option<T>, Option<T>)>(alloc, (None, None));
+            }
+            match self.get_scratch::<(Option<T>, Option<T>)>() {
+                Some((Some(v), _)) if self.is_neg() => return *v,
+                Some((_, Some(v))) if !self.is_neg() => return *v,
+                Some((prev_low, prev_high)) => {
+                    let l = self.low().bdd_fold_h(f, low_v, high_v, alloc);
+                    let h = self.high().bdd_fold_h(f, low_v, high_v, alloc);
+                    let res = f(self.var(), l, h);
+                    if self.is_neg() {
+                        self.set_scratch::<(Option<T>, Option<T>)>(alloc, (Some(res), *prev_high));
+                    } else {
+                        self.set_scratch::<(Option<T>, Option<T>)>(alloc, (*prev_low, Some(res)));
+                    }
+                    return res;
+                },
+                _ => panic!("unreachable")
+            }
+        }
+    }
+
+    pub fn bdd_fold<T: Clone + Copy + Debug, F: Fn(VarLabel, T, T) -> T>(
+        &self,
+        f: &F,
+        low_v: T,
+        high_v: T,
+    ) -> T {
+        let r = self.bdd_fold_h(f, low_v, high_v, &mut Bump::new());
+        self.clear_scratch();
+        return r;
+    }
+
+
     /// evaluates a circuit on a partial marginal MAP assignment to get an upper-bound on the wmc
     /// maxes over the `map_vars`, applies the `partial_map_assgn`
     fn marginal_map_eval(
         &self,
-        order: &VarOrder,
         partial_map_assgn: &PartialModel,
         map_vars: &BitSet,
         wmc: &WmcParams<f64>,
     ) -> f64 {
-        todo!()
-        // self.smoothed_bottomup_pass(
-        //     order,
-        //     |varlabel, low, high| {
-        //         let (low_w, high_w) = wmc.get_var_weight(varlabel);
-        //         match partial_map_assgn.get(varlabel) {
-        //             None => {
-        //                 if map_vars.contains(varlabel.value_usize()) {
-        //                     f64::max(*low_w * low, *high_w * high)
-        //                 } else {
-        //                     (*low_w * low) + (*high_w * high)
-        //                 }
-        //             }
-        //             Some(true) => *high_w * high,
-        //             Some(false) => *low_w * low,
-        //         }
-        //     },
-        //     wmc.zero,
-        //     wmc.one,
-        // )
+        let mut v = self.bdd_fold(
+            &|varlabel, low, high| {
+                let (low_w, high_w) = wmc.get_var_weight(varlabel);
+                match partial_map_assgn.get(varlabel) {
+                    None => {
+                        if map_vars.contains(varlabel.value_usize()) {
+                            f64::max(*low_w * low, *high_w * high)
+                        } else {
+                            (*low_w * low) + (*high_w * high)
+                        }
+                    }
+                    Some(true) => high,
+                    Some(false) => low,
+                }
+            },
+            wmc.zero,
+            wmc.one,
+        );
+        // multiply in weights of all variables in the partial assignment
+        for lit in partial_map_assgn.assignment_iter() {
+            let (l, h) = wmc.get_var_weight(lit.get_label());
+            if lit.get_polarity() {
+                v *= h;
+            } else {
+                v *= l;
+            }
+        }
+        return v;
     }
 
     fn marginal_map_h(
         &self,
-        order: &VarOrder,
         cur_lb: f64,
         cur_best: PartialModel,
         margvars: &[VarLabel],
@@ -260,7 +333,7 @@ impl BddPtr {
         match margvars {
             [] => {
                 let margvar_bits = BitSet::new();
-                let possible_best = self.marginal_map_eval(order, &cur_assgn, &margvar_bits, wmc);
+                let possible_best = self.marginal_map_eval(&cur_assgn, &margvar_bits, wmc);
                 if possible_best > cur_lb {
                     (possible_best, cur_assgn)
                 } else {
@@ -277,20 +350,19 @@ impl BddPtr {
                 let mut false_model = cur_assgn.clone();
                 false_model.set(*x, false);
 
-                let true_ub = self.marginal_map_eval(order, &true_model, &margvar_bits, wmc);
-                let false_ub = self.marginal_map_eval(order, &false_model, &margvar_bits, wmc);
+                let true_ub = self.marginal_map_eval(&true_model, &margvar_bits, wmc);
+                let false_ub = self.marginal_map_eval(&false_model, &margvar_bits, wmc);
 
                 // branch on the greater upper-bound first
-                let o = if true_ub > false_ub {
+                let order = if true_ub > false_ub {
                     [(true_ub, true_model), (false_ub, false_model)]
                 } else {
                     [(false_ub, false_model), (true_ub, true_model)]
                 };
-                for (upper_bound, partialmodel) in o {
+                for (upper_bound, partialmodel) in order {
                     // branch + bound
                     if upper_bound > best_lb {
                         (best_lb, best_model) = self.marginal_map_h(
-                            order,
                             best_lb,
                             best_model,
                             end,
@@ -325,8 +397,8 @@ impl BddPtr {
     /// ```
     pub fn marginal_map(
         &self,
-        order: &VarOrder,
         vars: &[VarLabel],
+        num_vars: usize,
         wmc: &WmcParams<f64>,
     ) -> (f64, PartialModel) {
         let mut marg_vars = BitSet::new();
@@ -335,16 +407,15 @@ impl BddPtr {
         }
 
         let all_true: Vec<Literal> = vars.iter().map(|x| Literal::new(*x, true)).collect();
-        let cur_assgn = PartialModel::from_litvec(&all_true, order.num_vars());
-        let lower_bound = self.marginal_map_eval(order, &cur_assgn, &BitSet::new(), wmc);
+        let cur_assgn = PartialModel::from_litvec(&all_true, num_vars);
+        let lower_bound = self.marginal_map_eval(&cur_assgn, &BitSet::new(), wmc);
 
         self.marginal_map_h(
-            order,
             lower_bound,
             cur_assgn,
             vars,
             wmc,
-            PartialModel::from_litvec(&[], order.num_vars()),
+            PartialModel::from_litvec(&[], num_vars),
         )
     }
 }
@@ -407,14 +478,14 @@ impl DDNNFPtr for BddPtr {
                         Some((None, cached)) | Some((cached, None)) => {
                             // no cached value found, compute it
                             let l = if ptr.is_neg() {
-                                ptr.low().neg()
+                                ptr.low_raw().neg()
                             } else {
-                                ptr.low()
+                                ptr.low_raw()
                             };
                             let h = if ptr.is_neg() {
-                                ptr.high().neg()
+                                ptr.high_raw().neg()
                             } else {
-                                ptr.high()
+                                ptr.high_raw()
                             };
 
                             let low_v = bottomup_pass_h(l, f, alloc);
@@ -463,8 +534,8 @@ impl DDNNFPtr for BddPtr {
                     None => {
                         // found a new node
                         ptr.set_scratch::<usize>(alloc, 0);
-                        let sub_l = count_h(ptr.low(), alloc);
-                        let sub_h = count_h(ptr.high(), alloc);
+                        let sub_l = count_h(ptr.low_raw(), alloc);
+                        let sub_h = count_h(ptr.high_raw(), alloc);
                         return sub_l + sub_h + 1;
                     }
                 }
@@ -481,6 +552,10 @@ impl DDNNFPtr for BddPtr {
             PtrFalse => PtrTrue,
         }
     }
+
+
+
+
 }
 
 /// Core BDD node storage

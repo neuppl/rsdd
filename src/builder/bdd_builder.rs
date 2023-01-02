@@ -168,7 +168,7 @@ impl<T: LruTable<BddPtr>> BddManager<T> {
         if f.is_const() || f.var() != lbl {
             return f;
         };
-        let r = if v { f.high() } else { f.low() };
+        let r = if v { f.high_raw() } else { f.low_raw() };
         if f.is_neg() {
             r.neg()
         } else {
@@ -279,7 +279,7 @@ impl<T: LruTable<BddPtr>> BddManager<T> {
             // we passed the variable in the order, we will never find it
             bdd
         } else if bdd.var() == lbl {
-            let r = if value { bdd.high() } else { bdd.low() };
+            let r = if value { bdd.high_raw() } else { bdd.low_raw() };
             if bdd.is_neg() {
                 r.neg()
             } else {
@@ -293,8 +293,8 @@ impl<T: LruTable<BddPtr>> BddManager<T> {
             };
 
             // recurse on the children
-            let l = self.cond_helper(bdd.low(), lbl, value, alloc);
-            let h = self.cond_helper(bdd.high(), lbl, value, alloc);
+            let l = self.cond_helper(bdd.low_raw(), lbl, value, alloc);
+            let h = self.cond_helper(bdd.high_raw(), lbl, value, alloc);
 
             if l == h {
                 // reduce the BDD -- two children identical
@@ -304,7 +304,7 @@ impl<T: LruTable<BddPtr>> BddManager<T> {
                     return l;
                 };
             };
-            let res = if l != bdd.low() || h != bdd.high() {
+            let res = if l != bdd.low_raw() || h != bdd.high_raw() {
                 // cache and return the new BDD
                 let new_bdd = BddNode::new(bdd.var(), l, h);
                 let r = self.get_or_insert(new_bdd);

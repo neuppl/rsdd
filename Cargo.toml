@@ -41,11 +41,6 @@ crate-type = ["staticlib", "rlib", "dylib"]
 [build]
 rustflags = ["-C", "link-args=-Wl,-undefined,dynamic_lookup,-export-dynamic"]
 
-
-[[bench]]
-name = "rsdd_benchmark"
-harness = false
-
 [profile.release]
 opt-level = 3
 debug = false

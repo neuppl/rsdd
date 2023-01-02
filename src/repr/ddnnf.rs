@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use crate::repr::model::PartialModel;
 
 use super::{
-    var_label::{VarLabel, VarSet},
+    var_label::{VarLabel, VarSet, Literal},
     wmc::WmcParams,
 };
 use std::hash::Hash;
@@ -51,17 +51,6 @@ pub trait DDNNFPtr: Clone + Debug + PartialEq + Eq + Hash + Copy {
                 }
             }
         })
-    }
-
-    fn marginal_map<T: Num + Clone + Debug + Copy>(
-        &self,
-        o: &Self::Order,
-        params: &WmcParams<T>,
-    ) -> T {
-        // fn marg_map_eval<T: Num + Clone + Debug + Copy>(ptr: &DDNNFPtr, partial_map_assgn: &PartialModel) -> T {
-
-        // }
-        todo!()
     }
 
     /// Negate the pointer

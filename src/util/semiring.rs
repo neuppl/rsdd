@@ -9,7 +9,7 @@
 use std::ops;
 use std::fmt::Debug;
 
-trait Semiring : Debug + Clone + Copy + ops::Add + ops::Mul {
+pub trait Semiring : Debug + Clone + Copy + ops::Add + ops::Mul {
     fn one() -> Self;
     fn zero() -> Self;
 }
@@ -41,4 +41,11 @@ impl Semiring for RealSemiring {
     fn zero() -> Self {
         RealSemiring(0.0)
     }
+}
+
+pub trait TropicalSemiring : Debug + Clone + Copy + ops::Add + ops::Mul {
+    fn one() -> Self;
+    fn zero() -> Self;
+    fn max(&self, other: &Self) -> Self;
+    fn min(&self, other: &Self) -> Self;
 }

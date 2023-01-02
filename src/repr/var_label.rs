@@ -3,6 +3,7 @@ use std::fmt;
 use std::mem;
 extern crate quickcheck;
 use bit_set::BitSet;
+use bit_set::Intersection;
 
 use self::quickcheck::{Arbitrary, Gen};
 
@@ -109,5 +110,9 @@ impl VarSet {
 
     pub fn contains(&self, v: VarLabel) -> bool {
         self.b.contains(v.value_usize())
+    }
+
+    pub fn intersect<'a>(&'a self, other: &'a VarSet) -> bit_set::Intersection<'a, u32> {
+        return self.b.intersection(&other.b);
     }
 }
