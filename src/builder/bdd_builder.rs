@@ -231,11 +231,14 @@ impl<T: LruTable<BddPtr>> BddManager<T> {
     /// ```
     /// # use rsdd::builder::bdd_builder::BddManager;
     /// # use rsdd::repr::var_label::VarLabel;
-    /// let mut mgr = BddManager::new_default_order(10);
+    /// # use crate::rsdd::repr::ddnnf::DDNNFPtr;
+    /// # use rsdd::builder::cache::all_app::AllTable;
+    /// # use rsdd::repr::bdd::BddPtr; 
+    /// let mut mgr = BddManager::<AllTable<BddPtr>>::new_default_order(10);
     /// let lbl_a = mgr.new_var();
     /// let a = mgr.var(lbl_a, true);
     /// let a_and_not_a = mgr.and(a, a.neg());
-    /// assert!(mgr.is_false(a_and_not_a));
+    /// assert!(a_and_not_a.is_false());
     /// ```
     pub fn and(&mut self, f: BddPtr, g: BddPtr) -> BddPtr {
         self.ite(f, g, BddPtr::false_ptr())

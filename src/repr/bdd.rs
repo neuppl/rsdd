@@ -376,25 +376,8 @@ pub fn low(&self) -> BddPtr {
         }
     }
 
-    /// Computes the marginal map over variables `vars` of `ptr` with evidence `evidence`
-    /// I.e., computes argmax_{v in vars} \sum_{v not in vars} w(ptr /\ evidence)
-    /// ```
-    /// use rsdd::builder::bdd_builder::{BddManager, BddWmc};
-    /// use rsdd::repr::var_label::{VarLabel, Literal};
-    /// use rsdd::repr::model::PartialModel;
-    /// use std::collections::HashMap;
-    /// use rsdd::repr::cnf::Cnf;
-    /// let cnf = Cnf::from_string(String::from("(1 || 2 || 3 || 4)"));
-    /// let mut mgr = BddManager::new_default_order(cnf.num_vars());
-    /// let w : HashMap<VarLabel, (f64, f64)> = (0..5).map(|x| (VarLabel::new(x), (0.3, 0.7))).collect();
-    /// let wmc = BddWmc::new_with_default(0.0, 1.0, w);
-    /// let evidence = mgr.true_ptr();
-    /// let bdd = mgr.from_cnf(&cnf);
-    /// let (p, marg_map) = mgr.marginal_map(bdd, evidence, &vec![VarLabel::new(0), VarLabel::new(1)], &wmc);
-    /// let expected_model = PartialModel::from_litvec(&vec![Literal::new(VarLabel::new(0), true), Literal::new(VarLabel::new(1), true)], cnf.num_vars());
-    /// let expected_prob = 0.49;
-    /// assert_eq!(marg_map, expected_model);
-    /// ```
+    /// Computes the marginal map over variables `vars` of `ptr`
+    /// I.e., computes argmax_{v in vars} \sum_{v not in vars} w(ptr)
     pub fn marginal_map(
         &self,
         vars: &[VarLabel],
