@@ -9,7 +9,6 @@ authors = ["Steven Holtzen <sholtzen@gmail.com>"]
 fnv = "1.0.3"
 rand = "0.8.5"
 dimacs = "0.2.0"
-im = "15.1.0"
 primal = "0.3.0"
 pretty = "0.3.3"
 num = "0.1.41"

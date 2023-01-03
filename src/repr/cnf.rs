@@ -2,7 +2,6 @@
 
 use crate::repr::var_label::{Literal, VarLabel};
 use crate::repr::var_order::VarOrder;
-use im::Vector;
 use num::Num;
 use petgraph::prelude::UnGraph;
 use rand;
@@ -220,7 +219,6 @@ fn num_fill(g: &UnGraph<VarLabel, ()>, v: NodeIndex) -> usize {
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Cnf {
     clauses: Vec<Vec<Literal>>,
-    imm_clauses: Vector<Vector<Literal>>,
     num_vars: usize,
     hasher: Option<CnfHasher>,
 }
@@ -285,7 +283,6 @@ impl Cnf {
         let mut r = Cnf {
             clauses: clauses.clone(),
             num_vars: m as usize,
-            imm_clauses: clauses.iter().map(Vector::from).collect(),
             hasher: None,
         };
         r.hasher = Some(CnfHasher::new(&r));
@@ -667,29 +664,6 @@ impl Cnf {
             r = format!("{}\n{} 0", r, clause_str);
         }
         r
-    }
-
-    /// Generates the sub-cnf that is the result of subsuming all assigned literals in `m`
-    pub fn sub_cnf(&self, m: &PartialModel) -> Vector<Vector<Literal>> {
-        self.imm_clauses
-            .clone()
-            .into_iter()
-            .filter_map(|clause| {
-                // first filter out all satisfied clauses
-                for lit in clause.iter() {
-                    if m.lit_implied(*lit) {
-                        return None;
-                    }
-                }
-                // then filter out unsat literals in this clause
-                Some(
-                    clause
-                        .into_iter()
-                        .filter(|lit| !m.lit_neg_implied(*lit))
-                        .collect(),
-                )
-            })
-            .collect()
     }
 
     /// get a hasher for this CNF
