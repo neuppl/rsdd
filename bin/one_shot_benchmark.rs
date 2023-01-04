@@ -4,7 +4,7 @@ extern crate rsdd;
 extern crate serde_json;
 
 use clap::Parser;
-use rsdd::repr::dtree::DTree;
+use rsdd::{repr::dtree::DTree, builder::cache::{LruTable, lru_app}};
 use std::fs;
 use rsdd::builder::cache::lru_app::BddApplyTable;
 use rsdd::repr::bdd::BddPtr;
@@ -68,7 +68,7 @@ struct BenchResult {
 #[allow(unused)]
 fn compile_topdown_nnf(str: String, args: &Args) -> BenchResult {
     let cnf = Cnf::from_file(str);
-    let mut man = rsdd::builder::decision_nnf_builder::DecisionNNFBuilder::new(cnf.num_vars());
+    let mut man = rsdd::builder::decision_nnf_builder::DecisionNNFBuilder::new();
     let order = VarOrder::linear_order(cnf.num_vars());
     // let order = cnf.force_order();
     let ddnnf = man.from_cnf_topdown(&order, &cnf);
@@ -78,7 +78,9 @@ fn compile_topdown_nnf(str: String, args: &Args) -> BenchResult {
 fn compile_sdd_dtree(str: String, args: &Args) -> BenchResult {
     use rsdd::builder::sdd_builder::*;
     let cnf = Cnf::from_file(str);
-    let dtree = DTree::from_cnf(&cnf, &VarOrder::linear_order(cnf.num_vars()));
+    let o = cnf.min_fill_order();
+    // let dtree = DTree::from_cnf(&cnf, &VarOrder::linear_order(cnf.num_vars()));
+    let dtree = DTree::from_cnf(&cnf, &o);
     let mut man = SddManager::new(dtree.to_vtree().unwrap());
     let _sdd = man.from_cnf(&cnf);
     BenchResult { num_recursive: man.get_stats().num_rec, size: _sdd.count_nodes() }
@@ -99,6 +101,7 @@ fn compile_sdd_rightlinear(str: String, args: &Args) -> BenchResult {
 fn compile_bdd(str: String, args: &Args) -> BenchResult {
     use rsdd::builder::bdd_builder::*;
     let cnf = Cnf::from_file(str);
+    // let mut man = BddManager::<BddApplyTable<BddPtr>>::new(cnf.min_fill_order(), lru_app::BddApplyTable::new());
     let mut man = BddManager::<BddApplyTable<BddPtr>>::new_default_order_lru(cnf.num_vars());
     let _bdd = man.from_cnf(&cnf);
     BenchResult { num_recursive: man.num_recursive_calls(), size: _bdd.count_nodes() }

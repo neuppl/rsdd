@@ -10,7 +10,7 @@ pub mod ddnnf;
 pub mod dtree;
 pub mod logical_expr;
 pub mod model;
-pub mod sat_solver;
+pub mod unit_prop;
 pub mod sdd;
 pub mod var_label;
 pub mod var_order;

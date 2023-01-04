@@ -14,176 +14,7 @@ use self::quickcheck::{Arbitrary, Gen};
 use crate::repr::model::PartialModel;
 use petgraph::graph::NodeIndex;
 
-// TODO: resolve unused
-#[allow(unused)]
-const PRIMES: [u128; 4] = [
-    64733603481794218985640164159,
-    79016979402926483817096290621,
-    46084029846212370199652019757,
-    49703069216273825773136967137,
-];
-// number of primes to consider during CNF hashing
-const NUM_PRIMES: usize = 2;
 
-#[derive(Debug, Hash, Eq, PartialEq, Clone)]
-pub struct HashedCNF {
-    v: [u128; NUM_PRIMES],
-}
-
-/// Probabilistically hashes a partially instantiated CNF, used primarily for
-/// component caching during bottom-up compilation (a component is a partially
-/// instantiated CNF).
-///
-/// The hash function satisfies the invariant that, with (arbitrarily) high
-/// probability, two components are syntactically equal if and only if they have
-/// the same hash.
-///
-/// It works by associating each literal in the CNF with a distinct prime
-/// number. To compute the hash function, one takes the product (modulo a prime
-/// field, the base of which is specified in PRIMES) of all unset literals in
-/// clauses that are not satisfied.
-///
-/// Example: Assume we have the following CNF, with its literals annotated with
-/// distinct primes:
-/// ```
-/// // `(a \/ b) /\ (!a \/ c)`
-/// //   ^    ^      ^     ^
-/// //   2    3      5     7
-/// ```
-/// Then, if we were to hash this CNF with the partial model (a = T), would
-/// get the value 7
-#[derive(Eq, PartialEq, Debug, Clone)]
-pub struct CnfHasher {
-    weighted_cnf: Vec<Vec<(usize, Literal)>>,
-    /// state[x] contains a list of unsatisfied clauses in the CNF (indexed into weighted_cnf)
-    state: Vec<HashSet<usize>>,
-    /// pos_lits[l] contains the list of indexes of clauses that contain the positive literal l
-    pos_lits: Vec<Vec<usize>>,
-    /// neg_lits[l] contains the list of indexes of clauses that contain the negative literal l
-    neg_lits: Vec<Vec<usize>>,
-}
-
-impl CnfHasher {
-    pub fn new(cnf: &Cnf) -> CnfHasher {
-        let mut primes = primal::Primes::all();
-        let weighted_cnf = cnf
-            .clauses
-            .iter()
-            .map({
-                |clause| {
-                    clause
-                        .iter()
-                        .map(|lit| (primes.next().unwrap(), *lit))
-                        .collect()
-                }
-            })
-            .collect();
-
-        let sat_clauses: HashSet<usize> = cnf
-            .clauses
-            .iter()
-            .enumerate()
-            .filter_map({
-                |(clause_idx, clause)| {
-                    if clause.len() > 1 {
-                        Some(clause_idx)
-                    } else {
-                        None
-                    }
-                } // ignore units
-            })
-            .collect();
-
-        let pos_lits: Vec<Vec<usize>> = (0..cnf.num_vars())
-            .map(|lit_idx| {
-                cnf.clauses
-                    .iter()
-                    .enumerate()
-                    .filter_map(|(clause_idx, clause)| {
-                        if clause.contains(&Literal::new(VarLabel::new_usize(lit_idx), true)) {
-                            Some(clause_idx)
-                        } else {
-                            None
-                        }
-                    })
-                    .collect()
-            })
-            .collect();
-
-        let neg_lits: Vec<Vec<usize>> = (0..cnf.num_vars())
-            .map(|lit_idx| {
-                cnf.clauses
-                    .iter()
-                    .enumerate()
-                    .filter_map(|(clause_idx, clause)| {
-                        if clause.contains(&Literal::new(VarLabel::new_usize(lit_idx), false)) {
-                            Some(clause_idx)
-                        } else {
-                            None
-                        }
-                    })
-                    .collect()
-            })
-            .collect();
-
-        CnfHasher {
-            weighted_cnf,
-            state: vec![sat_clauses],
-            pos_lits,
-            neg_lits,
-        }
-    }
-
-    pub fn decide(&mut self, lit: Literal) {
-        if lit.get_polarity() {
-            for clause_idx in self.pos_lits[lit.get_label().value_usize()].iter() {
-                self.state.last_mut().unwrap().remove(clause_idx);
-            }
-        } else {
-            for clause_idx in self.neg_lits[lit.get_label().value_usize()].iter() {
-                self.state.last_mut().unwrap().remove(clause_idx);
-            }
-        }
-    }
-
-    pub fn push(&mut self) {
-        let n = self.state.last().unwrap().clone();
-        self.state.push(n);
-    }
-
-    pub fn pop(&mut self) {
-        self.state.pop();
-    }
-
-    pub fn hash(&self, m: &PartialModel) -> HashedCNF {
-        let mut v: [u128; NUM_PRIMES] = [1; NUM_PRIMES];
-        'outer: for clause_idx in self.state.last().unwrap().iter() {
-            let mut cur_clause_v: u128 = 1;
-            let cur_clause = &self.weighted_cnf[*clause_idx];
-            for (ref weight, ref lit) in cur_clause.iter() {
-                if m.lit_implied(*lit) {
-                    // move onto the next clause without updating the
-                    // accumulator
-                    continue 'outer;
-                } else if m.lit_neg_implied(*lit) {
-                    // skip this literal and move onto the next one
-                    continue;
-                } else {
-                    // cur_clause_v = cur_clause_v * (*weight as u128);
-                    cur_clause_v = cur_clause_v.wrapping_mul(*weight as u128);
-                }
-            }
-            for i in 0..NUM_PRIMES {
-                // TODO at the moment this modular multiplication is very slow; we should use a
-                // crate that supports fast modular multiplication for fixed prime fields
-                // using just 128-bit for now, but this is a hack
-                // v[i] = (v[i]* (cur_clause_v)) % PRIMES[i];
-                v[i] = v[i].wrapping_mul(cur_clause_v);
-            }
-        }
-        HashedCNF { v }
-    }
-}
 
 /// Let G be a graph and X be a node in G. The result of eliminating node X from
 /// graph G is another graph obtained from G by first adding an edge between
@@ -220,7 +51,6 @@ fn num_fill(g: &UnGraph<VarLabel, ()>, v: NodeIndex) -> usize {
 pub struct Cnf {
     clauses: Vec<Vec<Literal>>,
     num_vars: usize,
-    hasher: Option<CnfHasher>,
 }
 
 pub struct AssignmentIter {
@@ -283,9 +113,7 @@ impl Cnf {
         let mut r = Cnf {
             clauses: clauses.clone(),
             num_vars: m as usize,
-            hasher: None,
         };
-        r.hasher = Some(CnfHasher::new(&r));
         r
     }
 
@@ -666,14 +494,6 @@ impl Cnf {
         r
     }
 
-    /// get a hasher for this CNF
-    /// may be expensive on first call; future calls are amortized
-    pub fn get_hasher(&self) -> &CnfHasher {
-        match self.hasher {
-            Some(ref v) => v,
-            None => panic!(),
-        }
-    }
 }
 
 impl Arbitrary for Cnf {

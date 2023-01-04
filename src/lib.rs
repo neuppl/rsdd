@@ -18,6 +18,8 @@ extern crate rustc_hash;
 extern crate segment_tree;
 extern crate time_test;
 extern crate tinyvec;
+extern crate gf256;
+
 
 #[macro_use]
 pub mod util;

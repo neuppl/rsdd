@@ -1,11 +1,13 @@
-//! A generic SAT solver for CNFs
-//! This SAT solver supports incremental solving via a push/pop interface
+//! A generic unit propagator for CNFs
 
 use super::{
     cnf::Cnf,
     model::PartialModel,
     var_label::{Literal, VarLabel},
 };
+use ::gf256::*;
+
+
 
 type ClauseIdx = usize;
 type LitIdx = usize;
@@ -47,7 +49,7 @@ type LitIdx = usize;
 /// watch in c0, so we deduce a unit !B and propagate. The resulting watcher
 /// state unchanged in this case.
 #[derive(Debug, Clone)]
-pub struct UnitPropagate<'a> {
+pub struct UnitPropagate {
     // watch_list_pos[i] is a list of the clauses that are watching the positive
     // literal of varlabel i
     watch_list_pos: Vec<Vec<ClauseIdx>>,
@@ -55,12 +57,13 @@ pub struct UnitPropagate<'a> {
     watch_list_neg: Vec<Vec<ClauseIdx>>,
     // stack of assignment states (all implied and decided literals)
     state: Vec<PartialModel>,
-    cnf: &'a Cnf,
+    cur_hash: gf256,
+    clauses: Vec<Vec<(Literal, gf256)>>,
 }
 
-impl<'a> UnitPropagate<'a> {
+impl UnitPropagate {
     /// Returns None if UNSAT discovered during initial unit propagation
-    pub fn new(cnf: &'a Cnf) -> Option<UnitPropagate<'a>> {
+    pub fn new(cnf: &Cnf) -> Option<UnitPropagate> {
         let mut watch_list_pos: Vec<Vec<usize>> = Vec::new();
         let mut watch_list_neg: Vec<Vec<usize>> = Vec::new();
         let mut assignments: Vec<Option<bool>> = Vec::new();
@@ -284,110 +287,6 @@ impl<'a> UnitPropagate<'a> {
     }
 }
 
-#[derive(Copy, Clone, PartialEq, Eq)]
-enum SATState {
-    UNSAT, // the state is currently unsatisfied according to the units in the CNF
-    SAT,   // the state is satisfied according to the units in the CNF
-    Unknown,
-}
-
-pub struct SATSolver<'a> {
-    up: Option<UnitPropagate<'a>>,
-    cur_state: Vec<SATState>,
-}
-
-impl<'a> SATSolver<'a> {
-    pub fn new(cnf: &'a Cnf) -> SATSolver<'a> {
-        let up = UnitPropagate::new(cnf);
-        let state = if up.is_some() {
-            if cnf.is_sat_partial(up.as_ref().unwrap().get_assgn()) {
-                SATState::SAT
-            } else {
-                SATState::Unknown
-            }
-        } else {
-            SATState::UNSAT
-        };
-        SATSolver {
-            up,
-            cur_state: vec![state],
-        }
-    }
-
-    fn top_state(&self) -> SATState {
-        *self.cur_state.last().unwrap()
-    }
-
-    /// Pushes the SAT context
-    ///
-    /// Saves all current clauses and decisions
-    pub fn push(&mut self) {
-        match &mut self.up {
-            Some(up) => {
-                up.push();
-                self.cur_state.push(self.top_state());
-            }
-            None => {
-                self.cur_state.push(self.top_state());
-            }
-        }
-    }
-
-    /// Pops the SAT state
-    ///
-    /// Restores the set of clause and decisions to the point at which it was previously pushed
-    /// Panics if there is no prior pushed state.
-    pub fn pop(&mut self) {
-        match &mut self.up {
-            Some(up) => {
-                up.pop();
-                self.cur_state.pop();
-            }
-            None => {
-                self.cur_state.pop();
-            }
-        }
-    }
-
-    /// Sets a literal in the SAT context
-    pub fn decide(&mut self, lit: Literal) {
-        match &mut self.up {
-            Some(up) => {
-                let res = up.decide(lit);
-                let l = self.cur_state.len() - 1;
-                if self.cur_state[l] == SATState::UNSAT {
-                    // stay UNSAT
-                    return;
-                }
-                if res {
-                    // TODO should check if the state is now satisfied
-                    self.cur_state[l] = SATState::Unknown;
-                } else {
-                    let l = self.cur_state.len() - 1;
-                    self.cur_state[l] = SATState::UNSAT;
-                }
-            }
-            None => {}
-        }
-    }
-
-    /// True if the formula is UNSAT according to the current state of the
-    /// decided units
-    pub fn unsat_unit(&self) -> bool {
-        match self.top_state() {
-            SATState::UNSAT => true,
-            _ => false,
-        }
-    }
-
-    /// Get the set of currently implied units
-    pub fn get_implied_units(&self) -> PartialModel {
-        match self.up {
-            Some(ref up) => up.get_assgn().clone(),
-            None => panic!(""),
-        }
-    }
-}
 
 // #[test]
 // fn test_unit_propagate_1() {

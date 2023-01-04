@@ -28,6 +28,7 @@ dot = "0.1.4"
 tinyvec = { version = "1.6.0", features = ["alloc"] }
 bumpalo = "3.11.1"
 petgraph = "0.6.2"
+gf256 = "0.3.0"
 rsgm = { git = "https://github.com/pmall-neu/rsgm" }
 
 

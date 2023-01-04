@@ -61,7 +61,7 @@ impl<T: DDNNFPtr> LruTable<T> for BddApplyTable<T> {
 }
 
 impl<T: DDNNFPtr> BddApplyTable<T> {
-    pub fn new(num_vars: usize) -> BddApplyTable<T> {
+    pub fn new() -> BddApplyTable<T> {
         BddApplyTable {
             table: Lru::new(INITIAL_CAPACITY),
         }
