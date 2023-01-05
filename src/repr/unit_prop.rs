@@ -390,7 +390,6 @@ impl SATSolver {
                     })
                     .collect();
 
-                println!("{:?}", clauses);
 
                 // initialize pos_lit and neg_lit
                 let mut pos_lit = Vec::new();

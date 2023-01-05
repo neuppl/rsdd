@@ -69,8 +69,11 @@ struct BenchResult {
 fn compile_topdown_nnf(str: String, args: &Args) -> BenchResult {
     let cnf = Cnf::from_file(str);
     let mut man = rsdd::builder::decision_nnf_builder::DecisionNNFBuilder::new();
-    let order = VarOrder::linear_order(cnf.num_vars());
+    // let order = VarOrder::linear_order(cnf.num_vars());
+    let order = cnf.min_fill_order();
     // let order = cnf.force_order();
+    let dtree = DTree::from_cnf(&cnf, &order);
+    println!("width: {}", dtree.width());
     let ddnnf = man.from_cnf_topdown(&order, &cnf);
     BenchResult { num_recursive: 0, size: ddnnf.count_nodes() }
 }

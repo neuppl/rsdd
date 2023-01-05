@@ -33,14 +33,10 @@ pub enum DTree {
 impl DTree {
     fn get_vars(&self) -> &VarSet {
         match self {
-            // TODO: resolve unused
-            #[allow(unused)]
-            Self::Leaf { v, cutset: _, vars } => vars.as_ref().unwrap(),
-            // TODO: resolve unused
-            #[allow(unused)]
+            Self::Leaf { v :_, cutset: _, vars } => vars.as_ref().unwrap(),
             Self::Node {
-                l,
-                r,
+                l: _,
+                r: _,
                 cutset: _,
                 vars,
             } => vars.as_ref().unwrap(),
@@ -285,11 +281,9 @@ impl DTree {
     }
 
     pub fn width(&self) -> usize {
-        // TODO: resolve unused
-        #[allow(unused)]
         match &self {
-            &Self::Leaf { v, cutset, vars } => cutset.as_ref().unwrap().len(),
-            &Self::Node { l, r, cutset, vars } => {
+            &Self::Leaf { v :_ , cutset, vars: _ } => cutset.as_ref().unwrap().len(),
+            &Self::Node { l, r, cutset, vars: _ } => {
                 let l_len = l.width();
                 let r_len = r.width();
                 let cur = cutset.as_ref().unwrap().len();
