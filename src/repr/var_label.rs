@@ -33,7 +33,7 @@ impl VarLabel {
 }
 
 /// Literal, a variable label and its corresponding truth assignment
-#[derive(Clone, PartialEq, Eq, Hash, Copy)]
+#[derive(Clone, PartialEq, Eq, Hash, Copy, PartialOrd, Ord)]
 pub struct Literal {
     data: u64,
 }
@@ -99,6 +99,10 @@ impl VarSet {
         VarSet { b: BitSet::new() }
     }
 
+    pub fn new_with_num_vars(num_vars: usize) -> VarSet {
+        VarSet { b: BitSet::with_capacity(num_vars) }
+    }
+
     /// unions self with other
     pub fn union_with(&mut self, other: &VarSet) -> () {
         self.b.union_with(&other.b);
@@ -108,6 +112,10 @@ impl VarSet {
         self.b.insert(v.value_usize());
     }
 
+    pub fn remove(&mut self, v: VarLabel) -> () {
+        self.b.remove(v.value_usize());
+    }
+
     pub fn contains(&self, v: VarLabel) -> bool {
         self.b.contains(v.value_usize())
     }
@@ -115,4 +123,14 @@ impl VarSet {
     pub fn intersect<'a>(&'a self, other: &'a VarSet) -> bit_set::Intersection<'a, u32> {
         return self.b.intersection(&other.b);
     }
+
+    pub fn difference<'a>(&'a self, other: &'a VarSet) -> impl Iterator<Item = VarLabel> + 'a {
+        self.b.difference(&other.b).map(|x| VarLabel::new_usize(x))
+    }
+
+
+    pub fn iter<'a>(&'a self) -> impl Iterator<Item = VarLabel> + 'a {
+        self.b.iter().map(|x| VarLabel::new_usize(x))
+    }
+
 }

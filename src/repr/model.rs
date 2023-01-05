@@ -1,23 +1,36 @@
 //! Models and partial models of logical sentences
 
-use super::var_label::{Literal, VarLabel};
+use super::var_label::{Literal, VarLabel, VarSet};
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct PartialModel {
     /// None if variable is unset
-    assignments: Vec<Option<bool>>,
+    true_assignments: VarSet,
+    false_assignments: VarSet
+    // assignments: Vec<Option<bool>>,
 }
 
 impl PartialModel {
+    pub fn new(num_vars: usize) -> PartialModel {
+        PartialModel { true_assignments: VarSet::new_with_num_vars(num_vars), false_assignments: VarSet::new_with_num_vars(num_vars) }
+    }
+
     pub fn from_vec(assignments: Vec<Option<bool>>) -> PartialModel {
-        PartialModel { assignments }
+        let mut true_v = VarSet::new_with_num_vars(assignments.len());
+        let mut false_v = VarSet::new_with_num_vars(assignments.len());
+        for i in 0..assignments.len() {
+            match assignments[i] {
+                Some(true) => true_v.insert(VarLabel::new_usize(i)),
+                Some(false) => false_v.insert(VarLabel::new_usize(i)),
+                None => ()
+            }
+        }
+        PartialModel { true_assignments: true_v, false_assignments: false_v }
     }
 
     /// Creates a partial model from a total model (assignment to all vars)
     pub fn from_total_model(assignments: Vec<bool>) -> PartialModel {
-        PartialModel {
-            assignments: assignments.into_iter().map(Some).collect(),
-        }
+        Self::from_vec(assignments.into_iter().map(Some).collect())
     }
 
     pub fn from_litvec(assignments: &[Literal], num_vars: usize) -> PartialModel {
@@ -25,23 +38,34 @@ impl PartialModel {
         for assgn in assignments {
             init_assgn[assgn.get_label().value_usize()] = Some(assgn.get_polarity());
         }
-        PartialModel {
-            assignments: init_assgn,
-        }
+        Self::from_vec(init_assgn)
     }
 
     /// Unsets a variable's value in the model
     pub fn unset(&mut self, label: VarLabel) {
-        self.assignments[label.value_usize()] = None;
+        self.true_assignments.remove(label);
+        self.false_assignments.remove(label);
     }
 
     pub fn set(&mut self, label: VarLabel, value: bool) {
-        self.assignments[label.value_usize()] = Some(value);
+        if value {
+            self.true_assignments.insert(label);
+            self.false_assignments.remove(label);
+        } else {
+            self.true_assignments.remove(label);
+            self.false_assignments.insert(label);
+        }
     }
 
     /// Returns the value of a variable (None if unset)
     pub fn get(&self, label: VarLabel) -> Option<bool> {
-        self.assignments[label.value_usize()]
+        if self.true_assignments.contains(label) {
+            return Some(true)
+        } else if self.false_assignments.contains(label) {
+            return Some(false)
+        } else { 
+            return None
+        }
     }
 
     pub fn lit_implied(&self, lit: Literal) -> bool {
@@ -58,30 +82,21 @@ impl PartialModel {
         }
     }
 
-    pub fn get_vec(&self) -> &[Option<bool>] {
-        &self.assignments
-    }
-
     /// True if this is a set variable, false otherwise
     pub fn is_set(&self, label: VarLabel) -> bool {
-        self.assignments[label.value_usize()].is_some()
+        return self.true_assignments.contains(label) || self.false_assignments.contains(label)
     }
 
     /// Produces an iterator of all the assigned literals
     pub fn assignment_iter<'a>(&'a self) -> impl Iterator<Item = Literal> + 'a {
-        self.assignments.iter().enumerate().filter_map(|(idx, x)| {
-            x.as_ref()
-                .map(|v| Literal::new(VarLabel::new_usize(idx), *v))
-        })
+        let false_iter = self.false_assignments.iter().map(|x| Literal::new(x, false));
+        let true_iter = self.true_assignments.iter().map(|x| Literal::new(x, true));
+        false_iter.chain(true_iter)
     }
 
-    pub fn unassigned_vars<'a>(&'a self) -> impl Iterator<Item = VarLabel> + 'a {
-        self.assignments
-            .iter()
-            .enumerate()
-            .filter_map(|(idx, x)| match x {
-                None => Some(VarLabel::new_usize(idx)),
-                Some(_) => None,
-            })
+    pub fn difference<'a>(&'a self, other: &'a Self) -> impl Iterator<Item = Literal> + 'a {
+        let true_diff = self.true_assignments.difference(&other.true_assignments).map(|x| Literal::new(x, true));
+        let false_diff = self.false_assignments.difference(&other.false_assignments).map(|x| Literal::new(x, false));
+        false_diff.chain(true_diff)
     }
 }

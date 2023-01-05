@@ -1,11 +1,34 @@
 //! A generic unit propagator for CNFs
+//! Probabilistically hashes a partially instantiated CNF, used primarily for
+//! component caching during bottom-up compilation (a component is a partially
+//! instantiated CNF).
+//
+//! The hash function satisfies the invariant that, with (arbitrarily) high
+//! probability, two components are syntactically equal if and only if they have
+//! the same hash.
+//
+//! It works by associating each literal in the CNF with a distinct prime
+//! number. To compute the hash function, one takes the product (modulo a prime
+//! field, the base of which is specified in PRIMES) of all unset literals in
+//! clauses that are not satisfied.
+//
+//! Example: Assume we have the following CNF, with its literals annotated with
+//! distinct primes:
+//! ```
+//! // `(a \/ b) /\ (!a \/ c)`
+//! //   ^    ^      ^     ^
+//! //   2    3      5     7
+//! ```
+//! Then, if we were to hash this CNF with the partial model (a = T), would
+//! get the value 7
 
 use super::{
     cnf::Cnf,
     model::PartialModel,
     var_label::{Literal, VarLabel},
 };
-use ::gf256::*;
+use bit_set::BitSet;
+use dimacs::Var;
 
 
 
@@ -55,22 +78,22 @@ pub struct UnitPropagate {
     watch_list_pos: Vec<Vec<ClauseIdx>>,
     // similar to the above, but for negative label
     watch_list_neg: Vec<Vec<ClauseIdx>>,
-    // stack of assignment states (all implied and decided literals)
-    state: Vec<PartialModel>,
-    cur_hash: gf256,
-    clauses: Vec<Vec<(Literal, gf256)>>,
+    cnf: Cnf,
+}
+
+enum UnitPropResult {
+    UNSAT,
+    PartialSAT(PartialModel)
 }
 
 impl UnitPropagate {
     /// Returns None if UNSAT discovered during initial unit propagation
-    pub fn new(cnf: &Cnf) -> Option<UnitPropagate> {
+    pub fn new(cnf: Cnf) -> Option<(UnitPropagate, PartialModel)> {
         let mut watch_list_pos: Vec<Vec<usize>> = Vec::new();
         let mut watch_list_neg: Vec<Vec<usize>> = Vec::new();
-        let mut assignments: Vec<Option<bool>> = Vec::new();
         for _ in 0..cnf.num_vars() {
             watch_list_pos.push(Vec::new());
             watch_list_neg.push(Vec::new());
-            assignments.push(None);
         }
 
         // do initial unit propagation
@@ -98,75 +121,40 @@ impl UnitPropagate {
         let mut cur = UnitPropagate {
             watch_list_pos,
             watch_list_neg,
-            state: vec![PartialModel::from_vec(assignments)],
             cnf,
         };
 
+        let mut cur_state = PartialModel::new(cur.cnf.num_vars());
+
         for i in implied {
-            if !cur.decide(i) {
-                return None;
+            match cur.decide(cur_state, i) {
+                UnitPropResult::UNSAT => return None,
+                UnitPropResult::PartialSAT(r) => { 
+                    cur_state = r;
+                }
             }
         }
 
-        Some(cur)
-    }
-
-    fn cur_state(&self) -> &PartialModel {
-        self.state.last().unwrap()
-    }
-
-    fn cur_state_mut(&mut self) -> &mut PartialModel {
-        let n = self.state.len();
-        &mut self.state[n - 1]
-    }
-
-    /// Sets a variable to a particular value
-    /// Returns true if successful and false if this resulted in an UNSAT assignment
-    pub fn decide(&mut self, new_assignment: Literal) -> bool {
-        self.set(new_assignment)
-    }
-
-    /// Returns an iterator over the literals that were decided at the previous decision step
-    /// Panics if no previous decision step was made
-    pub fn get_decided_literals(&self) -> impl Iterator<Item = Literal> + '_ {
-        // the most recently decided literals is the diff between the new
-        let n = self.state.len();
-        let cur_state_i = self.state[n - 1].get_vec().iter();
-        let prev_state_i = self.state[n - 2].get_vec().iter();
-
-        cur_state_i
-            .zip(prev_state_i)
-            .enumerate()
-            .filter_map(|(idx, (cur, prev))| {
-                if *cur == *prev {
-                    None
-                } else {
-                    Some(Literal::new(VarLabel::new_usize(idx), cur.unwrap()))
-                }
-            })
-    }
-
-    /// Backtracks to the previous decision
-    pub fn pop(&mut self) {
-        assert!(
-            self.state.len() > 1,
-            "Unit Propagate cannot backtrack past first decision"
-        );
-        self.state.pop();
+        Some((cur, cur_state))
     }
 
     /// Set a variable to a particular value and propagates
     /// returns true if success, false if UNSAT
-    fn set(&mut self, new_assignment: Literal) -> bool {
+    fn decide(&mut self, mut cur_state: PartialModel, new_assignment: Literal) -> UnitPropResult {
         // if already assigned, check if consistent -- if not, return unsat
-        match self.cur_state().get(new_assignment.get_label()) {
+        match cur_state.get(new_assignment.get_label()) {
             None => (),
-            Some(v) => return new_assignment.get_polarity() == v,
+            Some(v) => {
+                if v == new_assignment.get_polarity() {
+                    return UnitPropResult::PartialSAT(cur_state)
+                } else {
+                    return UnitPropResult::UNSAT
+                }
+            }
         };
 
         // update the value of the decided variable in the partial model
-        self.cur_state_mut()
-            .set(new_assignment.get_label(), new_assignment.get_polarity());
+        cur_state.set(new_assignment.get_label(), new_assignment.get_polarity());
 
         let var_idx = new_assignment.get_label().value() as usize;
 
@@ -195,7 +183,7 @@ impl UnitPropagate {
             // move onto the next watcher
             let mut is_sat = false;
             for lit in clause.iter() {
-                match self.cur_state().get(lit.get_label()) {
+                match cur_state.get(lit.get_label()) {
                     Some(v) if lit.get_polarity() == v => {
                         watcher_idx += 1;
                         is_sat = true;
@@ -212,7 +200,7 @@ impl UnitPropagate {
             let mut remaining_lits =
                 clause
                     .iter()
-                    .filter(|x| match self.cur_state().get(x.get_label()) {
+                    .filter(|x| match cur_state.get(x.get_label()) {
                         None => true,
                         Some(_) => false,
                     });
@@ -221,14 +209,19 @@ impl UnitPropagate {
             if num_remaining == 0 {
                 // UNSAT -- need to move a watcher and there are no remaining
                 // unassigned literals to watch
-                return false;
+                return UnitPropResult::UNSAT;
             } else if num_remaining == 1 {
-                // unit propagate and move onto the next watcher
+                // just found a unit. propagate it and move onto the next watcher
                 let new_unit = remaining_lits.next().unwrap();
-                if !self.set(*new_unit) {
-                    return false;
+                match self.decide(cur_state, *new_unit) {
+                    UnitPropResult::UNSAT => {
+                        return UnitPropResult::UNSAT
+                    },
+                    UnitPropResult::PartialSAT(new_state) => {
+                        cur_state = new_state;
+                        watcher_idx += 1;
+                    }
                 }
-                watcher_idx += 1;
             } else {
                 // num_remaining > 1, find a new literal to watch
                 // first, find a new literal to watch
@@ -275,61 +268,281 @@ impl UnitPropagate {
                 // do not increment watcher_idx (since we decreased the total number of watchers, we have made progress)
             }
         }
-        true
-    }
-
-    pub fn get_assgn(&self) -> &PartialModel {
-        self.cur_state()
-    }
-
-    pub fn push(&mut self) {
-        self.state.push(self.cur_state().clone());
+        UnitPropResult::PartialSAT(cur_state)
     }
 }
 
+pub enum DecisionResult {
+    SAT,
+    UNSAT,
+    Unknown
+}
 
-// #[test]
-// fn test_unit_propagate_1() {
-//     let v = vec![
-//         vec![Literal::new(VarLabel::new(0), false)],
-//         vec![
-//             Literal::new(VarLabel::new(0), true),
-//             Literal::new(VarLabel::new(1), false),
-//         ],
-//         vec![
-//             Literal::new(VarLabel::new(1), true),
-//             Literal::new(VarLabel::new(2), true),
-//         ],
-//     ];
+#[derive(Clone, Debug)]
+struct SatState {
+    model: PartialModel,
+    hash: u128,
+    sat_clauses: BitSet
+}
 
-//     let mut cnf = Cnf::new(v);
-//     let mut up = UnitPropagate::new(&cnf).unwrap();
-//     let assgn = up.get_assgn().get_vec();
-//     assert_eq!(assgn[0], Some(false));
-//     assert_eq!(assgn[1], Some(false));
-//     assert_eq!(assgn[2], Some(true));
-// }
+pub struct SATSolver {
+    up: UnitPropagate,
+    clauses: Vec<Vec<(Literal, u128)>>,
+    /// contains_pos_lit[i] is the set of clauses that contains positive
+    /// varlabel i
+    contains_pos_lit: Vec<BitSet>,
+    contains_neg_lit: Vec<BitSet>,
+    state_stack: Vec<SatState>,
+}
 
-// #[test]
-// fn test_unit_propagate_2() {
-//     let v = vec![
-//         vec![
-//             Literal::new(VarLabel::new(0), true),
-//             Literal::new(VarLabel::new(1), false),
-//         ],
-//         vec![
-//             Literal::new(VarLabel::new(1), true),
-//             Literal::new(VarLabel::new(2), true),
-//         ],
-//     ];
+impl SATSolver {
+    fn top_state(&self) -> &SatState {
+        self.state_stack.last().unwrap()
+    }
 
-//     let cnf = Cnf::new(v);
-//     let up = UnitPropagate::new(&cnf).unwrap();
-//     let assgn = up.get_assgn().get_vec();
-//     assert_eq!(assgn[0], None);
-//     assert_eq!(assgn[1], None);
-//     assert_eq!(assgn[2], None);
-// }
+    /// given a new_model, computes the resulting updated hash state and set of
+    /// satisfied clauses by multiplying in the contribution of all subsumed
+    /// literals between the top state of the sat state and the new model
+    fn update_hash_and_sat_set(&self, new_model: &PartialModel) -> (u128, BitSet) {
+        let mut hash = self.top_state().hash;
+        let mut new_set = self.top_state().sat_clauses.clone();
+        // multiply in the hash of all subsumed literals
+        // step through every clause that contains this literal. three cases:
+        //  1. clause is already satisfied. skip its contribution.
+        //  2. lit subsumes the clause. multiply in contribution of all variables in that clause
+        //     that are not already assigned.
+        //  3. lit does not subsume clause. multiply in only this literal's contribution
+
+        // first handle subsumed clause case (case 2)
+        for lit in new_model.difference(&self.top_state().model) {
+            let matching_polarity = if lit.get_polarity() { &self.contains_pos_lit } else { &self.contains_neg_lit };
+            for clause_idx in matching_polarity[lit.get_label().value_usize()].iter() {
+                if new_set.contains(clause_idx) {
+                    continue;
+                }
+                new_set.insert(clause_idx);
+                for (clause_lit, weight) in self.clauses[clause_idx].iter() {
+                    if !self.top_state().model.is_set(clause_lit.get_label()) {
+                        hash = hash.wrapping_mul(*weight);
+                    }
+                }
+            }
+        }
+
+        // now handle case 3
+        for lit in new_model.difference(&self.top_state().model) {
+            let opposite_polarity = if lit.get_polarity() { &self.contains_neg_lit } else { &self.contains_pos_lit };
+            for clause_idx in opposite_polarity[lit.get_label().value_usize()].iter() {
+                if new_set.contains(clause_idx) {
+                    // avoid double-counting
+                    continue;
+                }
+                for (clause_lit, weight) in self.clauses[clause_idx].iter() {
+                    if clause_lit.get_label() == lit.get_label() {
+                        hash = hash.wrapping_mul(*weight);
+                        break;
+                    }
+                }
+            }
+        }
+        
+        return (hash, new_set);
+    }
+
+
+
+    /// returns a new SATSolver
+    /// None if initially UNSAT
+    pub fn new(cnf: Cnf) -> Option<SATSolver> {
+        match UnitPropagate::new(cnf.clone()) {
+            None => { 
+                return None
+            },
+            Some((up, state)) => {
+                // normalize the clauses by (1) deduplicating and (2) filtering
+                // out all clauses that contain a literal and its negation
+                let mut clauses : Vec<Vec<Literal>> = cnf.clauses().iter().map(|x| x.clone()).collect();
+                for i in 0..clauses.len() {
+                    clauses[i].sort();
+                    clauses[i].dedup();
+                }
+                let i = clauses.iter().filter(|clause| {
+                    for i in 0..clause.len() {
+                        for j in (i+1)..clause.len() {
+                            if clause[i].get_label() == clause[j].get_label() && 
+                                clause[i].get_polarity() == !clause[j].get_polarity() {
+                                    return false
+                            }
+                        }
+                    }
+                    return true;
+                });
+
+                // weight each literal
+                let mut primes = primal::Primes::all();
+                let clauses : Vec<Vec<(Literal, u128)>> = i.map({
+                        |clause| {
+                            clause
+                                .iter()
+                                .map(|lit| (*lit, primes.next().unwrap() as u128))
+                                .collect()
+                        }
+                    })
+                    .collect();
+
+                println!("{:?}", clauses);
+
+                // initialize pos_lit and neg_lit
+                let mut pos_lit = Vec::new();
+                let mut neg_lit = Vec::new();
+                for _ in 0..(cnf.num_vars()) {
+                    pos_lit.push(BitSet::new());
+                    neg_lit.push(BitSet::new());
+                }
+
+                for (clause_idx, clause) in clauses.iter().enumerate() {
+                    for lit in clause.iter() {
+                        if lit.0.get_polarity() {
+                            pos_lit[lit.0.get_label().value_usize()].insert(clause_idx);
+                        } else {
+                            neg_lit[lit.0.get_label().value_usize()].insert(clause_idx);
+                        }
+                    }
+                }
+
+                let top_state = SatState { model: PartialModel::new(cnf.num_vars()), hash: 1, sat_clauses: BitSet::new() };
+                let mut solver = SATSolver { up, clauses, contains_pos_lit: pos_lit, contains_neg_lit: neg_lit, state_stack: vec![top_state] };
+
+                let (new_hash, new_sat_set) = solver.update_hash_and_sat_set(&state);
+                
+                solver.state_stack.push(SatState { model: state, hash: new_hash, sat_clauses: new_sat_set });
+
+                return Some(solver);
+            }
+        }
+    }
+
+    /// Pops the SAT state
+    ///
+    /// Restores the set of clause and decisions to the point at which it was previously pushed
+    /// Panics if there is no prior pushed state.
+    pub fn pop(&mut self) {
+        self.state_stack.pop();
+    }
+
+    /// Sets a literal in the SAT context
+    /// pushes this decision onto the stack
+    pub fn decide(&mut self, assignment: Literal) -> DecisionResult {
+        match self.up.decide(self.top_state().model.clone(), assignment) {
+            UnitPropResult::UNSAT => DecisionResult::UNSAT,
+            UnitPropResult::PartialSAT(new_model) => {
+                let (new_hash, new_sat) = self.update_hash_and_sat_set(&new_model);
+                let num_set = new_sat.len();
+                self.state_stack.push(SatState { model: new_model, hash: new_hash, sat_clauses: new_sat });
+                if num_set  == self.clauses.len() {
+                    return DecisionResult::SAT;
+                } else {
+                    return DecisionResult::Unknown;
+                }
+            },
+        }
+    }
+
+    /// Get an iterator over the difference between the units implied at 
+    /// the top and second-to-top decision
+    pub fn get_difference<'a>(&'a self) -> impl Iterator<Item=Literal> + 'a {
+        self.top_state().model.difference(&self.state_stack[self.state_stack.len() - 2].model)
+    }
+
+    pub fn get_cur_hash(&self) -> u128 {
+        self.top_state().hash
+    }
+
+    pub fn is_sat(&self) -> bool {
+        return self.top_state().sat_clauses.len() == self.clauses.len()
+    }
+
+    pub fn is_set(&self, var: VarLabel) -> bool {
+        self.top_state().model.is_set(var)
+    }
+}
+
+#[test]
+fn test_unit_propagate_1() {
+    let v = vec![
+        vec![Literal::new(VarLabel::new(0), false)],
+        vec![
+            Literal::new(VarLabel::new(0), true),
+            Literal::new(VarLabel::new(1), false),
+        ],
+        vec![
+            Literal::new(VarLabel::new(1), true),
+            Literal::new(VarLabel::new(2), true),
+        ],
+    ];
+
+    let cnf = Cnf::new(v);
+    match UnitPropagate::new(cnf) {
+        None => assert!(false),
+        Some((_, assgn)) => {
+            assert_eq!(assgn.get(VarLabel::new(0)), Some(false));
+            assert_eq!(assgn.get(VarLabel::new(1)), Some(false));
+            assert_eq!(assgn.get(VarLabel::new(2)), Some(true));
+        }
+    }
+}
+
+#[test]
+fn test_unit_propagate_2() {
+    let v = vec![vec![
+            Literal::new(VarLabel::new(0), true),
+            Literal::new(VarLabel::new(1), false),
+        ],
+        vec![
+            Literal::new(VarLabel::new(1), true),
+            Literal::new(VarLabel::new(2), true),
+        ],
+    ];
+
+    let cnf = Cnf::new(v);
+    match UnitPropagate::new(cnf) {
+        None => assert!(false),
+        Some((_, assgn)) => {
+            assert_eq!(assgn.get(VarLabel::new(0)), None); 
+            assert_eq!(assgn.get(VarLabel::new(1)), None); 
+            assert_eq!(assgn.get(VarLabel::new(2)), None); 
+        }
+    }
+}
+
+#[test]
+fn test_unit_propagate_3() {
+    let v = vec![
+        vec![Literal::new(VarLabel::new(0), false)],
+        vec![
+            Literal::new(VarLabel::new(0), false),
+            Literal::new(VarLabel::new(1), false),
+        ],
+        vec![
+            Literal::new(VarLabel::new(0), false),
+            Literal::new(VarLabel::new(1), true),
+        ],
+        vec![
+            Literal::new(VarLabel::new(1), true),
+            Literal::new(VarLabel::new(2), true),
+        ],
+    ];
+
+    let cnf = Cnf::new(v);
+    match UnitPropagate::new(cnf) {
+        None => assert!(false),
+        Some((_, assgn)) => {
+            assert_eq!(assgn.get(VarLabel::new(0)), Some(false));
+            assert_eq!(assgn.get(VarLabel::new(1)), None);
+            assert_eq!(assgn.get(VarLabel::new(2)), None);
+        }
+    }
+}
 
 // #[test]
 // fn test_unit_propagate_3() {

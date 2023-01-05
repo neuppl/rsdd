@@ -626,7 +626,7 @@ impl<T: LruTable<BddPtr>> BddManager<T> {
             &BddPlan::ConstTrue => BddPtr::true_ptr(),
             &BddPlan::ConstFalse => BddPtr::false_ptr(),
         }
-    }
+}
 
     // /// Returns A BDD that represents `cnf` conditioned on all
     // ///     variables set in the current top model
