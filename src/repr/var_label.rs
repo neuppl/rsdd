@@ -1,9 +1,9 @@
 //! A generic data structure for tracking variable labels throughout the library
 use std::fmt;
-use std::mem;
+
 extern crate quickcheck;
 use bit_set::BitSet;
-use bit_set::Intersection;
+
 
 use self::quickcheck::{Arbitrary, Gen};
 

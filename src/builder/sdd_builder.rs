@@ -568,7 +568,7 @@ impl<'a> SddManager {
     }
 
     /// Compose `g` into `f` by substituting for `lbl`
-    pub fn compose(&mut self, f: SddPtr, lbl: VarLabel, g: SddPtr) -> SddPtr {
+    pub fn compose(&mut self, _f: SddPtr, _lbl: VarLabel, _g: SddPtr) -> SddPtr {
         panic!("not impl")
         // TODO this can be optimized with a specialized implementation to make
         // it a single traversal
@@ -593,7 +593,7 @@ impl<'a> SddManager {
         self.is_compressed_h(f)
     }
 
-    fn is_compressed_h(&self, f: SddPtr) -> bool {
+    fn is_compressed_h(&self, _f: SddPtr) -> bool {
         panic!("not impl")
         // if f.is_const() {
         //     return true;
@@ -626,7 +626,7 @@ impl<'a> SddManager {
         self.is_trimmed_h(f)
     }
 
-    fn is_trimmed_h(&self, f: SddPtr) -> bool {
+    fn is_trimmed_h(&self, _f: SddPtr) -> bool {
         panic!("not impl")
         // if f.is_const() {
         //     return true;
@@ -813,7 +813,7 @@ impl<'a> SddManager {
         }
     }
 
-    pub fn from_logical_expr(&mut self, expr: &LogicalExpr) -> SddPtr {
+    pub fn from_logical_expr(&mut self, _expr: &LogicalExpr) -> SddPtr {
         panic!("not impl")
         // match expr {
         //     &LogicalExpr::Literal(lbl, polarity) => self.var(VarLabel::new(lbl as u64), polarity),

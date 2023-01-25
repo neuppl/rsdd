@@ -205,7 +205,7 @@ impl BddPtr {
     }
 
     /// Print a debug form of the BDD with the label remapping given by `map`
-    pub fn print_bdd_lbl(&self, ptr: BddPtr, map: &HashMap<VarLabel, VarLabel>) -> String {
+    pub fn print_bdd_lbl(&self, _ptr: BddPtr, _map: &HashMap<VarLabel, VarLabel>) -> String {
         panic!("todo")
         // use crate::builder::repr::builder_bdd::PointerType::*;
         // fn print_bdd_helper(
@@ -438,7 +438,7 @@ impl DDNNFPtr for BddPtr {
         }
     }
 
-    fn fold<T: Clone + Copy + Debug, F: Fn(DDNNF<T>) -> T>(&self, o: &VarOrder, f: F) -> T {
+    fn fold<T: Clone + Copy + Debug, F: Fn(DDNNF<T>) -> T>(&self, _o: &VarOrder, f: F) -> T {
         fn bottomup_pass_h<T: Clone + Copy + Debug, F: Fn(DDNNF<T>) -> T>(
             ptr: BddPtr,
             f: &F,

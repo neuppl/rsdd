@@ -6,7 +6,7 @@ use crate::repr::{
     var_label::{VarLabel, VarSet},
 };
 use bumpalo::Bump;
-use std::fmt::{Binary, Debug};
+use std::fmt::{Debug};
 use SddPtr::*;
 
 // This type is used a lot. Make sure it doesn't unintentionally get bigger.
@@ -303,7 +303,7 @@ impl SddPtr {
 
     pub fn get_var_label(&self) -> VarLabel {
         match &self {
-            Var(v, b) => *v,
+            Var(v, _b) => *v,
             _ => panic!("called get_var on non var"),
         }
     }
@@ -442,7 +442,7 @@ impl DDNNFPtr for SddPtr {
 
     fn fold<T: Clone + Copy + std::fmt::Debug, F: Fn(super::ddnnf::DDNNF<T>) -> T>(
         &self,
-        v: &VTreeManager,
+        _v: &VTreeManager,
         f: F,
     ) -> T {
         fn bottomup_pass_h<T: Clone + Copy + Debug, F: Fn(DDNNF<T>) -> T>(

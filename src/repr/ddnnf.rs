@@ -2,12 +2,12 @@
 //! (d-DNNF) pointer type
 use core::fmt::Debug;
 use num::Num;
-use std::collections::HashMap;
 
-use crate::repr::model::PartialModel;
+
+
 
 use super::{
-    var_label::{Literal, VarLabel, VarSet},
+    var_label::{VarLabel, VarSet},
     wmc::WmcParams,
 };
 use std::hash::Hash;

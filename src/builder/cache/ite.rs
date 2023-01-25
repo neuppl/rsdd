@@ -1,7 +1,7 @@
 //! Data-structure for representing ITEs in a standard form
 //! Follows Section 7.1.5, "Standard Triples", in
 //! 'Algorithms and Datastructures in VLSI Design' pages 115-117
-use crate::repr::{bdd::BddPtr, ddnnf::DDNNFPtr, var_order::VarOrder};
+use crate::repr::{ddnnf::DDNNFPtr};
 
 /// Core ITE representation
 #[derive(Debug, Clone, Hash, PartialEq, Eq, Copy)]

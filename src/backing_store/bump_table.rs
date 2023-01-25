@@ -7,7 +7,7 @@ use std::hash::{Hash, Hasher};
 use std::mem;
 
 use crate::util::*;
-use fnv::FnvHasher;
+
 use rustc_hash::FxHasher;
 
 /// The load factor of the table, i.e. how full the table will be when it

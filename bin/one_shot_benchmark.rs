@@ -75,7 +75,7 @@ fn compile_topdown_nnf(str: String, args: &Args) -> BenchResult {
     BenchResult { num_recursive: 0, size: ddnnf.count_nodes() }
 }
 
-fn compile_sdd_dtree(str: String, args: &Args) -> BenchResult {
+fn compile_sdd_dtree(str: String, _args: &Args) -> BenchResult {
     use rsdd::builder::sdd_builder::*;
     let cnf = Cnf::from_file(str);
     let dtree = DTree::from_cnf(&cnf, &VarOrder::linear_order(cnf.num_vars()));
@@ -85,7 +85,7 @@ fn compile_sdd_dtree(str: String, args: &Args) -> BenchResult {
 }
 
 
-fn compile_sdd_rightlinear(str: String, args: &Args) -> BenchResult {
+fn compile_sdd_rightlinear(str: String, _args: &Args) -> BenchResult {
     use rsdd::builder::sdd_builder::*;
     let cnf = Cnf::from_file(str);
     let o : Vec<VarLabel> = (0..cnf.num_vars()).map(|x| VarLabel::new(x as u64)).collect();
