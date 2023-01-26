@@ -72,7 +72,7 @@ impl<T> Random<T> {
     }
 
     // applies `f` to each component
-    pub fn bind<R>(&self, f: &mut FnMut(&T) -> Random<R>) -> Random<R> {
+    pub fn bind<R>(&self, f: &mut dyn FnMut(&T) -> Random<R>) -> Random<R> {
         let v: Vec<(Random<R>, Probability)> = self.vec().iter().map(|(x, p)| (f(x), *p)).collect();
         let n = Random::from_vec(v);
         Random::flatten(n)

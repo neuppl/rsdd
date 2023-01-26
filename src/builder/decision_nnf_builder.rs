@@ -2,8 +2,7 @@
 
 use crate::{backing_store::*, repr::ddnnf::DDNNFPtr};
 use bumpalo::Bump;
-use num::Num;
-use rand::Rng;
+
 use rustc_hash::FxHashMap;
 
 use crate::{
@@ -23,7 +22,7 @@ pub struct DecisionNNFBuilder {
 }
 
 impl DecisionNNFBuilder {
-    pub fn new(num_vars: usize) -> DecisionNNFBuilder {
+    pub fn new(_num_vars: usize) -> DecisionNNFBuilder {
         DecisionNNFBuilder {
             compute_table: BackedRobinhoodTable::new(),
         }
@@ -218,7 +217,7 @@ impl DecisionNNFBuilder {
             }
         } else {
             // check cache
-            let idx = match bdd.get_scratch::<BddPtr>() {
+            let _idx = match bdd.get_scratch::<BddPtr>() {
                 None => (),
                 Some(v) => return if bdd.is_neg() { v.neg() } else { *v },
             };
