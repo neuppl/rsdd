@@ -4,7 +4,6 @@ use std::fmt;
 extern crate quickcheck;
 use bit_set::BitSet;
 
-
 use self::quickcheck::{Arbitrary, Gen};
 
 /// a label for each distinct variable in the BDD

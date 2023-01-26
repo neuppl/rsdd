@@ -1,10 +1,8 @@
 //! Apply cache for BDD operations that stores all ITEs
 
-
-
 use rustc_hash::FxHashMap;
 
-use crate::repr::{ddnnf::DDNNFPtr};
+use crate::repr::ddnnf::DDNNFPtr;
 
 use super::{ite::Ite, LruTable};
 

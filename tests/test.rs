@@ -294,7 +294,7 @@ mod test_bdd_manager {
     use quickcheck::TestResult;
     use rsdd::builder::cache::all_app::AllTable;
     use rsdd::builder::cache::lru_app::BddApplyTable;
-    
+
     use rsdd::repr::bdd::BddPtr;
     use rsdd::repr::ddnnf::DDNNFPtr;
     use rsdd::repr::model::PartialModel;

@@ -3,9 +3,6 @@
 use core::fmt::Debug;
 use num::Num;
 
-
-
-
 use super::{
     var_label::{VarLabel, VarSet},
     wmc::WmcParams,

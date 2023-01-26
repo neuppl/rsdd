@@ -3,7 +3,6 @@
 use crate::{backing_store::*, repr::ddnnf::DDNNFPtr};
 use bumpalo::Bump;
 
-
 use rustc_hash::FxHashMap;
 
 use crate::{

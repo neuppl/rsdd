@@ -6,7 +6,7 @@ use crate::repr::{
     var_label::{VarLabel, VarSet},
 };
 use bumpalo::Bump;
-use std::fmt::{Debug};
+use std::fmt::Debug;
 use SddPtr::*;
 
 // This type is used a lot. Make sure it doesn't unintentionally get bigger.
