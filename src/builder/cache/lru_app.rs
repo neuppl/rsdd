@@ -3,10 +3,7 @@ use std::hash::Hasher;
 
 use rustc_hash::FxHasher;
 
-use crate::{
-    repr::{bdd::BddPtr, ddnnf::DDNNFPtr},
-    util::lru::*,
-};
+use crate::{repr::ddnnf::DDNNFPtr, util::lru::*};
 
 use super::{ite::Ite, LruTable};
 
@@ -61,7 +58,7 @@ impl<T: DDNNFPtr> LruTable<T> for BddApplyTable<T> {
 }
 
 impl<T: DDNNFPtr> BddApplyTable<T> {
-    pub fn new(num_vars: usize) -> BddApplyTable<T> {
+    pub fn new(_num_vars: usize) -> BddApplyTable<T> {
         BddApplyTable {
             table: Lru::new(INITIAL_CAPACITY),
         }

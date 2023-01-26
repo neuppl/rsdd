@@ -1,4 +1,4 @@
-use crate::repr::{bdd::BddPtr, ddnnf::DDNNFPtr};
+use crate::repr::ddnnf::DDNNFPtr;
 
 use self::ite::Ite;
 
