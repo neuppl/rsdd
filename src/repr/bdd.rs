@@ -29,6 +29,10 @@ impl BddPtr {
         Reg(n)
     }
 
+    pub fn from_bool(b:bool) -> BddPtr {
+        if b { PtrTrue } else { PtrFalse }
+    }
+
     pub fn new_compl(n: *mut BddNode) -> BddPtr {
         Compl(n)
     }
