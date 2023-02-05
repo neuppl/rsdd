@@ -1091,6 +1091,7 @@ fn sdd_circuit2() {
     );
 }
 
+#[allow(dead_code)]
 // #[test]
 fn sdd_wmc1() {
     // modeling the formula (x<=>fx) && (y<=>fy), with f weight of 0.5

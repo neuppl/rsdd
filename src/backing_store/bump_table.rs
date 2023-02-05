@@ -118,6 +118,7 @@ where
         self.tbl[pos].is_occupied()
     }
 
+    #[allow(dead_code)]
     fn get_pos(&self, pos: usize) -> *mut T {
         self.tbl[pos].ptr
     }
@@ -147,7 +148,7 @@ where
     //     let total = self.tbl.iter().fold(0, |sum, cur| cur.offset() + sum);
     //     (total as f64) / (self.len as f64)
     // }
-
+    #[allow(dead_code)]
     pub fn num_nodes(&self) -> usize {
         self.len
     }
