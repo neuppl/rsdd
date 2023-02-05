@@ -15,7 +15,7 @@ impl<T> Random<T> {
     }
 
     /// Generate a Boolean random value, call `f` with it, and return the result
-    /// wrapped in a Random<T>
+    /// wrapped in a `Random<T>`
     pub fn bool<F: FnMut(bool) -> T>(sampled: bool, prob: Probability, mut f: F) -> Random<T> {
         if sampled {
             let mut rng = rand::thread_rng();

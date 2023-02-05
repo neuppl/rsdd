@@ -45,7 +45,8 @@ pub struct HashedCNF {
 ///
 /// Example: Assume we have the following CNF, with its literals annotated with
 /// distinct primes:
-/// ```
+///
+/// ```text
 /// // `(a \/ b) /\ (!a \/ c)`
 /// //   ^    ^      ^     ^
 /// //   2    3      5     7
@@ -55,11 +56,11 @@ pub struct HashedCNF {
 #[derive(Eq, PartialEq, Debug, Clone)]
 pub struct CnfHasher {
     weighted_cnf: Vec<Vec<(usize, Literal)>>,
-    /// state[x] contains a list of unsatisfied clauses in the CNF (indexed into weighted_cnf)
+    /// state\[x\] contains a list of unsatisfied clauses in the CNF (indexed into weighted_cnf)
     state: Vec<HashSet<usize>>,
-    /// pos_lits[l] contains the list of indexes of clauses that contain the positive literal l
+    /// pos_lits\[l\] contains the list of indexes of clauses that contain the positive literal l
     pos_lits: Vec<Vec<usize>>,
-    /// neg_lits[l] contains the list of indexes of clauses that contain the negative literal l
+    /// neg_lits\[l\] contains the list of indexes of clauses that contain the negative literal l
     neg_lits: Vec<Vec<usize>>,
 }
 
@@ -384,7 +385,7 @@ impl Cnf {
     }
 
     /// evaluate this CNF on an assignment
-    /// assignment[x] is the assignment to VarLabel(x)
+    /// assignment\[x\] is the assignment to VarLabel(x)
     pub fn eval(&self, assignment: &Vec<bool>) -> bool {
         assert!(assignment.len() >= self.num_vars());
         for clause in self.clauses.iter() {

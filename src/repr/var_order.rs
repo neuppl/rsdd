@@ -121,7 +121,7 @@ impl VarOrder {
     }
 
     /// Produces an iterator of var -> position, where the
-    /// result[i] gives the position of variable i in the order
+    /// result\[i\] gives the position of variable i in the order
     pub fn order_iter(&self) -> Iter<usize> {
         self.var_to_pos.iter()
     }
