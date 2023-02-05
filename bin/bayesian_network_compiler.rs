@@ -1,3 +1,4 @@
+#![allow(clippy::all)]
 extern crate rsdd;
 extern crate rsgm;
 

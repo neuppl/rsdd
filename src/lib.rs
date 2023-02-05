@@ -1,4 +1,5 @@
 //! Defines exports and the C api
+#![allow(clippy::all)]
 extern crate dimacs;
 extern crate fnv;
 extern crate libc;
