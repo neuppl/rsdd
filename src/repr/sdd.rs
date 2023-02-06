@@ -6,6 +6,7 @@ use crate::repr::{
     var_label::{VarLabel, VarSet},
 };
 use bumpalo::Bump;
+use std::collections::HashSet;
 use std::fmt::Debug;
 use SddPtr::*;
 
@@ -432,6 +433,96 @@ impl SddPtr {
         } else {
             self.node_ref().index
         }
+    }
+
+    fn is_canonical_h(&self) -> bool {
+        self.is_compressed() && self.is_trimmed()
+    }
+
+    pub fn is_canonical(&self) -> bool {
+        self.is_canonical_h()
+    }
+
+    // predicate that returns if an SDD is compressed;
+    // see https://www.ijcai.org/Proceedings/11/Papers/143.pdf
+    // definition 8
+    pub fn is_compressed(&self) -> bool {
+        self.is_compressed_h()
+    }
+
+    fn is_compressed_h(&self) -> bool {
+        if self.is_const() {
+            return true;
+        }
+
+        // TODO: is this assumption correct?
+        if self.is_bdd() {
+            return true;
+        }
+
+        // TODO: is this assumption correct?
+        if !self.is_or() {
+            return true;
+        }
+
+        let mut visited_sdds: HashSet<SddPtr> = HashSet::new();
+
+        for and in self.node_iter() {
+            if visited_sdds.contains(&and.sub) {
+                return false;
+            }
+            visited_sdds.insert(and.sub);
+        }
+
+        return self.node_iter().all(|and| and.prime.is_compressed());
+    }
+
+    pub fn is_trimmed(&self) -> bool {
+        self.is_trimmed_h()
+    }
+
+    fn is_trimmed_h(&self) -> bool {
+        if self.is_const() {
+            return true;
+        }
+
+        // assumption: bdd is trimmed!
+        if self.is_bdd() {
+            return true;
+        }
+
+        // TODO: is this assumption correct?
+        if !self.is_or() {
+            return true;
+        }
+
+        // this is a linear search for decompositions of the form (T, a)
+        let trivial_p_exists = self.node_iter().all(|and| and.prime.is_true());
+
+        if trivial_p_exists {
+            return false;
+        }
+
+        // TODO(mattxwang): significantly optimize this
+        // this next part is an O(n^2) (i.e., pairwise) comparison of each SDD
+        // and an arbitrary prime. we are looking for untrimmed decomposition pairs of the form (a, T) and (~a, F)
+        let mut visited_sdds: Vec<SddPtr> = Vec::new();
+
+        for and in self.node_iter() {
+            if !and.sub.is_const() {
+                continue;
+            }
+            let p_neg = and.prime.neg();
+            let neg_exists = visited_sdds.iter().any(|visited_p| *visited_p == p_neg);
+
+            if neg_exists {
+                return false;
+            }
+            visited_sdds.push(and.prime);
+        }
+
+        // neither trimmed form exists at the top-level, so we recurse down once
+        return self.node_iter().all(|and| and.prime.is_trimmed());
     }
 }
 
