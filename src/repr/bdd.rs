@@ -213,36 +213,33 @@ impl BddPtr {
     }
 
     /// Print a debug form of the BDD with the label remapping given by `map`
-    pub fn print_bdd_lbl(&self, _ptr: BddPtr, _map: &HashMap<VarLabel, VarLabel>) -> String {
-        panic!("todo")
-        // use crate::builder::repr::builder_bdd::PointerType::*;
-        // fn print_bdd_helper(
-        //     t: &BddManager,
-        //     ptr: BddPtr,
-        //     map: &HashMap<VarLabel, VarLabel>,
-        // ) -> String {
-        //     match ptr.ptr_type() {
-        //         PtrTrue => String::from("T"),
-        //         PtrFalse => String::from("T"),
-        //         PtrNode => {
-        //             let l_p = t.low(ptr);
-        //             let h_p = t.high(ptr);
-        //             let l_s = print_bdd_helper(t, l_p, map);
-        //             let r_s = print_bdd_helper(t, h_p, map);
-        //             let lbl = ptr.label();
-        //             format!(
-        //                 "({:?}, {}{}, {}{})",
-        //                 map.get(&lbl).unwrap_or(&lbl).value(),
-        //                 if l_p.is_compl() { "!" } else { "" },
-        //                 l_s,
-        //                 if h_p.is_compl() { "!" } else { "" },
-        //                 r_s
-        //             )
-        //         }
-        //     }
-        // }
-        // let s = print_bdd_helper(self, ptr, map);
-        // format!("{}{}", if ptr.is_compl() { "!" } else { "" }, s)
+    pub fn print_bdd_lbl(&self, map: &HashMap<VarLabel, VarLabel>) -> String {
+        match self {
+            BddPtr::PtrTrue => String::from("T"),
+            // BddPtr::PtrFalse => String::from("T"),
+            BddPtr::PtrFalse => String::from("F"), // TODO: check that this is right?
+            BddPtr::Compl(n) => {
+                let s = BddPtr::Reg(*n).print_bdd_lbl(map);
+                format!("!{}", s)
+            }
+            BddPtr::Reg(n) => unsafe {
+                let l_p = (*(*n)).low;
+                let r_p = (*(*n)).high;
+                let l_s = l_p.print_bdd_lbl(map);
+                let r_s = r_p.print_bdd_lbl(map);
+                let lbl = (*(*n)).var;
+                format!(
+                    "({:?}, {}, {})",
+                    map.get(&lbl).unwrap_or(&lbl).value(),
+                    l_s,
+                    r_s
+                )
+            },
+        }
+    }
+
+    pub fn print_bdd(&self) -> String {
+        self.print_bdd_lbl(&HashMap::new())
     }
 
     fn bdd_fold_h<T: Clone + Copy + Debug, F: Fn(VarLabel, T, T) -> T>(
