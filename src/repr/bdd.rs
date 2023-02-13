@@ -131,10 +131,8 @@ impl BddPtr {
     }
 
     /// Traverses the BDD and clears all scratch memory (sets it equal to 0)
-    pub fn clear_scratch(&self) -> () {
-        if self.is_const() {
-            return;
-        } else {
+    pub fn clear_scratch(&self) {
+        if !self.is_const() {
             let n = self.mut_node_ref();
             if n.data != 0 {
                 n.data = 0;
@@ -161,9 +159,9 @@ impl BddPtr {
         unsafe {
             let ptr = self.mut_node_ref().data;
             if ptr == 0 {
-                return None;
+                None
             } else {
-                return Some(&*(self.into_node().data as *const T));
+                Some(&*(self.into_node().data as *const T))
             }
         }
     }
@@ -175,16 +173,16 @@ impl BddPtr {
     /// Invariant: values stored in `set_scratch` must not outlive
     /// the provided allocator `alloc` (i.e., calling `get_scratch`
     /// involves dereferencing a pointer stored in `alloc`)
-    pub fn set_scratch<T>(&self, alloc: &mut Bump, v: T) -> () {
+    pub fn set_scratch<T>(&self, alloc: &mut Bump, v: T) {
         self.mut_node_ref().data = (alloc.alloc(v) as *const T) as usize;
     }
 
     pub fn to_string_debug(&self) -> String {
         fn print_bdd_helper(ptr: BddPtr) -> String {
             if ptr.is_true() {
-                return String::from("T");
+                String::from("T")
             } else if ptr.is_false() {
-                return String::from("F");
+                String::from("F")
             } else {
                 let l_p = if ptr.is_neg() {
                     ptr.low_raw().neg()
@@ -245,16 +243,16 @@ impl BddPtr {
         alloc: &mut Bump,
     ) -> T {
         if self.is_true() {
-            return high_v;
+            high_v
         } else if self.is_false() {
-            return low_v;
+            low_v
         } else {
             if self.get_scratch::<(Option<T>, Option<T>)>().is_none() {
                 self.set_scratch::<(Option<T>, Option<T>)>(alloc, (None, None));
             }
             match self.get_scratch::<(Option<T>, Option<T>)>() {
-                Some((Some(v), _)) if self.is_neg() => return *v,
-                Some((_, Some(v))) if !self.is_neg() => return *v,
+                Some((Some(v), _)) if self.is_neg() => *v,
+                Some((_, Some(v))) if !self.is_neg() => *v,
                 Some((prev_low, prev_high)) => {
                     let l = self.low().bdd_fold_h(f, low_v, high_v, alloc);
                     let h = self.high().bdd_fold_h(f, low_v, high_v, alloc);
@@ -264,7 +262,7 @@ impl BddPtr {
                     } else {
                         self.set_scratch::<(Option<T>, Option<T>)>(alloc, (*prev_low, Some(res)));
                     }
-                    return res;
+                    res
                 }
                 _ => panic!("unreachable"),
             }
@@ -279,7 +277,7 @@ impl BddPtr {
     ) -> T {
         let r = self.bdd_fold_h(f, low_v, high_v, &mut Bump::new());
         self.clear_scratch();
-        return r;
+        r
     }
 
     /// evaluates a circuit on a partial marginal MAP assignment to get an upper-bound on the wmc
@@ -317,7 +315,7 @@ impl BddPtr {
                 v *= l;
             }
         }
-        return v;
+        v
     }
 
     fn marginal_map_h(
@@ -454,8 +452,8 @@ impl DDNNFPtr for BddPtr {
                         ptr.set_scratch::<DDNNFCache<T>>(alloc, (None, None));
                     }
                     match ptr.get_scratch::<DDNNFCache<T>>() {
-                        Some((Some(v), _)) if ptr.is_neg() => return v.clone(),
-                        Some((_, Some(v))) if !ptr.is_neg() => return v.clone(),
+                        Some((Some(v), _)) if ptr.is_neg() => v.clone(),
+                        Some((_, Some(v))) if !ptr.is_neg() => v.clone(),
                         Some((None, cached)) | Some((cached, None)) => {
                             // no cached value found, compute it
                             let l = if ptr.is_neg() {
@@ -491,7 +489,7 @@ impl DDNNFPtr for BddPtr {
                             } else {
                                 ptr.set_scratch::<DDNNFCache<T>>(alloc, (*cached, Some(or_v)));
                             }
-                            return or_v;
+                            or_v
                         }
                         _ => panic!("unreachable"),
                     }
@@ -508,7 +506,7 @@ impl DDNNFPtr for BddPtr {
     fn count_nodes(&self) -> usize {
         fn count_h(ptr: BddPtr, alloc: &mut Bump) -> usize {
             if ptr.is_const() {
-                return 0;
+                0
             } else {
                 match ptr.get_scratch::<usize>() {
                     Some(_) => 0,
@@ -517,7 +515,7 @@ impl DDNNFPtr for BddPtr {
                         ptr.set_scratch::<usize>(alloc, 0);
                         let sub_l = count_h(ptr.low_raw(), alloc);
                         let sub_h = count_h(ptr.high_raw(), alloc);
-                        return sub_l + sub_h + 1;
+                        sub_l + sub_h + 1
                     }
                 }
             }

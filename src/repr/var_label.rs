@@ -112,6 +112,6 @@ impl VarSet {
     }
 
     pub fn intersect<'a>(&'a self, other: &'a VarSet) -> bit_set::Intersection<'a, u32> {
-        return self.b.intersection(&other.b);
+        self.b.intersection(&other.b)
     }
 }

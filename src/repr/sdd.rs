@@ -100,26 +100,26 @@ impl Iterator for SddNodeIter {
             // if this is a binary SDD, produce the appropriate nodes
             if self.count == 0 {
                 self.count += 1;
-                return Some(SddAnd::new(
+                Some(SddAnd::new(
                     SddPtr::var(self.sdd.topvar(), true),
                     self.sdd.high_raw(),
-                ));
+                ))
             } else if self.count == 1 {
                 self.count += 1;
-                return Some(SddAnd::new(
+                Some(SddAnd::new(
                     SddPtr::var(self.sdd.topvar(), false),
                     self.sdd.low_raw(),
-                ));
+                ))
             } else {
-                return None;
+                None
             }
         } else {
             let sdd = self.sdd.node_ref();
             if self.count >= sdd.nodes.len() {
-                return None;
+                None
             } else {
                 self.count += 1;
-                return Some(sdd.nodes[self.count - 1]);
+                Some(sdd.nodes[self.count - 1])
             }
         }
     }
@@ -201,9 +201,9 @@ impl SddPtr {
                 self.node_ref().scratch
             };
             if ptr == 0 {
-                return None;
+                None
             } else {
-                return Some(&*(ptr as *const T));
+                Some(&*(ptr as *const T))
             }
         }
     }
@@ -215,7 +215,7 @@ impl SddPtr {
     /// Invariant: values stored in `set_scratch` must not outlive
     /// the provided allocator `alloc` (i.e., calling `get_scratch`
     /// involves dereferencing a pointer stored in `alloc`)
-    pub fn set_scratch<T>(&self, alloc: &mut Bump, v: T) -> () {
+    pub fn set_scratch<T>(&self, alloc: &mut Bump, v: T) {
         if self.is_bdd() {
             self.mut_bdd_ref().scratch = (alloc.alloc(v) as *const T) as usize;
         } else {
@@ -224,7 +224,7 @@ impl SddPtr {
     }
 
     /// recursively traverses the SDD and clears all scratch
-    pub fn clear_scratch(&self) -> () {
+    pub fn clear_scratch(&self) {
         if self.is_const() || self.is_var() {
             return;
         }
@@ -390,9 +390,9 @@ impl SddPtr {
 
     /// returns number of (prime, sub) pairs this node points to
     /// panics if not an or-node
-    pub fn num_nodes<'a>(&'a self) -> usize {
+    pub fn num_nodes(&self) -> usize {
         if self.is_bdd() {
-            return 2;
+            2
         } else {
             self.node_ref().nodes.len()
         }
@@ -487,7 +487,7 @@ impl SddPtr {
             BDD(_) => {
                 // core assumption: in binary SDD, the prime is always x and not x
                 // so, we only check low/high being flipped versions
-                if (!self.low().is_const() || !self.high().is_const()) {
+                if !self.low().is_const() || !self.high().is_const() {
                     return self.low().is_trimmed() && self.high().is_trimmed();
                 }
 
@@ -578,7 +578,7 @@ impl DDNNFPtr for SddPtr {
                             } else {
                                 ptr.set_scratch::<DDNNFCache<T>>(alloc, (*cached, Some(or_v)));
                             }
-                            return or_v;
+                            or_v
                         }
                         _ => panic!("unreachable"),
                     }
@@ -595,7 +595,7 @@ impl DDNNFPtr for SddPtr {
     fn count_nodes(&self) -> usize {
         fn count_h(ptr: SddPtr, alloc: &mut Bump) -> usize {
             if ptr.is_const() || ptr.is_var() {
-                return 0;
+                0
             } else {
                 match ptr.get_scratch::<usize>() {
                     Some(_) => 0,
@@ -608,7 +608,7 @@ impl DDNNFPtr for SddPtr {
                             c += count_h(a.prime(), alloc);
                             c += 1;
                         }
-                        return c;
+                        c
                     }
                 }
             }
@@ -662,10 +662,10 @@ impl DDNNFPtr for SddPtr {
 
 #[test]
 fn is_compressed_trivial() {
-    assert_eq!(PtrTrue.is_compressed(), true);
-    assert_eq!(PtrFalse.is_compressed(), true);
-    assert_eq!(Var(VarLabel::new(0), true).is_compressed(), true);
-    assert_eq!(Var(VarLabel::new(1), false).is_compressed(), true);
+    assert!(PtrTrue.is_compressed());
+    assert!(PtrFalse.is_compressed());
+    assert!(Var(VarLabel::new(0), true).is_compressed());
+    assert!(Var(VarLabel::new(1), false).is_compressed());
 }
 
 #[test]
@@ -686,7 +686,7 @@ fn is_compressed_simple_bdd() {
     let binary_sdd_ptr = &mut binary_sdd;
     let bdd_ptr = SddPtr::bdd(binary_sdd_ptr);
     assert_ne!(a, b);
-    assert_eq!(bdd_ptr.is_compressed(), true)
+    assert!(bdd_ptr.is_compressed())
 }
 
 #[test]
@@ -706,15 +706,15 @@ fn is_compressed_simple_bdd_duplicate() {
     let binary_sdd_ptr = &mut binary_sdd;
     let bdd_ptr = SddPtr::bdd(binary_sdd_ptr);
 
-    assert_eq!(bdd_ptr.is_compressed(), false)
+    assert!(!bdd_ptr.is_compressed())
 }
 
 #[test]
 fn is_trimmed_trivial() {
-    assert_eq!(PtrTrue.is_trimmed(), true);
-    assert_eq!(PtrFalse.is_trimmed(), true);
-    assert_eq!(Var(VarLabel::new(0), true).is_trimmed(), true);
-    assert_eq!(Var(VarLabel::new(1), false).is_trimmed(), true);
+    assert!(PtrTrue.is_trimmed());
+    assert!(PtrFalse.is_trimmed());
+    assert!(Var(VarLabel::new(0), true).is_trimmed());
+    assert!(Var(VarLabel::new(1), false).is_trimmed());
 }
 
 #[test]
@@ -736,15 +736,15 @@ fn is_trimmed_simple_demorgan() {
     let res = man.or(x, y).neg();
     let expected = man.and(x.neg(), y.neg());
 
-    assert_eq!(expected.is_trimmed(), true);
-    assert_eq!(res.is_trimmed(), true);
+    assert!(expected.is_trimmed());
+    assert!(res.is_trimmed());
 }
 #[test]
 fn is_canonical_trivial() {
-    assert_eq!(PtrTrue.is_canonical(), true);
-    assert_eq!(PtrFalse.is_canonical(), true);
-    assert_eq!(Var(VarLabel::new(0), true).is_canonical(), true);
-    assert_eq!(Var(VarLabel::new(1), false).is_canonical(), true);
+    assert!(PtrTrue.is_canonical());
+    assert!(PtrFalse.is_canonical());
+    assert!(Var(VarLabel::new(0), true).is_canonical());
+    assert!(Var(VarLabel::new(1), false).is_canonical());
 }
 
 #[test]
@@ -764,6 +764,6 @@ fn is_canonical_simple_demorgan() {
     let y = SddPtr::var(VarLabel::new(3), true);
     let res = man.or(x, y).neg();
     let expected = man.and(x.neg(), y.neg());
-    assert_eq!(expected.is_canonical(), true);
-    assert_eq!(res.is_canonical(), true);
+    assert!(expected.is_canonical());
+    assert!(res.is_canonical());
 }

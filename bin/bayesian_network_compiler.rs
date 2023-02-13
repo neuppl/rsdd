@@ -72,8 +72,8 @@ impl BayesianNetworkCNF {
                     indic_vec.push(new_indic);
 
                     println!("{:?} <=> {:?}", cur_param, indic_vec);
-                    let mut imp1 = implies(&vec![Literal::new(cur_param, true)], &indic_vec);
-                    let mut imp2 = implies(&indic_vec, &vec![Literal::new(cur_param, true)]);
+                    let mut imp1 = implies(&[Literal::new(cur_param, true)], &indic_vec);
+                    let mut imp2 = implies(&indic_vec, &[Literal::new(cur_param, true)]);
                     clauses.append(&mut imp1);
                     clauses.append(&mut imp2);
                 }
@@ -124,7 +124,7 @@ struct Args {
 }
 
 /// construct a CNF for the two TERMS (i.e., conjunctions of literals) t1 => t2
-fn implies(t1: &Vec<Literal>, t2: &Vec<Literal>) -> Vec<Vec<Literal>> {
+fn implies(t1: &[Literal], t2: &[Literal]) -> Vec<Vec<Literal>> {
     let mut r: Vec<Vec<Literal>> = Vec::new();
     // negate the lhs
     let lhs: Vec<Literal> = t1

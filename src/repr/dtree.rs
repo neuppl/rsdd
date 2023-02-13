@@ -239,13 +239,11 @@ impl DTree {
     /// International Conference on Principles and Practice of Constraint
     /// Programming. Springer, Cham, 2014.
     pub fn to_vtree(&self) -> Option<VTree> {
-        match &self {
-            // TODO: resolve unused
-            #[allow(unused)]
-            &Self::Leaf {
+        match self {
+            Self::Leaf {
                 v: _v,
                 cutset,
-                vars,
+                vars: _,
             } => {
                 let cutset_v: Vec<VarLabel> = cutset
                     .clone()
@@ -259,9 +257,12 @@ impl DTree {
                     Some(DTree::right_linear(cutset_v.as_slice(), &None))
                 }
             }
-            // TODO: resolve unused
-            #[allow(unused)]
-            &Self::Node { l, r, cutset, vars } => {
+            Self::Node {
+                l,
+                r,
+                cutset,
+                vars: _,
+            } => {
                 let cutset_v: Vec<VarLabel> = cutset
                     .clone()
                     .unwrap()
@@ -285,11 +286,18 @@ impl DTree {
     }
 
     pub fn width(&self) -> usize {
-        // TODO: resolve unused
-        #[allow(unused)]
-        match &self {
-            &Self::Leaf { v, cutset, vars } => cutset.as_ref().unwrap().len(),
-            &Self::Node { l, r, cutset, vars } => {
+        match self {
+            Self::Leaf {
+                v: _,
+                cutset,
+                vars: _,
+            } => cutset.as_ref().unwrap().len(),
+            Self::Node {
+                l,
+                r,
+                cutset,
+                vars: _,
+            } => {
                 let l_len = l.width();
                 let r_len = r.width();
                 let cur = cutset.as_ref().unwrap().len();

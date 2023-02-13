@@ -43,7 +43,7 @@ impl VTree {
     /// generate an even vtree by splitting a variable ordering in half repeatedly
     /// times; then reverts to a right-linear vtree for the remainder
     pub fn even_split(order: &[VarLabel], num_splits: usize) -> VTree {
-        if num_splits <= 0 {
+        if num_splits == 0 {
             Self::right_linear(order)
         } else {
             let (l_s, r_s) = order.split_at(order.len() / 2);
