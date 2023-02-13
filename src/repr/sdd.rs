@@ -6,6 +6,7 @@ use crate::repr::{
     var_label::{VarLabel, VarSet},
 };
 use bumpalo::Bump;
+use std::collections::HashSet;
 use std::fmt::Debug;
 use SddPtr::*;
 
@@ -433,6 +434,98 @@ impl SddPtr {
             self.node_ref().index
         }
     }
+
+    fn is_canonical_h(&self) -> bool {
+        self.is_compressed() && self.is_trimmed()
+    }
+
+    pub fn is_canonical(&self) -> bool {
+        self.is_canonical_h()
+    }
+
+    // predicate that returns if an SDD is compressed;
+    // see https://www.ijcai.org/Proceedings/11/Papers/143.pdf
+    // definition 8
+    pub fn is_compressed(&self) -> bool {
+        self.is_compressed_h()
+    }
+
+    fn is_compressed_h(&self) -> bool {
+        match &self {
+            PtrTrue => true,
+            PtrFalse => true,
+            Var(_, _) => true,
+            BDD(_) | ComplBDD(_) => {
+                let low = self.low();
+                let high = self.high();
+
+                (low != high) && low.is_compressed() && high.is_compressed()
+            }
+            Reg(_) | Compl(_) => {
+                let mut visited_sdds: HashSet<SddPtr> = HashSet::new();
+                for and in self.node_iter() {
+                    if visited_sdds.contains(&and.sub) {
+                        return false;
+                    }
+                    visited_sdds.insert(and.sub);
+                }
+
+                self.node_iter().all(|and| and.prime.is_compressed())
+            }
+        }
+    }
+
+    pub fn is_trimmed(&self) -> bool {
+        self.is_trimmed_h()
+    }
+
+    fn is_trimmed_h(&self) -> bool {
+        match &self {
+            PtrTrue => true,
+            PtrFalse => true,
+            Var(_, _) => true,
+            BDD(_) => {
+                // core assumption: in binary SDD, the prime is always x and not x
+                // so, we only check low/high being flipped versions
+                if (!self.low().is_const() || !self.high().is_const()) {
+                    return self.low().is_trimmed() && self.high().is_trimmed();
+                }
+
+                // both low and high are constants; need to check for (a,T) and (~a, F) case
+                self.low() != self.high()
+            }
+            ComplBDD(_) => self.neg().is_trimmed(),
+            Reg(_) | Compl(_) => {
+                // TODO(mattxwang): significantly optimize this
+                // this next part is an O(n^2) (i.e., pairwise) comparison of each SDD
+                // and an arbitrary prime. we are looking for untrimmed decomposition pairs of the form (a, T) and (~a, F)
+                let mut visited_primes: HashSet<SddPtr> = HashSet::new();
+
+                for and in self.node_iter() {
+                    let prime = and.prime;
+
+                    // decomposition of the form (T, a)
+                    if prime.is_true() {
+                        return false;
+                    }
+
+                    if !and.sub.is_const() {
+                        continue;
+                    }
+
+                    // have seen (a, T) and (~a, F)
+                    if visited_primes.contains(&prime) {
+                        return false;
+                    }
+
+                    // add (~a, _) to seen nodes
+                    visited_primes.insert(prime.neg());
+                }
+
+                self.node_iter().all(|s| s.prime.is_trimmed())
+            }
+        }
+    }
 }
 
 type DDNNFCache<T> = (Option<T>, Option<T>);
@@ -565,4 +658,112 @@ impl DDNNFPtr for SddPtr {
             ComplBDD(x) => BDD(*x),
         }
     }
+}
+
+#[test]
+fn is_compressed_trivial() {
+    assert_eq!(PtrTrue.is_compressed(), true);
+    assert_eq!(PtrFalse.is_compressed(), true);
+    assert_eq!(Var(VarLabel::new(0), true).is_compressed(), true);
+    assert_eq!(Var(VarLabel::new(1), false).is_compressed(), true);
+}
+
+#[test]
+fn is_compressed_simple_bdd() {
+    let vtree = crate::repr::vtree::VTree::even_split(
+        &[VarLabel::new(0), VarLabel::new(1), VarLabel::new(2)],
+        1,
+    );
+    let vtree_manager = VTreeManager::new(vtree);
+    let a = SddPtr::var(VarLabel::new(0), true);
+    let b = SddPtr::var(VarLabel::new(1), false);
+    let mut binary_sdd = BinarySDD::new(
+        VarLabel::new(2),
+        a,
+        b,
+        vtree_manager.get_varlabel_idx(VarLabel::new(2)),
+    );
+    let binary_sdd_ptr = &mut binary_sdd;
+    let bdd_ptr = SddPtr::bdd(binary_sdd_ptr);
+    assert_ne!(a, b);
+    assert_eq!(bdd_ptr.is_compressed(), true)
+}
+
+#[test]
+fn is_compressed_simple_bdd_duplicate() {
+    let vtree = crate::repr::vtree::VTree::even_split(
+        &[VarLabel::new(0), VarLabel::new(1), VarLabel::new(2)],
+        1,
+    );
+    let vtree_manager = VTreeManager::new(vtree);
+    let a = SddPtr::var(VarLabel::new(0), true);
+    let mut binary_sdd = BinarySDD::new(
+        VarLabel::new(2),
+        a,
+        a, // duplicate with low - not compressed!
+        vtree_manager.get_varlabel_idx(VarLabel::new(2)),
+    );
+    let binary_sdd_ptr = &mut binary_sdd;
+    let bdd_ptr = SddPtr::bdd(binary_sdd_ptr);
+
+    assert_eq!(bdd_ptr.is_compressed(), false)
+}
+
+#[test]
+fn is_trimmed_trivial() {
+    assert_eq!(PtrTrue.is_trimmed(), true);
+    assert_eq!(PtrFalse.is_trimmed(), true);
+    assert_eq!(Var(VarLabel::new(0), true).is_trimmed(), true);
+    assert_eq!(Var(VarLabel::new(1), false).is_trimmed(), true);
+}
+
+#[test]
+fn is_trimmed_simple_demorgan() {
+    let mut man =
+        crate::builder::sdd_builder::SddManager::new(crate::repr::vtree::VTree::even_split(
+            &[
+                VarLabel::new(0),
+                VarLabel::new(1),
+                VarLabel::new(2),
+                VarLabel::new(3),
+                VarLabel::new(4),
+            ],
+            1,
+        ));
+
+    let x = SddPtr::var(VarLabel::new(0), true);
+    let y = SddPtr::var(VarLabel::new(3), true);
+    let res = man.or(x, y).neg();
+    let expected = man.and(x.neg(), y.neg());
+
+    assert_eq!(expected.is_trimmed(), true);
+    assert_eq!(res.is_trimmed(), true);
+}
+#[test]
+fn is_canonical_trivial() {
+    assert_eq!(PtrTrue.is_canonical(), true);
+    assert_eq!(PtrFalse.is_canonical(), true);
+    assert_eq!(Var(VarLabel::new(0), true).is_canonical(), true);
+    assert_eq!(Var(VarLabel::new(1), false).is_canonical(), true);
+}
+
+#[test]
+fn is_canonical_simple_demorgan() {
+    let mut man =
+        crate::builder::sdd_builder::SddManager::new(crate::repr::vtree::VTree::even_split(
+            &[
+                VarLabel::new(0),
+                VarLabel::new(1),
+                VarLabel::new(2),
+                VarLabel::new(3),
+                VarLabel::new(4),
+            ],
+            1,
+        ));
+    let x = SddPtr::var(VarLabel::new(0), true);
+    let y = SddPtr::var(VarLabel::new(3), true);
+    let res = man.or(x, y).neg();
+    let expected = man.and(x.neg(), y.neg());
+    assert_eq!(expected.is_canonical(), true);
+    assert_eq!(res.is_canonical(), true);
 }
