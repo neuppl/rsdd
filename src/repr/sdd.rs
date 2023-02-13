@@ -692,11 +692,12 @@ fn is_compressed_simple_bdd_duplicate() {
     let mut binary_sdd = BinarySDD::new(
         VarLabel::new(2),
         a,
-        a,
+        a, // duplicate with low - not compressed!
         vtree_manager.get_varlabel_idx(VarLabel::new(2)),
     );
     let binary_sdd_ptr = &mut binary_sdd;
     let bdd_ptr = SddPtr::bdd(binary_sdd_ptr);
+
     assert_eq!(bdd_ptr.is_compressed(), false)
 }
 
@@ -709,6 +710,28 @@ fn is_trimmed_trivial() {
 }
 
 #[test]
+fn is_trimmed_simple_demorgan() {
+    let mut man =
+        crate::builder::sdd_builder::SddManager::new(crate::repr::vtree::VTree::even_split(
+            &[
+                VarLabel::new(0),
+                VarLabel::new(1),
+                VarLabel::new(2),
+                VarLabel::new(3),
+                VarLabel::new(4),
+            ],
+            1,
+        ));
+
+    let x = SddPtr::var(VarLabel::new(0), true);
+    let y = SddPtr::var(VarLabel::new(3), true);
+    let res = man.or(x, y).neg();
+    let expected = man.and(x.neg(), y.neg());
+
+    assert_eq!(expected.is_trimmed(), true);
+    assert_eq!(res.is_trimmed(), true);
+}
+#[test]
 fn is_canonical_trivial() {
     assert_eq!(PtrTrue.is_canonical(), true);
     assert_eq!(PtrFalse.is_canonical(), true);
@@ -716,145 +739,23 @@ fn is_canonical_trivial() {
     assert_eq!(Var(VarLabel::new(1), false).is_canonical(), true);
 }
 
-// #[test]
-// fn is_canonical_trivial() {
-//     // body of "simple_equality" test
-//     let mut mgr = crate::builder::sdd_builder::SddManager::new(crate::repr::vtree::VTree::even_split(
-//         &[
-//             VarLabel::new(0),
-//             VarLabel::new(1),
-//             VarLabel::new(2),
-//             VarLabel::new(3),
-//             VarLabel::new(4),
-//         ],
-//         2,
-//     ));
-//     let a = SddPtr::var(VarLabel::new(0), true);
-//     let d = SddPtr::var(VarLabel::new(3), true);
-//     let inner = mgr.or(a, d);
-//     let term = mgr.and(inner, a);
-
-//     assert_eq!(term.is_trimmed(), true);
-//     assert_eq!(term.is_compressed(), true);
-//     assert_eq!(term.is_canonical(), true);
-// }
-
-// #[test]
-// fn uncompressed_trivial() {
-// let vtree = crate::repr::vtree::VTree::even_split(
-//     &[
-//         VarLabel::new(0),
-//         VarLabel::new(1),
-//         VarLabel::new(2),
-//         VarLabel::new(3),
-//         VarLabel::new(4),
-//     ],
-//     1,
-// );
-// let mut man = crate::builder::sdd_builder::SddManager::new(vtree.clone());
-
-// man.set_compression(false); // necessary so we can observe duplication
-
-// let x = SddPtr::var(VarLabel::new(0), true);
-// let y = SddPtr::var(VarLabel::new(3), true);
-// let res = man.and(x, x);
-
-// // let iff1 = man.iff(x, f1);
-// // let iff2 = man.iff(y, f1); // note: same g's here!
-// // let obs = man.or(x, x);    // note: same x's here!
-// // let and1 = man.and(iff1, iff2);
-// // let f = man.and(and1, obs);
-// }
-
-// #[test]
-// fn untrimmed_trivial() {
-//     let vtree = crate::repr::vtree::VTree::even_split(
-//         &[
-//             VarLabel::new(0),
-//             VarLabel::new(1),
-//             VarLabel::new(2),
-//             VarLabel::new(3),
-//             VarLabel::new(4),
-//         ],
-//         1,
-//     );
-//     let mut man = crate::builder::sdd_builder::SddManager::new(vtree.clone());
-
-//     man.set_compression(false); // necessary so we can observe duplication
-
-//     let x = SddPtr::var(VarLabel::new(0), true);
-//     let y = SddPtr::var(VarLabel::new(3), true);
-//     let red = man.or(SddPtr::true_ptr(), y);
-//     let res = man.and(red, x);
-
-//     // let iff1 = man.iff(x, f1);
-//     // let iff2 = man.iff(y, f1); // note: same g's here!
-//     // let obs = man.or(x, x);    // note: same x's here!
-//     // let and1 = man.and(iff1, iff2);
-//     // let f = man.and(and1, obs);
-
-//     assert_eq!(res.is_trimmed(), false);
-// }
-
-// #[test]
-// fn not_compressed_or_trimmed_trivial() {
-//     let vtree = crate::repr::vtree::VTree::even_split(
-//         &[
-//             VarLabel::new(0),
-//             VarLabel::new(1),
-//             VarLabel::new(2),
-//             VarLabel::new(3),
-//             VarLabel::new(4),
-//         ],
-//         1,
-//     );
-//     let mut man = crate::builder::sdd_builder::SddManager::new(vtree.clone());
-
-//     man.set_compression(false); // necessary so we can observe duplication
-
-//     let x = SddPtr::var(VarLabel::new(0), true);
-//     let y = SddPtr::var(VarLabel::new(3), true);
-//     let res = man.and(x, x);
-
-//     // let iff1 = man.iff(x, f1);
-//     // let iff2 = man.iff(y, f1); // note: same g's here!
-//     // let obs = man.or(x, x);    // note: same x's here!
-//     // let and1 = man.and(iff1, iff2);
-//     // let f = man.and(and1, obs);
-
-//     // assert_eq!(res.is_trimmed(), false);
-//     assert_eq!(res.is_compressed(), false);
-//     // assert_eq!(f.is_canonical(), false);
-// }
-
-// // note: this test is identical to the one above.
-// // However, we keep compression on, and flip the asserts on the predicates
-// // the idea is that we test that the SDD Manager does indeed compress / trim under-the-hood!
-// #[test]
-// fn test_compression_trivial() {
-//     let vtree = crate::repr::vtree::VTree::even_split(
-//         &[
-//             VarLabel::new(1),
-//             VarLabel::new(2),
-//             VarLabel::new(3),
-//         ],
-//         1,
-//     );
-//     let mut man = crate::builder::sdd_builder::SddManager::new(vtree.clone());
-
-//     man.set_compression(false); // necessary so we can observe duplication
-
-//     let x = SddPtr::var(VarLabel::new(1), true);
-//     let y = SddPtr::var(VarLabel::new(2), true);
-//     let f1 = SddPtr::var(VarLabel::new(3), true);
-
-//     let iff1 = man.iff(x, f1);
-//     let iff2 = man.iff(y, f1); // note: same g's here!
-//     let obs = man.or(x, x); // note: same x's here!
-//     let and1 = man.and(iff1, iff2);
-//     let f = man.and(and1, obs);
-
-//     assert_eq!(f.is_trimmed(), true);
-//     assert_eq!(f.is_compressed(), true);
-//     assert_eq!(f.is_canonical(), true);
-// }
+#[test]
+fn is_canonical_simple_demorgan() {
+    let mut man =
+        crate::builder::sdd_builder::SddManager::new(crate::repr::vtree::VTree::even_split(
+            &[
+                VarLabel::new(0),
+                VarLabel::new(1),
+                VarLabel::new(2),
+                VarLabel::new(3),
+                VarLabel::new(4),
+            ],
+            1,
+        ));
+    let x = SddPtr::var(VarLabel::new(0), true);
+    let y = SddPtr::var(VarLabel::new(3), true);
+    let res = man.or(x, y).neg();
+    let expected = man.and(x.neg(), y.neg());
+    assert_eq!(expected.is_canonical(), true);
+    assert_eq!(res.is_canonical(), true);
+}
