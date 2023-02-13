@@ -363,7 +363,7 @@ impl SddPtr {
         self.mut_bdd_ref().low
     }
 
-    /// gets the low pointer of a BDD
+    /// gets the high pointer of a BDD
     /// negates the returned pointer if the root is negated
     ///
     /// panics if not a bdd pointer
@@ -375,7 +375,7 @@ impl SddPtr {
         }
     }
 
-    /// gets the low pointer of a BDD
+    /// gets the high pointer of a BDD
     ///
     /// panics if not a bdd pointer
     pub fn high_raw(&self) -> SddPtr {
@@ -456,10 +456,10 @@ impl SddPtr {
             PtrFalse => true,
             Var(_, _) => true,
             BDD(_) | ComplBDD(_) => {
-                let ptr = self.mut_bdd_ref();
-                let low = ptr.low();
-                let high = ptr.high();
-                return (low != high) && low.is_compressed() && high.is_compressed();
+                let low = self.low();
+                let high = self.high();
+
+                (low != high) && low.is_compressed() && high.is_compressed()
             }
             Reg(_) | Compl(_) => {
                 let mut visited_sdds: HashSet<SddPtr> = HashSet::new();
@@ -469,7 +469,8 @@ impl SddPtr {
                     }
                     visited_sdds.insert(and.sub);
                 }
-                return self.node_iter().all(|and| and.prime.is_compressed());
+
+                self.node_iter().all(|and| and.prime.is_compressed())
             }
         }
     }
@@ -483,38 +484,43 @@ impl SddPtr {
             PtrTrue => true,
             PtrFalse => true,
             Var(_, _) => true,
-            BDD(_) | ComplBDD(_) => {
-                let ptr = self.mut_bdd_ref();
-                return !ptr.low().is_true();
+            BDD(_) => {
+                // let ptr = self.mut_bdd_ref();
+                // // assumption: is low() always the prime?
+                // !ptr.high().is_true() && ptr.high().is_trimmed()
+
+                // TODO: is this true?
+                true
             }
+            ComplBDD(_) => self.neg().is_trimmed(),
             Reg(_) | Compl(_) => {
-                // // this is a linear search for decompositions of the form (T, a)
-                let trivial_p_exists = self.node_iter().any(|and| and.prime.is_true());
-
-                if trivial_p_exists {
-                    return false;
-                }
-
                 // TODO(mattxwang): significantly optimize this
                 // this next part is an O(n^2) (i.e., pairwise) comparison of each SDD
                 // and an arbitrary prime. we are looking for untrimmed decomposition pairs of the form (a, T) and (~a, F)
-                let mut visited_sdds: HashSet<SddPtr> = HashSet::new();
+                let mut visited_primes: HashSet<SddPtr> = HashSet::new();
 
                 for and in self.node_iter() {
+                    let prime = and.prime;
+
+                    // decomposition of the form (T, a)
+                    if prime.is_true() {
+                        return false;
+                    }
+
                     if !and.sub.is_const() {
                         continue;
                     }
-                    let p_neg = and.prime.neg();
-                    let neg_exists = visited_sdds.iter().any(|visited_p| *visited_p == p_neg);
 
-                    if neg_exists {
+                    // have seen (a, T) and (~a, F)
+                    if visited_primes.contains(&prime) {
                         return false;
                     }
-                    visited_sdds.insert(and.prime);
+
+                    // add (~a, _) to seen nodes
+                    visited_primes.insert(prime.neg());
                 }
 
-                // neither trimmed form exists at the top-level, so we recurse down once
-                return self.node_iter().all(|and| and.prime.is_trimmed());
+                self.node_iter().all(|s| s.prime.is_trimmed())
             }
         }
     }
