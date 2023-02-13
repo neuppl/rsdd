@@ -362,7 +362,7 @@ impl SddPtr {
         self.mut_bdd_ref().low
     }
 
-    /// gets the low pointer of a BDD
+    /// gets the high pointer of a BDD
     /// negates the returned pointer if the root is negated
     ///
     /// panics if not a bdd pointer
@@ -374,7 +374,7 @@ impl SddPtr {
         }
     }
 
-    /// gets the low pointer of a BDD
+    /// gets the high pointer of a BDD
     ///
     /// panics if not a bdd pointer
     pub fn high_raw(&self) -> SddPtr {
