@@ -485,12 +485,14 @@ impl SddPtr {
             PtrFalse => true,
             Var(_, _) => true,
             BDD(_) => {
-                // let ptr = self.mut_bdd_ref();
-                // // assumption: is low() always the prime?
-                // !ptr.high().is_true() && ptr.high().is_trimmed()
+                // core assumption: in binary SDD, the prime is always x and not x
+                // so, we only check low/high being flipped versions
+                if (!self.low().is_const() || !self.high().is_const()) {
+                    return self.low().is_trimmed() && self.high().is_trimmed();
+                }
 
-                // TODO: is this true?
-                true
+                // both low and high are constants; need to check for (a,T) and (~a, F) case
+                self.low() != self.high()
             }
             ComplBDD(_) => self.neg().is_trimmed(),
             Reg(_) | Compl(_) => {
