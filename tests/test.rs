@@ -651,7 +651,7 @@ mod test_sdd_manager {
     }
 
     quickcheck! {
-        fn sdd_compressed_default(c: Cnf) -> bool {
+        fn sdd_compressed_right_linear(c: Cnf) -> bool {
             let order : Vec<VarLabel> = (0..16).map(VarLabel::new).collect();
             let vtree = VTree::right_linear(&order);
             let mut mgr = super::SddManager::new(vtree);
@@ -661,17 +661,29 @@ mod test_sdd_manager {
     }
 
     quickcheck! {
-        fn sdd_trimmed_default(c: Cnf) -> bool {
+        fn sdd_trimmed_right_linear(c: Cnf) -> bool {
             let order : Vec<VarLabel> = (0..16).map(VarLabel::new).collect();
             let vtree = VTree::right_linear(&order);
             let mut mgr = super::SddManager::new(vtree);
             let cnf = mgr.from_cnf(&c);
 
-            if !cnf.is_trimmed() {
-                println!("{}", mgr.print_sdd(cnf))
-            }
+            cnf.is_trimmed()
+        }
+    }
 
-            true
+    quickcheck! {
+        fn sdd_compressed_arbitrary_vtree(c: Cnf, vtree: VTree) -> bool {
+            let mut mgr = super::SddManager::new(vtree);
+            let cnf = mgr.from_cnf(&c);
+            cnf.is_compressed()
+        }
+    }
+
+    quickcheck! {
+        fn sdd_trimmed_arbitrary_vtree(c: Cnf, vtree: VTree) -> bool {
+            let mut mgr = super::SddManager::new(vtree);
+            let cnf = mgr.from_cnf(&c);
+            cnf.is_trimmed()
         }
     }
 }
