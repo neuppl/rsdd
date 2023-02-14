@@ -63,9 +63,7 @@ struct BenchResult {
     size: usize,
 }
 
-// TODO: resolve unused
-#[allow(unused)]
-fn compile_topdown_nnf(str: String, args: &Args) -> BenchResult {
+fn compile_topdown_nnf(str: String, _args: &Args) -> BenchResult {
     let cnf = Cnf::from_file(str);
     let mut man = rsdd::builder::decision_nnf_builder::DecisionNNFBuilder::new(cnf.num_vars());
     let order = VarOrder::linear_order(cnf.num_vars());
@@ -103,9 +101,7 @@ fn compile_sdd_rightlinear(str: String, _args: &Args) -> BenchResult {
     }
 }
 
-// TODO: resolve unused
-#[allow(unused)]
-fn compile_bdd(str: String, args: &Args) -> BenchResult {
+fn compile_bdd(str: String, _args: &Args) -> BenchResult {
     use rsdd::builder::bdd_builder::*;
     let cnf = Cnf::from_file(str);
     let mut man = BddManager::<BddApplyTable<BddPtr>>::new_default_order_lru(cnf.num_vars());
