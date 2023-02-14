@@ -1,5 +1,5 @@
 // TODO: remove crate-level disable
-#![allow(dead_code, unused_imports, unused_variables)]
+#![allow(unused_imports)]
 
 use crate::repr::cnf::Cnf;
 use crate::repr::var_label::{Literal, VarLabel};
@@ -28,7 +28,7 @@ impl<T: Clone + Debug + PartialEq + Eq + Hash> Hypergraph<T> {
 
     /// assumes that hyperedges only includes elements from vertices
     fn cache_from(
-        vertices: &HashSet<T>,
+        _vertices: &HashSet<T>,
         hyperedges: &Vec<HashSet<T>>,
     ) -> HashMap<T, HashSet<usize>> {
         let mut assoc_cache: HashMap<T, HashSet<usize>> = HashMap::new();
@@ -143,7 +143,7 @@ impl<T: Clone + Debug + PartialEq + Eq + Hash> Hypergraph<T> {
             self.vertices = vertices;
         }
 
-        let next_ix = self.hyperedges.len();
+        let _next_ix = self.hyperedges.len();
         match self.hyperedges.clone().iter().find(|e| e == &edge) {
             Some(_) => return false,
             None => self.hyperedges.push(edge.clone()),
@@ -286,7 +286,7 @@ mod test {
         let cnf = Cnf::new(v);
         let ig = cnf.interaction_graph();
         println!("{:?}", Dot::with_config(&ig, &[Config::EdgeNoLabel]));
-        let nodes = ig
+        let _nodes = ig
             .raw_nodes()
             .iter()
             .map(|n| n.weight.clone())
@@ -362,7 +362,7 @@ mod test {
         }
         assert_eq!(hg.vertices, HashSet::from([2, 5, 7]));
 
-        let edges_api = hg.edges();
+        let _edges_api = hg.edges();
         for s in [HashSet::from([2, 5, 7]), HashSet::from([2])] {
             assert!(hg.hyperedges.iter().any(|e| e == &s));
         }
@@ -463,17 +463,17 @@ mod test {
                 let mut tmp = g.clone();
                 tmp.cut_vertex(&v);
                 // naive take 1
-                let mx_width: f64 = tmp.widths().1 as f64;
+                let _mx_width: f64 = tmp.widths().1 as f64;
                 // naive take 2
-                let mx_edge_size = tmp.edges().iter().map(|e| e.len()).max().unwrap() as f64;
+                let _mx_edge_size = tmp.edges().iter().map(|e| e.len()).max().unwrap() as f64;
                 // expectation over edge sizes
                 let sum_edge_size: f64 = tmp.edges().iter().map(|e| e.len() as f64).sum();
-                let mean_edge_size = sum_edge_size / tmp.size() as f64;
+                let _mean_edge_size = sum_edge_size / tmp.size() as f64;
 
                 // for each variable
                 // iterate through each node it would cut
                 let edges_for_v = g.edges_for(v);
-                let max_edge_size = edges_for_v.iter().map(|e| e.len()).max().unwrap() as f64;
+                let _max_edge_size = edges_for_v.iter().map(|e| e.len()).max().unwrap() as f64;
 
                 let (new_num_edges, total_acc) =
                     g.edges().iter().fold((0_f64, 0_f64), |(count, acc), e| {
@@ -488,7 +488,7 @@ mod test {
                             (count + 1.0, acc + 2_f64.powf(l))
                         }
                     });
-                let max_potential_combinations = total_acc / new_num_edges;
+                let _max_potential_combinations = total_acc / new_num_edges;
 
                 // largest cover after cut heuristic
                 let cut_cover_widths = g
@@ -507,14 +507,14 @@ mod test {
                                 .collect();
                             let cs = Hypergraph::edges_to_covers(newes.clone().iter().collect())
                                 .iter()
-                                .map(|(c, es)| es.len() as f64)
+                                .map(|(_c, es)| es.len() as f64)
                                 .collect();
                             cs
                         }
                     })
                     .collect::<Vec<f64>>();
 
-                let avg_cut_cover_widths =
+                let _avg_cut_cover_widths =
                     (-1.0) * cut_cover_widths.iter().sum::<f64>() / cut_cover_widths.len() as f64;
                 let max_cut_cover_widths = (-1.0)
                     * cut_cover_widths

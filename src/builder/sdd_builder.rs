@@ -12,7 +12,6 @@ use crate::backing_store::UniqueTable;
 use crate::repr::ddnnf::DDNNFPtr;
 use crate::repr::sdd::{BinarySDD, SddAnd, SddOr, SddPtr};
 use crate::repr::vtree::{VTree, VTreeIndex, VTreeManager};
-use crate::repr::wmc::WmcParams;
 use crate::{repr::cnf::Cnf, repr::logical_expr::LogicalExpr, repr::var_label::VarLabel};
 
 #[derive(Debug, Clone)]
@@ -999,7 +998,7 @@ fn sdd_circuit2() {
     );
 }
 
-// #[test]
+#[test]
 fn sdd_wmc1() {
     // modeling the formula (x<=>fx) && (y<=>fy), with f weight of 0.5
 
@@ -1022,7 +1021,7 @@ fn sdd_wmc1() {
         1,
     );
     let mut man = SddManager::new(vtree.clone());
-    let mut wmc_map = WmcParams::new(0.0, 1.0);
+    let mut wmc_map = crate::repr::wmc::WmcParams::new(0.0, 1.0);
     let x = SddPtr::var(VarLabel::new(0), true);
     wmc_map.set_weight(VarLabel::new(0), 1.0, 1.0);
     let y = SddPtr::var(VarLabel::new(1), true);
