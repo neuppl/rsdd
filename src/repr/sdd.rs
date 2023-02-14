@@ -487,7 +487,7 @@ impl SddPtr {
             BDD(_) => {
                 // core assumption: in binary SDD, the prime is always x and not x
                 // so, we only check low/high being flipped versions
-                if (!self.low().is_const() || !self.high().is_const()) {
+                if !self.low().is_const() || !self.high().is_const() {
                     return self.low().is_trimmed() && self.high().is_trimmed();
                 }
 
