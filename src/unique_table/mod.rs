@@ -1,6 +1,7 @@
 //! Internal module for unique tables, used for memoizing decision diagram nodes
 use std::hash::Hash;
 
+#[allow(dead_code)]
 struct UniquePtr<T: Hash + Eq + PartialEq>(*const T);
 
 /// Core UniqueTable trait that stores and memoizes unique nodes
