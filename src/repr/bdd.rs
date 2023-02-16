@@ -66,9 +66,19 @@ impl BddPtr {
     ///
     /// Panics if the pointer is constant (i.e., true or false)
     pub fn into_node(&self) -> BddNode {
+        match self.into_node_safe() {
+            None => panic!("Dereferencing constant in deref_or_panic"),
+            Some(n) => n,
+        }
+    }
+
+    /// Dereferences the BddPtr into a BddNode
+    /// The pointer is returned in regular-form (i.e., if &self is complemented, then
+    /// the returned BddNode incorporates this information)
+    pub fn into_node_safe(&self) -> Option<BddNode> {
         unsafe {
             match &self {
-                Reg(x) => (**x).clone(),
+                Reg(x) => Some((**x).clone()),
                 Compl(x) => {
                     let BddNode {
                         var,
@@ -76,14 +86,14 @@ impl BddPtr {
                         high,
                         data,
                     } = **x;
-                    BddNode {
+                    Some(BddNode {
                         var,
                         low: low.neg(),
                         high: high.neg(),
                         data,
-                    }
+                    })
                 }
-                _ => panic!("Dereferencing constant in deref_or_panic"),
+                _ => None,
             }
         }
     }
