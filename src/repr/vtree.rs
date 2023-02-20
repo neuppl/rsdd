@@ -1,7 +1,11 @@
 //! Defines the vtree datastructure used by SDDs for decomposition
 
 use super::{sdd::SddPtr, var_label::VarLabel};
+use crate::quickcheck::{Arbitrary, Gen};
 use crate::util::btree::{BTree, LeastCommonAncestor};
+use rand::rngs::SmallRng;
+use rand::seq::SliceRandom;
+use rand::SeedableRng;
 
 pub type VTree = BTree<(), VarLabel>;
 
@@ -51,6 +55,34 @@ impl VTree {
             let r_tree = Self::even_split(r_s, num_splits - 1);
             BTree::Node((), Box::new(l_tree), Box::new(r_tree))
         }
+    }
+}
+
+impl Arbitrary for VTree {
+    fn arbitrary(g: &mut Gen) -> VTree {
+        let mut rng = SmallRng::seed_from_u64(u64::arbitrary(g));
+        let mut vars: Vec<VarLabel> = (0..16).map(VarLabel::new).collect();
+
+        vars.shuffle(&mut rng);
+
+        fn rand_split(order: &[VarLabel], g: &mut Gen) -> VTree {
+            match order.len() {
+                0 => panic!("invalid label order passed; expects at least one VarLabel"),
+                1 => VTree::new_leaf(order[0]),
+                2 => VTree::new_node(
+                    Box::new(VTree::new_leaf(order[0])),
+                    Box::new(VTree::new_leaf(order[1])),
+                ),
+                len => {
+                    // clamps so we're guaranteed at least one item in l_s, r_s
+                    let split_index = (usize::arbitrary(g) % (len - 1)) + 1;
+                    let (l_s, r_s) = order.split_at(split_index);
+                    VTree::new_node(Box::new(rand_split(l_s, g)), Box::new(rand_split(r_s, g)))
+                }
+            }
+        }
+
+        rand_split(&vars[..], g)
     }
 }
 

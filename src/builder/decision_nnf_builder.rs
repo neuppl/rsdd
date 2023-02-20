@@ -2,8 +2,7 @@
 
 use crate::{backing_store::*, repr::{ddnnf::DDNNFPtr, unit_prop::{SATSolver, DecisionResult}}};
 use bumpalo::Bump;
-use num::Num;
-use rand::Rng;
+
 use rustc_hash::FxHashMap;
 
 use crate::{
@@ -197,7 +196,7 @@ impl DecisionNNFBuilder {
             }
         } else {
             // check cache
-            let idx = match bdd.get_scratch::<BddPtr>() {
+            let _idx = match bdd.get_scratch::<BddPtr>() {
                 None => (),
                 Some(v) => return if bdd.is_neg() { v.neg() } else { *v },
             };

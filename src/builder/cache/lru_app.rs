@@ -3,10 +3,7 @@ use std::hash::Hasher;
 
 use rustc_hash::FxHasher;
 
-use crate::{
-    repr::{bdd::BddPtr, ddnnf::DDNNFPtr},
-    util::lru::*,
-};
+use crate::{repr::ddnnf::DDNNFPtr, util::lru::*};
 
 use super::{ite::Ite, LruTable};
 

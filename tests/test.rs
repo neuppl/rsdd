@@ -285,6 +285,31 @@ fn test_sdd_canonicity() {
     }
 }
 
+#[test]
+fn test_sdd_is_canonical() {
+    for (cnf1, cnf2) in get_canonical_forms().into_iter() {
+        let v: Vec<VarLabel> = (0..cnf1.num_vars())
+            .map(|x| VarLabel::new(x as u64))
+            .collect();
+        let vtree = VTree::even_split(&v, 1);
+        let mut man = SddManager::new(vtree);
+        let r1 = man.from_cnf(&cnf1);
+        let r2 = man.from_cnf(&cnf2);
+        assert!(
+            r1.is_canonical(),
+            "Not canonical\nCNF 1: {:?}\nSDD 1:{}",
+            cnf1,
+            man.print_sdd(r1),
+        );
+        assert!(
+            r2.is_canonical(),
+            "Not canonical\nCNF 2: {:?}\nSDD 2:{}",
+            cnf2,
+            man.print_sdd(r2),
+        );
+    }
+}
+
 #[cfg(test)]
 mod test_bdd_manager {
     use crate::builder::decision_nnf_builder::DecisionNNFBuilder;
@@ -294,7 +319,7 @@ mod test_bdd_manager {
     use quickcheck::TestResult;
     use rsdd::builder::cache::all_app::AllTable;
     use rsdd::builder::cache::lru_app::BddApplyTable;
-    use rsdd::builder::cache::LruTable;
+
     use rsdd::repr::bdd::BddPtr;
     use rsdd::repr::ddnnf::DDNNFPtr;
     use rsdd::repr::model::PartialModel;
@@ -622,6 +647,43 @@ mod test_sdd_manager {
             } else {
                 TestResult::from_bool(true)
             }
+        }
+    }
+
+    quickcheck! {
+        fn sdd_compressed_right_linear(c: Cnf) -> bool {
+            let order : Vec<VarLabel> = (0..16).map(VarLabel::new).collect();
+            let vtree = VTree::right_linear(&order);
+            let mut mgr = super::SddManager::new(vtree);
+            let cnf = mgr.from_cnf(&c);
+            cnf.is_compressed()
+        }
+    }
+
+    quickcheck! {
+        fn sdd_trimmed_right_linear(c: Cnf) -> bool {
+            let order : Vec<VarLabel> = (0..16).map(VarLabel::new).collect();
+            let vtree = VTree::right_linear(&order);
+            let mut mgr = super::SddManager::new(vtree);
+            let cnf = mgr.from_cnf(&c);
+
+            cnf.is_trimmed()
+        }
+    }
+
+    quickcheck! {
+        fn sdd_compressed_arbitrary_vtree(c: Cnf, vtree: VTree) -> bool {
+            let mut mgr = super::SddManager::new(vtree);
+            let cnf = mgr.from_cnf(&c);
+            cnf.is_compressed()
+        }
+    }
+
+    quickcheck! {
+        fn sdd_trimmed_arbitrary_vtree(c: Cnf, vtree: VTree) -> bool {
+            let mut mgr = super::SddManager::new(vtree);
+            let cnf = mgr.from_cnf(&c);
+            cnf.is_trimmed()
         }
     }
 }

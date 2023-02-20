@@ -7,7 +7,7 @@ use std::hash::{Hash, Hasher};
 use std::mem;
 
 use crate::util::*;
-use fnv::FnvHasher;
+
 use rustc_hash::FxHasher;
 
 /// The load factor of the table, i.e. how full the table will be when it
@@ -118,6 +118,7 @@ where
         self.tbl[pos].is_occupied()
     }
 
+    #[allow(dead_code)]
     fn get_pos(&self, pos: usize) -> *mut T {
         self.tbl[pos].ptr
     }
@@ -148,6 +149,7 @@ where
     //     (total as f64) / (self.len as f64)
     // }
 
+    #[allow(dead_code)]
     pub fn num_nodes(&self) -> usize {
         self.len
     }

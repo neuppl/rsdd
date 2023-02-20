@@ -66,11 +66,9 @@ impl DTree {
                 *vars = Some(r.clone());
                 r
             }
-            // TODO: resolve unused
-            #[allow(unused)]
             Self::Node {
-                l,
-                r,
+                l: _,
+                r: _,
                 cutset: _,
                 ref mut vars,
             } if vars.is_some() => vars.as_ref().unwrap().clone(),
@@ -236,12 +234,10 @@ impl DTree {
     /// Programming. Springer, Cham, 2014.
     pub fn to_vtree(&self) -> Option<VTree> {
         match &self {
-            // TODO: resolve unused
-            #[allow(unused)]
             &Self::Leaf {
                 v: _v,
                 cutset,
-                vars,
+                vars: _,
             } => {
                 let cutset_v: Vec<VarLabel> = cutset
                     .clone()
@@ -255,9 +251,12 @@ impl DTree {
                     Some(DTree::right_linear(cutset_v.as_slice(), &None))
                 }
             }
-            // TODO: resolve unused
-            #[allow(unused)]
-            &Self::Node { l, r, cutset, vars } => {
+            &Self::Node {
+                l,
+                r,
+                cutset,
+                vars: _,
+            } => {
                 let cutset_v: Vec<VarLabel> = cutset
                     .clone()
                     .unwrap()

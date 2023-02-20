@@ -10,11 +10,13 @@ use rsdd::builder::cache::lru_app::BddApplyTable;
 use rsdd::repr::bdd::BddPtr;
 use rsdd::repr::cnf::Cnf;
 use rsdd::repr::ddnnf::DDNNFPtr;
+use rsdd::repr::dtree::DTree;
 use rsdd::repr::var_label::VarLabel;
 use rsdd::repr::var_order::VarOrder;
 use rsdd::repr::vtree::VTree;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use std::fs;
 use std::time::Instant;
 
 /// Test driver for one-shot benchmark
@@ -29,9 +31,8 @@ struct Args {
     #[clap(short, long, value_parser)]
     file: String,
 
-
     /// Mode to compile in
-    /// Options: 
+    /// Options:
     ///    bdd_topological
     ///    sdd_right_linear
     ///    sdd_topological_elim: compile in a topological elimination order
@@ -61,12 +62,10 @@ struct BenchmarkLog {
 
 struct BenchResult {
     num_recursive: usize,
-    size: usize
+    size: usize,
 }
 
-// TODO: resolve unused
-#[allow(unused)]
-fn compile_topdown_nnf(str: String, args: &Args) -> BenchResult {
+fn compile_topdown_nnf(str: String, _args: &Args) -> BenchResult {
     let cnf = Cnf::from_file(str);
     let mut man = rsdd::builder::decision_nnf_builder::DecisionNNFBuilder::new();
     // let order = VarOrder::linear_order(cnf.num_vars());
@@ -75,10 +74,13 @@ fn compile_topdown_nnf(str: String, args: &Args) -> BenchResult {
     let dtree = DTree::from_cnf(&cnf, &order);
     println!("width: {}", dtree.width());
     let ddnnf = man.from_cnf_topdown(&order, &cnf);
-    BenchResult { num_recursive: 0, size: ddnnf.count_nodes() }
+    BenchResult {
+        num_recursive: 0,
+        size: ddnnf.count_nodes(),
+    }
 }
 
-fn compile_sdd_dtree(str: String, args: &Args) -> BenchResult {
+fn compile_sdd_dtree(str: String, _args: &Args) -> BenchResult {
     use rsdd::builder::sdd_builder::*;
     let cnf = Cnf::from_file(str);
     let o = cnf.min_fill_order();
@@ -86,30 +88,37 @@ fn compile_sdd_dtree(str: String, args: &Args) -> BenchResult {
     let dtree = DTree::from_cnf(&cnf, &o);
     let mut man = SddManager::new(dtree.to_vtree().unwrap());
     let _sdd = man.from_cnf(&cnf);
-    BenchResult { num_recursive: man.get_stats().num_rec, size: _sdd.count_nodes() }
+    BenchResult {
+        num_recursive: man.get_stats().num_rec,
+        size: _sdd.count_nodes(),
+    }
 }
 
-
-fn compile_sdd_rightlinear(str: String, args: &Args) -> BenchResult {
+fn compile_sdd_rightlinear(str: String, _args: &Args) -> BenchResult {
     use rsdd::builder::sdd_builder::*;
     let cnf = Cnf::from_file(str);
-    let o : Vec<VarLabel> = (0..cnf.num_vars()).map(|x| VarLabel::new(x as u64)).collect();
+    let o: Vec<VarLabel> = (0..cnf.num_vars())
+        .map(|x| VarLabel::new(x as u64))
+        .collect();
     let mut man = SddManager::new(VTree::right_linear(&o));
     let _sdd = man.from_cnf(&cnf);
-    BenchResult { num_recursive: man.get_stats().num_rec, size: _sdd.count_nodes() }
+    BenchResult {
+        num_recursive: man.get_stats().num_rec,
+        size: _sdd.count_nodes(),
+    }
 }
 
-// TODO: resolve unused
-#[allow(unused)]
-fn compile_bdd(str: String, args: &Args) -> BenchResult {
+fn compile_bdd(str: String, _args: &Args) -> BenchResult {
     use rsdd::builder::bdd_builder::*;
     let cnf = Cnf::from_file(str);
     // let mut man = BddManager::<BddApplyTable<BddPtr>>::new(cnf.min_fill_order(), lru_app::BddApplyTable::new());
     let mut man = BddManager::<BddApplyTable<BddPtr>>::new_default_order_lru(cnf.num_vars());
     let _bdd = man.from_cnf(&cnf);
-    BenchResult { num_recursive: man.num_recursive_calls(), size: _bdd.count_nodes() }
+    BenchResult {
+        num_recursive: man.num_recursive_calls(),
+        size: _bdd.count_nodes(),
+    }
 }
-
 
 fn main() {
     let args = Args::parse();
@@ -122,7 +131,7 @@ fn main() {
         "dnnf_topdown" => compile_topdown_nnf(file, &args),
         "sdd_right_linear" => compile_sdd_rightlinear(file, &args),
         "sdd_dtree_topological" => compile_sdd_dtree(file, &args),
-        x => panic!("Unknown mode option: {}", x)
+        x => panic!("Unknown mode option: {}", x),
     };
     let duration = start.elapsed();
 

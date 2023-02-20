@@ -12,7 +12,6 @@ use crate::backing_store::UniqueTable;
 use crate::repr::ddnnf::DDNNFPtr;
 use crate::repr::sdd::{BinarySDD, SddAnd, SddOr, SddPtr};
 use crate::repr::vtree::{VTree, VTreeIndex, VTreeManager};
-use crate::repr::wmc::WmcParams;
 use crate::{repr::cnf::Cnf, repr::logical_expr::LogicalExpr, repr::var_label::VarLabel};
 
 #[derive(Debug, Clone)]
@@ -568,7 +567,7 @@ impl<'a> SddManager {
     }
 
     /// Compose `g` into `f` by substituting for `lbl`
-    pub fn compose(&mut self, f: SddPtr, lbl: VarLabel, g: SddPtr) -> SddPtr {
+    pub fn compose(&mut self, _f: SddPtr, _lbl: VarLabel, _g: SddPtr) -> SddPtr {
         panic!("not impl")
         // TODO this can be optimized with a specialized implementation to make
         // it a single traversal
@@ -576,98 +575,6 @@ impl<'a> SddManager {
         // let iff = self.iff(var, g);
         // let a = self.and(iff, f);
         // self.exists(a, lbl)
-    }
-
-    fn is_canonical_h(&self, f: SddPtr) -> bool {
-        self.is_compressed(f) && self.is_trimmed(f)
-    }
-
-    pub fn is_canonical(&self, f: SddPtr) -> bool {
-        self.is_canonical_h(f)
-    }
-
-    // predicate that returns if an SDD is compressed;
-    // see https://www.ijcai.org/Proceedings/11/Papers/143.pdf
-    // definition 8
-    pub fn is_compressed(&self, f: SddPtr) -> bool {
-        self.is_compressed_h(f)
-    }
-
-    fn is_compressed_h(&self, f: SddPtr) -> bool {
-        panic!("not impl")
-        // if f.is_const() {
-        //     return true;
-        // }
-
-        // // TODO: is this assumption correct?
-        // if f.is_bdd() {
-        //     return true;
-        // }
-
-        // // question for matt: should we be recursively passing this down?
-        // let mut visited_sdds: HashSet<SddPtr> = HashSet::new();
-
-        // let or = self.tbl.sdd_get_or(f);
-
-        // for (_, s) in or.iter() {
-        //     if visited_sdds.contains(&s.regular()) {
-        //         return false;
-        //     }
-        //     visited_sdds.insert(s.regular());
-        // }
-
-        // return or.iter().all(|(p, _)| self.is_compressed(*p));
-    }
-
-    // predicate that returns if an SDD is trimmed;
-    // see https://www.ijcai.org/Proceedings/11/Papers/143.pdf
-    // definition 8
-    pub fn is_trimmed(&self, f: SddPtr) -> bool {
-        self.is_trimmed_h(f)
-    }
-
-    fn is_trimmed_h(&self, f: SddPtr) -> bool {
-        panic!("not impl")
-        // if f.is_const() {
-        //     return true;
-        // }
-
-        // // assumption: bdd is trimmed!
-        // if f.is_bdd() {
-        //     return true;
-        // }
-
-        // let or = self.tbl.sdd_get_or(f);
-
-        // // this is a linear search for decompositions of the form (T, a)
-        // let trivial_p_exists = or.iter().all(|(p, _)| p.is_true());
-
-        // if trivial_p_exists {
-        //     return false;
-        // }
-
-        // // TODO(mattxwang): significantly optimize this
-        // // this next part is an O(n^2) (i.e., pairwise) comparison of each SDD
-        // // and an arbitrary prime. we are looking for untrimmed decomposition pairs of the form (a, T) and (~a, F)
-        // let mut visited_sdds: Vec<SddPtr> = Vec::new();
-
-        // for (p, s) in or.iter() {
-        //     if !s.is_const() {
-        //         continue;
-        //     }
-        //     let p_neg = p.neg();
-        //     let neg_exists = visited_sdds
-        //         .iter()
-        //         .any(|visited_p| self.sdd_eq(*visited_p, p_neg));
-
-        //     if neg_exists {
-        //         return false;
-        //     }
-        //     visited_sdds.push(*p);
-        // }
-
-        // // neither trimmed form exists at the top-level, so we recurse down once
-        // return or.iter().all(|(p, _)| self.is_trimmed(*p));
     }
 
     fn print_sdd_internal(&self, ptr: SddPtr) -> String {
@@ -813,7 +720,7 @@ impl<'a> SddManager {
         }
     }
 
-    pub fn from_logical_expr(&mut self, expr: &LogicalExpr) -> SddPtr {
+    pub fn from_logical_expr(&mut self, _expr: &LogicalExpr) -> SddPtr {
         panic!("not impl")
         // match expr {
         //     &LogicalExpr::Literal(lbl, polarity) => self.var(VarLabel::new(lbl as u64), polarity),
@@ -1091,7 +998,7 @@ fn sdd_circuit2() {
     );
 }
 
-// #[test]
+#[test]
 fn sdd_wmc1() {
     // modeling the formula (x<=>fx) && (y<=>fy), with f weight of 0.5
 
@@ -1114,7 +1021,7 @@ fn sdd_wmc1() {
         1,
     );
     let mut man = SddManager::new(vtree.clone());
-    let mut wmc_map = WmcParams::new(0.0, 1.0);
+    let mut wmc_map = crate::repr::wmc::WmcParams::new(0.0, 1.0);
     let x = SddPtr::var(VarLabel::new(0), true);
     wmc_map.set_weight(VarLabel::new(0), 1.0, 1.0);
     let y = SddPtr::var(VarLabel::new(1), true);
@@ -1137,72 +1044,3 @@ fn sdd_wmc1() {
         wmc_res
     );
 }
-
-// #[test]
-// fn is_canonical_trivial() {
-//     let mut mgr = SddManager::new(even_split(&[VarLabel::new(0)], 2));
-//     let a = mgr.var(VarLabel::new(0), true);
-
-//     assert_eq!(mgr.is_trimmed(a), true);
-//     assert_eq!(mgr.is_compressed(a), true);
-//     assert_eq!(mgr.is_canonical(a), true);
-// }
-
-// #[test]
-// fn not_compressed_or_trimmed_trivial() {
-//     let mut man = SddManager::new(even_split(
-//         &[
-//             VarLabel::new(0),
-//             VarLabel::new(1),
-//             VarLabel::new(2),
-//             VarLabel::new(3),
-//         ],
-//         2,
-//     ));
-
-//     man.set_compression(false); // necessary so we can observe duplication
-
-//     let x = man.var(VarLabel::new(0), true);
-//     let y = man.var(VarLabel::new(1), true);
-//     let f1 = man.var(VarLabel::new(2), true);
-
-//     let iff1 = man.iff(x, f1);
-//     let iff2 = man.iff(y, f1); // note: same g's here!
-//     let obs = man.or(x, x); // note: same x's here!
-//     let and1 = man.and(iff1, iff2);
-//     let f = man.and(and1, obs);
-
-//     assert_eq!(man.is_trimmed(f), false);
-//     assert_eq!(man.is_compressed(f), false);
-//     assert_eq!(man.is_canonical(f), false);
-// }
-
-// // note: this test is identical to the one above.
-// // However, we keep compression on, and flip the asserts on the predicates
-// // the idea is that we test that the SDD Manager does indeed compress / trim under-the-hood!
-// #[test]
-// fn test_compression() {
-//     let mut man = SddManager::new(even_split(
-//         &[
-//             VarLabel::new(0),
-//             VarLabel::new(1),
-//             VarLabel::new(2),
-//             VarLabel::new(3),
-//         ],
-//         2,
-//     ));
-
-//     let x = man.var(VarLabel::new(0), true);
-//     let y = man.var(VarLabel::new(1), true);
-//     let f1 = man.var(VarLabel::new(2), true);
-
-//     let iff1 = man.iff(x, f1);
-//     let iff2 = man.iff(y, f1); // note: same g's here!
-//     let obs = man.or(x, x);
-//     let and1 = man.and(iff1, iff2);
-//     let f = man.and(and1, obs);
-
-//     assert_eq!(man.is_trimmed(f), true);
-//     assert_eq!(man.is_compressed(f), true);
-//     assert_eq!(man.is_canonical(f), true);
-// }
