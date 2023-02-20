@@ -151,7 +151,7 @@ impl DecisionNNFBuilder {
 
     /// compile a decision DNNF top-down from a CNF with the searching order
     /// specified by `order`
-    pub fn from_cnf_topdown(&mut self, : &VarOrder, cnf: &Cnf) -> BddPtr {
+    pub fn from_cnf_topdown(&mut self, order: &VarOrder, cnf: &Cnf) -> BddPtr {
         let mut sat = match SATSolver::new(cnf.clone()) {
             Some(v) => v,
             None => return BddPtr::false_ptr()
