@@ -9,8 +9,7 @@ use crate::repr::{
     var_label::{Literal, VarLabel},
 };
 
-use super::{var_order::VarOrder, vtree::VTree, var_label::VarSet};
-
+use super::{var_label::VarSet, var_order::VarOrder, vtree::VTree};
 
 #[derive(Clone, Debug)]
 pub enum DTree {
@@ -20,7 +19,7 @@ pub enum DTree {
         /// right child
         r: Box<DTree>,
         /// cutset: vars(l) ∩ vars(r) \ ancestor cutsets
-        /// in English: set of variables that are in both left and right children that 
+        /// in English: set of variables that are in both left and right children that
         /// are not cut by an ancestor
         cutset: VarSet,
         /// vars = vars(l) ∪ vars(r)
@@ -39,11 +38,15 @@ impl DTree {
     fn get_vars(&self) -> &VarSet {
         match self {
             DTree::Node { l, r, cutset, vars } => &vars,
-            DTree::Leaf { clause, cutset, vars } => &vars,
+            DTree::Leaf {
+                clause,
+                cutset,
+                vars,
+            } => &vars,
         }
     }
 
-    /// initialize the set of vars so that, for each node, it holds that 
+    /// initialize the set of vars so that, for each node, it holds that
     /// vars = vars(l) ∪ vars(r)
     fn init_vars(&mut self) -> () {
         match self {
@@ -51,12 +54,16 @@ impl DTree {
                 l.init_vars();
                 r.init_vars();
                 *vars = l.get_vars().union(r.get_vars());
-            },
-            DTree::Leaf { clause, cutset, vars } => {
+            }
+            DTree::Leaf {
+                clause,
+                cutset,
+                vars,
+            } => {
                 for c in clause.iter() {
                     vars.insert(c.get_label());
                 }
-            },
+            }
         }
     }
 
@@ -69,13 +76,17 @@ impl DTree {
                 l.gen_cutset(&my_cutset);
                 r.gen_cutset(&my_cutset);
                 *cutset = my_cutset;
-            },
-            DTree::Leaf { clause, cutset, vars } => {
+            }
+            DTree::Leaf {
+                clause,
+                cutset,
+                vars,
+            } => {
                 println!("ancestor cutset: {:?}", ancestor_cutset);
                 let my_cutset = vars.minus(ancestor_cutset);
                 println!("my cutset: {:?}", my_cutset);
                 *cutset = my_cutset;
-            },
+            }
         }
     }
 
@@ -211,7 +222,7 @@ impl DTree {
                 cutset,
                 vars,
             } => {
-                let cutset_v : Vec<VarLabel> = cutset.iter().collect();
+                let cutset_v: Vec<VarLabel> = cutset.iter().collect();
                 if cutset.is_empty() {
                     None
                 } else {

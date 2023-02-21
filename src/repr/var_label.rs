@@ -108,17 +108,19 @@ impl VarSet {
         self.b.iter().map(|x| VarLabel::new_usize(x))
     }
 
-
     /// unions self with other
     pub fn union(&self, other: &VarSet) -> VarSet {
-        VarSet { b: self.b.union(&other.b).collect() }
+        VarSet {
+            b: self.b.union(&other.b).collect(),
+        }
     }
 
     /// returns self \ other, where "\"" is the "set minus" operator
     pub fn minus(&self, other: &VarSet) -> VarSet {
-        VarSet { b: self.b.difference(&other.b).collect() }
+        VarSet {
+            b: self.b.difference(&other.b).collect(),
+        }
     }
-
 
     pub fn insert(&mut self, v: VarLabel) -> () {
         self.b.insert(v.value_usize());
@@ -133,7 +135,9 @@ impl VarSet {
     }
 
     pub fn intersect_varset<'a>(&'a self, other: &'a VarSet) -> VarSet {
-        return VarSet { b: self.b.intersection(&other.b).collect() };
+        return VarSet {
+            b: self.b.intersection(&other.b).collect(),
+        };
     }
 
     pub fn is_empty(&self) -> bool {
