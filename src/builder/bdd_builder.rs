@@ -457,12 +457,12 @@ impl<T: LruTable<BddPtr>> BddManager<T> {
         use dtree::DTree;
         match &dtree {
             &DTree::Leaf {
-                v: c,
-                cutset: _,
-                vars: _,
+                clause,
+                cutset,
+                vars,
             } => {
                 // compile the clause
-                c.iter().fold(BddPtr::false_ptr(), |acc, i| {
+                clause.iter().fold(BddPtr::false_ptr(), |acc, i| {
                     let v = self.var(i.get_label(), i.get_polarity());
                     self.or(acc, v)
                 })

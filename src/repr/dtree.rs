@@ -1,9 +1,7 @@
 //! Implementation of a decomposition tree (dtree)
 //! A dtree describes a decomposition structure on clauses of a CNF. See Chapter
 //! 9.5 of 'Modeling and Reasoning with Bayesian Networks' by Adnan Darwiche
-//!
 
-use bit_set::BitSet;
 use std::{cmp::Ordering, iter::FromIterator};
 
 use crate::repr::{
@@ -11,103 +9,73 @@ use crate::repr::{
     var_label::{Literal, VarLabel},
 };
 
-use super::{var_order::VarOrder, vtree::VTree};
+use super::{var_order::VarOrder, vtree::VTree, var_label::VarSet};
 
-type VarSet = BitSet;
 
 #[derive(Clone, Debug)]
 pub enum DTree {
     Node {
+        /// left child
         l: Box<DTree>,
+        /// right child
         r: Box<DTree>,
-        cutset: Option<VarSet>,
-        vars: Option<VarSet>,
+        /// cutset: vars(l) ∩ vars(r) \ ancestor cutsets
+        /// in English: set of variables that are in both left and right children that 
+        /// are not cut by an ancestor
+        cutset: VarSet,
+        /// vars = vars(l) ∪ vars(r)
+        vars: VarSet,
     },
     Leaf {
-        v: Vec<Literal>,
-        cutset: Option<VarSet>,
-        vars: Option<VarSet>,
+        /// each leaf associated with a clause
+        clause: Vec<Literal>,
+        cutset: VarSet,
+        /// `vars` is simply set of vars in the clause
+        vars: VarSet,
     },
 }
 
 impl DTree {
     fn get_vars(&self) -> &VarSet {
         match self {
-            Self::Leaf {
-                v: _,
-                cutset: _,
-                vars,
-            } => vars.as_ref().unwrap(),
-            Self::Node {
-                l: _,
-                r: _,
-                cutset: _,
-                vars,
-            } => vars.as_ref().unwrap(),
+            DTree::Node { l, r, cutset, vars } => &vars,
+            DTree::Leaf { clause, cutset, vars } => &vars,
         }
     }
 
-    fn init_vars(&mut self) -> VarSet {
+    /// initialize the set of vars so that, for each node, it holds that 
+    /// vars = vars(l) ∪ vars(r)
+    fn init_vars(&mut self) -> () {
         match self {
-            Self::Leaf {
-                v,
-                cutset: _,
-                ref mut vars,
-            } => {
-                let r = BitSet::from_iter(v.iter().map(|x| x.get_label().value_usize()));
-                *vars = Some(r.clone());
-                r
-            }
-            Self::Node {
-                l,
-                r,
-                cutset: _,
-                ref mut vars,
-            } if vars.is_none() => {
-                let l_vars = l.init_vars();
-                let r_vars = r.init_vars();
-                let r: BitSet = l_vars.union(&r_vars).collect();
-                *vars = Some(r.clone());
-                r
-            }
-            Self::Node {
-                l: _,
-                r: _,
-                cutset: _,
-                ref mut vars,
-            } if vars.is_some() => vars.as_ref().unwrap().clone(),
-            _ => panic!(),
+            DTree::Node { l, r, cutset, vars } => {
+                l.init_vars();
+                r.init_vars();
+                *vars = l.get_vars().union(r.get_vars());
+            },
+            DTree::Leaf { clause, cutset, vars } => {
+                for c in clause.iter() {
+                    vars.insert(c.get_label());
+                }
+            },
         }
     }
 
-    fn gen_cutset(&mut self, parent_vars: &BitSet) {
+    fn gen_cutset(&mut self, ancestor_cutset: &VarSet) {
         match self {
-            Self::Leaf { v: _, cutset, vars } => {
-                // cutset of leaf is all vars mentioned in leaf not mentioned in parent
-                // println!("parent vars: {:?}", parent_vars);
-                let mut c = vars.as_ref().unwrap().clone();
-                c.difference_with(parent_vars);
-                *cutset = Some(c);
-            }
-            Self::Node {
-                l,
-                r,
-                cutset,
-                vars: _,
-            } => {
-                // cutset of a node is (vars(l) ∩ vars(r)) \ cutset(ancestor)
-                let mut cuts = l.get_vars().clone();
-                let r_cuts = r.get_vars().clone();
-                cuts.intersect_with(&r_cuts);
-                cuts.difference_with(parent_vars);
-
-                let mut all_parents = cuts.clone();
-                all_parents.union_with(parent_vars);
-
-                l.gen_cutset(&all_parents);
-                r.gen_cutset(&all_parents);
-                *cutset = Some(cuts);
-            }
+            DTree::Node { l, r, cutset, vars } => {
+                // cutset of a node is defined (vars(l) ∩ vars(r)) \ ancestor cutset
+                let intersect = l.get_vars().intersect_varset(r.get_vars());
+                let my_cutset = intersect.minus(ancestor_cutset);
+                l.gen_cutset(&my_cutset);
+                r.gen_cutset(&my_cutset);
+                *cutset = my_cutset;
+            },
+            DTree::Leaf { clause, cutset, vars } => {
+                println!("ancestor cutset: {:?}", ancestor_cutset);
+                let my_cutset = vars.minus(ancestor_cutset);
+                println!("my cutset: {:?}", my_cutset);
+                *cutset = my_cutset;
+            },
         }
     }
 
@@ -115,9 +83,9 @@ impl DTree {
         assert!(!leaves.is_empty());
         if leaves.len() == 1 {
             DTree::Leaf {
-                v: leaves[0].clone(),
-                cutset: None,
-                vars: None,
+                vars: VarSet::new(),
+                cutset: VarSet::new(),
+                clause: leaves[0].clone(),
             }
         } else {
             let (l, r) = leaves.split_at(leaves.len() / 2);
@@ -126,8 +94,8 @@ impl DTree {
             DTree::Node {
                 l: Box::new(subl),
                 r: Box::new(subr),
-                cutset: None,
-                vars: None,
+                cutset: VarSet::new(),
+                vars: VarSet::new(),
             }
         }
     }
@@ -185,8 +153,8 @@ impl DTree {
                         root = Some(DTree::Node {
                             l: Box::new(root.unwrap()),
                             r: Box::new(subtree),
-                            cutset: None,
-                            vars: None,
+                            cutset: VarSet::new(),
+                            vars: VarSet::new(),
                         })
                     }
                     all_mentioned = vec![clause];
@@ -202,14 +170,14 @@ impl DTree {
                 root = Some(DTree::Node {
                     l: Box::new(root.unwrap()),
                     r: Box::new(subtree),
-                    cutset: None,
-                    vars: None,
+                    cutset: VarSet::new(),
+                    vars: VarSet::new(),
                 })
             }
         }
         let mut r = root.unwrap();
         r.init_vars();
-        r.gen_cutset(&BitSet::new());
+        r.gen_cutset(&VarSet::new());
         r
     }
 
@@ -239,17 +207,12 @@ impl DTree {
     pub fn to_vtree(&self) -> Option<VTree> {
         match &self {
             &Self::Leaf {
-                v: _v,
+                clause,
                 cutset,
-                vars: _,
+                vars,
             } => {
-                let cutset_v: Vec<VarLabel> = cutset
-                    .clone()
-                    .unwrap()
-                    .into_iter()
-                    .map(|x| VarLabel::new(x as u64))
-                    .collect();
-                if cutset_v.is_empty() {
+                let cutset_v : Vec<VarLabel> = cutset.iter().collect();
+                if cutset.is_empty() {
                     None
                 } else {
                     Some(DTree::right_linear(cutset_v.as_slice(), &None))
@@ -261,12 +224,7 @@ impl DTree {
                 cutset,
                 vars: _,
             } => {
-                let cutset_v: Vec<VarLabel> = cutset
-                    .clone()
-                    .unwrap()
-                    .into_iter()
-                    .map(|x| VarLabel::new(x as u64))
-                    .collect();
+                let cutset_v: Vec<VarLabel> = cutset.iter().collect();
                 let l_vtree = l.to_vtree();
                 let r_vtree = r.to_vtree();
                 match (l_vtree, r_vtree) {
@@ -286,10 +244,10 @@ impl DTree {
     pub fn width(&self) -> usize {
         match &self {
             &Self::Leaf {
-                v: _,
+                clause,
                 cutset,
-                vars: _,
-            } => cutset.as_ref().unwrap().len(),
+                vars,
+            } => cutset.iter().count(),
             &Self::Node {
                 l,
                 r,
@@ -298,22 +256,22 @@ impl DTree {
             } => {
                 let l_len = l.width();
                 let r_len = r.width();
-                let cur = cutset.as_ref().unwrap().len();
+                let cur = cutset.iter().count();
                 usize::max(cur, usize::max(l_len, r_len))
             }
         }
     }
 }
 
-// #[test]
-// fn test_dtree() {
-//     // let cnf = Cnf::from_string(String::from("(1 || -2 || 3) && (2 || 3) && (1 || 2) && (3 || 4) "));
-//     // let cnf = Cnf::from_string(String::from("(1 || -2 || 3) && (2 || 3)"));
-//     let cnf = Cnf::from_string(String::from("(3 || 4) && (1 || 2) "));
-//     println!("cnf: {:?}", cnf.to_string());
-//     let order = VarOrder::linear_order(cnf.num_vars());
-//     let dtree = DTree::from_cnf(&cnf, &order);
-//     println!("{:?}", dtree);
-//     println!("{:?}", dtree.to_vtree());
-//     assert!(false);
-// }
+#[test]
+fn test_dtree() {
+    let cnf = Cnf::from_string(String::from("(1 || -2 || 3) && (2 || 3) && (1 || 2) && (3 || 4) "));
+    // let cnf = Cnf::from_string(String::from("(1 || -2 || 3) && (2 || 3)"));
+    // let cnf = Cnf::from_string(String::from("(3 || 4) && (1 || 2) "));
+    println!("cnf: {:?}", cnf.to_string());
+    let order = VarOrder::linear_order(cnf.num_vars());
+    let dtree = DTree::from_cnf(&cnf, &order);
+    println!("{:#?}", dtree);
+    println!("{:#?}", dtree.to_vtree());
+    assert!(false);
+}
