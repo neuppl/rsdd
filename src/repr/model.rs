@@ -68,14 +68,14 @@ impl PartialModel {
     }
 
     /// Produces an iterator of all the assigned literals
-    pub fn assignment_iter<'a>(&'a self) -> impl Iterator<Item = Literal> + 'a {
+    pub fn assignment_iter(&self) -> impl Iterator<Item = Literal> + '_ {
         self.assignments.iter().enumerate().filter_map(|(idx, x)| {
             x.as_ref()
                 .map(|v| Literal::new(VarLabel::new_usize(idx), *v))
         })
     }
 
-    pub fn unassigned_vars<'a>(&'a self) -> impl Iterator<Item = VarLabel> + 'a {
+    pub fn unassigned_vars(&self) -> impl Iterator<Item = VarLabel> + '_ {
         self.assignments
             .iter()
             .enumerate()

@@ -110,43 +110,43 @@ impl LogicalExpr {
 
     /// Evaluates a boolean expression
     pub fn eval(&self, values: &HashMap<VarLabel, bool>) -> bool {
-        match self {
-            &LogicalExpr::Literal(lbl, polarity) => {
-                let v = match values.get(&(VarLabel::new(lbl as u64))) {
+        match &self {
+            LogicalExpr::Literal(lbl, polarity) => {
+                let v = match values.get(&(VarLabel::new(*lbl as u64))) {
                     None => panic!("Variable {} not found in varset", lbl),
                     Some(a) => a,
                 };
-                if polarity {
+                if *polarity {
                     *v
                 } else {
                     !*v
                 }
             }
-            &LogicalExpr::Not(ref l) => {
+            LogicalExpr::Not(ref l) => {
                 let v = (*l).eval(values);
                 !v
             }
-            &LogicalExpr::And(ref l, ref r) => {
+            LogicalExpr::And(ref l, ref r) => {
                 let l_v = (*l).eval(values);
                 let r_v = (*r).eval(values);
                 l_v && r_v
             }
-            &LogicalExpr::Or(ref l, ref r) => {
+            LogicalExpr::Or(ref l, ref r) => {
                 let l_v = (*l).eval(values);
                 let r_v = (*r).eval(values);
                 l_v || r_v
             }
-            &LogicalExpr::Iff(ref l, ref r) => {
+            LogicalExpr::Iff(ref l, ref r) => {
                 let l_v = (*l).eval(values);
                 let r_v = (*r).eval(values);
                 l_v == r_v
             }
-            &LogicalExpr::Xor(ref l, ref r) => {
+            LogicalExpr::Xor(ref l, ref r) => {
                 let l_v = (*l).eval(values);
                 let r_v = (*r).eval(values);
                 (!l_v && r_v) || (l_v && !r_v)
             }
-            &LogicalExpr::Ite {
+            LogicalExpr::Ite {
                 ref guard,
                 ref thn,
                 ref els,

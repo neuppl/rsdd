@@ -50,7 +50,7 @@ impl<T: DDNNFPtr> LruTable<T> for BddApplyTable<T> {
                 f.hash(&mut hasher);
                 g.hash(&mut hasher);
                 h.hash(&mut hasher);
-                return hasher.finish();
+                hasher.finish()
             }
             Ite::IteConst(_) => 0, // do not cache base-cases
         }

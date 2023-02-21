@@ -61,35 +61,26 @@ impl<T: DDNNFPtr> Ite<T> {
 
         // now, standardize for negation: ensure f and g are non-negated
         match (f, g, h) {
-            (f, g, h) if f.is_neg() && !h.is_neg() => {
-                return IteChoice {
-                    f: f.neg(),
-                    g: h,
-                    h: g,
-                }
-            }
-            (f, g, h) if !f.is_neg() && g.is_neg() => {
-                return IteComplChoice {
-                    f,
-                    g: g.neg(),
-                    h: h.neg(),
-                }
-            }
-            (f, g, h) if f.is_neg() && h.is_neg() => {
-                return IteComplChoice {
-                    f: f.neg(),
-                    g: h.neg(),
-                    h: g.neg(),
-                }
-            }
-            _ => return IteChoice { f, g, h },
+            (f, g, h) if f.is_neg() && !h.is_neg() => IteChoice {
+                f: f.neg(),
+                g: h,
+                h: g,
+            },
+            (f, g, h) if !f.is_neg() && g.is_neg() => IteComplChoice {
+                f,
+                g: g.neg(),
+                h: h.neg(),
+            },
+            (f, g, h) if f.is_neg() && h.is_neg() => IteComplChoice {
+                f: f.neg(),
+                g: h.neg(),
+                h: g.neg(),
+            },
+            _ => IteChoice { f, g, h },
         }
     }
 
     pub fn is_compl_choice(&self) -> bool {
-        match &self {
-            IteComplChoice { f: _, g: _, h: _ } => true,
-            _ => false,
-        }
+        matches!(self, IteComplChoice { f: _, g: _, h: _ })
     }
 }

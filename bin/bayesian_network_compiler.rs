@@ -124,6 +124,7 @@ struct Args {
 }
 
 /// construct a CNF for the two TERMS (i.e., conjunctions of literals) t1 => t2
+#[allow(clippy::ptr_arg)]
 fn implies(t1: &Vec<Literal>, t2: &Vec<Literal>) -> Vec<Vec<Literal>> {
     let mut r: Vec<Vec<Literal>> = Vec::new();
     // negate the lhs

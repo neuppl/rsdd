@@ -55,3 +55,9 @@ impl<T: DDNNFPtr> AllTable<T> {
         }
     }
 }
+
+impl<T: DDNNFPtr> Default for AllTable<T> {
+    fn default() -> AllTable<T> {
+        Self::new()
+    }
+}

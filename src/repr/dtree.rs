@@ -2,7 +2,7 @@
 //! A dtree describes a decomposition structure on clauses of a CNF. See Chapter
 //! 9.5 of 'Modeling and Reasoning with Bayesian Networks' by Adnan Darwiche
 
-use std::{cmp::Ordering, iter::FromIterator};
+use std::cmp::Ordering;
 
 use crate::repr::{
     cnf::Cnf,
@@ -37,27 +37,37 @@ pub enum DTree {
 impl DTree {
     fn get_vars(&self) -> &VarSet {
         match self {
-            DTree::Node { l, r, cutset, vars } => &vars,
-            DTree::Leaf {
-                clause,
-                cutset,
+            DTree::Node {
+                l: _,
+                r: _,
+                cutset: _,
                 vars,
-            } => &vars,
+            } => vars,
+            DTree::Leaf {
+                clause: _,
+                cutset: _,
+                vars,
+            } => vars,
         }
     }
 
     /// initialize the set of vars so that, for each node, it holds that
     /// vars = vars(l) ∪ vars(r)
-    fn init_vars(&mut self) -> () {
+    fn init_vars(&mut self) {
         match self {
-            DTree::Node { l, r, cutset, vars } => {
+            DTree::Node {
+                l,
+                r,
+                cutset: _,
+                vars,
+            } => {
                 l.init_vars();
                 r.init_vars();
                 *vars = l.get_vars().union(r.get_vars());
             }
             DTree::Leaf {
                 clause,
-                cutset,
+                cutset: _,
                 vars,
             } => {
                 for c in clause.iter() {
@@ -69,7 +79,12 @@ impl DTree {
 
     fn gen_cutset(&mut self, ancestor_cutset: &VarSet) {
         match self {
-            DTree::Node { l, r, cutset, vars } => {
+            DTree::Node {
+                l,
+                r,
+                cutset,
+                vars: _,
+            } => {
                 // cutset of a node is defined (vars(l) ∩ vars(r)) \ ancestor cutset
                 let intersect = l.get_vars().intersect_varset(r.get_vars());
                 let my_cutset = intersect.minus(ancestor_cutset);
@@ -78,7 +93,7 @@ impl DTree {
                 *cutset = my_cutset;
             }
             DTree::Leaf {
-                clause,
+                clause: _,
                 cutset,
                 vars,
             } => {
@@ -216,11 +231,11 @@ impl DTree {
     /// International Conference on Principles and Practice of Constraint
     /// Programming. Springer, Cham, 2014.
     pub fn to_vtree(&self) -> Option<VTree> {
-        match &self {
-            &Self::Leaf {
-                clause,
+        match &&self {
+            Self::Leaf {
+                clause: _,
                 cutset,
-                vars,
+                vars: _,
             } => {
                 let cutset_v: Vec<VarLabel> = cutset.iter().collect();
                 if cutset.is_empty() {
@@ -229,7 +244,7 @@ impl DTree {
                     Some(DTree::right_linear(cutset_v.as_slice(), &None))
                 }
             }
-            &Self::Node {
+            Self::Node {
                 l,
                 r,
                 cutset,
@@ -253,13 +268,13 @@ impl DTree {
     }
 
     pub fn width(&self) -> usize {
-        match &self {
-            &Self::Leaf {
-                clause,
+        match &&self {
+            Self::Leaf {
+                clause: _,
                 cutset,
-                vars,
+                vars: _,
             } => cutset.iter().count(),
-            &Self::Node {
+            Self::Node {
                 l,
                 r,
                 cutset,

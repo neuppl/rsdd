@@ -27,6 +27,12 @@ impl ApplyCacheStats {
     }
 }
 
+impl Default for ApplyCacheStats {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// cap `v` at 2^`p`
 #[inline]
 fn pow_cap(v: usize, p: usize) -> usize {

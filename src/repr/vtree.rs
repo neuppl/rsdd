@@ -47,7 +47,7 @@ impl VTree {
     /// generate an even vtree by splitting a variable ordering in half repeatedly
     /// times; then reverts to a right-linear vtree for the remainder
     pub fn even_split(order: &[VarLabel], num_splits: usize) -> VTree {
-        if num_splits <= 0 {
+        if num_splits == 0 {
             Self::right_linear(order)
         } else {
             let (l_s, r_s) = order.split_at(order.len() / 2);
@@ -112,6 +112,7 @@ pub struct VTreeManager {
     bfs_to_dfs: Vec<usize>,
     /// maps an Sdd VarLabel into its vtree index in the depth-first order
     vtree_idx: Vec<usize>,
+    #[allow(clippy::vec_box)] // TODO: fix this, but requires some refactoring
     index_lookup: Vec<Box<VTree>>,
     lca: LeastCommonAncestor,
 }
@@ -150,7 +151,7 @@ impl VTreeManager {
 
     /// Given a vtree index, produce a pointer to the vtree this corresponds with
     pub fn get_idx(&self, idx: VTreeIndex) -> &VTree {
-        &*(self.index_lookup[idx.0])
+        &(self.index_lookup[idx.0])
     }
 
     /// Find the index into self.vtree that contains the label `lbl`
