@@ -1,4 +1,4 @@
-[![Build](https://github.com/pmall-neu/rsdd/actions/workflows/rust.yml/badge.svg)](https://github.com/pmall-neu/rsdd/actions/workflows/rust.yml)
+[![CI](https://github.com/pmall-neu/rsdd/actions/workflows/ci.yml/badge.svg)](https://github.com/pmall-neu/rsdd/actions/workflows/ci.yml)
 
 # RSDD
 
