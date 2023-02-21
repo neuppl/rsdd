@@ -369,8 +369,8 @@ mod test_bdd_manager {
             let and = mgr.or(clause1, clause2);
 
             if and != iff1 {
-                println!("cnf1: {}", c1.to_string());
-                println!("cnf2: {}", c2.to_string());
+                println!("cnf1: {}", c1);
+                println!("cnf2: {}", c2);
                 println!("not equal: Bdd1: {}, Bdd2: {}", and.to_string_debug(), iff1.to_string_debug());
             }
             TestResult::from_bool(and == iff1)
@@ -477,7 +477,7 @@ mod test_bdd_manager {
             let eps = f64::abs(bddres - dnnfres) < 0.0001;
             if !eps {
               println!("error on input {}: bddres {}, cnfres {}\n topdown bdd: {}\nbottom-up bdd: {}",
-                c1.to_string(), bddres, dnnfres, dnnf.to_string_debug(), cnf1.to_string_debug());
+                c1, bddres, dnnfres, dnnf.to_string_debug(), cnf1.to_string_debug());
             }
             TestResult::from_bool(eps)
         }
@@ -536,7 +536,7 @@ mod test_bdd_manager {
                 }
             }
             if f64::abs(max - marg_prob) > 0.00001 {
-                println!("cnf: {}", c1.to_string());
+                println!("cnf: {}", c1);
                 println!("true map probability: {max}\nGot map probability: {marg_prob} with assignment {:?}", _marg_assgn);
             }
             TestResult::from_bool(f64::abs(max - marg_prob) < 0.00001)
@@ -641,7 +641,7 @@ mod test_sdd_manager {
             let bdd_res = cnf_bdd.wmc(bddmgr.get_order(), &sdd_wmc);
 
             if f64::abs(sdd_res - bdd_res) > 0.00001 {
-                println!("not equal for cnf {}: sdd_res:{sdd_res}, bdd_res: {bdd_res}", cnf.to_string());
+                println!("not equal for cnf {}: sdd_res:{sdd_res}, bdd_res: {bdd_res}", cnf);
                 println!("sdd: {}", mgr.print_sdd(cnf_sdd));
                 TestResult::from_bool(false)
             } else {

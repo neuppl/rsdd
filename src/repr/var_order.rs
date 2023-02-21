@@ -127,13 +127,13 @@ impl VarOrder {
     }
 
     /// Iterate through the variables in the order in which they appear in the order
-    pub fn in_order_iter<'a>(&'a self) -> impl Iterator<Item = VarLabel> + 'a {
+    pub fn in_order_iter(&self) -> impl Iterator<Item = VarLabel> + '_ {
         self.pos_to_var.iter().map(|x| VarLabel::new_usize(*x))
     }
 
     /// Iterate through the variables in the the reverse order in which they
     /// appear in the order
-    pub fn reverse_in_order_iter<'a>(&'a self) -> impl Iterator<Item = VarLabel> + 'a {
+    pub fn reverse_in_order_iter(&self) -> impl Iterator<Item = VarLabel> + '_ {
         self.pos_to_var
             .iter()
             .map(|x| VarLabel::new_usize(*x))
@@ -189,11 +189,11 @@ impl VarOrder {
     }
 
     /// Returns an iterator of all variables between [low_level..high_level)
-    pub fn between_iter<'a>(
-        &'a self,
+    pub fn between_iter(
+        &self,
         low_level: usize,
         high_level: usize,
-    ) -> impl Iterator<Item = VarLabel> + 'a {
+    ) -> impl Iterator<Item = VarLabel> + '_ {
         assert!(low_level <= high_level);
         self.pos_to_var
             .iter()
@@ -209,7 +209,7 @@ fn var_order_basics() {
     let order = VarOrder::linear_order(10);
     let lbl1 = VarLabel::new(4);
     let lbl2 = VarLabel::new(5);
-    assert_eq!(order.lt(lbl1, lbl2), true);
-    assert_eq!(order.lt(lbl2, lbl1), false);
+    assert!(order.lt(lbl1, lbl2));
+    assert!(!order.lt(lbl2, lbl1));
     assert_eq!(order.above(lbl2).unwrap(), lbl1);
 }

@@ -36,13 +36,14 @@ pub fn zero_vec<T>(sz: usize) -> Vec<T> {
     let mut v: Vec<T> = Vec::with_capacity(sz);
     unsafe {
         let vec_ptr = v.as_mut_ptr();
-        ptr::write_bytes(vec_ptr, 0, sz as usize);
+        ptr::write_bytes(vec_ptr, 0, sz);
         v.set_len(sz);
     }
     v
 }
 
 /// custom allocation of a non-initialized vector
+#[allow(clippy::uninit_vec)] // intentionally unsafe code
 pub fn malloc_vec<T>(sz: usize) -> Vec<T> {
     let mut v: Vec<T> = Vec::with_capacity(sz);
     unsafe {

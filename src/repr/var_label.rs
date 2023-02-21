@@ -99,13 +99,13 @@ impl VarSet {
     }
 
     /// unions self with other in-place
-    pub fn union_with(&mut self, other: &VarSet) -> () {
+    pub fn union_with(&mut self, other: &VarSet) {
         self.b.union_with(&other.b);
     }
 
     /// unions self with other in-place
     pub fn iter(&self) -> impl Iterator<Item = VarLabel> + '_ {
-        self.b.iter().map(|x| VarLabel::new_usize(x))
+        self.b.iter().map(VarLabel::new_usize)
     }
 
     /// unions self with other
@@ -122,7 +122,7 @@ impl VarSet {
         }
     }
 
-    pub fn insert(&mut self, v: VarLabel) -> () {
+    pub fn insert(&mut self, v: VarLabel) {
         self.b.insert(v.value_usize());
     }
 
@@ -131,7 +131,7 @@ impl VarSet {
     }
 
     pub fn intersect<'a>(&'a self, other: &'a VarSet) -> bit_set::Intersection<'a, u32> {
-        return self.b.intersection(&other.b);
+        self.b.intersection(&other.b)
     }
 
     pub fn intersect_varset<'a>(&'a self, other: &'a VarSet) -> VarSet {
@@ -142,5 +142,11 @@ impl VarSet {
 
     pub fn is_empty(&self) -> bool {
         self.b.is_empty()
+    }
+}
+
+impl Default for VarSet {
+    fn default() -> Self {
+        Self::new()
     }
 }

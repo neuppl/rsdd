@@ -187,17 +187,17 @@ impl<T: LruTable<BddPtr>> BddManager<T> {
             }
             return self.get_order().lt(a.var(), b.var());
         };
+
         let ite = Ite::new(o, f, g, h);
-        match ite {
-            Ite::IteConst(f) => return f,
-            _ => (),
-        };
+
+        if let Ite::IteConst(f) = ite {
+            return f;
+        }
 
         let hash = self.apply_table.hash(&ite);
-        match self.apply_table.get(ite, hash) {
-            Some(v) => return v,
-            None => (),
-        };
+        if let Some(v) = self.apply_table.get(ite, hash) {
+            return v;
+        }
 
         // ok the work!
         // find the first essential variable for f, g, or h
@@ -455,11 +455,11 @@ impl<T: LruTable<BddPtr>> BddManager<T> {
 
     pub fn from_dtree(&mut self, dtree: &dtree::DTree) -> BddPtr {
         use dtree::DTree;
-        match &dtree {
-            &DTree::Leaf {
+        match &&dtree {
+            DTree::Leaf {
                 clause,
-                cutset,
-                vars,
+                cutset: _,
+                vars: _,
             } => {
                 // compile the clause
                 clause.iter().fold(BddPtr::false_ptr(), |acc, i| {
@@ -467,7 +467,7 @@ impl<T: LruTable<BddPtr>> BddManager<T> {
                     self.or(acc, v)
                 })
             }
-            &DTree::Node {
+            DTree::Node {
                 ref l,
                 ref r,
                 cutset: _,
@@ -526,8 +526,8 @@ impl<T: LruTable<BddPtr>> BddManager<T> {
         for lit_vec in cnf_sorted.iter() {
             let (vlabel, val) = (lit_vec[0].get_label(), lit_vec[0].get_polarity());
             let mut bdd = self.var(vlabel, val);
-            for i in 1..lit_vec.len() {
-                let (vlabel, val) = (lit_vec[i].get_label(), lit_vec[i].get_polarity());
+            for lit in lit_vec {
+                let (vlabel, val) = (lit.get_label(), lit.get_polarity());
                 let var = self.var(vlabel, val);
                 bdd = self.or(bdd, var);
             }
@@ -551,38 +551,37 @@ impl<T: LruTable<BddPtr>> BddManager<T> {
             }
         }
         let r = helper(&cvec, self);
-        if r.is_none() {
-            BddPtr::true_ptr()
-        } else {
-            r.unwrap()
+        match r {
+            None => BddPtr::true_ptr(),
+            Some(x) => x,
         }
     }
 
     pub fn from_boolexpr(&mut self, expr: &LogicalExpr) -> BddPtr {
-        match expr {
-            &LogicalExpr::Literal(lbl, polarity) => self.var(VarLabel::new(lbl as u64), polarity),
-            &LogicalExpr::And(ref l, ref r) => {
+        match &expr {
+            LogicalExpr::Literal(lbl, polarity) => self.var(VarLabel::new(*lbl as u64), *polarity),
+            LogicalExpr::And(ref l, ref r) => {
                 let r1 = self.from_boolexpr(l);
                 let r2 = self.from_boolexpr(r);
                 self.and(r1, r2)
             }
-            &LogicalExpr::Or(ref l, ref r) => {
+            LogicalExpr::Or(ref l, ref r) => {
                 let r1 = self.from_boolexpr(l);
                 let r2 = self.from_boolexpr(r);
                 self.or(r1, r2)
             }
-            &LogicalExpr::Not(ref e) => self.from_boolexpr(e).neg(),
-            &LogicalExpr::Iff(ref l, ref r) => {
+            LogicalExpr::Not(ref e) => self.from_boolexpr(e).neg(),
+            LogicalExpr::Iff(ref l, ref r) => {
                 let r1 = self.from_boolexpr(l);
                 let r2 = self.from_boolexpr(r);
                 self.iff(r1, r2)
             }
-            &LogicalExpr::Xor(ref l, ref r) => {
+            LogicalExpr::Xor(ref l, ref r) => {
                 let r1 = self.from_boolexpr(l);
                 let r2 = self.from_boolexpr(r);
                 self.xor(r1, r2)
             }
-            &LogicalExpr::Ite {
+            LogicalExpr::Ite {
                 ref guard,
                 ref thn,
                 ref els,
@@ -597,35 +596,35 @@ impl<T: LruTable<BddPtr>> BddManager<T> {
 
     /// Compiles a plan into a BDD
     pub fn compile_plan(&mut self, expr: &BddPlan) -> BddPtr {
-        match expr {
-            &BddPlan::Literal(var, polarity) => self.var(VarLabel::new(var as u64), polarity),
-            &BddPlan::And(ref l, ref r) => {
+        match &expr {
+            BddPlan::Literal(var, polarity) => self.var(VarLabel::new(*var), *polarity),
+            BddPlan::And(ref l, ref r) => {
                 let r1 = self.compile_plan(l);
                 let r2 = self.compile_plan(r);
                 self.and(r1, r2)
             }
-            &BddPlan::Or(ref l, ref r) => {
+            BddPlan::Or(ref l, ref r) => {
                 let r1 = self.compile_plan(l);
                 let r2 = self.compile_plan(r);
                 self.or(r1, r2)
             }
-            &BddPlan::Iff(ref l, ref r) => {
+            BddPlan::Iff(ref l, ref r) => {
                 let r1 = self.compile_plan(l);
                 let r2 = self.compile_plan(r);
                 self.iff(r1, r2)
             }
-            &BddPlan::Ite(ref f, ref g, ref h) => {
+            BddPlan::Ite(ref f, ref g, ref h) => {
                 let f = self.compile_plan(f);
                 let g = self.compile_plan(g);
                 let h = self.compile_plan(h);
                 self.ite(f, g, h)
             }
-            &BddPlan::Not(ref f) => {
+            BddPlan::Not(ref f) => {
                 let f = self.compile_plan(f);
                 f.neg()
             }
-            &BddPlan::ConstTrue => BddPtr::true_ptr(),
-            &BddPlan::ConstFalse => BddPtr::false_ptr(),
+            BddPlan::ConstTrue => BddPtr::true_ptr(),
+            BddPlan::ConstFalse => BddPtr::false_ptr(),
         }
     }
 
@@ -1081,6 +1080,7 @@ mod tests {
         );
     }
 
+    #[allow(clippy::assertions_on_constants)] // TODO: why does this test have assert!(true) ?
     #[test]
     fn iff_regression() {
         let mut man = BddManager::<AllTable<BddPtr>>::new_default_order(0);
@@ -1196,8 +1196,8 @@ mod tests {
         let and = mgr.or(clause1, clause2);
 
         if and != iff1 {
-            println!("cnf1: {}", c1.to_string());
-            println!("cnf2: {}", c2.to_string());
+            println!("cnf1: {}", c1);
+            println!("cnf2: {}", c2);
             println!(
                 "not equal:\nBdd1: {}\nBdd2: {}",
                 and.to_string_debug(),

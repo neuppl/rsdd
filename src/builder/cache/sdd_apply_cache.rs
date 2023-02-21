@@ -15,7 +15,13 @@ impl SddApply {
     pub fn get(&self, and: SddAnd) -> Option<SddPtr> {
         self.table.get(&and).cloned()
     }
-    pub fn insert(&mut self, and: SddAnd, ptr: SddPtr) -> () {
+    pub fn insert(&mut self, and: SddAnd, ptr: SddPtr) {
         self.table.insert(and, ptr);
+    }
+}
+
+impl Default for SddApply {
+    fn default() -> Self {
+        Self::new()
     }
 }

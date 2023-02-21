@@ -26,6 +26,12 @@ impl SddStats {
     }
 }
 
+impl Default for SddStats {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 pub struct SddManager {
     sdd_tbl: BackedRobinhoodTable<SddOr>,
     bdd_tbl: BackedRobinhoodTable<BinarySDD>,
@@ -38,7 +44,7 @@ pub struct SddManager {
     use_compression: bool,
 }
 
-impl<'a> SddManager {
+impl SddManager {
     pub fn new(vtree: VTree) -> SddManager {
         SddManager {
             sdd_tbl: BackedRobinhoodTable::new(),
@@ -127,12 +133,12 @@ impl<'a> SddManager {
             } else {
                 node[1].sub()
             };
-            return self.unique_bdd(BinarySDD::new(v, low, high, table));
+            self.unique_bdd(BinarySDD::new(v, low, high, table))
         } else {
-            node.sort_by(|a, b| a.prime().cmp(&b.prime()));
+            node.sort_by_key(|a| a.prime());
             if node[0].sub().is_neg() || node[0].sub().is_false() || node[0].sub().is_neg_var() {
-                for i in 0..node.len() {
-                    node[i] = SddAnd::new(node[i].prime(), node[i].sub().neg());
+                for x in node.iter_mut() {
+                    *x = SddAnd::new(x.prime(), x.sub().neg());
                 }
                 self.get_or_insert(SddOr::new(node, table)).neg()
             } else {
@@ -249,7 +255,7 @@ impl<'a> SddManager {
             let new_s = self.and(root_s, d);
             v.push(SddAnd::new(root_p, new_s));
         }
-        return self.canonicalize(v, r.vtree());
+        self.canonicalize(v, r.vtree())
     }
 
     /// conjoin SDDs where `d` is a descendent of `r`, and `r` is sub to `d`
@@ -325,8 +331,7 @@ impl<'a> SddManager {
         }
 
         // canonicalize
-        let ptr = self.canonicalize(new_n, r.vtree());
-        ptr
+        self.canonicalize(new_n, r.vtree())
 
         // for a in r.node_iter() {
         //     let p = self.and(a.prime(), d);
@@ -362,16 +367,19 @@ impl<'a> SddManager {
             // // check if there exists an equal prime
             let eq_itm = b.node_iter().find(|a| self.sdd_eq(a.prime(), p1));
             let s1 = if a.is_neg() { s1.neg() } else { s1 };
-            if eq_itm.is_some() {
-                let andb = eq_itm.unwrap();
-                let s2 = if b.is_neg() {
-                    andb.sub().neg()
-                } else {
-                    andb.sub()
-                };
-                // this sub is the only one with a non-false prime, so no need to iterate
-                r.push(SddAnd::new(p1, self.and(s1, s2)));
-                continue;
+
+            match eq_itm {
+                None => (),
+                Some(andb) => {
+                    let s2 = if b.is_neg() {
+                        andb.sub().neg()
+                    } else {
+                        andb.sub()
+                    };
+                    // this sub is the only one with a non-false prime, so no need to iterate
+                    r.push(SddAnd::new(p1, self.and(s1, s2)));
+                    continue;
+                }
             }
 
             // no special case
@@ -401,8 +409,7 @@ impl<'a> SddManager {
         }
 
         // canonicalize
-        let ptr = self.canonicalize(r, lca);
-        ptr
+        self.canonicalize(r, lca)
     }
 
     pub fn and(&mut self, a: SddPtr, b: SddPtr) -> SddPtr {
@@ -436,8 +443,9 @@ impl<'a> SddManager {
 
         // check if we have this application cached
         let c = self.app_cache.get(SddAnd::new(a, b));
-        if c.is_some() {
-            return c.unwrap();
+
+        if let Some(x) = c {
+            return x;
         }
 
         // now we determine the current iterator for primes and subs
@@ -464,7 +472,7 @@ impl<'a> SddManager {
         };
         // cache and return
         self.app_cache.insert(SddAnd::new(a, b), r);
-        return r;
+        r
     }
 
     pub fn or(&mut self, a: SddPtr, b: SddPtr) -> SddPtr {
@@ -529,16 +537,14 @@ impl<'a> SddManager {
     /// Computes the SDD representing the logical function `if f then g else h`
     pub fn ite(&mut self, f: SddPtr, g: SddPtr, h: SddPtr) -> SddPtr {
         let ite = Ite::new(|a, b| self.vtree.is_prime(a, b), f, g, h);
-        match ite {
-            Ite::IteConst(f) => return f,
-            _ => (),
-        };
+        if let Ite::IteConst(f) = ite {
+            return f;
+        }
 
         let hash = self.ite_cache.hash(&ite);
-        match self.ite_cache.get(ite, hash) {
-            Some(v) => return v,
-            None => (),
-        };
+        if let Some(v) = self.ite_cache.get(ite, hash) {
+            return v;
+        }
 
         // TODO make this a primitive operation
         let fg = self.and(f, g);
@@ -579,7 +585,7 @@ impl<'a> SddManager {
 
     fn print_sdd_internal(&self, ptr: SddPtr) -> String {
         use pretty::*;
-        fn helper(man: &SddManager, ptr: SddPtr) -> Doc<BoxDoc> {
+        fn helper(_man: &SddManager, ptr: SddPtr) -> Doc<BoxDoc> {
             if ptr.is_true() {
                 return Doc::from("T");
             } else if ptr.is_false() {
@@ -592,8 +598,8 @@ impl<'a> SddManager {
                     l.get_label().value()
                 ));
             } else if ptr.is_bdd() {
-                let l = helper(man, ptr.low());
-                let h = helper(man, ptr.high());
+                let l = helper(_man, ptr.low());
+                let h = helper(_man, ptr.high());
                 let mut doc: Doc<BoxDoc> = Doc::from("");
                 doc = doc.append(Doc::newline()).append(
                     (Doc::from(format!("ITE {:?} ", ptr))
@@ -609,8 +615,8 @@ impl<'a> SddManager {
                 let sub = a.sub();
                 let prime = a.prime();
                 let s = if ptr.is_neg() { sub.neg() } else { sub };
-                let new_s1 = helper(man, prime);
-                let new_s2 = helper(man, s);
+                let new_s1 = helper(_man, prime);
+                let new_s2 = helper(_man, s);
                 doc = doc.append(Doc::newline()).append(
                     (Doc::from("/\\")
                         .append(Doc::newline())
@@ -618,7 +624,7 @@ impl<'a> SddManager {
                     .nest(2),
                 );
             }
-            let d = Doc::from(format!("\\/"));
+            let d = Doc::from("\\/".to_string());
             d.append(doc.nest(2))
         }
         let d = helper(self, ptr);
@@ -688,8 +694,8 @@ impl<'a> SddManager {
         for lit_vec in cnf_sorted.iter() {
             let (vlabel, val) = (lit_vec[0].get_label(), lit_vec[0].get_polarity());
             let mut bdd = SddPtr::var(vlabel, val);
-            for i in 1..lit_vec.len() {
-                let (vlabel, val) = (lit_vec[i].get_label(), lit_vec[i].get_polarity());
+            for lit in lit_vec {
+                let (vlabel, val) = (lit.get_label(), lit.get_polarity());
                 let var = SddPtr::var(vlabel, val);
                 bdd = self.or(bdd, var);
             }
@@ -713,10 +719,9 @@ impl<'a> SddManager {
             }
         }
         let r = helper(&cvec, self);
-        if r.is_none() {
-            SddPtr::true_ptr()
-        } else {
-            r.unwrap()
+        match r {
+            None => SddPtr::true_ptr(),
+            Some(x) => x,
         }
     }
 
@@ -1020,7 +1025,7 @@ fn sdd_wmc1() {
         ],
         1,
     );
-    let mut man = SddManager::new(vtree.clone());
+    let mut man = SddManager::new(vtree);
     let mut wmc_map = crate::repr::wmc::WmcParams::new(0.0, 1.0);
     let x = SddPtr::var(VarLabel::new(0), true);
     wmc_map.set_weight(VarLabel::new(0), 1.0, 1.0);

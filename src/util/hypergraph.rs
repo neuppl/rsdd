@@ -1,5 +1,12 @@
 // TODO: remove crate-level disable
 #![allow(unused_imports)]
+#![allow(
+    clippy::ptr_arg,
+    clippy::type_complexity,
+    clippy::clone_on_copy,
+    clippy::redundant_clone,
+    clippy::explicit_counter_loop
+)]
 
 use crate::repr::cnf::Cnf;
 use crate::repr::var_label::{Literal, VarLabel};
@@ -50,7 +57,7 @@ impl<T: Clone + Debug + PartialEq + Eq + Hash> Hypergraph<T> {
         &self.vertices
     }
     pub fn edges(&self) -> Vec<&HashSet<T>> {
-        self.hyperedges.iter().filter(|hs| hs.len() > 0).collect()
+        self.hyperedges.iter().filter(|hs| !hs.is_empty()).collect()
     }
     pub fn edges_for(&self, node: &T) -> Option<Vec<&HashSet<T>>> {
         let cache = Self::cache_from(&self.vertices, &self.hyperedges);
@@ -71,11 +78,11 @@ impl<T: Clone + Debug + PartialEq + Eq + Hash> Hypergraph<T> {
             let os: Vec<(usize, (HashSet<T>, Vec<&HashSet<T>>))> = overlaps
                 .iter()
                 .enumerate()
-                .filter(|(_, o)| !o.0.is_disjoint(&e))
+                .filter(|(_, o)| !o.0.is_disjoint(e))
                 .map(|(i, (l, r))| (i, (l.clone(), r.clone())))
                 .collect();
 
-            if os.len() == 0 {
+            if os.is_empty() {
                 overlaps.push((e.clone(), vec![e]))
             } else {
                 let mut newc = e.clone();
@@ -93,7 +100,7 @@ impl<T: Clone + Debug + PartialEq + Eq + Hash> Hypergraph<T> {
                 }
                 overlaps.push((
                     newc,
-                    dedupe_hashset_refs(newes.into_iter().filter(|s| s.len() > 0).collect()),
+                    dedupe_hashset_refs(newes.into_iter().filter(|s| !s.is_empty()).collect()),
                 ));
             }
         }
@@ -138,7 +145,7 @@ impl<T: Clone + Debug + PartialEq + Eq + Hash> Hypergraph<T> {
     /// add an edge to the hypergraph. Returns false if the edge is already in the hypergraph
     pub fn insert_edge(&mut self, edge: &HashSet<T>) -> bool {
         let new_verts: HashSet<T> = edge.difference(&self.vertices).cloned().collect();
-        if new_verts.len() > 0 {
+        if !new_verts.is_empty() {
             let vertices = self.vertices().union(&new_verts).cloned().collect();
             self.vertices = vertices;
         }
@@ -164,7 +171,7 @@ impl<T: Clone + Debug + PartialEq + Eq + Hash> Hypergraph<T> {
             }
             let new_edges = dedupe_hashsets(self.hyperedges.clone())
                 .into_iter()
-                .filter(|s| s.len() > 0)
+                .filter(|s| !s.is_empty())
                 .collect();
             self.hyperedges = new_edges;
             // self.assoc_cache.remove(v);
@@ -177,7 +184,7 @@ impl<T: Clone + Debug + PartialEq + Eq + Hash> Hypergraph<T> {
             let contains_part1 = part1.iter().any(|i| e.contains(i));
             let contains_part2 = part2.iter().any(|i| e.contains(i));
             if contains_part1 && contains_part2 {
-                r = r + 1;
+                r += 1;
             }
         }
         r
@@ -224,7 +231,7 @@ fn dedupe_hashset_refs<T: Hash + Eq>(hss: Vec<&HashSet<T>>) -> Vec<&HashSet<T>> 
             Some(cached_hss) => {
                 let mut add = true;
                 for hs in cached_hss.iter() {
-                    if hs.symmetric_difference(&cur).next().is_none() {
+                    if hs.symmetric_difference(cur).next().is_none() {
                         add = false;
                         break;
                     }
@@ -461,7 +468,7 @@ mod test {
             let mut order: Vec<(u64, f64)> = vec![];
             for v in g.vertices() {
                 let mut tmp = g.clone();
-                tmp.cut_vertex(&v);
+                tmp.cut_vertex(v);
                 // naive take 1
                 let _mx_width: f64 = tmp.widths().1 as f64;
                 // naive take 2
@@ -478,7 +485,7 @@ mod test {
                 let (new_num_edges, total_acc) =
                     g.edges().iter().fold((0_f64, 0_f64), |(count, acc), e| {
                         let l = e.len() as f64;
-                        if e.contains(&v) {
+                        if e.contains(v) {
                             if l - 1.0 > 0.0 {
                                 (count + 1.0, acc + 2_f64.powf(l - 1.0))
                             } else {
@@ -496,14 +503,14 @@ mod test {
                     .iter()
                     .flat_map(|(cover, es)| {
                         let l = cover.len() as f64;
-                        if !cover.contains(&v) {
+                        if !cover.contains(v) {
                             vec![l]
                         } else {
                             let newes: Vec<HashSet<u64>> = es
                                 .iter()
                                 .cloned()
                                 .map(|e| e.difference(&HashSet::from([*v])).cloned().collect())
-                                .filter(|e: &HashSet<u64>| e.len() > 0)
+                                .filter(|e: &HashSet<u64>| !e.is_empty())
                                 .collect();
                             let cs = Hypergraph::edges_to_covers(newes.clone().iter().collect())
                                 .iter()

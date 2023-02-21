@@ -33,9 +33,9 @@ where
         use self::BTree::*;
         match self.queue.pop_front() {
             None => None,
-            Some(v) => match v {
-                &Leaf(_) => Some(v),
-                &Node(_, ref l, ref r) => {
+            Some(v) => match &v {
+                Leaf(_) => Some(v),
+                Node(_, ref l, ref r) => {
                     self.queue.push_back(l);
                     self.queue.push_back(r);
                     Some(v)
@@ -76,7 +76,7 @@ where
     N: PartialEq + Eq + Clone,
     L: PartialEq + Eq + Clone,
 {
-    fn dfs_recurse<'a>(&'a self, v: &mut VecDeque<&'a Self>) -> () {
+    fn dfs_recurse<'a>(&'a self, v: &mut VecDeque<&'a Self>) {
         match self {
             BTree::Leaf(_) => v.push_back(self),
             BTree::Node(_, l, r) => {
@@ -87,13 +87,13 @@ where
         }
     }
 
-    pub fn inorder_dfs_iter<'a>(&'a self) -> InOrderDepthFirstIter<'a, N, L> {
+    pub fn inorder_dfs_iter(&self) -> InOrderDepthFirstIter<'_, N, L> {
         let mut v = VecDeque::new();
         self.dfs_recurse(&mut v);
         InOrderDepthFirstIter { v }
     }
 
-    pub fn bfs_iter<'a>(&'a self) -> BreadthFirstIter<'a, N, L> {
+    pub fn bfs_iter(&self) -> BreadthFirstIter<'_, N, L> {
         BreadthFirstIter {
             queue: VecDeque::from([self]),
         }
@@ -103,9 +103,9 @@ where
     where
         F: Fn(&L) -> bool,
     {
-        match self {
-            &BTree::Leaf(ref v) => f(v),
-            &BTree::Node(_, ref l, ref r) => l.contains_leaf(f) || r.contains_leaf(f),
+        match &self {
+            BTree::Leaf(ref v) => f(v),
+            BTree::Node(_, ref l, ref r) => l.contains_leaf(f) || r.contains_leaf(f),
         }
     }
 
@@ -116,9 +116,9 @@ where
         F: Fn(&L) -> bool,
     {
         for (idx, i) in self.inorder_dfs_iter().enumerate() {
-            match i {
-                &BTree::Node(_, _, _) => (),
-                &BTree::Leaf(ref l) => {
+            match &i {
+                BTree::Node(_, _, _) => (),
+                BTree::Leaf(ref l) => {
                     if f(l) {
                         return Some(idx);
                     } else {
@@ -162,10 +162,7 @@ where
     }
 
     pub fn is_leaf(&self) -> bool {
-        match self {
-            Self::Leaf(_) => true,
-            _ => false,
-        }
+        matches!(self, Self::Leaf(_))
     }
 
     /// Flatten a BTree into a breadth-first iteration
@@ -274,8 +271,8 @@ impl LeastCommonAncestor {
         // build the node lookup map
         let n = tree.inorder_dfs_iter().count();
         let mut lookup = vec![None; n];
-        for i in 0..(euler_vec.len()) {
-            let cur_var = euler_vec[i];
+        for (i, val) in euler_vec.iter().enumerate() {
+            let cur_var = *val;
             if lookup[cur_var].is_none() {
                 lookup[cur_var] = Some(i);
             }
