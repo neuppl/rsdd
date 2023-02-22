@@ -770,25 +770,24 @@ impl SddManager {
         // }
     }
 
-    pub fn get_semantic_hash(&self, ptr: SddPtr, prime: u128) -> u128 {
+    // Generates a mapping from variables to numbers in [2, PRIME)
+    pub fn create_prob_map(&self, prime: u128) -> HashMap<usize, u128> {
         let all_vars = self.get_vtree_root().get_all_vars();
         let vars = all_vars.into_iter().collect::<Vec<usize>>();
 
-        let map = self.devise_random_map(vars, prime);
-
-        ptr.get_semantic_hash(&map, prime)
-    }
-
-    fn devise_random_map(&self, vars: Vec<usize>, prime: u128) -> HashMap<usize, u128> {
+        // theoretical guarantee from paper; need to verify more!
         assert!((2 * vars.len() as u128) < prime);
 
         let mut random_order = vars;
         random_order.shuffle(&mut thread_rng());
 
+        let mut value_range: Vec<u128> = (2..prime).collect();
+        value_range.shuffle(&mut thread_rng());
+
         let mut map = HashMap::<usize, u128>::new();
 
-        for (i, var) in random_order.into_iter().enumerate() {
-            map.insert(var, i as u128 + 2);
+        for (&var, &value) in random_order.iter().zip(value_range.iter()) {
+            map.insert(var, value);
         }
 
         map
@@ -1076,4 +1075,33 @@ fn sdd_wmc1() {
         expected,
         wmc_res
     );
+}
+
+#[test]
+fn prob_equiv_sdd_demorgan() {
+    let mut man = SddManager::new(VTree::even_split(
+        &[
+            VarLabel::new(0),
+            VarLabel::new(1),
+            VarLabel::new(2),
+            VarLabel::new(3),
+            VarLabel::new(4),
+        ],
+        1,
+    ));
+    man.set_compression(false);
+    let x = SddPtr::var(VarLabel::new(0), true);
+    let y = SddPtr::var(VarLabel::new(3), true);
+    let res = man.or(x, y).neg();
+    let expected = man.and(x.neg(), y.neg());
+
+    let prime = 1223; // small enough for this circuit
+    let map = man.create_prob_map(prime);
+
+    let sh1 = res.get_semantic_hash(&map, prime);
+    let sh2 = expected.get_semantic_hash(&map, prime);
+
+    // TODO: need to express this as pointer eq, not semantic eq
+    // assert!(res != expected);
+    assert!(sh1 == sh2, "Not eq:\nGot: {}\nExpected: {}", sh1, sh2);
 }

@@ -507,10 +507,13 @@ impl SddPtr {
         }
     }
 
+    // heavy lifting for getting the semantic hash of SDD; assumes current is the root
+    // this function doesn't allocate anything!
+    // for more info, see https://tr.inf.unibe.ch/pdf/iam-06-001.pdf
     pub fn get_semantic_hash(&self, map: &HashMap<usize, u128>, prime: u128) -> u128 {
         match &self {
-            PtrTrue => 1,  // TODO: what are these values?
-            PtrFalse => 1, // TODO: what are these values?
+            PtrTrue => 1,
+            PtrFalse => 0,
             Var(v, polarity) => match map.get(&v.value_usize()) {
                 None => panic!("error!"),
                 Some(val) => {
