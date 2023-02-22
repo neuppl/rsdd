@@ -525,16 +525,21 @@ impl SddPtr {
                 }
             },
             BDD(_) | ComplBDD(_) => {
-                self.low().get_semantic_hash(map, prime) + self.high().get_semantic_hash(map, prime)
+                (self.low().get_semantic_hash(map, prime)
+                    + self.high().get_semantic_hash(map, prime))
+                    % prime
             }
             // TODO: do I need to flip Compl here somehow?
-            Reg(_) | Compl(_) => self
-                .node_iter()
-                .map(|and| {
-                    and.prime().get_semantic_hash(map, prime)
-                        + and.sub().get_semantic_hash(map, prime)
-                })
-                .sum(),
+            Reg(_) | Compl(_) => {
+                let raw_hash: u128 = self
+                    .node_iter()
+                    .map(|and| {
+                        and.prime().get_semantic_hash(map, prime)
+                            + and.sub().get_semantic_hash(map, prime)
+                    })
+                    .sum();
+                raw_hash % prime
+            }
         }
     }
 }
