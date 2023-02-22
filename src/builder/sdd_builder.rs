@@ -2,6 +2,10 @@
 //! with SDDs.
 
 use std::cmp::Ordering;
+use std::collections::HashMap;
+
+use rand::seq::SliceRandom;
+use rand::thread_rng;
 
 use super::cache::all_app::AllTable;
 use super::cache::ite::Ite;
@@ -764,6 +768,30 @@ impl SddManager {
         //         self.ite(g, thn, els)
         //     }
         // }
+    }
+
+    pub fn get_semantic_hash(&self, ptr: SddPtr, prime: u128) -> u128 {
+        let all_vars = self.get_vtree_root().get_all_vars();
+        let vars = all_vars.into_iter().collect::<Vec<usize>>();
+
+        let map = self.devise_random_map(vars, prime);
+
+        ptr.get_semantic_hash(&map, prime)
+    }
+
+    fn devise_random_map(&self, vars: Vec<usize>, prime: u128) -> HashMap<usize, u128> {
+        assert!((2 * vars.len() as u128) < prime);
+
+        let mut random_order = vars;
+        random_order.shuffle(&mut thread_rng());
+
+        let mut map = HashMap::<usize, u128>::new();
+
+        for (i, var) in random_order.into_iter().enumerate() {
+            map.insert(var, i as u128 + 2);
+        }
+
+        map
     }
 
     pub fn get_stats(&self) -> &SddStats {

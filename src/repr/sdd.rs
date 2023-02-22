@@ -6,7 +6,7 @@ use crate::repr::{
     var_label::{VarLabel, VarSet},
 };
 use bumpalo::Bump;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
 use SddPtr::*;
 
@@ -504,6 +504,34 @@ impl SddPtr {
 
                 self.node_iter().all(|s| s.prime.is_trimmed())
             }
+        }
+    }
+
+    pub fn get_semantic_hash(&self, map: &HashMap<usize, u128>, prime: u128) -> u128 {
+        match &self {
+            PtrTrue => 1,  // TODO: what are these values?
+            PtrFalse => 1, // TODO: what are these values?
+            Var(v, polarity) => match map.get(&v.value_usize()) {
+                None => panic!("error!"),
+                Some(val) => {
+                    if *polarity {
+                        *val
+                    } else {
+                        (prime - *val) + 1
+                    }
+                }
+            },
+            BDD(_) | ComplBDD(_) => {
+                self.low().get_semantic_hash(map, prime) + self.high().get_semantic_hash(map, prime)
+            }
+            // TODO: do I need to flip Compl here somehow?
+            Reg(_) | Compl(_) => self
+                .node_iter()
+                .map(|and| {
+                    and.prime().get_semantic_hash(map, prime)
+                        + and.sub().get_semantic_hash(map, prime)
+                })
+                .sum(),
         }
     }
 }
