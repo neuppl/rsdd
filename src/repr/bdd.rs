@@ -24,6 +24,70 @@ use bit_set::BitSet;
 use bumpalo::Bump;
 use BddPtr::*;
 
+pub struct FoldNode {
+    pub parent_is_compl: bool,
+    pub node: BddPtr,
+    pub var: Option<VarLabel>,
+}
+impl FoldNode {
+    fn new(node: BddPtr, parent_is_compl: bool, var: Option<VarLabel>) -> Self {
+        Self {
+            parent_is_compl,
+            node,
+            var,
+        }
+    }
+}
+// In the style of:
+// https://hackage.haskell.org/package/foldl-1.4.14/docs/Control-Foldl.html#t:Fold
+pub struct Fold<'a, T, U> {
+    step: &'a mut dyn FnMut(T, FoldNode) -> T,
+    initial: T,
+    extract: &'a dyn Fn(T, Option<(U, U)>) -> U,
+}
+
+impl<'a, T: Clone, U> Fold<'a, T, U> {
+    pub fn new(
+        step: &'a mut dyn FnMut(T, FoldNode) -> T,
+        initial: T,
+        extract: &'a dyn Fn(T, Option<(U, U)>) -> U,
+    ) -> Fold<'a, T, U> {
+        Self {
+            step,
+            initial,
+            extract,
+        }
+    }
+
+    fn mut_fold_h(&mut self, bdd: &BddPtr, p_compl: bool, r: &T) -> U {
+        match bdd {
+            BddPtr::PtrTrue => {
+                let t = (self.step)(r.clone(), FoldNode::new(*bdd, p_compl, None));
+                (self.extract)(t, None)
+            }
+            BddPtr::PtrFalse => {
+                let t = (self.step)(r.clone(), FoldNode::new(*bdd, p_compl, None));
+                (self.extract)(t, None)
+            }
+            BddPtr::Compl(n) => self.mut_fold_h(&BddPtr::Reg(*n), true, r),
+            BddPtr::Reg(n) => unsafe {
+                let l_p = (*(*n)).low;
+                let r_p = (*(*n)).high;
+
+                let lbl = (*(*n)).var;
+                let t = (self.step)(r.clone(), FoldNode::new(*bdd, p_compl, Some(lbl)));
+                let l_r = self.mut_fold_h(&l_p, false, &r.clone());
+                let r_r = self.mut_fold_h(&r_p, false, &r.clone());
+                (self.extract)(t, Some((l_r, r_r)))
+            },
+        }
+    }
+    pub fn mut_fold(&mut self, bdd: &BddPtr) -> U {
+        let initial = self.initial.clone();
+        self.mut_fold_h(bdd, false, &initial)
+    }
+}
+
 impl BddPtr {
     pub fn new_reg(n: *mut BddNode) -> BddPtr {
         Reg(n)
@@ -45,6 +109,9 @@ impl BddPtr {
     /// Panics if not a node
     pub fn var(&self) -> VarLabel {
         self.into_node().var
+    }
+    pub fn var_safe(&self) -> Option<VarLabel> {
+        self.into_node_safe().and_then(|x| Some(x.var))
     }
 
     /// Get a mutable reference to the node that &self points to
@@ -247,7 +314,6 @@ impl BddPtr {
             },
         }
     }
-
     pub fn print_bdd(&self) -> String {
         self.print_bdd_lbl(&HashMap::new())
     }
