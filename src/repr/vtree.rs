@@ -3,6 +3,7 @@
 use super::{sdd::SddPtr, var_label::VarLabel};
 use crate::quickcheck::{Arbitrary, Gen};
 use crate::util::btree::{BTree, LeastCommonAncestor};
+use crate::repr::dtree::DTree;
 use rand::rngs::SmallRng;
 use rand::seq::SliceRandom;
 use rand::SeedableRng;
@@ -13,9 +14,11 @@ impl VTree {
     pub fn new_node(l: Box<VTree>, r: Box<VTree>) -> VTree {
         VTree::Node((), l, r)
     }
+
     pub fn new_leaf(v: VarLabel) -> VTree {
         VTree::Leaf(v)
     }
+
     pub fn num_vars(&self) -> usize {
         match self {
             BTree::Leaf(v) => v.value_usize() + 1,
@@ -43,6 +46,68 @@ impl VTree {
             _ => false,
         }
     }
+
+    /// construct a right-linear vtree that has an optional continuation
+    /// a continuation is a sub-tree that the right-linear vtree terminates to
+    fn right_linear_c(vars: &[VarLabel], continuation: &Option<VTree>) -> VTree {
+        // slice patterns are great!
+        match (vars, continuation) {
+            (&[], None) => panic!("invalid vtree: no vars"),
+            (&[], Some(v)) => v.clone(),
+            (&[v1], Some(v2)) => {
+                VTree::new_node(Box::new(VTree::new_leaf(v1)), Box::new(v2.clone()))
+            }
+            (&[v1], None) => VTree::new_leaf(v1),
+            (&[v, ref vars @ ..], _) => {
+                let sub = VTree::right_linear_c(vars, continuation);
+                VTree::new_node(Box::new(VTree::new_leaf(v)), Box::new(sub))
+            }
+        }
+    }
+
+    /// Converts a dtree into a vtree
+    /// For details on this process, see Section 3.5 of
+    /// Oztok, Umut, and Adnan Darwiche. "On compiling CNF into decision-DNNF."
+    /// International Conference on Principles and Practice of Constraint
+    /// Programming. Springer, Cham, 2014.
+    pub fn from_dtree(dtree: &DTree) -> Option<VTree> {
+        match &&dtree {
+            DTree::Leaf {
+                clause: _,
+                cutset,
+                vars: _,
+            } => {
+                let cutset_v: Vec<VarLabel> = cutset.iter().collect();
+                if cutset.is_empty() {
+                    None
+                } else {
+                    Some(VTree::right_linear_c(cutset_v.as_slice(), &None))
+                }
+            }
+            DTree::Node {
+                l,
+                r,
+                cutset,
+                vars: _,
+            } => {
+                let cutset_v: Vec<VarLabel> = cutset.iter().collect();
+                let l_vtree = VTree::from_dtree(l);
+                let r_vtree = VTree::from_dtree(r);
+                match (l_vtree, r_vtree) {
+                    (None, None) if cutset_v.is_empty() => None,
+                    (None, None) => Some(VTree::right_linear_c(cutset_v.as_slice(), &None)),
+                    (Some(l), None) => Some(VTree::right_linear_c(cutset_v.as_slice(), &Some(l))),
+                    (None, Some(r)) => Some(VTree::right_linear_c(cutset_v.as_slice(), &Some(r))),
+                    (Some(l), Some(r)) => {
+                        let subtree = VTree::new_node(Box::new(l), Box::new(r));
+                        Some(VTree::right_linear_c(cutset_v.as_slice(), &Some(subtree)))
+                    }
+                }
+            }
+        }
+    }
+
+
 
     /// generate an even vtree by splitting a variable ordering in half repeatedly
     /// times; then reverts to a right-linear vtree for the remainder

@@ -150,3 +150,18 @@ impl Default for VarSet {
         Self::new()
     }
 }
+
+
+#[test]
+fn test_varset() {
+    let mut v1 = VarSet::new();
+    let mut v2 = VarSet::new();
+    let mut v3 = VarSet::new();
+    v1.insert(VarLabel::new(0));
+    v1.insert(VarLabel::new(1));
+    v2.insert(VarLabel::new(0));
+    v3.insert(VarLabel::new(1));
+    // assert {0,1} \ {0} = {1}
+    let v1minusv2 = v1.minus(&v2);
+    assert_eq!(v3, v1minusv2);
+}

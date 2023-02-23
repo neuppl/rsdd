@@ -9,6 +9,7 @@ use rsdd::repr::bdd::BddPtr;
 use rsdd::repr::ddnnf::DDNNFPtr;
 use rsdd::repr::dtree::DTree;
 use rsdd::repr::var_order::VarOrder;
+use rsdd::repr::vtree::VTree;
 use rsdd::{builder::bdd_builder::BddManager, repr::wmc::WmcParams};
 
 use std::collections::HashMap;
@@ -282,9 +283,9 @@ fn compile_sdd_cnf(network: BayesianNetwork) {
     let dtree = DTree::from_cnf(&bn.cnf, &VarOrder::linear_order(bn.cnf.num_vars()));
     let duration = start.elapsed();
     println!("Dtree built\nNumber of variables: {}\n\tNumber of clauses: {}\n\tWidth: {}\n\tElapsed dtree time: {:?}",
-        bn.cnf.num_vars(), bn.cnf.clauses().len(), dtree.width(), duration);
+        bn.cnf.num_vars(), bn.cnf.clauses().len(), dtree.cutwidth(), duration);
 
-    let mut compiler = sdd_builder::SddManager::new(dtree.to_vtree().unwrap());
+    let mut compiler = sdd_builder::SddManager::new(VTree::from_dtree(&dtree).unwrap());
 
     println!("Compiling");
     let start = Instant::now();

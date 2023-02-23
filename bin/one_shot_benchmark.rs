@@ -79,7 +79,7 @@ fn compile_sdd_dtree(str: String, _args: &Args) -> BenchResult {
     use rsdd::builder::sdd_builder::*;
     let cnf = Cnf::from_file(str);
     let dtree = DTree::from_cnf(&cnf, &VarOrder::linear_order(cnf.num_vars()));
-    let mut man = SddManager::new(dtree.to_vtree().unwrap());
+    let mut man = SddManager::new(VTree::from_dtree(&dtree).unwrap());
     let _sdd = man.from_cnf(&cnf);
     BenchResult {
         num_recursive: man.get_stats().num_rec,
