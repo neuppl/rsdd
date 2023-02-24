@@ -1,5 +1,7 @@
 //! Defines the vtree datastructure used by SDDs for decomposition
 
+use std::collections::HashSet;
+
 use super::{sdd::SddPtr, var_label::VarLabel};
 use crate::quickcheck::{Arbitrary, Gen};
 use crate::util::btree::{BTree, LeastCommonAncestor};
@@ -20,6 +22,17 @@ impl VTree {
         match self {
             BTree::Leaf(v) => v.value_usize() + 1,
             BTree::Node((), l, r) => usize::max(l.num_vars(), r.num_vars()),
+        }
+    }
+
+    pub fn get_all_vars(&self) -> HashSet<usize> {
+        match self {
+            BTree::Leaf(v) => HashSet::from([v.value_usize()]),
+            BTree::Node((), l, r) => {
+                let lvar = l.get_all_vars();
+                let rvar = r.get_all_vars();
+                &lvar | &rvar
+            }
         }
     }
 
