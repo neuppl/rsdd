@@ -42,11 +42,10 @@
 //! The *cut-width* of a dtree is the size of the largest cutset. An effective
 //! dtree is one that does not have large cutwidth.
 
-use std::cmp::Ordering;
 
 use crate::repr::{
     cnf::Cnf,
-    var_label::{Literal}, vtree::VTree,
+    var_label::{Literal}
 };
 
 use super::{var_label::VarSet, var_order::VarOrder};
@@ -133,7 +132,7 @@ impl DTree {
                 *cutset = my_cutset;
             }
             DTree::Leaf {
-                clause,
+                clause: _,
                 cutset,
                 vars,
             } => {
@@ -231,6 +230,6 @@ fn test_dtree() {
     let order = VarOrder::linear_order(cnf.num_vars());
     let dtree = DTree::from_cnf(&cnf, &order);
     println!("{:#?}", dtree);
-    println!("{:#?}", VTree::from_dtree(&dtree));
+    println!("{:#?}", crate::repr::vtree::VTree::from_dtree(&dtree));
     // assert!(false);
 }

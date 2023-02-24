@@ -60,12 +60,12 @@ impl BddPlan {
     /// (A ∨ B)  (B ∨ C)
     pub fn from_dtree(dtree: &DTree) -> BddPlan {
         match dtree {
-            DTree::Node { l, r, cutset, vars } => {
+            DTree::Node { l, r, cutset: _, vars: _ } => {
                 let l = Self::from_dtree(l);
                 let r = Self::from_dtree(r);
                 Self::and(l, r)
             },
-            DTree::Leaf { clause, cutset, vars } => {
+            DTree::Leaf { clause, cutset: _, vars: _ } => {
                 if clause.len() == 0 {
                     return Self::ConstFalse;
                 } else if clause.len() == 1 {
