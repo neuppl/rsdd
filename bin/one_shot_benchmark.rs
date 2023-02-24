@@ -4,6 +4,7 @@ extern crate rsdd;
 extern crate serde_json;
 
 use clap::Parser;
+use rsdd::builder::bdd_plan::BddPlan;
 use rsdd::builder::cache::lru_app::BddApplyTable;
 use rsdd::repr::bdd::BddPtr;
 use rsdd::repr::cnf::Cnf;
@@ -112,6 +113,22 @@ fn compile_bdd(str: String, _args: &Args) -> BenchResult {
     }
 }
 
+fn compile_bdd_dtree(str: String, _args: &Args) -> BenchResult {
+    use rsdd::builder::bdd_builder::*;
+    let cnf = Cnf::from_file(str);
+    let order = VarOrder::linear_order(cnf.num_vars());
+    let rev = VarOrder::new((0..cnf.num_vars()).map(|x| VarLabel::new_usize(x)).rev().collect());
+    let mut man = BddManager::<BddApplyTable<BddPtr>>::new(rev, BddApplyTable::new(cnf.num_vars()));
+    let dtree = DTree::from_cnf(&cnf, &order);
+    let plan = BddPlan::from_dtree(&dtree);
+    println!("cut width: {}", dtree.cutwidth());
+    let _bdd = man.compile_plan(&plan);
+    BenchResult {
+        num_recursive: man.num_recursive_calls(),
+        size: _bdd.count_nodes(),
+    }
+}
+
 fn main() {
     let args = Args::parse();
 
@@ -120,6 +137,7 @@ fn main() {
     let start = Instant::now();
     let res = match args.mode.as_str() {
         "bdd_topological" => compile_bdd(file, &args),
+        "bdd_dtree_topological" => compile_bdd_dtree(file, &args),
         "dnnf_topdown" => compile_topdown_nnf(file, &args),
         "sdd_right_linear" => compile_sdd_rightlinear(file, &args),
         "sdd_dtree_topological" => compile_sdd_dtree(file, &args),

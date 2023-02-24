@@ -1,4 +1,7 @@
 //! Represents a deferred BDD computation
+//! BDD plans are executed according to an in-order left-first depth-first traversal of the tree
+
+use crate::repr::{dtree::DTree, var_label::VarLabel};
 
 #[derive(Debug, Clone)]
 pub enum BddPlan {
@@ -9,7 +12,7 @@ pub enum BddPlan {
     Not(Box<BddPlan>),
     ConstTrue,
     ConstFalse,
-    Literal(u64, bool),
+    Literal(VarLabel, bool),
 }
 
 impl BddPlan {
@@ -32,5 +35,49 @@ impl BddPlan {
 
     pub fn ite(pc: BddPlan, pt: BddPlan, pf: BddPlan) -> Self {
         Self::Ite(Box::new(pc), Box::new(pt), Box::new(pf))
+    }
+
+    pub fn literal(label: VarLabel, polarity: bool) -> Self {
+        Self::Literal(label, polarity)
+    }
+
+    /// Given a dtree decomposition of a CNF, generates an appropriate plan for
+    /// compiling the CNF
+    /// i.e., for a dtree 
+    ///          /\
+    ///        /  (C ∨ D)
+    ///       /\
+    ///      /  \
+    ///     /    \
+    /// (A ∨ B)  (B ∨ C)
+    /// generates a plan
+    ///     &&
+    ///    /  \ 
+    ///       (C || D)
+    ///   /
+    ///     &&
+    ///  /       \
+    /// (A ∨ B)  (B ∨ C)
+    pub fn from_dtree(dtree: &DTree) -> BddPlan {
+        match dtree {
+            DTree::Node { l, r, cutset, vars } => {
+                let l = Self::from_dtree(l);
+                let r = Self::from_dtree(r);
+                Self::and(l, r)
+            },
+            DTree::Leaf { clause, cutset, vars } => {
+                if clause.len() == 0 {
+                    return Self::ConstFalse;
+                } else if clause.len() == 1 {
+                    return Self::literal(clause[0].get_label(), clause[0].get_polarity());
+                } else {
+                    let first_lit = Self::literal(clause[0].get_label(), clause[0].get_polarity());
+                    clause.iter().skip(1).fold(first_lit, |acc, i| {
+                        let new_l = Self::literal(i.get_label(), i.get_polarity());
+                        Self::or(acc, new_l)
+                    })
+                }
+            },
+        }       
     }
 }

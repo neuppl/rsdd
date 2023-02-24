@@ -453,33 +453,6 @@ impl<T: LruTable<BddPtr>> BddManager<T> {
         ptr
     }
 
-    pub fn from_dtree(&mut self, dtree: &dtree::DTree) -> BddPtr {
-        use dtree::DTree;
-        match &&dtree {
-            DTree::Leaf {
-                clause,
-                cutset: _,
-                vars: _,
-            } => {
-                // compile the clause
-                clause.iter().fold(BddPtr::false_ptr(), |acc, i| {
-                    let v = self.var(i.get_label(), i.get_polarity());
-                    self.or(acc, v)
-                })
-            }
-            DTree::Node {
-                ref l,
-                ref r,
-                cutset: _,
-                vars: _,
-            } => {
-                let l = self.from_dtree(l);
-                let r = self.from_dtree(r);
-                self.and(l, r)
-            }
-        }
-    }
-
     /// Compile a BDD from a CNF
     pub fn from_cnf(&mut self, cnf: &Cnf) -> BddPtr {
         let mut cvec: Vec<BddPtr> = Vec::with_capacity(cnf.clauses().len());
@@ -597,7 +570,7 @@ impl<T: LruTable<BddPtr>> BddManager<T> {
     /// Compiles a plan into a BDD
     pub fn compile_plan(&mut self, expr: &BddPlan) -> BddPtr {
         match &expr {
-            BddPlan::Literal(var, polarity) => self.var(VarLabel::new(*var), *polarity),
+            BddPlan::Literal(var, polarity) => self.var(*var, *polarity),
             BddPlan::And(ref l, ref r) => {
                 let r1 = self.compile_plan(l);
                 let r2 = self.compile_plan(r);

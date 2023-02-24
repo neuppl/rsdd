@@ -6,13 +6,14 @@
 //! clauses from a CNF. Example:
 //! Let φ = (A ∨ B) ∧ (B ∨ C) ∧ (C ∨ D)
 //! Then, we can construct the following dtree:
-//!
-//!         /\
-//!        /  (C ∨ D)
-//!       /\
-//!      /  \
-//!     /    \
-//! (A ∨ B)  (B ∨ C)
+//! ```
+//! //         /\
+//! //        /  (C ∨ D)
+//! //       /\
+//! //      /  \
+//! //     /    \
+//! // (A ∨ B)  (B ∨ C)
+//! ```
 //!
 //! The primary purpose of a dtree is to describe a recursive decomposition of a
 //! CNF. To see how this works, we define a notion of *cutset*.
@@ -27,15 +28,16 @@
 //!    left child of n, and r is the right child.
 //!
 //! We can annotate the above diagram with its cutsets:
-//!
-//!         {C}
-//!         /\
-//!        /  (C ∨ D)
-//!       {B}
-//!       /\
-//!      /  \
-//!     /    \
-//! (A ∨ B)  (B ∨ C)
+//! ```
+//! //         {C}
+//! //         /\
+//! //        /  (C ∨ D)
+//! //       {B}
+//! //       /\
+//! //      /  \
+//! //     /    \
+//! // (A ∨ B)  (B ∨ C)
+//! ```
 //!
 //! The *cut-width* of a dtree is the size of the largest cutset. An effective
 //! dtree is one that does not have large cutwidth.
@@ -135,14 +137,18 @@ impl DTree {
                 cutset,
                 vars,
             } => {
-                println!("ancestor cutset: {:?}", ancestor_cutset);
                 let my_cutset = vars.minus(ancestor_cutset);
-                println!("my cutset: {:?}, my clauses: {:?}", my_cutset, clause);
                 *cutset = my_cutset;
             }
         }
     }
 
+    /// given a slice of dtree nodes, composes a balanced tree out of these nodes
+    /// i.e., for list [a, b, c, d] creates a dtree
+    ///    /\ 
+    ///   /  \
+    ///  /\  /\
+    /// a b  c d
     fn balanced(trees: &[DTree]) -> DTree {
         assert!(!trees.is_empty());
         if trees.len() == 1 {
@@ -226,5 +232,5 @@ fn test_dtree() {
     let dtree = DTree::from_cnf(&cnf, &order);
     println!("{:#?}", dtree);
     println!("{:#?}", VTree::from_dtree(&dtree));
-    assert!(false);
+    // assert!(false);
 }
