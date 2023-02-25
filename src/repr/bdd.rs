@@ -1,7 +1,7 @@
 //! Binary decision diagram representation
 use crate::repr::var_label::VarSet;
 
-use super::{
+pub use super::{
     ddnnf::*,
     model::PartialModel,
     var_label::{Literal, VarLabel},
