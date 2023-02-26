@@ -1,5 +1,6 @@
 //! A generic data structure for tracking variable labels throughout the library
 use std::fmt;
+use serde::Serialize;
 
 extern crate quickcheck;
 use bit_set::BitSet;
@@ -32,7 +33,7 @@ impl VarLabel {
 }
 
 /// Literal, a variable label and its corresponding truth assignment
-#[derive(Clone, PartialEq, Eq, Hash, Copy)]
+#[derive(Clone, PartialEq, Eq, Hash, Copy, Serialize, Deserialize)]
 pub struct Literal {
     data: u64,
 }
@@ -91,6 +92,14 @@ impl Arbitrary for Literal {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct VarSet {
     b: BitSet,
+}
+
+impl Serialize for VarSet {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer {
+        todo!()
+    }
 }
 
 impl VarSet {

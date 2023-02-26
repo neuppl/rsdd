@@ -4,7 +4,7 @@ use segment_tree::{ops::Min, SegmentPoint};
 use std::collections::{HashMap, VecDeque};
 
 /// A generic B-Tree type with leaf data type L and node data type N
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum BTree<N, L>
 where
     N: PartialEq + Eq + Clone,
