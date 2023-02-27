@@ -198,7 +198,7 @@ impl DTree {
         assert!(subtrees.len() == 1);
         let mut res = subtrees[0].clone();
         res.gen_cutset(&VarSet::new());
-        return res;
+        res
     }
 
     /// computes the cutwidth of the dtree, which is the size of the largest cut

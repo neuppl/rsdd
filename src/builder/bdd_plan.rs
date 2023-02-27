@@ -75,10 +75,10 @@ impl BddPlan {
                 cutset: _,
                 vars: _,
             } => {
-                if clause.len() == 0 {
-                    return Self::ConstFalse;
+                if clause.is_empty() {
+                    Self::ConstFalse
                 } else if clause.len() == 1 {
-                    return Self::literal(clause[0].get_label(), clause[0].get_polarity());
+                    Self::literal(clause[0].get_label(), clause[0].get_polarity())
                 } else {
                     let first_lit = Self::literal(clause[0].get_label(), clause[0].get_polarity());
                     clause.iter().skip(1).fold(first_lit, |acc, i| {
