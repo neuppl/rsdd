@@ -95,7 +95,7 @@ pub struct VarSet {
 }
 
 impl Serialize for VarSet {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    fn serialize<S>(&self, _serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer {
         todo!()

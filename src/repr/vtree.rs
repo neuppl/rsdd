@@ -120,8 +120,6 @@ impl VTree {
         }
     }
 
-
-
     /// generate an even vtree by splitting a variable ordering in half repeatedly
     /// times; then reverts to a right-linear vtree for the remainder
     pub fn even_split(order: &[VarLabel], num_splits: usize) -> VTree {

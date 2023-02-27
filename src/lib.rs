@@ -26,3 +26,4 @@ pub mod builder;
 pub mod repr;
 pub mod sample;
 pub mod unique_table;
+pub mod serialize;

@@ -13,9 +13,11 @@ use rsdd::repr::dtree::DTree;
 use rsdd::repr::var_label::VarLabel;
 use rsdd::repr::var_order::VarOrder;
 use rsdd::repr::vtree::VTree;
+use rsdd::serialize::{ser_vtree, ser_bdd};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use std::fs;
+use std::fs::{self, File};
+use std::io::Write;
 use std::time::Instant;
 
 /// Test driver for one-shot benchmark
@@ -25,6 +27,14 @@ struct Args {
     /// Print debug messages to console
     #[clap(short, long, value_parser, default_value_t = false)]
     debug: bool,
+
+    /// Dumps the vtree to the specified file in JSON format
+    #[clap(short, long, value_parser)]
+    dump_vtree: Option<String>,
+
+    /// Dumps the bdd to the specified file in JSON format
+    #[clap(short, long, value_parser)]
+    dump_bdd: Option<String>,
 
     /// File to benchmark
     #[clap(short, long, value_parser)]
@@ -80,8 +90,20 @@ fn compile_sdd_dtree(str: String, _args: &Args) -> BenchResult {
     use rsdd::builder::sdd_builder::*;
     let cnf = Cnf::from_file(str);
     let dtree = DTree::from_cnf(&cnf, &VarOrder::linear_order(cnf.num_vars()));
-    let mut man = SddManager::new(VTree::from_dtree(&dtree).unwrap());
+    let vtree = VTree::from_dtree(&dtree).unwrap();
+    let mut man = SddManager::new(vtree.clone());
     let _sdd = man.from_cnf(&cnf);
+
+    match &_args.dump_vtree {
+        Some(path) => {
+            let json = ser_vtree::VTreeSerializer::from_vtree(&vtree);
+            let mut file = File::create(path).unwrap();
+            let r = file.write_all(serde_json::to_string(&json).unwrap().as_bytes());
+            assert!(r.is_ok(), "Error writing file");
+        },
+        _ => ()
+    };
+
     BenchResult {
         num_recursive: man.get_stats().num_rec,
         size: _sdd.count_nodes(),
@@ -94,8 +116,20 @@ fn compile_sdd_rightlinear(str: String, _args: &Args) -> BenchResult {
     let o: Vec<VarLabel> = (0..cnf.num_vars())
         .map(|x| VarLabel::new(x as u64))
         .collect();
-    let mut man = SddManager::new(VTree::right_linear(&o));
+    let vtree = VTree::right_linear(&o);
+    let mut man = SddManager::new(vtree.clone());
     let _sdd = man.from_cnf(&cnf);
+
+    match &_args.dump_vtree {
+        Some(path) => {
+            let json = ser_vtree::VTreeSerializer::from_vtree(&vtree);
+            let mut file = File::create(path).unwrap();
+            let r = file.write_all(serde_json::to_string(&json).unwrap().as_bytes());
+            assert!(r.is_ok(), "Error writing file");
+        },
+        _ => ()
+    };
+
     BenchResult {
         num_recursive: man.get_stats().num_rec,
         size: _sdd.count_nodes(),
@@ -107,6 +141,12 @@ fn compile_bdd(str: String, _args: &Args) -> BenchResult {
     let cnf = Cnf::from_file(str);
     let mut man = BddManager::<BddApplyTable<BddPtr>>::new_default_order_lru(cnf.num_vars());
     let _bdd = man.from_cnf(&cnf);
+
+    if _args.dump_bdd.is_some() {
+        let json = ser_bdd::BDDSerializer::from_bdd(_bdd);
+        println!("{}", serde_json::to_string(&json).unwrap());
+    }
+
     BenchResult {
         num_recursive: man.num_recursive_calls(),
         size: _bdd.count_nodes(),
