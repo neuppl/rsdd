@@ -1,8 +1,14 @@
 //! A representation of a numeric probability
 
+use std::fmt;
 #[derive(Copy, Clone, Debug)]
 pub struct Probability(f64);
 
+impl fmt::Display for Probability {
+    fn fmt(&self, f:&mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Pr({})", self.0)
+    }
+}
 impl Probability {
     pub fn new(v: f64) -> Probability {
         assert!((0.0..=1.0).contains(&v), "{} ∉ [0.0..1.0]", v);
