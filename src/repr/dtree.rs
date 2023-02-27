@@ -42,11 +42,7 @@
 //! The *cut-width* of a dtree is the size of the largest cutset. An effective
 //! dtree is one that does not have large cutwidth.
 
-
-use crate::repr::{
-    cnf::Cnf,
-    var_label::{Literal}
-};
+use crate::repr::{cnf::Cnf, var_label::Literal};
 
 use super::{var_label::VarSet, var_order::VarOrder};
 
@@ -144,7 +140,7 @@ impl DTree {
 
     /// given a slice of dtree nodes, composes a balanced tree out of these nodes
     /// i.e., for list [a, b, c, d] creates a dtree
-    ///    /\ 
+    ///    /\
     ///   /  \
     ///  /\  /\
     /// a b  c d
@@ -165,20 +161,29 @@ impl DTree {
         }
     }
 
-    /// given an elimination order `elim_order`, generate a corresponding 
+    /// given an elimination order `elim_order`, generate a corresponding
     /// dtree.
     /// follows algorithm 25, `eo2dtree`, from Darwiche
     pub fn from_cnf(cnf: &Cnf, elim_order: &VarOrder) -> DTree {
         // first generate all leaf subtrees
-        let mut subtrees : Vec<DTree> = cnf.clauses().iter().map(|clause| {
-            let mut l = DTree::Leaf { clause: clause.clone(), cutset: VarSet::new(), vars: VarSet::new() };
-            l.init_vars();
-            l
-        }).collect();
+        let mut subtrees: Vec<DTree> = cnf
+            .clauses()
+            .iter()
+            .map(|clause| {
+                let mut l = DTree::Leaf {
+                    clause: clause.clone(),
+                    cutset: VarSet::new(),
+                    vars: VarSet::new(),
+                };
+                l.init_vars();
+                l
+            })
+            .collect();
         // now recursively construct the dtree (lines 2 -- 6 in Alg 25)
         for o in elim_order.in_order_iter() {
             // collect all subtrees that contain o and compose them
-            let (t, s) : (Vec<DTree>, Vec<DTree>) = subtrees.into_iter().partition(|t| t.get_vars().contains(o));
+            let (t, s): (Vec<DTree>, Vec<DTree>) =
+                subtrees.into_iter().partition(|t| t.get_vars().contains(o));
             subtrees = s;
             if t.is_empty() {
                 continue;
@@ -193,7 +198,7 @@ impl DTree {
         assert!(subtrees.len() == 1);
         let mut res = subtrees[0].clone();
         res.gen_cutset(&VarSet::new());
-        return res;
+        res
     }
 
     /// computes the cutwidth of the dtree, which is the size of the largest cut
