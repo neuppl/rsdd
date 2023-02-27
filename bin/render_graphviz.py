@@ -14,8 +14,6 @@ count = 0
 # returns a node
 def walk_vtree(j, ps):
     global count
-    print(j)
-    print("")
     if "Leaf" in j:
         count = count + 1
         ps.node(str(count), str(j["Leaf"]), shape="plaintext")
