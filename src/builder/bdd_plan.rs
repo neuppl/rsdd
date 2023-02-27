@@ -43,7 +43,7 @@ impl BddPlan {
 
     /// Given a dtree decomposition of a CNF, generates an appropriate plan for
     /// compiling the CNF
-    /// i.e., for a dtree 
+    /// i.e., for a dtree
     ///          /\
     ///        /  (C ∨ D)
     ///       /\
@@ -52,7 +52,7 @@ impl BddPlan {
     /// (A ∨ B)  (B ∨ C)
     /// generates a plan
     ///     &&
-    ///    /  \ 
+    ///    /  \
     ///       (C || D)
     ///   /
     ///     &&
@@ -60,12 +60,21 @@ impl BddPlan {
     /// (A ∨ B)  (B ∨ C)
     pub fn from_dtree(dtree: &DTree) -> BddPlan {
         match dtree {
-            DTree::Node { l, r, cutset: _, vars: _ } => {
+            DTree::Node {
+                l,
+                r,
+                cutset: _,
+                vars: _,
+            } => {
                 let l = Self::from_dtree(l);
                 let r = Self::from_dtree(r);
                 Self::and(l, r)
-            },
-            DTree::Leaf { clause, cutset: _, vars: _ } => {
+            }
+            DTree::Leaf {
+                clause,
+                cutset: _,
+                vars: _,
+            } => {
                 if clause.len() == 0 {
                     return Self::ConstFalse;
                 } else if clause.len() == 1 {
@@ -77,7 +86,7 @@ impl BddPlan {
                         Self::or(acc, new_l)
                     })
                 }
-            },
-        }       
+            }
+        }
     }
 }

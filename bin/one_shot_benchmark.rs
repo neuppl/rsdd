@@ -117,7 +117,12 @@ fn compile_bdd_dtree(str: String, _args: &Args) -> BenchResult {
     use rsdd::builder::bdd_builder::*;
     let cnf = Cnf::from_file(str);
     let order = VarOrder::linear_order(cnf.num_vars());
-    let rev = VarOrder::new((0..cnf.num_vars()).map(|x| VarLabel::new_usize(x)).rev().collect());
+    let rev = VarOrder::new(
+        (0..cnf.num_vars())
+            .map(|x| VarLabel::new_usize(x))
+            .rev()
+            .collect(),
+    );
     let mut man = BddManager::<BddApplyTable<BddPtr>>::new(rev, BddApplyTable::new(cnf.num_vars()));
     let dtree = DTree::from_cnf(&cnf, &order);
     let plan = BddPlan::from_dtree(&dtree);

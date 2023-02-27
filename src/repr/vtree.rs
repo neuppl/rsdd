@@ -4,8 +4,8 @@ use std::collections::HashSet;
 
 use super::{sdd::SddPtr, var_label::VarLabel};
 use crate::quickcheck::{Arbitrary, Gen};
-use crate::util::btree::{BTree, LeastCommonAncestor};
 use crate::repr::dtree::DTree;
+use crate::util::btree::{BTree, LeastCommonAncestor};
 use rand::rngs::SmallRng;
 use rand::seq::SliceRandom;
 use rand::SeedableRng;
@@ -119,8 +119,6 @@ impl VTree {
             }
         }
     }
-
-
 
     /// generate an even vtree by splitting a variable ordering in half repeatedly
     /// times; then reverts to a right-linear vtree for the remainder
