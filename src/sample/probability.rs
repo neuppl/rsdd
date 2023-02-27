@@ -5,14 +5,24 @@ use std::fmt;
 pub struct Probability(f64);
 
 impl fmt::Display for Probability {
-    fn fmt(&self, f:&mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "Pr({})", self.0)
     }
 }
 impl Probability {
     pub fn new(v: f64) -> Probability {
-        assert!((0.0..=1.0).contains(&v), "{} ∉ [0.0..1.0]", v);
-        Probability(v)
+        assert!(
+            (0.0..=1.0).contains(&(v - f64::EPSILON).abs()),
+            "{} ∉ [0.0..1.0]",
+            v
+        );
+        if v < 0.0 {
+            Probability(0.0)
+        } else if v > 1.0 {
+            Probability(1.0)
+        } else {
+            Probability(v)
+        }
     }
 
     pub fn as_f64(&self) -> f64 {
