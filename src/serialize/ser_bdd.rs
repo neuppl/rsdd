@@ -2,7 +2,7 @@
 
 use std::collections::HashMap;
 
-use crate::repr::{bdd::BddPtr, ddnnf::DDNNFPtr};
+use crate::repr::{bdd::{BddPtr, BddNode}, ddnnf::DDNNFPtr};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum SerBDDPtr {
@@ -26,15 +26,16 @@ pub struct BDDSerializer {
 }
 
 impl BDDSerializer { 
-    fn serialize_helper(bdd: BddPtr, table: &mut HashMap<BddPtr, SerBDDPtr>, nodes: &mut Vec<SerBDD>) -> SerBDDPtr {
+    fn serialize_helper(bdd: BddPtr, table: &mut HashMap<*mut BddNode, usize>, nodes: &mut Vec<SerBDD>) -> SerBDDPtr {
         if bdd.is_true() { 
             return SerBDDPtr::True
         }
         if bdd.is_false() {
             return SerBDDPtr::False
         }
-        if table.contains_key(&bdd) {
-            return table.get(&bdd).unwrap().clone();
+        if table.contains_key(&bdd.ptr_raw()) {
+            let index = table.get(&bdd.ptr_raw()).unwrap().clone();
+            return SerBDDPtr::Ptr { index: index, compl: bdd.is_neg() }
         }
 
         // new node, recurse
@@ -42,8 +43,9 @@ impl BDDSerializer {
         let h = BDDSerializer::serialize_helper(bdd.high_raw(), table, nodes);
         let new_node = SerBDD { topvar: bdd.var().value_usize(), low: l, high: h };
         nodes.push(new_node);
-        let new_ptr = SerBDDPtr::Ptr { index: nodes.len() - 1, compl: bdd.is_neg() };
-        table.insert(bdd, new_ptr.clone());
+        let index = nodes.len() - 1;
+        let new_ptr = SerBDDPtr::Ptr { index: index, compl: bdd.is_neg() };
+        table.insert(bdd.ptr_raw(), index);
         new_ptr
     }
 

@@ -31,11 +31,12 @@ pub struct SDDSerializer {
 }
 
 impl SDDSerializer { 
-    fn serialize_helper(sdd: SddPtr, table: &mut HashMap<SddPtr, SerSDDPtr>, nodes: &mut Vec<SDDOr>) -> SerSDDPtr {
-        if table.contains_key(&sdd) {
-            return *table.get(&sdd).unwrap();
+    fn serialize_helper(sdd: SddPtr, table: &mut HashMap<SddPtr, usize>, nodes: &mut Vec<SDDOr>) -> SerSDDPtr {
+        if table.contains_key(&sdd.to_reg()) {
+            let r = table.get(&sdd.to_reg()).unwrap();
+            return SerSDDPtr::Ptr { index: *r, compl: sdd.is_neg() }
         }
-        let r = if sdd.is_true() {
+        let (r, idx) = if sdd.is_true() {
             return SerSDDPtr::True
         } else if sdd.is_false() {
             return SerSDDPtr::False
@@ -51,7 +52,7 @@ impl SDDSerializer {
             let o = SDDOr(vec![SDDAnd { prime: prime_t, sub: h}, SDDAnd { prime: prime_f, sub: l}]);
             nodes.push(o);
             let idx = nodes.len() - 1;
-            SerSDDPtr::Ptr { index: idx, compl: sdd.is_neg() }
+            (SerSDDPtr::Ptr { index: idx, compl: sdd.is_neg() }, idx)
         } else { // it's an SDD
             let o : Vec<SDDAnd> = sdd.node_iter().map(|and| {
                 let p = SDDSerializer::serialize_helper(and.prime(), table, nodes);
@@ -60,9 +61,9 @@ impl SDDSerializer {
             }).collect();
             nodes.push(SDDOr(o));
             let idx = nodes.len() - 1;
-            SerSDDPtr::Ptr { index: idx, compl: sdd.is_neg() }
+            (SerSDDPtr::Ptr { index: idx, compl: sdd.is_neg() }, idx)
         };
-        table.insert(sdd, r);
+        table.insert(sdd.to_reg(), idx);
         return r;
     }
 
