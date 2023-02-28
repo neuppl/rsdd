@@ -606,7 +606,7 @@ impl SddManager {
                 let h = helper(_man, ptr.high());
                 let mut doc: Doc<BoxDoc> = Doc::from("");
                 doc = doc.append(Doc::newline()).append(
-                    (Doc::from(format!("ITE {:?} ", ptr))
+                    (Doc::from(format!("ITE {:?} {}", ptr, ptr.topvar().value()))
                         .append(Doc::newline())
                         .append(h.append(Doc::newline()).append(l)))
                     .nest(2),
@@ -628,7 +628,7 @@ impl SddManager {
                     .nest(2),
                 );
             }
-            let d = Doc::from("\\/".to_string());
+            let d = Doc::from(format!("\\/ {:?}", ptr));
             d.append(doc.nest(2))
         }
         let d = helper(self, ptr);
@@ -781,7 +781,7 @@ impl SddManager {
         let mut random_order = vars;
         random_order.shuffle(&mut thread_rng());
 
-        let mut value_range: Vec<u128> = (2..prime).collect();
+        let mut value_range: Vec<u128> = (2..prime / 2).collect();
         value_range.shuffle(&mut thread_rng());
 
         let mut map = HashMap::<usize, u128>::new();

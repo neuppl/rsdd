@@ -686,4 +686,73 @@ mod test_sdd_manager {
             cnf.is_trimmed()
         }
     }
+
+    // quickcheck! {
+    //     fn sdd_prob_equiv_identical_test(c: Cnf, vtree: VTree) -> bool {
+    //         let mut compr_mgr = super::SddManager::new(vtree.clone());
+    //         let compr_cnf = compr_mgr.from_cnf(&c);
+
+    //         let mut uncompr_mgr = super::SddManager::new(vtree);
+    //         uncompr_mgr.set_compression(false);
+    //         let uncompr_cnf = uncompr_mgr.from_cnf(&c);
+
+    //         // let prime = 64733603481794218985640164159;
+    //         let prime = 1123;
+    //         let map = uncompr_mgr.create_prob_map(prime);
+
+    //         let compr_h = compr_cnf.get_semantic_hash(&map, prime);
+    //         let uncompr_h = uncompr_cnf.get_semantic_hash(&map, prime);
+
+    //         compr_h == uncompr_h
+    //     }
+    // }
+
+    quickcheck! {
+        fn prob_equiv_trivial(c: Cnf, vtree:VTree) -> bool {
+            let mut mgr1 = super::SddManager::new(vtree.clone());
+            let c1 = mgr1.from_cnf(&c);
+
+            let mut mgr2 = super::SddManager::new(vtree);
+            let c2 = mgr2.from_cnf(&c);
+
+            let prime = 1123;
+            let map = mgr1.create_prob_map(prime);
+
+            let h1 = c1.get_semantic_hash(&map, prime);
+            let h2 = c2.get_semantic_hash(&map, prime);
+
+            h1 == h2
+        }
+    }
+
+    quickcheck! {
+        fn prob_equiv_sdd_identity_uncompressed(c: Cnf, vtree:VTree) -> TestResult {
+            if c.num_vars() > 4 || c.clauses().len() > 4 {
+                return TestResult::discard();
+            }
+
+            let mut compr_mgr = super::SddManager::new(vtree.clone());
+            let compr_cnf = compr_mgr.from_cnf(&c);
+
+            let mut uncompr_mgr = super::SddManager::new(vtree);
+            uncompr_mgr.set_compression(false);
+            let uncompr_cnf = uncompr_mgr.from_cnf(&c);
+
+            let prime = 1123; // large enough for our purposes
+            let map = uncompr_mgr.create_prob_map(prime);
+
+            let compr_h = compr_cnf.get_semantic_hash(&map, prime);
+            let uncompr_h = uncompr_cnf.get_semantic_hash(&map, prime);
+
+            if compr_h != uncompr_h {
+                println!("not equal! hashes: compr: {compr_h}, uncompr: {uncompr_h}");
+                println!("map: {:?}", map);
+                println!("compr sdd: {}", compr_mgr.print_sdd(compr_cnf));
+                println!("uncompr sdd: {}", uncompr_mgr.print_sdd(uncompr_cnf));
+                TestResult::from_bool(false)
+            } else {
+                TestResult::from_bool(true)
+            }
+        }
+    }
 }
