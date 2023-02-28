@@ -131,6 +131,17 @@ impl BddPtr {
         }
     }
 
+    /// gets the raw pointer that this BDD points to
+    /// panics if not a ptr
+    pub fn ptr_raw(&self) -> *mut BddNode {
+        match &self {
+            Compl(x) => *x,
+            Reg(x) => *x,
+            PtrTrue | PtrFalse => panic!("deref constant BDD"),
+        }
+    }
+
+
     /// Traverses the BDD and clears all scratch memory (sets it equal to 0)
     pub fn clear_scratch(&self) {
         if !self.is_const() {
