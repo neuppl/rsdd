@@ -522,7 +522,7 @@ impl SddPtr {
                     if polarity {
                         return val;
                     }
-                    prime - val + 1
+                    (prime - val + 1) % prime
                 }
             }
         }
@@ -550,7 +550,9 @@ impl SddPtr {
                 raw_hash % prime
             }
 
-            ComplBDD(_) | Compl(_) => prime - self.to_reg().get_semantic_hash(map, prime) + 1,
+            ComplBDD(_) | Compl(_) => {
+                (prime - self.to_reg().get_semantic_hash(map, prime) + 1) % prime
+            }
         }
     }
 }

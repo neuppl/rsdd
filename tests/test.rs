@@ -755,4 +755,36 @@ mod test_sdd_manager {
             }
         }
     }
+
+    quickcheck! {
+        fn prob_equiv_sdd_inequality(c1: Cnf, c2: Cnf, vtree:VTree) -> TestResult {
+            if c1.num_vars() > 4 || c1.clauses().len() > 4 || c2.num_vars() > 4 || c2.clauses().len() > 4 {
+                return TestResult::discard();
+            }
+
+            let mut mgr = super::SddManager::new(vtree);
+            let cnf_1 = mgr.from_cnf(&c1);
+            let cnf_2 = mgr.from_cnf(&c2);
+
+            if cnf_1 == cnf_2 {
+                return TestResult::discard();
+            }
+
+            let prime = 1123; // large enough for our purposes
+            let map = mgr.create_prob_map(prime);
+
+            let h1 = cnf_1.get_semantic_hash(&map, prime);
+            let h2 = cnf_2.get_semantic_hash(&map, prime);
+
+            if h1 == h2 {
+                println!("unintended equality! h1: {h1}, h2: {h2}");
+                println!("map: {:?}", map);
+                println!("sdd1: {}", mgr.print_sdd(cnf_1));
+                println!("sdd2: {}", mgr.print_sdd(cnf_2));
+                TestResult::from_bool(false)
+            } else {
+                TestResult::from_bool(true)
+            }
+        }
+    }
 }
