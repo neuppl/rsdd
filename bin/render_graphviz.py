@@ -79,6 +79,62 @@ def render_bdd(options, file):
     ps.view()
 
 
+def render_sdd(options, file):
+    j = json.loads(file.read())
+    nodes = j["nodes"]
+    ps = graphviz.Digraph('G', filename=options.output)
+    # create all or-nodes
+    for (idx, n) in enumerate(nodes):
+        ps.node("or" + str(idx), " ", shape="circle")
+        
+    # create all and-nodes and edges
+    for (idx_or, n) in enumerate(nodes):
+        or_label = "or" + str(idx_or)
+        for (idx_and, a) in enumerate(n):
+            label = "and" + str(idx_or) + str(idx_and)
+            prime = a["prime"]
+            sub = a["sub"]
+            p_text = ""
+            s_text = ""
+            if prime == "True":
+                p_text = "T"
+            elif prime == "False":
+                p_text = "F"
+            elif "Literal" in prime:
+                p_text = "%s%s" % ("" if prime["Literal"]["polarity"] else "!", str(prime["Literal"]["label"]))
+            else:
+                p_text = "<p>"
+
+            if sub == "True":
+                s_text = "T"
+            elif sub == "False":
+                s_text = "F"
+            elif "Literal" in sub:
+                s_text = "%s%s" % ("" if sub["Literal"]["polarity"] else "!", str(sub["Literal"]["label"]))
+            else:
+                s_text = "<s>"
+
+            ps.node(label, "%s | %s" % (p_text, s_text), shape="record")
+
+            # add or-edge
+            ps.edge(or_label, label)
+
+            # add sub-edges if prime and sub are pointers
+            if "Ptr" in prime:
+                ps.edge(label + ":p", str("or" + str(prime["Ptr"]["index"])), color = "red" if prime["Ptr"]["compl"] else "black")
+            if "Ptr" in sub:
+                ps.edge(label + ":s", str("or" + str(sub["Ptr"]["index"])), color = "red" if sub["Ptr"]["compl"] else "black")
+
+    # create root pointers
+    for (idx, r) in enumerate(j["roots"]):
+        name = str(idx) + "root"
+        ps.node(name, str(idx), shape="point")
+        if r["Ptr"]["compl"]:
+            ps.edge(name, "or" + str(r["Ptr"]["index"]), color="red")
+        else:
+            ps.edge(name, "or" + str(r["Ptr"]["index"]), color="black")
+
+    ps.view()
 
 if __name__ == "__main__":
     parser = OptionParser()
@@ -95,5 +151,7 @@ if __name__ == "__main__":
             render_vtree(options, f)
         elif file_extension == ".bdd":
             render_bdd(options, f)
+        elif file_extension == ".sdd":
+            render_sdd(options, f)
         else:
             print("Failure: No matching extension for file %s. Please use extension '.vtree', '.sdd', '.bdd', or '.dtree'." % f)
