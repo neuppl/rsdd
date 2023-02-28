@@ -687,26 +687,6 @@ mod test_sdd_manager {
         }
     }
 
-    // quickcheck! {
-    //     fn sdd_prob_equiv_identical_test(c: Cnf, vtree: VTree) -> bool {
-    //         let mut compr_mgr = super::SddManager::new(vtree.clone());
-    //         let compr_cnf = compr_mgr.from_cnf(&c);
-
-    //         let mut uncompr_mgr = super::SddManager::new(vtree);
-    //         uncompr_mgr.set_compression(false);
-    //         let uncompr_cnf = uncompr_mgr.from_cnf(&c);
-
-    //         // let prime = 64733603481794218985640164159;
-    //         let prime = 1123;
-    //         let map = uncompr_mgr.create_prob_map(prime);
-
-    //         let compr_h = compr_cnf.get_semantic_hash(&map, prime);
-    //         let uncompr_h = uncompr_cnf.get_semantic_hash(&map, prime);
-
-    //         compr_h == uncompr_h
-    //     }
-    // }
-
     quickcheck! {
         fn prob_equiv_trivial(c: Cnf, vtree:VTree) -> bool {
             let mut mgr1 = super::SddManager::new(vtree.clone());
@@ -727,10 +707,6 @@ mod test_sdd_manager {
 
     quickcheck! {
         fn prob_equiv_sdd_identity_uncompressed(c: Cnf, vtree:VTree) -> TestResult {
-            if c.num_vars() > 4 || c.clauses().len() > 4 {
-                return TestResult::discard();
-            }
-
             let mut compr_mgr = super::SddManager::new(vtree.clone());
             let compr_cnf = compr_mgr.from_cnf(&c);
 
@@ -758,10 +734,6 @@ mod test_sdd_manager {
 
     quickcheck! {
         fn prob_equiv_sdd_inequality(c1: Cnf, c2: Cnf, vtree:VTree) -> TestResult {
-            if c1.num_vars() > 4 || c1.clauses().len() > 4 || c2.num_vars() > 4 || c2.clauses().len() > 4 {
-                return TestResult::discard();
-            }
-
             let mut mgr = super::SddManager::new(vtree);
             let cnf_1 = mgr.from_cnf(&c1);
             let cnf_2 = mgr.from_cnf(&c2);
@@ -777,7 +749,7 @@ mod test_sdd_manager {
             let h2 = cnf_2.get_semantic_hash(&map, prime);
 
             if h1 == h2 {
-                println!("unintended equality! h1: {h1}, h2: {h2}");
+                println!("collision! h1: {h1}, h2: {h2}");
                 println!("map: {:?}", map);
                 println!("sdd1: {}", mgr.print_sdd(cnf_1));
                 println!("sdd2: {}", mgr.print_sdd(cnf_2));
