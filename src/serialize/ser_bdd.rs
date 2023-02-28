@@ -11,16 +11,6 @@ pub enum SerBDDPtr {
     False
 }
 
-impl SerBDDPtr {
-    pub fn neg(&self) -> SerBDDPtr { 
-        match self {
-            SerBDDPtr::Ptr { index, compl } => SerBDDPtr::Ptr { index: *index, compl: !compl  },
-            SerBDDPtr::True => SerBDDPtr::False,
-            SerBDDPtr::False => SerBDDPtr::True,
-        }
-    }
-}
-
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SerBDD {
     topvar: usize, low: SerBDDPtr, high: SerBDDPtr

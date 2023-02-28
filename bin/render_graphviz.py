@@ -76,8 +76,6 @@ def render_bdd(options, file):
             ps.edge(name, str(r["Ptr"]["index"]), color="red")
         else:
             ps.edge(name, str(r["Ptr"]["index"]), color="black")
-   
-
     ps.view()
 
 

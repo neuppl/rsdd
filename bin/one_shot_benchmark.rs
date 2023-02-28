@@ -13,7 +13,7 @@ use rsdd::repr::dtree::DTree;
 use rsdd::repr::var_label::VarLabel;
 use rsdd::repr::var_order::VarOrder;
 use rsdd::repr::vtree::VTree;
-use rsdd::serialize::{ser_vtree, ser_bdd};
+use rsdd::serialize::{ser_vtree, ser_bdd, ser_sdd};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::fs::{self, File};
@@ -35,6 +35,10 @@ struct Args {
     /// Dumps the bdd to the specified file in JSON format
     #[clap(short, long, value_parser)]
     dump_bdd: Option<String>,
+
+    /// Dumps the sdd to the specified file in JSON format
+    #[clap(short, long, value_parser)]
+    dump_sdd: Option<String>,
 
     /// File to benchmark
     #[clap(short, long, value_parser)]
@@ -94,6 +98,16 @@ fn compile_sdd_dtree(str: String, _args: &Args) -> BenchResult {
     let mut man = SddManager::new(vtree.clone());
     let _sdd = man.from_cnf(&cnf);
 
+    match &_args.dump_sdd {
+        Some(path) => {
+            let json = ser_sdd::SDDSerializer::from_sdd(_sdd);
+            let mut file = File::create(path).unwrap();
+            let r = file.write_all(serde_json::to_string(&json).unwrap().as_bytes());
+            assert!(r.is_ok(), "Error writing file");
+        },
+        _ => ()
+    };
+
     match &_args.dump_vtree {
         Some(path) => {
             let json = ser_vtree::VTreeSerializer::from_vtree(&vtree);
@@ -119,6 +133,16 @@ fn compile_sdd_rightlinear(str: String, _args: &Args) -> BenchResult {
     let vtree = VTree::right_linear(&o);
     let mut man = SddManager::new(vtree.clone());
     let _sdd = man.from_cnf(&cnf);
+
+    match &_args.dump_sdd {
+        Some(path) => {
+            let json = ser_sdd::SDDSerializer::from_sdd(_sdd);
+            let mut file = File::create(path).unwrap();
+            let r = file.write_all(serde_json::to_string(&json).unwrap().as_bytes());
+            assert!(r.is_ok(), "Error writing file");
+        },
+        _ => ()
+    };
 
     match &_args.dump_vtree {
         Some(path) => {
