@@ -6,6 +6,7 @@ use crate::repr::{
     var_label::{VarLabel, VarSet},
 };
 use bumpalo::Bump;
+use serde::{ser::SerializeTupleVariant, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
 use SddPtr::*;
@@ -22,9 +23,33 @@ pub enum SddPtr {
     Reg(*mut SddOr),
 }
 
+impl Serialize for SddPtr {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        match &self {
+            PtrTrue => serializer.serialize_bool(true),
+            PtrFalse => serializer.serialize_bool(false),
+            Var(label, bool) => {
+                let mut tv = serializer.serialize_tuple_variant("SddPtr", 4, "Var", 2)?;
+                tv.serialize_field(label)?;
+                tv.serialize_field(bool)?;
+                tv.end()
+            }
+            BDD(_) => serializer.serialize_newtype_variant("SddPtr", 2, "BDD", self.mut_bdd_ref()),
+            ComplBDD(_) => {
+                serializer.serialize_newtype_variant("SddPtr", 3, "ComplBDD", self.mut_bdd_ref())
+            }
+            Compl(_) => serializer.serialize_newtype_variant("SddPtr", 4, "Comp", self.node_ref()),
+            Reg(_) => serializer.serialize_newtype_variant("SddPtr", 5, "Reg", self.node_ref()),
+        }
+    }
+}
+
 /// Specialized SDD node for a right-linear sub-vtree
 /// SDDs for these fragments are binary decisions
-#[derive(Debug, Clone, Eq, Ord, PartialOrd, Copy)]
+#[derive(Debug, Clone, Eq, Ord, PartialOrd, Copy, Serialize)]
 pub struct BinarySDD {
     label: VarLabel,
     vtree: VTreeIndex,
@@ -125,7 +150,7 @@ impl Iterator for SddNodeIter {
     }
 }
 
-#[derive(Debug, Clone, Hash, PartialEq, Eq, Ord, PartialOrd, Copy)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq, Ord, PartialOrd, Copy, Serialize)]
 pub struct SddAnd {
     prime: SddPtr,
     sub: SddPtr,
@@ -144,7 +169,7 @@ impl SddAnd {
 }
 
 /// An SddOr node is a vector of (prime, sub) pairs.
-#[derive(Debug, Clone, Eq, Ord, PartialOrd)]
+#[derive(Debug, Clone, Eq, Ord, PartialOrd, Serialize)]
 pub struct SddOr {
     index: VTreeIndex,
     pub nodes: Vec<SddAnd>,

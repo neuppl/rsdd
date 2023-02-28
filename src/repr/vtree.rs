@@ -168,7 +168,7 @@ impl Arbitrary for VTree {
 ///        6
 ///    2       5
 ///  0  1    3   4
-#[derive(Debug, Clone, Copy, Eq, PartialEq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, PartialOrd, Ord, Hash, Serialize)]
 pub struct VTreeIndex(usize);
 
 impl VTreeIndex {
