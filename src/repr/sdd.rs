@@ -506,40 +506,48 @@ impl SddPtr {
             }
         }
     }
-
     // heavy lifting for getting the semantic hash of SDD; assumes current is the root
     // this function doesn't allocate anything!
     // for more info, see https://tr.inf.unibe.ch/pdf/iam-06-001.pdf
     pub fn get_semantic_hash(&self, map: &HashMap<usize, u128>, prime: u128) -> u128 {
+        let negate_hash = |val: u128| -> u128 { (prime - val + 1) % prime };
+
+        let get_var_weight = |v: &VarLabel, polarity: bool| -> u128 {
+            match map.get(&v.value_usize()) {
+                None => panic!("error - variable weight not defined in map"),
+                Some(&val) => {
+                    if polarity {
+                        return val;
+                    }
+                    negate_hash(val)
+                }
+            }
+        };
+
         match &self {
             PtrTrue => 1,
             PtrFalse => 0,
-            Var(v, polarity) => match map.get(&v.value_usize()) {
-                None => panic!("error!"),
-                Some(val) => {
-                    if *polarity {
-                        *val
-                    } else {
-                        (prime - *val) + 1
-                    }
-                }
-            },
-            BDD(_) | ComplBDD(_) => {
-                (self.low().get_semantic_hash(map, prime)
-                    + self.high().get_semantic_hash(map, prime))
-                    % prime
+            Var(v, polarity) => get_var_weight(v, *polarity),
+            BDD(_) => {
+                let label_weight = get_var_weight(&self.topvar(), true);
+
+                let low_weight = self.low().get_semantic_hash(map, prime);
+                let high_weight = self.high().get_semantic_hash(map, prime);
+
+                (negate_hash(label_weight) * low_weight + label_weight * high_weight) % prime
             }
-            // TODO: do I need to flip Compl here somehow?
-            Reg(_) | Compl(_) => {
+            Reg(_) => {
                 let raw_hash: u128 = self
                     .node_iter()
                     .map(|and| {
                         and.prime().get_semantic_hash(map, prime)
-                            + and.sub().get_semantic_hash(map, prime)
+                            * and.sub().get_semantic_hash(map, prime)
                     })
                     .sum();
                 raw_hash % prime
             }
+
+            ComplBDD(_) | Compl(_) => negate_hash(self.to_reg().get_semantic_hash(map, prime)),
         }
     }
 }
