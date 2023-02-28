@@ -118,10 +118,10 @@ impl<T: LruTable<BddPtr>> BddManager<T> {
         return self.get_order().num_vars();
     }
 
-    /// Generate a new variable which was not in the original order. Places the
+    /// Generate a new variable label which was not in the original order. Places the
     /// new variable at the end of the current order. Returns the label of the
     /// new variable.
-    pub fn new_var(&mut self) -> VarLabel {
+    pub fn new_label(&mut self) -> VarLabel {
         self.order.new_last()
     }
 
@@ -235,7 +235,7 @@ impl<T: LruTable<BddPtr>> BddManager<T> {
     /// # use rsdd::builder::cache::all_app::AllTable;
     /// # use rsdd::repr::bdd::BddPtr;
     /// let mut mgr = BddManager::<AllTable<BddPtr>>::new_default_order(10);
-    /// let lbl_a = mgr.new_var();
+    /// let lbl_a = mgr.new_label();
     /// let a = mgr.var(lbl_a, true);
     /// let a_and_not_a = mgr.and(a, a.neg());
     /// assert!(a_and_not_a.is_false());
@@ -839,8 +839,8 @@ mod tests {
     #[test]
     fn test_newvar() {
         let mut man = BddManager::<AllTable<BddPtr>>::new_default_order(0);
-        let l1 = man.new_var();
-        let l2 = man.new_var();
+        let l1 = man.new_label();
+        let l2 = man.new_label();
         let v1 = man.var(l1, true);
         let v2 = man.var(l2, true);
         let r1 = man.or(v1, v2);
@@ -1001,10 +1001,10 @@ mod tests {
     }
 
     #[test]
-    fn test_new_var() {
+    fn test_new_label() {
         let mut man = BddManager::<AllTable<BddPtr>>::new_default_order(0);
-        let vlbl1 = man.new_var();
-        let vlbl2 = man.new_var();
+        let vlbl1 = man.new_label();
+        let vlbl2 = man.new_label();
         let v1 = man.var(vlbl1, false);
         let v2 = man.var(vlbl2, false);
         let r1 = man.and(v1, v2);
@@ -1086,8 +1086,8 @@ mod tests {
         let mut man = BddManager::<AllTable<BddPtr>>::new_default_order(0);
         let mut ptrvec = Vec::new();
         for _ in 0..40 {
-            let vlab = man.new_var();
-            let flab = man.new_var();
+            let vlab = man.new_label();
+            let flab = man.new_label();
             let vptr = man.var(vlab, true);
             let fptr = man.var(flab, true);
             let sent = man.iff(vptr, fptr);
