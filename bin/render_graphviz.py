@@ -25,16 +25,62 @@ def walk_vtree(j, ps):
         right = walk_vtree(j["Node"]["right"], ps)
         count = count + 1
         ps.node(str(count), "", shape="point")
-        ps.edge(str(count), left)
-        ps.edge(str(count), right)
+        ps.edge(str(count), left, "l")
+        ps.edge(str(count), right, "r")
         return str(count)
         
 
-def print_vtree(options, file):
+def render_vtree(options, file):
     parsed = json.loads(file.read())
     g = graphviz.Digraph('G', filename=options.output)
     walk_vtree(parsed["root"], g)
     g.view()
+
+
+def render_bdd(options, file):
+    j = json.loads(file.read())
+    nodes = j["nodes"]
+    ps = graphviz.Digraph('G', filename=options.output)
+    # create all nodes
+    for (idx, n) in enumerate(nodes):
+        ps.node(str(idx), str(n["topvar"]), shape="circle")
+    ps.node("True", "T", shape="square")
+    ps.node("False", "F", shape="square")
+
+    # create all edges
+    for (idx, n) in enumerate(nodes):
+        low = n["low"]
+        high = n["high"]
+
+        if "Ptr" in low:
+            if low["Ptr"]["compl"]:
+                ps.edge(str(idx), str(low["Ptr"]["index"]), style="dotted", color="red")
+            else:
+                ps.edge(str(idx), str(low["Ptr"]["index"]), style="dotted", color="black")
+        else:
+            ps.edge(str(idx), low, style="dotted")
+
+        if "Ptr" in high:
+            if high["Ptr"]["compl"]:
+                ps.edge(str(idx), str(high["Ptr"]["index"]), color="red")
+            else:
+                ps.edge(str(idx), str(high["Ptr"]["index"]), color="black")
+        else:
+            ps.edge(str(idx), high)
+
+    # create root pointers
+    for (idx, r) in enumerate(j["roots"]):
+        name = str(idx) + "root"
+        ps.node(name, str(idx), shape="point")
+        if r["Ptr"]["compl"]:
+            ps.edge(name, str(r["Ptr"]["index"]), color="red")
+        else:
+            ps.edge(name, str(r["Ptr"]["index"]), color="black")
+   
+
+    ps.view()
+
+
 
 if __name__ == "__main__":
     parser = OptionParser()
@@ -48,6 +94,8 @@ if __name__ == "__main__":
     with open(options.file, "r") as f:
         file_extension = pathlib.Path(options.file).suffix
         if file_extension == ".vtree":
-            print_vtree(options, f)
+            render_vtree(options, f)
+        elif file_extension == ".bdd":
+            render_bdd(options, f)
         else:
             print("Failure: No matching extension for file %s. Please use extension '.vtree', '.sdd', '.bdd', or '.dtree'." % f)

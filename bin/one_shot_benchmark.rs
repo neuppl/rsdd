@@ -142,10 +142,15 @@ fn compile_bdd(str: String, _args: &Args) -> BenchResult {
     let mut man = BddManager::<BddApplyTable<BddPtr>>::new_default_order_lru(cnf.num_vars());
     let _bdd = man.from_cnf(&cnf);
 
-    if _args.dump_bdd.is_some() {
-        let json = ser_bdd::BDDSerializer::from_bdd(_bdd);
-        println!("{}", serde_json::to_string(&json).unwrap());
-    }
+    match &_args.dump_bdd {
+        Some(path) => {
+            let json = ser_bdd::BDDSerializer::from_bdd(_bdd);
+            let mut file = File::create(path).unwrap();
+            let r = file.write_all(serde_json::to_string(&json).unwrap().as_bytes());
+            assert!(r.is_ok(), "Error writing file");
+        },
+        _ => ()
+    };
 
     BenchResult {
         num_recursive: man.num_recursive_calls(),
@@ -161,8 +166,20 @@ fn compile_bdd_dtree(str: String, _args: &Args) -> BenchResult {
     let mut man = BddManager::<BddApplyTable<BddPtr>>::new(rev, BddApplyTable::new(cnf.num_vars()));
     let dtree = DTree::from_cnf(&cnf, &order);
     let plan = BddPlan::from_dtree(&dtree);
-    println!("cut width: {}", dtree.cutwidth());
+    // println!("cut width: {}", dtree.cutwidth());
     let _bdd = man.compile_plan(&plan);
+
+    match &_args.dump_bdd {
+        Some(path) => {
+            let json = ser_bdd::BDDSerializer::from_bdd(_bdd);
+            let mut file = File::create(path).unwrap();
+            let r = file.write_all(serde_json::to_string(&json).unwrap().as_bytes());
+            assert!(r.is_ok(), "Error writing file");
+        },
+        _ => ()
+    };
+
+
     BenchResult {
         num_recursive: man.num_recursive_calls(),
         size: _bdd.count_nodes(),
