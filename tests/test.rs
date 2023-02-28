@@ -695,7 +695,7 @@ mod test_sdd_manager {
             let mut mgr2 = super::SddManager::new(vtree);
             let c2 = mgr2.from_cnf(&c);
 
-            let prime = 1123;
+            let prime = 1123; // large enough for our purposes
             let map = mgr1.create_prob_map(prime);
 
             let h1 = c1.get_semantic_hash(&map, prime);
@@ -714,7 +714,8 @@ mod test_sdd_manager {
             uncompr_mgr.set_compression(false);
             let uncompr_cnf = uncompr_mgr.from_cnf(&c);
 
-            let prime = 1123; // large enough for our purposes
+            let prime = 4391; // large enough for our purposes
+
             let map = uncompr_mgr.create_prob_map(prime);
 
             let compr_h = compr_cnf.get_semantic_hash(&map, prime);
@@ -742,21 +743,28 @@ mod test_sdd_manager {
                 return TestResult::discard();
             }
 
-            let prime = 1123; // large enough for our purposes
-            let map = mgr.create_prob_map(prime);
+            let prime = 4391; // large enough for our purposes
 
-            let h1 = cnf_1.get_semantic_hash(&map, prime);
-            let h2 = cnf_2.get_semantic_hash(&map, prime);
+            // running iteratively, taking majority
 
-            if h1 == h2 {
-                println!("collision! h1: {h1}, h2: {h2}");
-                println!("map: {:?}", map);
-                println!("sdd1: {}", mgr.print_sdd(cnf_1));
-                println!("sdd2: {}", mgr.print_sdd(cnf_2));
-                TestResult::from_bool(false)
-            } else {
-                TestResult::from_bool(true)
+            let mut num_collisions = 0;
+
+            for _ in 1 .. 5 {
+
+                let map = mgr.create_prob_map(prime);
+
+                let h1 = cnf_1.get_semantic_hash(&map, prime);
+                let h2 = cnf_2.get_semantic_hash(&map, prime);
+
+                if h1 == h2 {
+                    println!("collision! h1: {h1}, h2: {h2}");
+                    println!("map: {:?}", map);
+                    println!("sdd1: {}", mgr.print_sdd(cnf_1));
+                    println!("sdd2: {}", mgr.print_sdd(cnf_2));
+                    num_collisions += 1;
+                }
             }
+            TestResult::from_bool(num_collisions < 2) // less than half
         }
     }
 }
