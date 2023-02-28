@@ -160,7 +160,6 @@ impl Default for VarSet {
     }
 }
 
-
 #[test]
 fn test_varset() {
     let mut v1 = VarSet::new();

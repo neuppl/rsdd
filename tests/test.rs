@@ -686,4 +686,85 @@ mod test_sdd_manager {
             cnf.is_trimmed()
         }
     }
+
+    quickcheck! {
+        fn prob_equiv_trivial(c: Cnf, vtree:VTree) -> bool {
+            let mut mgr1 = super::SddManager::new(vtree.clone());
+            let c1 = mgr1.from_cnf(&c);
+
+            let mut mgr2 = super::SddManager::new(vtree);
+            let c2 = mgr2.from_cnf(&c);
+
+            let prime = 1123; // large enough for our purposes
+            let map = mgr1.create_prob_map(prime);
+
+            let h1 = c1.get_semantic_hash(&map, prime);
+            let h2 = c2.get_semantic_hash(&map, prime);
+
+            h1 == h2
+        }
+    }
+
+    quickcheck! {
+        fn prob_equiv_sdd_identity_uncompressed(c: Cnf, vtree:VTree) -> TestResult {
+            let mut compr_mgr = super::SddManager::new(vtree.clone());
+            let compr_cnf = compr_mgr.from_cnf(&c);
+
+            let mut uncompr_mgr = super::SddManager::new(vtree);
+            uncompr_mgr.set_compression(false);
+            let uncompr_cnf = uncompr_mgr.from_cnf(&c);
+
+            let prime = 4391; // large enough for our purposes
+
+            let map = uncompr_mgr.create_prob_map(prime);
+
+            let compr_h = compr_cnf.get_semantic_hash(&map, prime);
+            let uncompr_h = uncompr_cnf.get_semantic_hash(&map, prime);
+
+            if compr_h != uncompr_h {
+                println!("not equal! hashes: compr: {compr_h}, uncompr: {uncompr_h}");
+                println!("map: {:?}", map);
+                println!("compr sdd: {}", compr_mgr.print_sdd(compr_cnf));
+                println!("uncompr sdd: {}", uncompr_mgr.print_sdd(uncompr_cnf));
+                TestResult::from_bool(false)
+            } else {
+                TestResult::from_bool(true)
+            }
+        }
+    }
+
+    quickcheck! {
+        fn prob_equiv_sdd_inequality(c1: Cnf, c2: Cnf, vtree:VTree) -> TestResult {
+            let mut mgr = super::SddManager::new(vtree);
+            let cnf_1 = mgr.from_cnf(&c1);
+            let cnf_2 = mgr.from_cnf(&c2);
+
+            if cnf_1 == cnf_2 {
+                return TestResult::discard();
+            }
+
+            let prime = 4391; // large enough for our purposes
+
+            // running iteratively, taking majority
+
+            let mut num_collisions = 0;
+
+            for _ in 1 .. 5 {
+
+                let map = mgr.create_prob_map(prime);
+
+                let h1 = cnf_1.get_semantic_hash(&map, prime);
+                let h2 = cnf_2.get_semantic_hash(&map, prime);
+
+                if h1 == h2 {
+                    println!("collision! h1: {h1}, h2: {h2}");
+                    println!("map: {:?}", map);
+                    println!("sdd1: {}", mgr.print_sdd(cnf_1));
+                    println!("sdd2: {}", mgr.print_sdd(cnf_2));
+                    num_collisions += 1;
+                }
+            }
+            TestResult::from_bool(num_collisions < 2) // less than half
+        }
+    }
 }

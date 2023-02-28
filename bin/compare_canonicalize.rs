@@ -147,10 +147,12 @@ fn main() {
     // or maybe eval_sdd? not sure
     for _ in 0..args.iterations {
         originals.push(
-            compile_sdd_benchmark(black_box(&cnf), VTree::from_dtree(&dtree).unwrap(), false).as_secs_f64(),
+            compile_sdd_benchmark(black_box(&cnf), VTree::from_dtree(&dtree).unwrap(), false)
+                .as_secs_f64(),
         );
         modifieds.push(
-            compile_sdd_benchmark(black_box(&cnf), VTree::from_dtree(&dtree).unwrap(), true).as_secs_f64(),
+            compile_sdd_benchmark(black_box(&cnf), VTree::from_dtree(&dtree).unwrap(), true)
+                .as_secs_f64(),
         );
     }
 
