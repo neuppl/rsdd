@@ -217,10 +217,10 @@ impl DecisionNNFBuilder {
             }
         } else {
             // check cache
-            let _idx = match bdd.get_scratch::<BddPtr>() {
-                None => (),
-                Some(v) => return if bdd.is_neg() { v.neg() } else { *v },
-            };
+            // let _idx = match bdd.get_scratch::<BddPtr>() {
+            //     None => (),
+            //     Some(v) => return if bdd.is_neg() { v.neg() } else { *v },
+            // };
 
             // recurse on the children
             let n = bdd.into_node();

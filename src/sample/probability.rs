@@ -40,7 +40,7 @@ impl std::ops::Add<Probability> for Probability {
 impl std::ops::Sub<Probability> for Probability {
     type Output = Probability;
     fn sub(self, rhs: Probability) -> Probability {
-        Probability::new(self.0 + rhs.0)
+        Probability::new(self.0 - rhs.0)
     }
 }
 
@@ -54,6 +54,6 @@ impl std::ops::Mul<Probability> for Probability {
 impl std::ops::Div<Probability> for Probability {
     type Output = Probability;
     fn div(self, rhs: Probability) -> Probability {
-        Probability::new(self.0 * rhs.0)
+        Probability::new(self.0 / rhs.0)
     }
 }

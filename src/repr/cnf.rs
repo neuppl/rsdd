@@ -9,6 +9,7 @@ use rand::rngs::ThreadRng;
 use rand::Rng;
 use std::cmp::{max, min};
 use std::collections::{HashMap, HashSet};
+use std::fmt;
 extern crate quickcheck;
 use self::quickcheck::{Arbitrary, Gen};
 use crate::repr::model::PartialModel;
@@ -174,12 +175,12 @@ impl CnfHasher {
                     cur_clause_v = cur_clause_v.wrapping_mul(*weight as u128);
                 }
             }
-            for i in 0..NUM_PRIMES {
+            for i in v.iter_mut().take(NUM_PRIMES) {
                 // TODO at the moment this modular multiplication is very slow; we should use a
                 // crate that supports fast modular multiplication for fixed prime fields
                 // using just 128-bit for now, but this is a hack
                 // v[i] = (v[i]* (cur_clause_v)) % PRIMES[i];
-                v[i] = v[i].wrapping_mul(cur_clause_v);
+                *i = i.wrapping_mul(cur_clause_v);
             }
         }
         HashedCNF { v }
@@ -277,7 +278,7 @@ impl Cnf {
                 m = max(lit.get_label().value() + 1, m);
             }
             // remove duplicate literals
-            clause.sort_by(|a, b| a.get_label().value().cmp(&b.get_label().value()));
+            clause.sort_by_key(|a| a.get_label().value());
             clause.dedup();
         }
 
@@ -409,14 +410,11 @@ impl Cnf {
         for clause in self.clauses.iter() {
             let mut clause_sat = false;
             for lit in clause.iter() {
-                match partial_assignment.get(lit.get_label()) {
-                    Some(assgn) => {
-                        if lit.get_polarity() == assgn {
-                            clause_sat = true;
-                        }
+                if let Some(assgn) = partial_assignment.get(lit.get_label()) {
+                    if lit.get_polarity() == assgn {
+                        clause_sat = true;
                     }
-                    None => (),
-                };
+                }
             }
             if !clause_sat {
                 return false;
@@ -531,7 +529,7 @@ impl Cnf {
             let l = avg_cog.len();
             let mut avg_cog: Vec<(f64, usize)> = avg_cog.into_iter().zip(0..l).collect();
             // now sort avg_cog on the centers of gravity
-            avg_cog.sort_by(|&(ref c1, _), &(ref c2, _)| c1.partial_cmp(c2).unwrap());
+            avg_cog.sort_by(|(c1, _), (c2, _)| c1.partial_cmp(c2).unwrap());
             // update positions
             let pos_to_lbl: Vec<usize> = avg_cog.into_iter().map(|(_, p)| p).collect();
             // now convert to lbl_to_pos
@@ -557,14 +555,10 @@ impl Cnf {
             .iter()
             .filter_map(|clause| {
                 // first, check if there is a true literal -- if there is, filter out this clause
-                if clause
-                    .iter()
-                    .find(|outer| {
-                        outer.get_label() == lit.get_label()
-                            && outer.get_polarity() == lit.get_polarity()
-                    })
-                    .is_some()
-                {
+                if clause.iter().any(|outer| {
+                    outer.get_label() == lit.get_label()
+                        && outer.get_polarity() == lit.get_polarity()
+                }) {
                     None
                 } else {
                     // next, filter out clauses with false literals
@@ -581,31 +575,6 @@ impl Cnf {
             })
             .collect();
         Cnf::new(new_cnf)
-    }
-
-    pub fn to_string(&self) -> String {
-        let mut r = String::new();
-        for clause in self.clauses.iter() {
-            let mut clause_str = String::new();
-            for lit in clause.iter() {
-                let lit_str = format!(
-                    "{}{}",
-                    if lit.get_polarity() { "" } else { "!" },
-                    lit.get_label().value()
-                );
-                if clause_str.is_empty() {
-                    clause_str = lit_str;
-                } else {
-                    clause_str = format!("{} || {}", clause_str, lit_str);
-                }
-            }
-            if r.is_empty() {
-                r = format!("({})", clause_str);
-            } else {
-                r = format!(" {} && ({})", r, clause_str);
-            }
-        }
-        r
     }
 
     pub fn interaction_graph(&self) -> UnGraph<VarLabel, ()> {
@@ -694,6 +663,33 @@ impl Arbitrary for Cnf {
             clauses.push(clause);
         }
         Cnf::new(clauses)
+    }
+}
+
+impl fmt::Display for Cnf {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let mut r = String::new();
+        for clause in self.clauses.iter() {
+            let mut clause_str = String::new();
+            for lit in clause.iter() {
+                let lit_str = format!(
+                    "{}{}",
+                    if lit.get_polarity() { "" } else { "!" },
+                    lit.get_label().value()
+                );
+                if clause_str.is_empty() {
+                    clause_str = lit_str;
+                } else {
+                    clause_str = format!("{} || {}", clause_str, lit_str);
+                }
+            }
+            if r.is_empty() {
+                r = format!("({})", clause_str);
+            } else {
+                r = format!(" {} && ({})", r, clause_str);
+            }
+        }
+        write!(f, "{}", r)
     }
 }
 

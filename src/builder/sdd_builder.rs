@@ -2,6 +2,10 @@
 //! with SDDs.
 
 use std::cmp::Ordering;
+use std::collections::HashMap;
+
+use rand::seq::SliceRandom;
+use rand::thread_rng;
 
 use super::cache::all_app::AllTable;
 use super::cache::ite::Ite;
@@ -12,7 +16,6 @@ use crate::backing_store::UniqueTable;
 use crate::repr::ddnnf::DDNNFPtr;
 use crate::repr::sdd::{BinarySDD, SddAnd, SddOr, SddPtr};
 use crate::repr::vtree::{VTree, VTreeIndex, VTreeManager};
-use crate::repr::wmc::WmcParams;
 use crate::{repr::cnf::Cnf, repr::logical_expr::LogicalExpr, repr::var_label::VarLabel};
 
 #[derive(Debug, Clone)]
@@ -24,6 +27,12 @@ pub struct SddStats {
 impl SddStats {
     pub fn new() -> SddStats {
         SddStats { num_rec: 0 }
+    }
+}
+
+impl Default for SddStats {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -39,7 +48,7 @@ pub struct SddManager {
     use_compression: bool,
 }
 
-impl<'a> SddManager {
+impl SddManager {
     pub fn new(vtree: VTree) -> SddManager {
         SddManager {
             sdd_tbl: BackedRobinhoodTable::new(),
@@ -128,12 +137,12 @@ impl<'a> SddManager {
             } else {
                 node[1].sub()
             };
-            return self.unique_bdd(BinarySDD::new(v, low, high, table));
+            self.unique_bdd(BinarySDD::new(v, low, high, table))
         } else {
-            node.sort_by(|a, b| a.prime().cmp(&b.prime()));
+            node.sort_by_key(|a| a.prime());
             if node[0].sub().is_neg() || node[0].sub().is_false() || node[0].sub().is_neg_var() {
-                for i in 0..node.len() {
-                    node[i] = SddAnd::new(node[i].prime(), node[i].sub().neg());
+                for x in node.iter_mut() {
+                    *x = SddAnd::new(x.prime(), x.sub().neg());
                 }
                 self.get_or_insert(SddOr::new(node, table)).neg()
             } else {
@@ -250,7 +259,7 @@ impl<'a> SddManager {
             let new_s = self.and(root_s, d);
             v.push(SddAnd::new(root_p, new_s));
         }
-        return self.canonicalize(v, r.vtree());
+        self.canonicalize(v, r.vtree())
     }
 
     /// conjoin SDDs where `d` is a descendent of `r`, and `r` is sub to `d`
@@ -326,8 +335,7 @@ impl<'a> SddManager {
         }
 
         // canonicalize
-        let ptr = self.canonicalize(new_n, r.vtree());
-        ptr
+        self.canonicalize(new_n, r.vtree())
 
         // for a in r.node_iter() {
         //     let p = self.and(a.prime(), d);
@@ -363,16 +371,19 @@ impl<'a> SddManager {
             // // check if there exists an equal prime
             let eq_itm = b.node_iter().find(|a| self.sdd_eq(a.prime(), p1));
             let s1 = if a.is_neg() { s1.neg() } else { s1 };
-            if eq_itm.is_some() {
-                let andb = eq_itm.unwrap();
-                let s2 = if b.is_neg() {
-                    andb.sub().neg()
-                } else {
-                    andb.sub()
-                };
-                // this sub is the only one with a non-false prime, so no need to iterate
-                r.push(SddAnd::new(p1, self.and(s1, s2)));
-                continue;
+
+            match eq_itm {
+                None => (),
+                Some(andb) => {
+                    let s2 = if b.is_neg() {
+                        andb.sub().neg()
+                    } else {
+                        andb.sub()
+                    };
+                    // this sub is the only one with a non-false prime, so no need to iterate
+                    r.push(SddAnd::new(p1, self.and(s1, s2)));
+                    continue;
+                }
             }
 
             // no special case
@@ -402,8 +413,7 @@ impl<'a> SddManager {
         }
 
         // canonicalize
-        let ptr = self.canonicalize(r, lca);
-        ptr
+        self.canonicalize(r, lca)
     }
 
     pub fn and(&mut self, a: SddPtr, b: SddPtr) -> SddPtr {
@@ -437,8 +447,9 @@ impl<'a> SddManager {
 
         // check if we have this application cached
         let c = self.app_cache.get(SddAnd::new(a, b));
-        if c.is_some() {
-            return c.unwrap();
+
+        if let Some(x) = c {
+            return x;
         }
 
         // now we determine the current iterator for primes and subs
@@ -465,7 +476,7 @@ impl<'a> SddManager {
         };
         // cache and return
         self.app_cache.insert(SddAnd::new(a, b), r);
-        return r;
+        r
     }
 
     pub fn or(&mut self, a: SddPtr, b: SddPtr) -> SddPtr {
@@ -530,16 +541,14 @@ impl<'a> SddManager {
     /// Computes the SDD representing the logical function `if f then g else h`
     pub fn ite(&mut self, f: SddPtr, g: SddPtr, h: SddPtr) -> SddPtr {
         let ite = Ite::new(|a, b| self.vtree.is_prime(a, b), f, g, h);
-        match ite {
-            Ite::IteConst(f) => return f,
-            _ => (),
-        };
+        if let Ite::IteConst(f) = ite {
+            return f;
+        }
 
         let hash = self.ite_cache.hash(&ite);
-        match self.ite_cache.get(ite, hash) {
-            Some(v) => return v,
-            None => (),
-        };
+        if let Some(v) = self.ite_cache.get(ite, hash) {
+            return v;
+        }
 
         // TODO make this a primitive operation
         let fg = self.and(f, g);
@@ -578,101 +587,9 @@ impl<'a> SddManager {
         // self.exists(a, lbl)
     }
 
-    fn is_canonical_h(&self, f: SddPtr) -> bool {
-        self.is_compressed(f) && self.is_trimmed(f)
-    }
-
-    pub fn is_canonical(&self, f: SddPtr) -> bool {
-        self.is_canonical_h(f)
-    }
-
-    // predicate that returns if an SDD is compressed;
-    // see https://www.ijcai.org/Proceedings/11/Papers/143.pdf
-    // definition 8
-    pub fn is_compressed(&self, f: SddPtr) -> bool {
-        self.is_compressed_h(f)
-    }
-
-    fn is_compressed_h(&self, _f: SddPtr) -> bool {
-        panic!("not impl")
-        // if f.is_const() {
-        //     return true;
-        // }
-
-        // // TODO: is this assumption correct?
-        // if f.is_bdd() {
-        //     return true;
-        // }
-
-        // // question for matt: should we be recursively passing this down?
-        // let mut visited_sdds: HashSet<SddPtr> = HashSet::new();
-
-        // let or = self.tbl.sdd_get_or(f);
-
-        // for (_, s) in or.iter() {
-        //     if visited_sdds.contains(&s.regular()) {
-        //         return false;
-        //     }
-        //     visited_sdds.insert(s.regular());
-        // }
-
-        // return or.iter().all(|(p, _)| self.is_compressed(*p));
-    }
-
-    // predicate that returns if an SDD is trimmed;
-    // see https://www.ijcai.org/Proceedings/11/Papers/143.pdf
-    // definition 8
-    pub fn is_trimmed(&self, f: SddPtr) -> bool {
-        self.is_trimmed_h(f)
-    }
-
-    fn is_trimmed_h(&self, _f: SddPtr) -> bool {
-        panic!("not impl")
-        // if f.is_const() {
-        //     return true;
-        // }
-
-        // // assumption: bdd is trimmed!
-        // if f.is_bdd() {
-        //     return true;
-        // }
-
-        // let or = self.tbl.sdd_get_or(f);
-
-        // // this is a linear search for decompositions of the form (T, a)
-        // let trivial_p_exists = or.iter().all(|(p, _)| p.is_true());
-
-        // if trivial_p_exists {
-        //     return false;
-        // }
-
-        // // TODO(mattxwang): significantly optimize this
-        // // this next part is an O(n^2) (i.e., pairwise) comparison of each SDD
-        // // and an arbitrary prime. we are looking for untrimmed decomposition pairs of the form (a, T) and (~a, F)
-        // let mut visited_sdds: Vec<SddPtr> = Vec::new();
-
-        // for (p, s) in or.iter() {
-        //     if !s.is_const() {
-        //         continue;
-        //     }
-        //     let p_neg = p.neg();
-        //     let neg_exists = visited_sdds
-        //         .iter()
-        //         .any(|visited_p| self.sdd_eq(*visited_p, p_neg));
-
-        //     if neg_exists {
-        //         return false;
-        //     }
-        //     visited_sdds.push(*p);
-        // }
-
-        // // neither trimmed form exists at the top-level, so we recurse down once
-        // return or.iter().all(|(p, _)| self.is_trimmed(*p));
-    }
-
     fn print_sdd_internal(&self, ptr: SddPtr) -> String {
         use pretty::*;
-        fn helper(man: &SddManager, ptr: SddPtr) -> Doc<BoxDoc> {
+        fn helper(_man: &SddManager, ptr: SddPtr) -> Doc<BoxDoc> {
             if ptr.is_true() {
                 return Doc::from("T");
             } else if ptr.is_false() {
@@ -685,11 +602,11 @@ impl<'a> SddManager {
                     l.get_label().value()
                 ));
             } else if ptr.is_bdd() {
-                let l = helper(man, ptr.low());
-                let h = helper(man, ptr.high());
+                let l = helper(_man, ptr.low());
+                let h = helper(_man, ptr.high());
                 let mut doc: Doc<BoxDoc> = Doc::from("");
                 doc = doc.append(Doc::newline()).append(
-                    (Doc::from(format!("ITE {:?} ", ptr))
+                    (Doc::from(format!("ITE {:?} {}", ptr, ptr.topvar().value()))
                         .append(Doc::newline())
                         .append(h.append(Doc::newline()).append(l)))
                     .nest(2),
@@ -702,8 +619,8 @@ impl<'a> SddManager {
                 let sub = a.sub();
                 let prime = a.prime();
                 let s = if ptr.is_neg() { sub.neg() } else { sub };
-                let new_s1 = helper(man, prime);
-                let new_s2 = helper(man, s);
+                let new_s1 = helper(_man, prime);
+                let new_s2 = helper(_man, s);
                 doc = doc.append(Doc::newline()).append(
                     (Doc::from("/\\")
                         .append(Doc::newline())
@@ -711,7 +628,7 @@ impl<'a> SddManager {
                     .nest(2),
                 );
             }
-            let d = Doc::from(format!("\\/"));
+            let d = Doc::from(format!("\\/ {:?}", ptr));
             d.append(doc.nest(2))
         }
         let d = helper(self, ptr);
@@ -781,8 +698,8 @@ impl<'a> SddManager {
         for lit_vec in cnf_sorted.iter() {
             let (vlabel, val) = (lit_vec[0].get_label(), lit_vec[0].get_polarity());
             let mut bdd = SddPtr::var(vlabel, val);
-            for i in 1..lit_vec.len() {
-                let (vlabel, val) = (lit_vec[i].get_label(), lit_vec[i].get_polarity());
+            for lit in lit_vec {
+                let (vlabel, val) = (lit.get_label(), lit.get_polarity());
                 let var = SddPtr::var(vlabel, val);
                 bdd = self.or(bdd, var);
             }
@@ -806,10 +723,9 @@ impl<'a> SddManager {
             }
         }
         let r = helper(&cvec, self);
-        if r.is_none() {
-            SddPtr::true_ptr()
-        } else {
-            r.unwrap()
+        match r {
+            None => SddPtr::true_ptr(),
+            Some(x) => x,
         }
     }
 
@@ -852,6 +768,29 @@ impl<'a> SddManager {
         //         self.ite(g, thn, els)
         //     }
         // }
+    }
+
+    // Generates a mapping from variables to numbers in [2, PRIME)
+    pub fn create_prob_map(&self, prime: u128) -> HashMap<usize, u128> {
+        let all_vars = self.get_vtree_root().get_all_vars();
+        let vars = all_vars.into_iter().collect::<Vec<usize>>();
+
+        // theoretical guarantee from paper; need to verify more!
+        assert!((2 * vars.len() as u128) < prime);
+
+        let mut random_order = vars;
+        random_order.shuffle(&mut thread_rng());
+
+        let mut value_range: Vec<u128> = (2..prime / 2).collect();
+        value_range.shuffle(&mut thread_rng());
+
+        let mut map = HashMap::<usize, u128>::new();
+
+        for (&var, &value) in random_order.iter().zip(value_range.iter()) {
+            map.insert(var, value);
+        }
+
+        map
     }
 
     pub fn get_stats(&self) -> &SddStats {
@@ -1091,8 +1030,7 @@ fn sdd_circuit2() {
     );
 }
 
-#[allow(dead_code)]
-// #[test]
+#[test]
 fn sdd_wmc1() {
     // modeling the formula (x<=>fx) && (y<=>fy), with f weight of 0.5
 
@@ -1114,8 +1052,8 @@ fn sdd_wmc1() {
         ],
         1,
     );
-    let mut man = SddManager::new(vtree.clone());
-    let mut wmc_map = WmcParams::new(0.0, 1.0);
+    let mut man = SddManager::new(vtree);
+    let mut wmc_map = crate::repr::wmc::WmcParams::new(0.0, 1.0);
     let x = SddPtr::var(VarLabel::new(0), true);
     wmc_map.set_weight(VarLabel::new(0), 1.0, 1.0);
     let y = SddPtr::var(VarLabel::new(1), true);
@@ -1139,71 +1077,31 @@ fn sdd_wmc1() {
     );
 }
 
-// #[test]
-// fn is_canonical_trivial() {
-//     let mut mgr = SddManager::new(even_split(&[VarLabel::new(0)], 2));
-//     let a = mgr.var(VarLabel::new(0), true);
+#[test]
+fn prob_equiv_sdd_demorgan() {
+    let mut man = SddManager::new(VTree::even_split(
+        &[
+            VarLabel::new(0),
+            VarLabel::new(1),
+            VarLabel::new(2),
+            VarLabel::new(3),
+            VarLabel::new(4),
+        ],
+        1,
+    ));
+    man.set_compression(false);
+    let x = SddPtr::var(VarLabel::new(0), true);
+    let y = SddPtr::var(VarLabel::new(3), true);
+    let res = man.or(x, y).neg();
+    let expected = man.and(x.neg(), y.neg());
 
-//     assert_eq!(mgr.is_trimmed(a), true);
-//     assert_eq!(mgr.is_compressed(a), true);
-//     assert_eq!(mgr.is_canonical(a), true);
-// }
+    let prime = 1223; // small enough for this circuit
+    let map = man.create_prob_map(prime);
 
-// #[test]
-// fn not_compressed_or_trimmed_trivial() {
-//     let mut man = SddManager::new(even_split(
-//         &[
-//             VarLabel::new(0),
-//             VarLabel::new(1),
-//             VarLabel::new(2),
-//             VarLabel::new(3),
-//         ],
-//         2,
-//     ));
+    let sh1 = res.get_semantic_hash(&map, prime);
+    let sh2 = expected.get_semantic_hash(&map, prime);
 
-//     man.set_compression(false); // necessary so we can observe duplication
-
-//     let x = man.var(VarLabel::new(0), true);
-//     let y = man.var(VarLabel::new(1), true);
-//     let f1 = man.var(VarLabel::new(2), true);
-
-//     let iff1 = man.iff(x, f1);
-//     let iff2 = man.iff(y, f1); // note: same g's here!
-//     let obs = man.or(x, x); // note: same x's here!
-//     let and1 = man.and(iff1, iff2);
-//     let f = man.and(and1, obs);
-
-//     assert_eq!(man.is_trimmed(f), false);
-//     assert_eq!(man.is_compressed(f), false);
-//     assert_eq!(man.is_canonical(f), false);
-// }
-
-// // note: this test is identical to the one above.
-// // However, we keep compression on, and flip the asserts on the predicates
-// // the idea is that we test that the SDD Manager does indeed compress / trim under-the-hood!
-// #[test]
-// fn test_compression() {
-//     let mut man = SddManager::new(even_split(
-//         &[
-//             VarLabel::new(0),
-//             VarLabel::new(1),
-//             VarLabel::new(2),
-//             VarLabel::new(3),
-//         ],
-//         2,
-//     ));
-
-//     let x = man.var(VarLabel::new(0), true);
-//     let y = man.var(VarLabel::new(1), true);
-//     let f1 = man.var(VarLabel::new(2), true);
-
-//     let iff1 = man.iff(x, f1);
-//     let iff2 = man.iff(y, f1); // note: same g's here!
-//     let obs = man.or(x, x);
-//     let and1 = man.and(iff1, iff2);
-//     let f = man.and(and1, obs);
-
-//     assert_eq!(man.is_trimmed(f), true);
-//     assert_eq!(man.is_compressed(f), true);
-//     assert_eq!(man.is_canonical(f), true);
-// }
+    // TODO: need to express this as pointer eq, not semantic eq
+    // assert!(res != expected);
+    assert!(sh1 == sh2, "Not eq:\nGot: {}\nExpected: {}", sh1, sh2);
+}

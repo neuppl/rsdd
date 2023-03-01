@@ -1,7 +1,14 @@
 //! Defines the vtree datastructure used by SDDs for decomposition
 
+use std::collections::HashSet;
+
 use super::{sdd::SddPtr, var_label::VarLabel};
+use crate::quickcheck::{Arbitrary, Gen};
+use crate::repr::dtree::DTree;
 use crate::util::btree::{BTree, LeastCommonAncestor};
+use rand::rngs::SmallRng;
+use rand::seq::SliceRandom;
+use rand::SeedableRng;
 
 pub type VTree = BTree<(), VarLabel>;
 
@@ -9,13 +16,26 @@ impl VTree {
     pub fn new_node(l: Box<VTree>, r: Box<VTree>) -> VTree {
         VTree::Node((), l, r)
     }
+
     pub fn new_leaf(v: VarLabel) -> VTree {
         VTree::Leaf(v)
     }
+
     pub fn num_vars(&self) -> usize {
         match self {
             BTree::Leaf(v) => v.value_usize() + 1,
             BTree::Node((), l, r) => usize::max(l.num_vars(), r.num_vars()),
+        }
+    }
+
+    pub fn get_all_vars(&self) -> HashSet<usize> {
+        match self {
+            BTree::Leaf(v) => HashSet::from([v.value_usize()]),
+            BTree::Node((), l, r) => {
+                let lvar = l.get_all_vars();
+                let rvar = r.get_all_vars();
+                &lvar | &rvar
+            }
         }
     }
 
@@ -40,10 +60,70 @@ impl VTree {
         }
     }
 
+    /// construct a right-linear vtree that has an optional continuation
+    /// a continuation is a sub-tree that the right-linear vtree terminates to
+    fn right_linear_c(vars: &[VarLabel], continuation: &Option<VTree>) -> VTree {
+        // slice patterns are great!
+        match (vars, continuation) {
+            (&[], None) => panic!("invalid vtree: no vars"),
+            (&[], Some(v)) => v.clone(),
+            (&[v1], Some(v2)) => {
+                VTree::new_node(Box::new(VTree::new_leaf(v1)), Box::new(v2.clone()))
+            }
+            (&[v1], None) => VTree::new_leaf(v1),
+            (&[v, ref vars @ ..], _) => {
+                let sub = VTree::right_linear_c(vars, continuation);
+                VTree::new_node(Box::new(VTree::new_leaf(v)), Box::new(sub))
+            }
+        }
+    }
+
+    /// Converts a dtree into a vtree
+    /// For details on this process, see Section 3.5 of
+    /// Oztok, Umut, and Adnan Darwiche. "On compiling CNF into decision-DNNF."
+    /// International Conference on Principles and Practice of Constraint
+    /// Programming. Springer, Cham, 2014.
+    pub fn from_dtree(dtree: &DTree) -> Option<VTree> {
+        match &&dtree {
+            DTree::Leaf {
+                clause: _,
+                cutset,
+                vars: _,
+            } => {
+                let cutset_v: Vec<VarLabel> = cutset.iter().collect();
+                if cutset.is_empty() {
+                    None
+                } else {
+                    Some(VTree::right_linear_c(cutset_v.as_slice(), &None))
+                }
+            }
+            DTree::Node {
+                l,
+                r,
+                cutset,
+                vars: _,
+            } => {
+                let cutset_v: Vec<VarLabel> = cutset.iter().collect();
+                let l_vtree = VTree::from_dtree(l);
+                let r_vtree = VTree::from_dtree(r);
+                match (l_vtree, r_vtree) {
+                    (None, None) if cutset_v.is_empty() => None,
+                    (None, None) => Some(VTree::right_linear_c(cutset_v.as_slice(), &None)),
+                    (Some(l), None) => Some(VTree::right_linear_c(cutset_v.as_slice(), &Some(l))),
+                    (None, Some(r)) => Some(VTree::right_linear_c(cutset_v.as_slice(), &Some(r))),
+                    (Some(l), Some(r)) => {
+                        let subtree = VTree::new_node(Box::new(l), Box::new(r));
+                        Some(VTree::right_linear_c(cutset_v.as_slice(), &Some(subtree)))
+                    }
+                }
+            }
+        }
+    }
+
     /// generate an even vtree by splitting a variable ordering in half repeatedly
     /// times; then reverts to a right-linear vtree for the remainder
     pub fn even_split(order: &[VarLabel], num_splits: usize) -> VTree {
-        if num_splits <= 0 {
+        if num_splits == 0 {
             Self::right_linear(order)
         } else {
             let (l_s, r_s) = order.split_at(order.len() / 2);
@@ -51,6 +131,34 @@ impl VTree {
             let r_tree = Self::even_split(r_s, num_splits - 1);
             BTree::Node((), Box::new(l_tree), Box::new(r_tree))
         }
+    }
+}
+
+impl Arbitrary for VTree {
+    fn arbitrary(g: &mut Gen) -> VTree {
+        let mut rng = SmallRng::seed_from_u64(u64::arbitrary(g));
+        let mut vars: Vec<VarLabel> = (0..16).map(VarLabel::new).collect();
+
+        vars.shuffle(&mut rng);
+
+        fn rand_split(order: &[VarLabel], g: &mut Gen) -> VTree {
+            match order.len() {
+                0 => panic!("invalid label order passed; expects at least one VarLabel"),
+                1 => VTree::new_leaf(order[0]),
+                2 => VTree::new_node(
+                    Box::new(VTree::new_leaf(order[0])),
+                    Box::new(VTree::new_leaf(order[1])),
+                ),
+                len => {
+                    // clamps so we're guaranteed at least one item in l_s, r_s
+                    let split_index = (usize::arbitrary(g) % (len - 1)) + 1;
+                    let (l_s, r_s) = order.split_at(split_index);
+                    VTree::new_node(Box::new(rand_split(l_s, g)), Box::new(rand_split(r_s, g)))
+                }
+            }
+        }
+
+        rand_split(&vars[..], g)
     }
 }
 
@@ -80,6 +188,7 @@ pub struct VTreeManager {
     bfs_to_dfs: Vec<usize>,
     /// maps an Sdd VarLabel into its vtree index in the depth-first order
     vtree_idx: Vec<usize>,
+    #[allow(clippy::vec_box)] // TODO: fix this, but requires some refactoring
     index_lookup: Vec<Box<VTree>>,
     lca: LeastCommonAncestor,
 }
@@ -118,7 +227,7 @@ impl VTreeManager {
 
     /// Given a vtree index, produce a pointer to the vtree this corresponds with
     pub fn get_idx(&self, idx: VTreeIndex) -> &VTree {
-        &*(self.index_lookup[idx.0])
+        &(self.index_lookup[idx.0])
     }
 
     /// Find the index into self.vtree that contains the label `lbl`

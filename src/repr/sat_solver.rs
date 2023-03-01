@@ -212,13 +212,9 @@ impl<'a> UnitPropagate<'a> {
             }
 
             // gather a list of all remaining unassigned literals in the current clause
-            let mut remaining_lits =
-                clause
-                    .iter()
-                    .filter(|x| match self.cur_state().get(x.get_label()) {
-                        None => true,
-                        Some(_) => false,
-                    });
+            let mut remaining_lits = clause
+                .iter()
+                .filter(|x| self.cur_state().get(x.get_label()).is_none());
 
             let num_remaining = remaining_lits.clone().count();
             if num_remaining == 0 {
@@ -290,6 +286,7 @@ impl<'a> UnitPropagate<'a> {
     }
 }
 
+#[allow(clippy::upper_case_acronyms)]
 #[derive(Copy, Clone, PartialEq, Eq)]
 enum SATState {
     UNSAT, // the state is currently unsatisfied according to the units in the CNF
@@ -380,10 +377,7 @@ impl<'a> SATSolver<'a> {
     /// True if the formula is UNSAT according to the current state of the
     /// decided units
     pub fn unsat_unit(&self) -> bool {
-        match self.top_state() {
-            SATState::UNSAT => true,
-            _ => false,
-        }
+        matches!(self.top_state(), SATState::UNSAT)
     }
 
     /// Get the set of currently implied units

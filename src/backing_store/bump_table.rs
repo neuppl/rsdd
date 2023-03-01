@@ -30,7 +30,7 @@ struct HashTableElement<T: Clone> {
 impl<T: Clone> Default for HashTableElement<T> {
     fn default() -> Self {
         HashTableElement {
-            ptr: 0 as *mut T,
+            ptr: std::ptr::null_mut::<T>(),
             hash: 0,
             psl: 0,
         }
@@ -39,15 +39,12 @@ impl<T: Clone> Default for HashTableElement<T> {
 
 impl<T: Clone> HashTableElement<T> {
     pub fn new(ptr: *mut T, hash: u64, psl: u8) -> HashTableElement<T> {
-        HashTableElement {
-            ptr,
-            hash,
-            psl: psl,
-        }
+        HashTableElement { ptr, hash, psl }
     }
 
+    #[allow(clippy::cmp_null)] // TODO: fix. unsure why the suggestion (using is_null) doesn't work
     pub fn is_occupied(&self) -> bool {
-        return self.ptr != 0 as *mut T;
+        self.ptr != std::ptr::null_mut::<T>()
     }
 }
 
@@ -55,7 +52,7 @@ impl<T: Clone> HashTableElement<T> {
 /// is used during growing and after an element has been found during
 /// `get_or_insert`
 fn propagate<T: Clone>(
-    v: &mut Vec<HashTableElement<T>>,
+    v: &mut [HashTableElement<T>],
     cap: usize,
     itm: HashTableElement<T>,
     pos: usize,
@@ -148,6 +145,7 @@ where
     //     let total = self.tbl.iter().fold(0, |sum, cur| cur.offset() + sum);
     //     (total as f64) / (self.len as f64)
     // }
+
     #[allow(dead_code)]
     pub fn num_nodes(&self) -> usize {
         self.len

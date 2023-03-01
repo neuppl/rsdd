@@ -37,9 +37,6 @@ path = "src/lib.rs"
 crate-type = ["staticlib", "rlib", "dylib"]
 
 
-[build]
-rustflags = ["-C", "link-args=-Wl,-undefined,dynamic_lookup,-export-dynamic"]
-
 [profile.release]
 opt-level = 3
 debug = false

@@ -1,5 +1,6 @@
 //! A generic data structure for tracking variable labels throughout the library
 use std::fmt;
+use serde::Serialize;
 
 extern crate quickcheck;
 use bit_set::BitSet;
@@ -32,7 +33,7 @@ impl VarLabel {
 }
 
 /// Literal, a variable label and its corresponding truth assignment
-#[derive(Clone, PartialEq, Eq, Hash, Copy)]
+#[derive(Clone, PartialEq, Eq, Hash, Copy, Serialize, Deserialize)]
 pub struct Literal {
     data: u64,
 }
@@ -93,17 +94,44 @@ pub struct VarSet {
     b: BitSet,
 }
 
+impl Serialize for VarSet {
+    fn serialize<S>(&self, _serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer {
+        todo!()
+    }
+}
+
 impl VarSet {
     pub fn new() -> VarSet {
         VarSet { b: BitSet::new() }
     }
 
-    /// unions self with other
-    pub fn union_with(&mut self, other: &VarSet) -> () {
+    /// unions self with other in-place
+    pub fn union_with(&mut self, other: &VarSet) {
         self.b.union_with(&other.b);
     }
 
-    pub fn insert(&mut self, v: VarLabel) -> () {
+    /// unions self with other in-place
+    pub fn iter(&self) -> impl Iterator<Item = VarLabel> + '_ {
+        self.b.iter().map(VarLabel::new_usize)
+    }
+
+    /// unions self with other
+    pub fn union(&self, other: &VarSet) -> VarSet {
+        VarSet {
+            b: self.b.union(&other.b).collect(),
+        }
+    }
+
+    /// returns self \ other, where "\"" is the "set minus" operator
+    pub fn minus(&self, other: &VarSet) -> VarSet {
+        VarSet {
+            b: self.b.difference(&other.b).collect(),
+        }
+    }
+
+    pub fn insert(&mut self, v: VarLabel) {
         self.b.insert(v.value_usize());
     }
 
@@ -112,6 +140,36 @@ impl VarSet {
     }
 
     pub fn intersect<'a>(&'a self, other: &'a VarSet) -> bit_set::Intersection<'a, u32> {
-        return self.b.intersection(&other.b);
+        self.b.intersection(&other.b)
     }
+
+    pub fn intersect_varset<'a>(&'a self, other: &'a VarSet) -> VarSet {
+        return VarSet {
+            b: self.b.intersection(&other.b).collect(),
+        };
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.b.is_empty()
+    }
+}
+
+impl Default for VarSet {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[test]
+fn test_varset() {
+    let mut v1 = VarSet::new();
+    let mut v2 = VarSet::new();
+    let mut v3 = VarSet::new();
+    v1.insert(VarLabel::new(0));
+    v1.insert(VarLabel::new(1));
+    v2.insert(VarLabel::new(0));
+    v3.insert(VarLabel::new(1));
+    // assert {0,1} \ {0} = {1}
+    let v1minusv2 = v1.minus(&v2);
+    assert_eq!(v3, v1minusv2);
 }

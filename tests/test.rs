@@ -285,6 +285,31 @@ fn test_sdd_canonicity() {
     }
 }
 
+#[test]
+fn test_sdd_is_canonical() {
+    for (cnf1, cnf2) in get_canonical_forms().into_iter() {
+        let v: Vec<VarLabel> = (0..cnf1.num_vars())
+            .map(|x| VarLabel::new(x as u64))
+            .collect();
+        let vtree = VTree::even_split(&v, 1);
+        let mut man = SddManager::new(vtree);
+        let r1 = man.from_cnf(&cnf1);
+        let r2 = man.from_cnf(&cnf2);
+        assert!(
+            r1.is_canonical(),
+            "Not canonical\nCNF 1: {:?}\nSDD 1:{}",
+            cnf1,
+            man.print_sdd(r1),
+        );
+        assert!(
+            r2.is_canonical(),
+            "Not canonical\nCNF 2: {:?}\nSDD 2:{}",
+            cnf2,
+            man.print_sdd(r2),
+        );
+    }
+}
+
 #[cfg(test)]
 mod test_bdd_manager {
     use crate::builder::decision_nnf_builder::DecisionNNFBuilder;
@@ -344,8 +369,8 @@ mod test_bdd_manager {
             let and = mgr.or(clause1, clause2);
 
             if and != iff1 {
-                println!("cnf1: {}", c1.to_string());
-                println!("cnf2: {}", c2.to_string());
+                println!("cnf1: {}", c1);
+                println!("cnf2: {}", c2);
                 println!("not equal: Bdd1: {}, Bdd2: {}", and.to_string_debug(), iff1.to_string_debug());
             }
             TestResult::from_bool(and == iff1)
@@ -452,7 +477,7 @@ mod test_bdd_manager {
             let eps = f64::abs(bddres - dnnfres) < 0.0001;
             if !eps {
               println!("error on input {}: bddres {}, cnfres {}\n topdown bdd: {}\nbottom-up bdd: {}",
-                c1.to_string(), bddres, dnnfres, dnnf.to_string_debug(), cnf1.to_string_debug());
+                c1, bddres, dnnfres, dnnf.to_string_debug(), cnf1.to_string_debug());
             }
             TestResult::from_bool(eps)
         }
@@ -511,7 +536,7 @@ mod test_bdd_manager {
                 }
             }
             if f64::abs(max - marg_prob) > 0.00001 {
-                println!("cnf: {}", c1.to_string());
+                println!("cnf: {}", c1);
                 println!("true map probability: {max}\nGot map probability: {marg_prob} with assignment {:?}", _marg_assgn);
             }
             TestResult::from_bool(f64::abs(max - marg_prob) < 0.00001)
@@ -616,12 +641,130 @@ mod test_sdd_manager {
             let bdd_res = cnf_bdd.wmc(bddmgr.get_order(), &sdd_wmc);
 
             if f64::abs(sdd_res - bdd_res) > 0.00001 {
-                println!("not equal for cnf {}: sdd_res:{sdd_res}, bdd_res: {bdd_res}", cnf.to_string());
+                println!("not equal for cnf {}: sdd_res:{sdd_res}, bdd_res: {bdd_res}", cnf);
                 println!("sdd: {}", mgr.print_sdd(cnf_sdd));
                 TestResult::from_bool(false)
             } else {
                 TestResult::from_bool(true)
             }
+        }
+    }
+
+    quickcheck! {
+        fn sdd_compressed_right_linear(c: Cnf) -> bool {
+            let order : Vec<VarLabel> = (0..16).map(VarLabel::new).collect();
+            let vtree = VTree::right_linear(&order);
+            let mut mgr = super::SddManager::new(vtree);
+            let cnf = mgr.from_cnf(&c);
+            cnf.is_compressed()
+        }
+    }
+
+    quickcheck! {
+        fn sdd_trimmed_right_linear(c: Cnf) -> bool {
+            let order : Vec<VarLabel> = (0..16).map(VarLabel::new).collect();
+            let vtree = VTree::right_linear(&order);
+            let mut mgr = super::SddManager::new(vtree);
+            let cnf = mgr.from_cnf(&c);
+
+            cnf.is_trimmed()
+        }
+    }
+
+    quickcheck! {
+        fn sdd_compressed_arbitrary_vtree(c: Cnf, vtree: VTree) -> bool {
+            let mut mgr = super::SddManager::new(vtree);
+            let cnf = mgr.from_cnf(&c);
+            cnf.is_compressed()
+        }
+    }
+
+    quickcheck! {
+        fn sdd_trimmed_arbitrary_vtree(c: Cnf, vtree: VTree) -> bool {
+            let mut mgr = super::SddManager::new(vtree);
+            let cnf = mgr.from_cnf(&c);
+            cnf.is_trimmed()
+        }
+    }
+
+    quickcheck! {
+        fn prob_equiv_trivial(c: Cnf, vtree:VTree) -> bool {
+            let mut mgr1 = super::SddManager::new(vtree.clone());
+            let c1 = mgr1.from_cnf(&c);
+
+            let mut mgr2 = super::SddManager::new(vtree);
+            let c2 = mgr2.from_cnf(&c);
+
+            let prime = 1123; // large enough for our purposes
+            let map = mgr1.create_prob_map(prime);
+
+            let h1 = c1.get_semantic_hash(&map, prime);
+            let h2 = c2.get_semantic_hash(&map, prime);
+
+            h1 == h2
+        }
+    }
+
+    quickcheck! {
+        fn prob_equiv_sdd_identity_uncompressed(c: Cnf, vtree:VTree) -> TestResult {
+            let mut compr_mgr = super::SddManager::new(vtree.clone());
+            let compr_cnf = compr_mgr.from_cnf(&c);
+
+            let mut uncompr_mgr = super::SddManager::new(vtree);
+            uncompr_mgr.set_compression(false);
+            let uncompr_cnf = uncompr_mgr.from_cnf(&c);
+
+            let prime = 4391; // large enough for our purposes
+
+            let map = uncompr_mgr.create_prob_map(prime);
+
+            let compr_h = compr_cnf.get_semantic_hash(&map, prime);
+            let uncompr_h = uncompr_cnf.get_semantic_hash(&map, prime);
+
+            if compr_h != uncompr_h {
+                println!("not equal! hashes: compr: {compr_h}, uncompr: {uncompr_h}");
+                println!("map: {:?}", map);
+                println!("compr sdd: {}", compr_mgr.print_sdd(compr_cnf));
+                println!("uncompr sdd: {}", uncompr_mgr.print_sdd(uncompr_cnf));
+                TestResult::from_bool(false)
+            } else {
+                TestResult::from_bool(true)
+            }
+        }
+    }
+
+    quickcheck! {
+        fn prob_equiv_sdd_inequality(c1: Cnf, c2: Cnf, vtree:VTree) -> TestResult {
+            let mut mgr = super::SddManager::new(vtree);
+            let cnf_1 = mgr.from_cnf(&c1);
+            let cnf_2 = mgr.from_cnf(&c2);
+
+            if cnf_1 == cnf_2 {
+                return TestResult::discard();
+            }
+
+            let prime = 4391; // large enough for our purposes
+
+            // running iteratively, taking majority
+
+            let mut num_collisions = 0;
+
+            for _ in 1 .. 5 {
+
+                let map = mgr.create_prob_map(prime);
+
+                let h1 = cnf_1.get_semantic_hash(&map, prime);
+                let h2 = cnf_2.get_semantic_hash(&map, prime);
+
+                if h1 == h2 {
+                    println!("collision! h1: {h1}, h2: {h2}");
+                    println!("map: {:?}", map);
+                    println!("sdd1: {}", mgr.print_sdd(cnf_1));
+                    println!("sdd2: {}", mgr.print_sdd(cnf_2));
+                    num_collisions += 1;
+                }
+            }
+            TestResult::from_bool(num_collisions < 2) // less than half
         }
     }
 }

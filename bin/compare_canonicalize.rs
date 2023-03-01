@@ -31,6 +31,7 @@ struct Args {
 }
 
 /// construct a CNF for the two TERMS (i.e., conjunctions of literals) t1 => t2
+#[allow(clippy::ptr_arg)]
 fn implies(t1: &Vec<Literal>, t2: &Vec<Literal>) -> Vec<Vec<Literal>> {
     let mut r: Vec<Vec<Literal>> = Vec::new();
     // negate the lhs
@@ -113,7 +114,7 @@ fn build_dtree(cnf: &Cnf) -> DTree {
     let dtree = DTree::from_cnf(cnf, &VarOrder::linear_order(cnf.num_vars()));
     let duration = start.elapsed();
     println!("Dtree built\nNumber of variables: {}\n\tNumber of clauses: {}\n\tWidth: {}\n\tElapsed dtree time: {:?}",
-        cnf.num_vars(), cnf.clauses().len(), dtree.width(), duration);
+        cnf.num_vars(), cnf.clauses().len(), dtree.cutwidth(), duration);
     dtree
 }
 
@@ -147,10 +148,12 @@ fn main() {
     // or maybe eval_sdd? not sure
     for _ in 0..args.iterations {
         originals.push(
-            compile_sdd_benchmark(black_box(&cnf), dtree.to_vtree().unwrap(), false).as_secs_f64(),
+            compile_sdd_benchmark(black_box(&cnf), VTree::from_dtree(&dtree).unwrap(), false)
+                .as_secs_f64(),
         );
         modifieds.push(
-            compile_sdd_benchmark(black_box(&cnf), dtree.to_vtree().unwrap(), true).as_secs_f64(),
+            compile_sdd_benchmark(black_box(&cnf), VTree::from_dtree(&dtree).unwrap(), true)
+                .as_secs_f64(),
         );
     }
 
