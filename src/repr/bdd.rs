@@ -104,6 +104,8 @@ impl<'a, T: Clone, U> Fold<'a, T, U> {
     /// A mutable fold. An example of how to use this fold can be seen by collecting all VarLabels in the sub-tree referenced by a given [`BddPtr`]:
     ///
     /// ```rust
+    /// use rsdd::repr::bdd::*;
+    ///
     /// pub fn variables(bdd: BddPtr) -> Vec<VarLabel> {
     ///     Fold::new(
     ///         &mut |vs: Vec<Option<VarLabel>>, bdd| {
