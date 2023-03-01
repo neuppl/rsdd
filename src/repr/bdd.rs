@@ -24,6 +24,12 @@ use bit_set::BitSet;
 use bumpalo::Bump;
 use BddPtr::*;
 
+/// The intermediate representation for a BddPtr that is being folded in a
+/// [`Fold`] computation.
+///
+/// - [`FoldNode::parent_is_compl`]: tells you if the parent node was a [`BddPtr::Compl`].
+/// - [`FoldNode::node`]: gives you the pointer to the current node.
+/// - [`FoldNode::var`]: gives you the [`VarLabel`] if the node is a [`BddPtr::Reg`].
 pub struct FoldNode {
     pub parent_is_compl: bool,
     pub node: BddPtr,
@@ -38,15 +44,28 @@ impl FoldNode {
         }
     }
 }
-// In the style of:
-// https://hackage.haskell.org/package/foldl-1.4.14/docs/Control-Foldl.html#t:Fold
+
+/// Folds in the style of [foldl on
+/// hackage](https://hackage.haskell.org/package/foldl-1.4.14/docs/Control-Foldl.html#t:Fold).
+/// This performs specialized folds over [`FoldNode`] representations. With a
+/// (currently non-existent) composition, one can perform multiple folds in a
+/// single walk of the BDD.
+///
+/// See [`Fold::mut_fold`]'s documentation for an example of how to write this
+/// style of fold.
 pub struct Fold<'a, T, U> {
-    step: &'a mut dyn FnMut(T, FoldNode) -> T,
-    initial: T,
-    extract: &'a dyn Fn(T, Option<(U, U)>) -> U,
+    /// [`FnMut`] step which takes in an aggregation `T` and a node
+    /// representation [`FoldNode`].
+    pub step: &'a mut dyn FnMut(T, FoldNode) -> T,
+    /// The initial value for the aggregation.
+    pub initial: T,
+    /// How to extract the final value `U` from a node. If a node has children,
+    /// provide the final outputs of their values as a tuple.
+    pub extract: &'a dyn Fn(T, Option<(U, U)>) -> U,
 }
 
 impl<'a, T: Clone, U> Fold<'a, T, U> {
+    /// Construct a new [`Fold`].
     pub fn new(
         step: &'a mut dyn FnMut(T, FoldNode) -> T,
         initial: T,
@@ -82,6 +101,33 @@ impl<'a, T: Clone, U> Fold<'a, T, U> {
             },
         }
     }
+    /// A mutable fold. An example of how to use this fold can be seen by collecting all VarLabels in the sub-tree referenced by a given [`BddPtr`]:
+    ///
+    /// ```rust
+    /// pub fn variables(bdd: BddPtr) -> Vec<VarLabel> {
+    ///     Fold::new(
+    ///         &mut |vs: Vec<Option<VarLabel>>, bdd| {
+    ///             let mut vs = vs;
+    ///             vs.push(bdd.node.var_safe());
+    ///             vs
+    ///         },
+    ///         vec![],
+    ///         &|ret, lo_hi| match lo_hi {
+    ///             None => ret,
+    ///             Some((lo, hi)) => {
+    ///                 let mut v = ret;
+    ///                 v.extend(lo);
+    ///                 v.extend(hi);
+    ///                 v
+    ///             }
+    ///         },
+    ///     )
+    ///     .mut_fold(&bdd)
+    ///     .into_iter()
+    ///     .flatten()
+    ///     .collect()
+    /// }
+    /// ```
     pub fn mut_fold(&mut self, bdd: &BddPtr) -> U {
         let initial = self.initial.clone();
         self.mut_fold_h(bdd, false, &initial)
