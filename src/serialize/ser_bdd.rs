@@ -24,7 +24,7 @@ pub struct SerBDD {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct BDDSerializer {
     /// list of nodes allocated in the BDD
-    /// nodes[0] is true, nodes[1] is false
+    /// `nodes[0]` is true, `nodes[1]` is false
     nodes: Vec<SerBDD>,
     /// list of all roots (to support multi-rooted BDD serialization with shared structure)
     roots: Vec<SerBDDPtr>,

@@ -5,7 +5,6 @@
 use bumpalo::Bump;
 
 use crate::repr::bdd::BddNode;
-use crate::repr::dtree;
 use crate::repr::model::PartialModel;
 use crate::repr::sat_solver::SATSolver;
 use crate::repr::var_order::VarOrder;

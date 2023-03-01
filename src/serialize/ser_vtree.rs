@@ -1,18 +1,18 @@
 //! Serialized vtree
 //! Represents a vtree in the following JSON format:
-//!     An array a=[node0, node1, node2]
-//!     where a[0] is the root of the tree
+//!     An array `a=[node0, node1, node2]`
+//!     where `a[0]` is the root of the tree
 //!     each node is of type SerVTree
 //! Example JSON serialization:
 //! For the VTree:
-//! ```
+//! ```text
 //! //       /\
 //! //      0  \
 //! //         /\
 //! //         1 2
 //! ```
 //! The following JSON will be generated
-//! ```
+//! ```text
 //! // {
 //! //  "root": {
 //! //    "Node": {

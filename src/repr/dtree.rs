@@ -6,7 +6,7 @@
 //! clauses from a CNF. Example:
 //! Let φ = (A ∨ B) ∧ (B ∨ C) ∧ (C ∨ D)
 //! Then, we can construct the following dtree:
-//! ```
+//! ```text
 //! //         /\
 //! //        /  (C ∨ D)
 //! //       /\
@@ -28,7 +28,7 @@
 //!    left child of n, and r is the right child.
 //!
 //! We can annotate the above diagram with its cutsets:
-//! ```
+//! ```text
 //! //         {C}
 //! //         /\
 //! //        /  (C ∨ D)

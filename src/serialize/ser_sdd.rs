@@ -24,7 +24,7 @@ pub struct SDDOr(Vec<SDDAnd>);
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SDDSerializer {
     /// list of nodes allocated in the BDD
-    /// nodes[0] is true, nodes[1] is false
+    /// `nodes[0]` is true, `nodes[1]` is false
     nodes: Vec<SDDOr>,
     roots: Vec<SerSDDPtr>,
 }
