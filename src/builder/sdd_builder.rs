@@ -36,6 +36,84 @@ impl Default for SddStats {
     }
 }
 
+pub trait SddCanonicalizationScheme {
+    fn should_compress(&self) -> bool;
+    fn sdd_eq(&self, s1: SddPtr, s2: SddPtr) -> bool;
+    // fn canonicalize(&mut self, node: Vec<SddAnd>, table: VTreeIndex) -> SddPtr;
+    // fn compress(&mut self, node: &mut Vec<SddAnd>);
+}
+
+pub struct CompressionCanonicalizer {
+    pub use_compression: bool
+}
+
+impl CompressionCanonicalizer {
+    pub fn set_compression(&mut self, b: bool) {
+        self.use_compression = b
+    }
+}
+
+impl SddCanonicalizationScheme for CompressionCanonicalizer {
+    fn sdd_eq(&self, s1: SddPtr, s2: SddPtr) -> bool {
+        s1 == s2
+    }
+    fn should_compress(&self) -> bool {
+        self.use_compression
+    }
+}
+
+
+pub struct SemanticCanoncalizer<'a> {
+    prime: u128,
+    vtree: &'a VTree,
+}
+
+impl SemanticCanoncalizer<'_> {
+    // Generates a mapping from variables to numbers in [2, PRIME)
+    pub fn create_prob_map(&self, vtree: &VTree, prime: &u128) -> HashMap<usize, u128> {
+        let all_vars = vtree.get_all_vars();
+        let vars = all_vars.into_iter().collect::<Vec<usize>>();
+
+        // theoretical guarantee from paper; need to verify more!
+        assert!((2 * vars.len() as u128) < *prime);
+
+        let mut random_order = vars;
+        random_order.shuffle(&mut thread_rng());
+
+        let mut value_range: Vec<u128> = (2..*prime / 2).collect();
+        value_range.shuffle(&mut thread_rng());
+
+        let mut map = HashMap::<usize, u128>::new();
+
+        for (&var, &value) in random_order.iter().zip(value_range.iter()) {
+            map.insert(var, value);
+        }
+
+        map
+    }
+}
+
+impl SddCanonicalizationScheme for SemanticCanoncalizer<'_> {
+    fn sdd_eq(&self, s1: SddPtr, s2: SddPtr) -> bool {
+        let mut num_collisions = 0;
+
+        for _ in 1 .. 5 { // TODO: infer this from the prime / var number
+            let map = self.create_prob_map(self.vtree, &self.prime);
+            let h1 = s1.get_semantic_hash(&map, self.prime);
+            let h2 = s2.get_semantic_hash(&map, self.prime);
+            if h1 == h2 {
+                num_collisions += 1
+            }
+        }
+
+        num_collisions < 2
+    }
+
+    fn should_compress(&self) -> bool {
+        false
+    }
+}
+
 pub struct SddManager {
     sdd_tbl: BackedRobinhoodTable<SddOr>,
     bdd_tbl: BackedRobinhoodTable<BinarySDD>,
@@ -172,48 +250,45 @@ impl SddManager {
         }
     }
 
-    /// Returns a canonicalized SDD pointer from a list of (prime, sub) pairs
-    fn canonicalize(&mut self, mut node: Vec<SddAnd>, table: VTreeIndex) -> SddPtr {
-        // check for base cases before compression
+    fn canonicalize_base_case(&mut self, node: &Vec<SddAnd>) -> Option<SddPtr> {
         if node.is_empty() {
-            return SddPtr::true_ptr();
+            return Some(SddPtr::true_ptr());
         }
         if node.len() == 1 {
             if node[0].prime().is_true() {
-                return node[0].sub();
+                return Some(node[0].sub());
             }
-        } else if node.len() == 2 {
+
+            // TODO: Why is this only included after compression?
+            if node[0].sub().is_false() {
+                return Some(SddPtr::false_ptr());
+            }
+        }
+        if node.len() == 2 {
             if node[0].sub().is_true() && node[1].sub().is_false() {
-                return node[0].prime();
+                return Some(node[0].prime());
             } else if node[0].sub().is_false() && node[1].sub().is_true() {
-                return node[1].prime();
+                return Some(node[1].prime());
             }
+        }
+        None
+    }
+
+    /// Returns a canonicalized SDD pointer from a list of (prime, sub) pairs
+    fn canonicalize(&mut self, mut node: Vec<SddAnd>, table: VTreeIndex) -> SddPtr {
+        // check for base cases before compression
+        if let Some(sdd) = self.canonicalize_base_case(&node) {
+            return sdd;
         }
 
         if self.use_compression {
-            // first compress
-            self.compress(&mut node);
+            self.compress(&mut node)
         }
 
         // check for a base case after compression (compression can sometimes
         // reduce node counts to a base case)
-        if node.is_empty() {
-            return SddPtr::true_ptr();
-        }
-        if node.len() == 1 {
-            if node[0].prime().is_true() {
-                return node[0].sub();
-            } else if node[0].sub().is_false() {
-                return SddPtr::false_ptr();
-            } else {
-                panic!("internal error: encountered untrimmed SDD")
-            }
-        } else if node.len() == 2 {
-            if node[0].sub().is_true() && node[1].sub().is_false() {
-                return node[0].prime();
-            } else if node[0].sub().is_false() && node[1].sub().is_true() {
-                return node[1].prime();
-            }
+        if let Some(sdd) = self.canonicalize_base_case(&node) {
+            return sdd;
         }
         self.unique_or(node, table)
     }
