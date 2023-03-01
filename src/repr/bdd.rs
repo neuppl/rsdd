@@ -226,7 +226,6 @@ impl BddPtr {
         }
     }
 
-
     /// Traverses the BDD and clears all scratch memory (sets it equal to 0)
     pub fn clear_scratch(&self) {
         if !self.is_const() {

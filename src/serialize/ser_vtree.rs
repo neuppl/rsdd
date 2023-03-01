@@ -41,7 +41,6 @@
 //! // }
 //! ```
 
-
 use crate::repr::vtree::VTree;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -49,13 +48,15 @@ pub enum SerVTree {
     /// a var label leaf
     Leaf(usize),
     /// a left and right index
-    Node { left: Box<SerVTree>, right: Box<SerVTree> }
+    Node {
+        left: Box<SerVTree>,
+        right: Box<SerVTree>,
+    },
 }
-
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct VTreeSerializer {
-    root: SerVTree
+    root: SerVTree,
 }
 
 impl VTreeSerializer {
@@ -63,14 +64,12 @@ impl VTreeSerializer {
         // traverses the vtree and returns a node to the current root
         fn helper(t: &VTree) -> Box<SerVTree> {
             match t {
-                crate::util::btree::BTree::Leaf(v) => {
-                    Box::new(SerVTree::Leaf(v.value_usize()))
-                },
-                crate::util::btree::BTree::Node(_, l, r) => { 
+                crate::util::btree::BTree::Leaf(v) => Box::new(SerVTree::Leaf(v.value_usize())),
+                crate::util::btree::BTree::Node(_, l, r) => {
                     let left = helper(l);
                     let right = helper(r);
                     Box::new(SerVTree::Node { left, right })
-                },
+                }
             }
         }
         let root = helper(vtree);
