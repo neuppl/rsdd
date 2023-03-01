@@ -31,7 +31,7 @@ jobs:
       - name: Setup Pages
         uses: actions/configure-pages@v3
       - name: Run cargo doc
-        run: RUSTDOCFLAGS="-D warnings --cfg docsrs" cargo doc --workspace --all-features
+        run: RUSTDOCFLAGS="-D warnings --cfg docsrs" cargo doc --workspace --no-deps --all-features
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v1
         with:
