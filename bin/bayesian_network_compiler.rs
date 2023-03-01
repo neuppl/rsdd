@@ -1,3 +1,4 @@
+#![allow(clippy::all)]
 extern crate rsdd;
 extern crate rsgm;
 
@@ -213,7 +214,7 @@ fn compile_bdd(_args: &Args, network: BayesianNetwork) {
         let mut cur_indic: Vec<Literal> = Vec::new();
         indicators.insert(v.clone(), HashMap::new());
         for varassgn in network.get_all_assignments(&v) {
-            let cur_var = compiler.new_var();
+            let cur_var = compiler.new_label();
             let new_indic = Literal::new(cur_var, true);
             wmc_params.insert(cur_var, (1.0, 1.0));
             cur_indic.push(new_indic);
@@ -223,7 +224,7 @@ fn compile_bdd(_args: &Args, network: BayesianNetwork) {
                 .insert(varassgn.clone(), cur_var);
 
             for passgn in network.parent_assignments(&v) {
-                let cur_param = compiler.new_var();
+                let cur_param = compiler.new_label();
                 let cur_param_v = compiler.var(cur_param, true);
                 let cur_prob = network.get_conditional_prob(&v, varassgn, &passgn);
                 wmc_params.insert(cur_param, (1.0, cur_prob));

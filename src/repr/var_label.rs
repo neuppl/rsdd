@@ -1,6 +1,6 @@
 //! A generic data structure for tracking variable labels throughout the library
-use std::fmt;
 use serde::Serialize;
+use std::fmt;
 
 extern crate quickcheck;
 use bit_set::BitSet;
@@ -97,7 +97,8 @@ pub struct VarSet {
 impl Serialize for VarSet {
     fn serialize<S>(&self, _serializer: S) -> Result<S::Ok, S::Error>
     where
-        S: serde::Serializer {
+        S: serde::Serializer,
+    {
         todo!()
     }
 }

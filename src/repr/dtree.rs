@@ -6,7 +6,7 @@
 //! clauses from a CNF. Example:
 //! Let φ = (A ∨ B) ∧ (B ∨ C) ∧ (C ∨ D)
 //! Then, we can construct the following dtree:
-//! ```
+//! ```text
 //! //         /\
 //! //        /  (C ∨ D)
 //! //       /\
@@ -28,7 +28,7 @@
 //!    left child of n, and r is the right child.
 //!
 //! We can annotate the above diagram with its cutsets:
-//! ```
+//! ```text
 //! //         {C}
 //! //         /\
 //! //        /  (C ∨ D)
@@ -42,11 +42,8 @@
 //! The *cut-width* of a dtree is the size of the largest cutset. An effective
 //! dtree is one that does not have large cutwidth.
 
+use crate::repr::{cnf::Cnf, var_label::Literal};
 use serde::Serialize;
-use crate::repr::{
-    cnf::Cnf,
-    var_label::{Literal}
-};
 
 use super::{var_label::VarSet, var_order::VarOrder};
 

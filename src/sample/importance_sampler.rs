@@ -1,7 +1,7 @@
 //! A generic importance sampling interface with methods for automated testing
 
 use super::probability::Probability;
-use super::random::Random;
+use super::random::Rand;
 
 /// An importance sampler takes two types in order to support (optional)
 /// collapsed sampling:
@@ -36,12 +36,12 @@ pub trait ImportanceSampler<Sample: std::fmt::Debug + Clone, State: std::fmt::De
     /// This is used for testing -- its runtime is `O(# states)`
     /// TODO: resolve unused
     #[allow(unused)]
-    fn is_valid(&mut self) -> bool {
+    fn is_valid<P: Rand<Val = Sample>, C: Rand<Val = State>>(&mut self) -> bool {
         todo!();
-        let proposals = self.propose(false);
+        let proposals: P = self.propose(false);
         let mut is_prob = vec![0; self.num_states()];
         for (proposal, outer_prob) in proposals.vec().iter() {
-            let collapsed = self.collapse(proposal);
+            let collapsed: C = self.collapse(proposal);
             let unnormalized = self.unnormalized_prob(proposal);
             for (state, inner_prob) in collapsed.vec().iter() {}
         }
@@ -49,7 +49,7 @@ pub trait ImportanceSampler<Sample: std::fmt::Debug + Clone, State: std::fmt::De
     }
 
     /// Collapse a sample into a distribution on states
-    fn collapse(&mut self, state: &Sample) -> Random<State>;
+    fn collapse<R: Rand<Val = State>>(&mut self, state: &Sample) -> R;
 
     /// Propose a transition
     /// `sampled` is true if this is current a sampled proposal, it is false
@@ -57,5 +57,5 @@ pub trait ImportanceSampler<Sample: std::fmt::Debug + Clone, State: std::fmt::De
     ///
     /// Returns a distribution over the set of possible samples (i.e., draws
     /// a sample from `q(x)`)
-    fn propose(&mut self, sampled: bool) -> Random<Sample>;
+    fn propose<R: Rand<Val = Sample>>(&mut self, sampled: bool) -> R;
 }

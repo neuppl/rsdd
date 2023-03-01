@@ -13,11 +13,14 @@ type LitIdx = usize;
 /// A data-structure for efficient implementation of unit propagation with CNFs.
 /// It implements a two-literal watching scheme.
 /// For instance, for the CNF:
+/// ```text
 ///     c0             c1
 /// (A \/ !B) /\ (C \/ !A \/ B)
 ///  ^     ^      ^    ^
+/// ```
 /// The literals A and !B are watched in c0, and C and !A  are watched in c1
 /// This is stored in the watch lists as:
+/// ```text
 /// watch_list_pos:
 ///    A: [c0]
 ///    B: []
@@ -26,6 +29,7 @@ type LitIdx = usize;
 ///    A: [c1]
 ///    B: [c0]
 ///    C: []
+/// ```
 ///
 /// The invariant maintained by the watched literals is that, for a given
 /// partial model state, the watched literal is either (1) satisfied by the
@@ -35,17 +39,19 @@ type LitIdx = usize;
 /// When a variable is decided, we decide how to update the watched literals according
 /// to the following cases
 ///
-/// Case 1. We decide C=False. In this case, we deduce no units, and update the literal watches
-/// as:
-///     c0             c1
-/// (A \/ !B) /\ (C \/ !A \/ B)
-///  ^     ^            ^    ^
-/// I.e., we pick a new literal to watch in c1
-/// Case 2. Decide C=True, In this case, the clause c1 is satisfied, so  we do not make
-/// any changes to its watched literals.
-/// Case 3. Decide A=False. In this case there are no remaining literals to
-/// watch in c0, so we deduce a unit !B and propagate. The resulting watcher
-/// state unchanged in this case.
+/// - Case 1. We decide C=False. In this case, we deduce no units, and update the literal watches
+///   as:
+///   ```text
+///       c0             c1
+///   (A \/ !B) /\ (C \/ !A \/ B)
+///    ^     ^            ^    ^
+///   ```
+///   I.e., we pick a new literal to watch in c1
+/// - Case 2. Decide C=True, In this case, the clause c1 is satisfied, so we do
+///   not make any changes to its watched literals.
+/// - Case 3. Decide A=False. In this case there are no remaining literals to
+///   watch in c0, so we deduce a unit !B and propagate. The resulting watcher
+///   state unchanged in this case.
 #[derive(Debug, Clone)]
 pub struct UnitPropagate<'a> {
     // watch_list_pos[i] is a list of the clauses that are watching the positive

@@ -1,7 +1,7 @@
 //! Binary decision diagram representation
 use crate::repr::var_label::VarSet;
 
-use super::{
+pub use super::{
     ddnnf::*,
     model::PartialModel,
     var_label::{Literal, VarLabel},
@@ -24,24 +24,154 @@ use bit_set::BitSet;
 use bumpalo::Bump;
 use BddPtr::*;
 
+/// The intermediate representation for a BddPtr that is being folded in a
+/// [`Fold`] computation.
+///
+/// - [`FoldNode::parent_is_compl`]: tells you if the parent node was a [`BddPtr::Compl`].
+/// - [`FoldNode::node`]: gives you the pointer to the current node.
+/// - [`FoldNode::var`]: gives you the [`VarLabel`] if the node is a [`BddPtr::Reg`].
+pub struct FoldNode {
+    pub parent_is_compl: bool,
+    pub node: BddPtr,
+    pub var: Option<VarLabel>,
+}
+impl FoldNode {
+    fn new(node: BddPtr, parent_is_compl: bool, var: Option<VarLabel>) -> Self {
+        Self {
+            parent_is_compl,
+            node,
+            var,
+        }
+    }
+}
+
+/// Folds in the style of [foldl on
+/// hackage](https://hackage.haskell.org/package/foldl-1.4.14/docs/Control-Foldl.html#t:Fold).
+/// This performs specialized folds over [`FoldNode`] representations. With a
+/// (currently non-existent) composition, one can perform multiple folds in a
+/// single walk of the BDD.
+///
+/// See [`Fold::mut_fold`]'s documentation for an example of how to write this
+/// style of fold.
+pub struct Fold<'a, T, U> {
+    /// [`FnMut`] step which takes in an aggregation `T` and a node
+    /// representation [`FoldNode`].
+    pub step: &'a mut dyn FnMut(T, FoldNode) -> T,
+    /// The initial value for the aggregation.
+    pub initial: T,
+    /// How to extract the final value `U` from a node. If a node has children,
+    /// provide the final outputs of their values as a tuple.
+    pub extract: &'a dyn Fn(T, Option<(U, U)>) -> U,
+}
+
+impl<'a, T: Clone, U> Fold<'a, T, U> {
+    /// Construct a new [`Fold`].
+    pub fn new(
+        step: &'a mut dyn FnMut(T, FoldNode) -> T,
+        initial: T,
+        extract: &'a dyn Fn(T, Option<(U, U)>) -> U,
+    ) -> Fold<'a, T, U> {
+        Self {
+            step,
+            initial,
+            extract,
+        }
+    }
+
+    fn mut_fold_h(&mut self, bdd: &BddPtr, p_compl: bool, r: &T) -> U {
+        match bdd {
+            BddPtr::PtrTrue => {
+                let t = (self.step)(r.clone(), FoldNode::new(*bdd, p_compl, None));
+                (self.extract)(t, None)
+            }
+            BddPtr::PtrFalse => {
+                let t = (self.step)(r.clone(), FoldNode::new(*bdd, p_compl, None));
+                (self.extract)(t, None)
+            }
+            BddPtr::Compl(n) => self.mut_fold_h(&BddPtr::Reg(*n), true, r),
+            BddPtr::Reg(n) => unsafe {
+                let l_p = (*(*n)).low;
+                let r_p = (*(*n)).high;
+
+                let lbl = (*(*n)).var;
+                let t = (self.step)(r.clone(), FoldNode::new(*bdd, p_compl, Some(lbl)));
+                let l_r = self.mut_fold_h(&l_p, false, &r.clone());
+                let r_r = self.mut_fold_h(&r_p, false, &r.clone());
+                (self.extract)(t, Some((l_r, r_r)))
+            },
+        }
+    }
+    /// A mutable fold. An example of how to use this fold can be seen by collecting all VarLabels in the sub-tree referenced by a given [`BddPtr`]:
+    ///
+    /// ```rust
+    /// use rsdd::repr::bdd::*;
+    ///
+    /// pub fn variables(bdd: BddPtr) -> Vec<VarLabel> {
+    ///     Fold::new(
+    ///         &mut |vs: Vec<Option<VarLabel>>, bdd| {
+    ///             let mut vs = vs;
+    ///             vs.push(bdd.node.var_safe());
+    ///             vs
+    ///         },
+    ///         vec![],
+    ///         &|ret, lo_hi| match lo_hi {
+    ///             None => ret,
+    ///             Some((lo, hi)) => {
+    ///                 let mut v = ret;
+    ///                 v.extend(lo);
+    ///                 v.extend(hi);
+    ///                 v
+    ///             }
+    ///         },
+    ///     )
+    ///     .mut_fold(&bdd)
+    ///     .into_iter()
+    ///     .flatten()
+    ///     .collect()
+    /// }
+    /// ```
+    pub fn mut_fold(&mut self, bdd: &BddPtr) -> U {
+        let initial = self.initial.clone();
+        self.mut_fold_h(bdd, false, &initial)
+    }
+}
+
 impl BddPtr {
+    #[inline]
     pub fn new_reg(n: *mut BddNode) -> BddPtr {
         Reg(n)
     }
 
+    #[inline]
+    pub fn from_bool(b: bool) -> BddPtr {
+        if b {
+            PtrTrue
+        } else {
+            PtrFalse
+        }
+    }
+
+    #[inline]
     pub fn new_compl(n: *mut BddNode) -> BddPtr {
         Compl(n)
     }
 
     /// Gets the varlabel of &self
     /// Panics if not a node
+    #[inline]
     pub fn var(&self) -> VarLabel {
         self.into_node().var
+    }
+    /// Gets the varlabel of &self
+    #[inline]
+    pub fn var_safe(&self) -> Option<VarLabel> {
+        self.into_node_safe().and_then(|x| Some(x.var))
     }
 
     /// Get a mutable reference to the node that &self points to
     ///
     /// Panics if not a node pointer
+    #[inline]
     #[allow(clippy::mut_from_ref)]
     pub fn mut_node_ref(&self) -> &mut BddNode {
         unsafe {
@@ -58,10 +188,21 @@ impl BddPtr {
     /// the returned BddNode incorporates this information)
     ///
     /// Panics if the pointer is constant (i.e., true or false)
+    #[inline]
     pub fn into_node(&self) -> BddNode {
+        match self.into_node_safe() {
+            None => panic!("Dereferencing constant in deref_or_panic"),
+            Some(n) => n,
+        }
+    }
+
+    /// Dereferences the BddPtr into a BddNode
+    /// The pointer is returned in regular-form (i.e., if &self is complemented, then
+    /// the returned BddNode incorporates this information)
+    pub fn into_node_safe(&self) -> Option<BddNode> {
         unsafe {
             match &self {
-                Reg(x) => (**x).clone(),
+                Reg(x) => Some((**x).clone()),
                 Compl(x) => {
                     let BddNode {
                         var,
@@ -69,14 +210,14 @@ impl BddPtr {
                         high,
                         data,
                     } = **x;
-                    BddNode {
+                    Some(BddNode {
                         var,
                         low: low.neg(),
                         high: high.neg(),
                         data,
-                    }
+                    })
                 }
-                _ => panic!("Dereferencing constant in deref_or_panic"),
+                _ => None,
             }
         }
     }
@@ -140,7 +281,6 @@ impl BddPtr {
             PtrTrue | PtrFalse => panic!("deref constant BDD"),
         }
     }
-
 
     /// Traverses the BDD and clears all scratch memory (sets it equal to 0)
     pub fn clear_scratch(&self) {
@@ -215,36 +355,33 @@ impl BddPtr {
     }
 
     /// Print a debug form of the BDD with the label remapping given by `map`
-    pub fn print_bdd_lbl(&self, _ptr: BddPtr, _map: &HashMap<VarLabel, VarLabel>) -> String {
-        panic!("todo")
-        // use crate::builder::repr::builder_bdd::PointerType::*;
-        // fn print_bdd_helper(
-        //     t: &BddManager,
-        //     ptr: BddPtr,
-        //     map: &HashMap<VarLabel, VarLabel>,
-        // ) -> String {
-        //     match ptr.ptr_type() {
-        //         PtrTrue => String::from("T"),
-        //         PtrFalse => String::from("T"),
-        //         PtrNode => {
-        //             let l_p = t.low(ptr);
-        //             let h_p = t.high(ptr);
-        //             let l_s = print_bdd_helper(t, l_p, map);
-        //             let r_s = print_bdd_helper(t, h_p, map);
-        //             let lbl = ptr.label();
-        //             format!(
-        //                 "({:?}, {}{}, {}{})",
-        //                 map.get(&lbl).unwrap_or(&lbl).value(),
-        //                 if l_p.is_compl() { "!" } else { "" },
-        //                 l_s,
-        //                 if h_p.is_compl() { "!" } else { "" },
-        //                 r_s
-        //             )
-        //         }
-        //     }
-        // }
-        // let s = print_bdd_helper(self, ptr, map);
-        // format!("{}{}", if ptr.is_compl() { "!" } else { "" }, s)
+    pub fn print_bdd_lbl(&self, map: &HashMap<VarLabel, VarLabel>) -> String {
+        match self {
+            BddPtr::PtrTrue => String::from("T"),
+            // BddPtr::PtrFalse => String::from("T"),
+            BddPtr::PtrFalse => String::from("F"), // TODO: check that this is right?
+            BddPtr::Compl(n) => {
+                let s = BddPtr::Reg(*n).print_bdd_lbl(map);
+                format!("!{}", s)
+            }
+            BddPtr::Reg(n) => unsafe {
+                let l_p = (*(*n)).low;
+                let r_p = (*(*n)).high;
+                let l_s = l_p.print_bdd_lbl(map);
+                let r_s = r_p.print_bdd_lbl(map);
+                let lbl = (*(*n)).var;
+                format!(
+                    "({:?}, {}, {})",
+                    map.get(&lbl).unwrap_or(&lbl).value(),
+                    l_s,
+                    r_s
+                )
+            },
+        }
+    }
+    #[inline]
+    pub fn print_bdd(&self) -> String {
+        self.print_bdd_lbl(&HashMap::new())
     }
 
     fn bdd_fold_h<T: Clone + Copy + Debug, F: Fn(VarLabel, T, T) -> T>(

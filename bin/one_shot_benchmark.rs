@@ -6,14 +6,13 @@ extern crate serde_json;
 use clap::Parser;
 use rsdd::builder::bdd_plan::BddPlan;
 use rsdd::builder::cache::lru_app::BddApplyTable;
-use rsdd::repr::bdd::BddPtr;
 use rsdd::repr::cnf::Cnf;
 use rsdd::repr::ddnnf::DDNNFPtr;
 use rsdd::repr::dtree::DTree;
 use rsdd::repr::var_label::VarLabel;
 use rsdd::repr::var_order::VarOrder;
 use rsdd::repr::vtree::VTree;
-use rsdd::serialize::{ser_vtree, ser_bdd, ser_sdd};
+use rsdd::serialize::{ser_bdd, ser_sdd, ser_vtree};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::fs::{self, File};
@@ -104,8 +103,8 @@ fn compile_sdd_dtree(str: String, _args: &Args) -> BenchResult {
             let mut file = File::create(path).unwrap();
             let r = file.write_all(serde_json::to_string(&json).unwrap().as_bytes());
             assert!(r.is_ok(), "Error writing file");
-        },
-        _ => ()
+        }
+        _ => (),
     };
 
     match &_args.dump_vtree {
@@ -114,8 +113,8 @@ fn compile_sdd_dtree(str: String, _args: &Args) -> BenchResult {
             let mut file = File::create(path).unwrap();
             let r = file.write_all(serde_json::to_string(&json).unwrap().as_bytes());
             assert!(r.is_ok(), "Error writing file");
-        },
-        _ => ()
+        }
+        _ => (),
     };
 
     BenchResult {
@@ -140,8 +139,8 @@ fn compile_sdd_rightlinear(str: String, _args: &Args) -> BenchResult {
             let mut file = File::create(path).unwrap();
             let r = file.write_all(serde_json::to_string(&json).unwrap().as_bytes());
             assert!(r.is_ok(), "Error writing file");
-        },
-        _ => ()
+        }
+        _ => (),
     };
 
     match &_args.dump_vtree {
@@ -150,8 +149,8 @@ fn compile_sdd_rightlinear(str: String, _args: &Args) -> BenchResult {
             let mut file = File::create(path).unwrap();
             let r = file.write_all(serde_json::to_string(&json).unwrap().as_bytes());
             assert!(r.is_ok(), "Error writing file");
-        },
-        _ => ()
+        }
+        _ => (),
     };
 
     BenchResult {
@@ -172,8 +171,8 @@ fn compile_bdd(str: String, _args: &Args) -> BenchResult {
             let mut file = File::create(path).unwrap();
             let r = file.write_all(serde_json::to_string(&json).unwrap().as_bytes());
             assert!(r.is_ok(), "Error writing file");
-        },
-        _ => ()
+        }
+        _ => (),
     };
 
     BenchResult {
@@ -199,10 +198,9 @@ fn compile_bdd_dtree(str: String, _args: &Args) -> BenchResult {
             let mut file = File::create(path).unwrap();
             let r = file.write_all(serde_json::to_string(&json).unwrap().as_bytes());
             assert!(r.is_ok(), "Error writing file");
-        },
-        _ => ()
+        }
+        _ => (),
     };
-
 
     BenchResult {
         num_recursive: man.num_recursive_calls(),

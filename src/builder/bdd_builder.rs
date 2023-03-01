@@ -4,20 +4,18 @@
 
 use bumpalo::Bump;
 
-use crate::repr::bdd::{BddNode, BddPtr};
-use crate::repr::ddnnf::DDNNFPtr;
+use crate::repr::bdd::BddNode;
 use crate::repr::model::PartialModel;
 use crate::repr::sat_solver::SATSolver;
 use crate::repr::var_order::VarOrder;
 use crate::{
     backing_store::bump_table::BackedRobinhoodTable, repr::cnf::*, repr::logical_expr::LogicalExpr,
-    repr::model, repr::var_label::Literal, repr::var_label::VarLabel,
+    repr::model, repr::var_label::Literal,
 };
 
 use super::cache::all_app::AllTable;
 use super::cache::ite::Ite;
 use super::cache::lru_app::BddApplyTable;
-use super::cache::*;
 use crate::backing_store::*;
 use std::cmp::Ordering;
 use std::collections::HashMap;
@@ -25,6 +23,11 @@ use std::collections::{BinaryHeap, HashSet};
 use std::fmt::Debug;
 
 use super::bdd_plan::BddPlan;
+
+pub use crate::builder::cache::LruTable;
+pub use crate::repr::bdd::BddPtr;
+pub use crate::repr::ddnnf::DDNNFPtr;
+pub use crate::repr::var_label::VarLabel;
 
 #[derive(Eq, PartialEq, Debug)]
 struct CompiledCNF {
@@ -113,18 +116,43 @@ impl<T: LruTable<BddPtr>> BddManager<T> {
     }
 
     /// Returns the number of variables in the manager
+    #[inline]
     pub fn num_vars(&self) -> usize {
         return self.get_order().num_vars();
     }
 
-    /// Generate a new variable which was not in the original order. Places the
-    /// new variable at the end of the current order. Returns the label of the
-    /// new variable.
-    pub fn new_var(&mut self) -> VarLabel {
+    /// Generate a new variable label which was not in the original order. Places the
+    /// new variable label at the end of the current order. Returns the newly
+    /// generated label.
+    #[inline]
+    pub fn new_label(&mut self) -> VarLabel {
         self.order.new_last()
     }
 
+    /// Generate a new pointer which was not in the original order. Uses
+    /// `new_label` to produce a new label at the end of the current order, then
+    /// uses `var` to create a pointer in the manager. Returns the output of both.
+    #[inline]
+    pub fn new_var(&mut self, polarity: bool) -> (VarLabel, BddPtr) {
+        let label = self.new_label();
+        let ptr = self.var(label, polarity);
+        (label, ptr)
+    }
+
+    /// Use `new_var` to create a new positive pointer.
+    #[inline]
+    pub fn new_pos(&mut self) -> (VarLabel, BddPtr) {
+        self.new_var(true)
+    }
+
+    /// Use `new_var` to create a new negative pointer.
+    #[inline]
+    pub fn new_neg(&mut self) -> (VarLabel, BddPtr) {
+        self.new_var(false)
+    }
+
     /// Get the current variable order
+    #[inline]
     pub fn get_order(&self) -> &VarOrder {
         &self.order
     }
@@ -234,7 +262,7 @@ impl<T: LruTable<BddPtr>> BddManager<T> {
     /// # use rsdd::builder::cache::all_app::AllTable;
     /// # use rsdd::repr::bdd::BddPtr;
     /// let mut mgr = BddManager::<AllTable<BddPtr>>::new_default_order(10);
-    /// let lbl_a = mgr.new_var();
+    /// let lbl_a = mgr.new_label();
     /// let a = mgr.var(lbl_a, true);
     /// let a_and_not_a = mgr.and(a, a.neg());
     /// assert!(a_and_not_a.is_false());
@@ -810,8 +838,8 @@ mod tests {
     #[test]
     fn test_newvar() {
         let mut man = BddManager::<AllTable<BddPtr>>::new_default_order(0);
-        let l1 = man.new_var();
-        let l2 = man.new_var();
+        let l1 = man.new_label();
+        let l2 = man.new_label();
         let v1 = man.var(l1, true);
         let v2 = man.var(l2, true);
         let r1 = man.or(v1, v2);
@@ -972,10 +1000,10 @@ mod tests {
     }
 
     #[test]
-    fn test_new_var() {
+    fn test_new_label() {
         let mut man = BddManager::<AllTable<BddPtr>>::new_default_order(0);
-        let vlbl1 = man.new_var();
-        let vlbl2 = man.new_var();
+        let vlbl1 = man.new_label();
+        let vlbl2 = man.new_label();
         let v1 = man.var(vlbl1, false);
         let v2 = man.var(vlbl2, false);
         let r1 = man.and(v1, v2);
@@ -1058,8 +1086,8 @@ mod tests {
         let mut man = BddManager::<AllTable<BddPtr>>::new_default_order(0);
         let mut ptrvec = Vec::new();
         for _ in 0..40 {
-            let vlab = man.new_var();
-            let flab = man.new_var();
+            let vlab = man.new_label();
+            let flab = man.new_label();
             let vptr = man.var(vlab, true);
             let fptr = man.var(flab, true);
             let sent = man.iff(vptr, fptr);
