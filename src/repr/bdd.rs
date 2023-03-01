@@ -135,10 +135,12 @@ impl<'a, T: Clone, U> Fold<'a, T, U> {
 }
 
 impl BddPtr {
+    #[inline]
     pub fn new_reg(n: *mut BddNode) -> BddPtr {
         Reg(n)
     }
 
+    #[inline]
     pub fn from_bool(b: bool) -> BddPtr {
         if b {
             PtrTrue
@@ -147,15 +149,19 @@ impl BddPtr {
         }
     }
 
+    #[inline]
     pub fn new_compl(n: *mut BddNode) -> BddPtr {
         Compl(n)
     }
 
     /// Gets the varlabel of &self
     /// Panics if not a node
+    #[inline]
     pub fn var(&self) -> VarLabel {
         self.into_node().var
     }
+    /// Gets the varlabel of &self
+    #[inline]
     pub fn var_safe(&self) -> Option<VarLabel> {
         self.into_node_safe().and_then(|x| Some(x.var))
     }
@@ -163,6 +169,7 @@ impl BddPtr {
     /// Get a mutable reference to the node that &self points to
     ///
     /// Panics if not a node pointer
+    #[inline]
     #[allow(clippy::mut_from_ref)]
     pub fn mut_node_ref(&self) -> &mut BddNode {
         unsafe {
@@ -179,6 +186,7 @@ impl BddPtr {
     /// the returned BddNode incorporates this information)
     ///
     /// Panics if the pointer is constant (i.e., true or false)
+    #[inline]
     pub fn into_node(&self) -> BddNode {
         match self.into_node_safe() {
             None => panic!("Dereferencing constant in deref_or_panic"),
@@ -369,6 +377,7 @@ impl BddPtr {
             },
         }
     }
+    #[inline]
     pub fn print_bdd(&self) -> String {
         self.print_bdd_lbl(&HashMap::new())
     }

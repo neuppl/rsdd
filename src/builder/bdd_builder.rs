@@ -116,6 +116,7 @@ impl<T: LruTable<BddPtr>> BddManager<T> {
     }
 
     /// Returns the number of variables in the manager
+    #[inline]
     pub fn num_vars(&self) -> usize {
         return self.get_order().num_vars();
     }
@@ -123,6 +124,7 @@ impl<T: LruTable<BddPtr>> BddManager<T> {
     /// Generate a new variable label which was not in the original order. Places the
     /// new variable label at the end of the current order. Returns the newly
     /// generated label.
+    #[inline]
     pub fn new_label(&mut self) -> VarLabel {
         self.order.new_last()
     }
@@ -130,6 +132,7 @@ impl<T: LruTable<BddPtr>> BddManager<T> {
     /// Generate a new pointer which was not in the original order. Uses
     /// `new_label` to produce a new label at the end of the current order, then
     /// uses `var` to create a pointer in the manager. Returns the output of both.
+    #[inline]
     pub fn new_var(&mut self, polarity: bool) -> (VarLabel, BddPtr) {
         let label = self.new_label();
         let ptr = self.var(label, polarity);
@@ -137,16 +140,19 @@ impl<T: LruTable<BddPtr>> BddManager<T> {
     }
 
     /// Use `new_var` to create a new positive pointer.
+    #[inline]
     pub fn new_pos(&mut self) -> (VarLabel, BddPtr) {
         self.new_var(true)
     }
 
     /// Use `new_var` to create a new negative pointer.
+    #[inline]
     pub fn new_neg(&mut self) -> (VarLabel, BddPtr) {
         self.new_var(false)
     }
 
     /// Get the current variable order
+    #[inline]
     pub fn get_order(&self) -> &VarOrder {
         &self.order
     }
