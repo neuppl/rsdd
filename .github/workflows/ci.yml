@@ -18,6 +18,13 @@ jobs:
     - run: cargo fmt --all -- --check
     - run: cargo clippy --all
 
+  docs:
+    name: cargo doc
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - run: RUSTDOCFLAGS="-D warnings --cfg docsrs" cargo doc --workspace --no-deps --all-features
+
   test:
     name: test
     strategy:
