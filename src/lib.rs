@@ -1,10 +1,10 @@
 //! Defines exports and the C api
 extern crate dimacs;
+extern crate dot;
 extern crate fnv;
 extern crate libc;
 extern crate maplit;
 extern crate num;
-extern crate dot;
 extern crate pretty;
 extern crate primal;
 extern crate rand;
@@ -25,5 +25,5 @@ mod backing_store;
 pub mod builder;
 pub mod repr;
 pub mod sample;
-pub mod unique_table;
 pub mod serialize;
+pub mod unique_table;
