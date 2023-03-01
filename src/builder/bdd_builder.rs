@@ -4,21 +4,19 @@
 
 use bumpalo::Bump;
 
-use crate::repr::bdd::{BddNode, BddPtr};
-use crate::repr::ddnnf::DDNNFPtr;
+use crate::repr::bdd::BddNode;
 use crate::repr::dtree;
 use crate::repr::model::PartialModel;
 use crate::repr::sat_solver::SATSolver;
 use crate::repr::var_order::VarOrder;
 use crate::{
     backing_store::bump_table::BackedRobinhoodTable, repr::cnf::*, repr::logical_expr::LogicalExpr,
-    repr::model, repr::var_label::Literal, repr::var_label::VarLabel,
+    repr::model, repr::var_label::Literal,
 };
 
 use super::cache::all_app::AllTable;
 use super::cache::ite::Ite;
 use super::cache::lru_app::BddApplyTable;
-use super::cache::*;
 use crate::backing_store::*;
 use std::cmp::Ordering;
 use std::collections::HashMap;
@@ -26,6 +24,11 @@ use std::collections::{BinaryHeap, HashSet};
 use std::fmt::Debug;
 
 use super::bdd_plan::BddPlan;
+
+pub use crate::builder::cache::LruTable;
+pub use crate::repr::bdd::BddPtr;
+pub use crate::repr::ddnnf::DDNNFPtr;
+pub use crate::repr::var_label::VarLabel;
 
 #[derive(Eq, PartialEq, Debug)]
 struct CompiledCNF {
