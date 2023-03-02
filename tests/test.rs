@@ -773,7 +773,6 @@ mod test_sdd_manager {
         fn qc_sdd_canonicity(c1: Cnf, vtree:VTree) -> TestResult {
             let mut mgr = super::SddManager::new(vtree);
             let _ = mgr.from_cnf(&c1);
-            println!("num nodes: {}", mgr.node_iter().count());
             // take a large prime to make collisions impossible 
             // useful site: http://compoasso.free.fr/primelistweb/page/prime/liste_online_en.php
             let prime = 10037; 
