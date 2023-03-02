@@ -3,7 +3,6 @@
 
 use std::cmp::Ordering;
 use std::collections::HashMap;
-use std::fmt::Binary;
 
 use rand::seq::SliceRandom;
 use rand::thread_rng;
