@@ -555,7 +555,7 @@ mod test_sdd_manager {
     use rsdd::repr::ddnnf::DDNNFPtr;
     use rsdd::repr::vtree::VTree;
     use rsdd::repr::wmc::WmcParams;
-    use std::collections::HashMap;
+    use std::collections::{HashMap, HashSet};
     use std::iter::FromIterator;
 
     quickcheck! {
@@ -765,6 +765,29 @@ mod test_sdd_manager {
                 }
             }
             TestResult::from_bool(num_collisions < 2) // less than half
+        }
+    }
+
+    quickcheck! {
+        /// verify that every node in the SDD has a unique semantic hash
+        fn qc_sdd_canonicity(c1: Cnf, vtree:VTree) -> TestResult {
+            let mut mgr = super::SddManager::new(vtree);
+            let _ = mgr.from_cnf(&c1);
+            println!("num nodes: {}", mgr.node_iter().count());
+            // take a large prime to make collisions impossible 
+            // useful site: http://compoasso.free.fr/primelistweb/page/prime/liste_online_en.php
+            let prime = 10037; 
+
+            // running iteratively, taking majority
+            let map = mgr.create_prob_map(prime);
+            let seen_hashes : HashSet<u128> = HashSet::new();
+            for sdd in mgr.node_iter() {
+                let hash = sdd.get_semantic_hash(&map, prime);
+                if seen_hashes.contains(&hash) {
+                    return TestResult::from_bool(false);
+                }
+            }
+            return TestResult::from_bool(true);
         }
     }
 }
