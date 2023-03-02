@@ -734,17 +734,18 @@ fn is_trimmed_trivial() {
 
 #[test]
 fn is_trimmed_simple_demorgan() {
-    let mut man =
-        crate::builder::sdd_builder::SddManager::new(crate::repr::vtree::VTree::even_split(
-            &[
-                VarLabel::new(0),
-                VarLabel::new(1),
-                VarLabel::new(2),
-                VarLabel::new(3),
-                VarLabel::new(4),
-            ],
-            1,
-        ));
+    let mut man = crate::builder::sdd_builder::SddManager::<
+        crate::builder::sdd_builder::CompressionCanonicalizer,
+    >::new(crate::repr::vtree::VTree::even_split(
+        &[
+            VarLabel::new(0),
+            VarLabel::new(1),
+            VarLabel::new(2),
+            VarLabel::new(3),
+            VarLabel::new(4),
+        ],
+        1,
+    ));
 
     let x = SddPtr::var(VarLabel::new(0), true);
     let y = SddPtr::var(VarLabel::new(3), true);
@@ -764,17 +765,18 @@ fn is_canonical_trivial() {
 
 #[test]
 fn is_canonical_simple_demorgan() {
-    let mut man =
-        crate::builder::sdd_builder::SddManager::new(crate::repr::vtree::VTree::even_split(
-            &[
-                VarLabel::new(0),
-                VarLabel::new(1),
-                VarLabel::new(2),
-                VarLabel::new(3),
-                VarLabel::new(4),
-            ],
-            1,
-        ));
+    let mut man = crate::builder::sdd_builder::SddManager::<
+        crate::builder::sdd_builder::CompressionCanonicalizer,
+    >::new(crate::repr::vtree::VTree::even_split(
+        &[
+            VarLabel::new(0),
+            VarLabel::new(1),
+            VarLabel::new(2),
+            VarLabel::new(3),
+            VarLabel::new(4),
+        ],
+        1,
+    ));
     let x = SddPtr::var(VarLabel::new(0), true);
     let y = SddPtr::var(VarLabel::new(3), true);
     let res = man.or(x, y).neg();

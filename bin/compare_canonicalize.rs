@@ -5,7 +5,7 @@ extern crate rsgm;
 
 use clap::Parser;
 use criterion::black_box;
-use rsdd::builder::sdd_builder;
+use rsdd::builder::sdd_builder::{self, CompressionCanonicalizer};
 use rsdd::repr::vtree::VTree;
 
 use rsdd::repr::cnf::Cnf;
@@ -119,7 +119,7 @@ fn build_dtree(cnf: &Cnf) -> DTree {
 }
 
 fn compile_sdd_benchmark(cnf: &Cnf, vtree: VTree, modified: bool) -> Duration {
-    let mut compiler = sdd_builder::SddManager::new(vtree);
+    let mut compiler = sdd_builder::SddManager::<CompressionCanonicalizer>::new(vtree);
     compiler.set_compression(!modified);
 
     let start = Instant::now();

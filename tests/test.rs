@@ -8,7 +8,7 @@ use crate::repr::cnf::Cnf;
 use crate::repr::var_label::VarLabel;
 use rsdd::builder::bdd_builder::BddManager;
 use rsdd::builder::cache::all_app::AllTable;
-use rsdd::builder::sdd_builder::SddManager;
+use rsdd::builder::sdd_builder::{CompressionCanonicalizer, SddManager};
 use rsdd::repr::bdd::BddPtr;
 use rsdd::repr::vtree::VTree;
 use rsdd::*;
@@ -271,7 +271,7 @@ fn test_sdd_canonicity() {
             .map(|x| VarLabel::new(x as u64))
             .collect();
         let vtree = VTree::even_split(&v, 1);
-        let mut man = SddManager::new(vtree);
+        let mut man = SddManager::<CompressionCanonicalizer>::new(vtree);
         let r1 = man.from_cnf(&cnf1);
         let r2 = man.from_cnf(&cnf2);
         assert!(
@@ -292,7 +292,7 @@ fn test_sdd_is_canonical() {
             .map(|x| VarLabel::new(x as u64))
             .collect();
         let vtree = VTree::even_split(&v, 1);
-        let mut man = SddManager::new(vtree);
+        let mut man = SddManager::<CompressionCanonicalizer>::new(vtree);
         let r1 = man.from_cnf(&cnf1);
         let r2 = man.from_cnf(&cnf2);
         assert!(
@@ -551,6 +551,7 @@ mod test_sdd_manager {
     use crate::repr::var_label::{Literal, VarLabel};
     use quickcheck::TestResult;
     use rsdd::builder::cache::all_app::AllTable;
+    use rsdd::builder::sdd_builder::CompressionCanonicalizer;
     use rsdd::repr::bdd::BddPtr;
     use rsdd::repr::ddnnf::DDNNFPtr;
     use rsdd::repr::vtree::VTree;
@@ -561,7 +562,7 @@ mod test_sdd_manager {
     quickcheck! {
         fn test_cond_and(c: Cnf) -> bool {
             let order : Vec<VarLabel> = (0..16).map(VarLabel::new).collect();
-            let mut mgr = super::SddManager::new(VTree::even_split(&order, 4));
+            let mut mgr = super::SddManager::<CompressionCanonicalizer>::new(VTree::even_split(&order, 4));
             let cnf = mgr.from_cnf(&c);
             let v1 = VarLabel::new(0);
             let bdd1 = mgr.exists(cnf, v1);
@@ -579,7 +580,7 @@ mod test_sdd_manager {
             let order : Vec<VarLabel> = (0..16).map(VarLabel::new).collect();
             // let vtree = VTree::even_split(&order, 4);
             let vtree = VTree::right_linear(&order);
-            let mut mgr = super::SddManager::new(vtree);
+            let mut mgr = super::SddManager::<CompressionCanonicalizer>::new(vtree);
             let cnf1 = mgr.from_cnf(&c1);
             let cnf2 = mgr.from_cnf(&c2);
             let iff1 = mgr.iff(cnf1, cnf2);
@@ -602,7 +603,7 @@ mod test_sdd_manager {
             let order : Vec<VarLabel> = (0..16).map(VarLabel::new).collect();
             let vtree = VTree::even_split(&order, 4);
             // let vtree = VTree::right_linear(&order);
-            let mut mgr = super::SddManager::new(vtree);
+            let mut mgr = super::SddManager::<CompressionCanonicalizer>::new(vtree);
             let cnf1 = mgr.from_cnf(&c1);
             let cnf2 = mgr.from_cnf(&c2);
             let iff1 = mgr.iff(cnf1, cnf2);
@@ -630,7 +631,7 @@ mod test_sdd_manager {
                 (0..cnf.num_vars()).map(|x| (VarLabel::new(x as u64), (0.5, 0.5))));
 
             let order : Vec<VarLabel> = (0..cnf.num_vars()).map(|x| VarLabel::new(x as u64)).collect();
-            let mut mgr = super::SddManager::new(VTree::even_split(&order, 3));
+            let mut mgr = super::SddManager::<CompressionCanonicalizer>::new(VTree::even_split(&order, 3));
             let cnf_sdd = mgr.from_cnf(&cnf);
             let sdd_wmc = WmcParams::new_with_default(0.0, 1.0, weight_map);
             let sdd_res = cnf_sdd.wmc(mgr.get_vtree_manager(), &sdd_wmc);
@@ -654,7 +655,7 @@ mod test_sdd_manager {
         fn sdd_compressed_right_linear(c: Cnf) -> bool {
             let order : Vec<VarLabel> = (0..16).map(VarLabel::new).collect();
             let vtree = VTree::right_linear(&order);
-            let mut mgr = super::SddManager::new(vtree);
+            let mut mgr = super::SddManager::<CompressionCanonicalizer>::new(vtree);
             let cnf = mgr.from_cnf(&c);
             cnf.is_compressed()
         }
@@ -664,7 +665,7 @@ mod test_sdd_manager {
         fn sdd_trimmed_right_linear(c: Cnf) -> bool {
             let order : Vec<VarLabel> = (0..16).map(VarLabel::new).collect();
             let vtree = VTree::right_linear(&order);
-            let mut mgr = super::SddManager::new(vtree);
+            let mut mgr = super::SddManager::<CompressionCanonicalizer>::new(vtree);
             let cnf = mgr.from_cnf(&c);
 
             cnf.is_trimmed()
@@ -673,7 +674,7 @@ mod test_sdd_manager {
 
     quickcheck! {
         fn sdd_compressed_arbitrary_vtree(c: Cnf, vtree: VTree) -> bool {
-            let mut mgr = super::SddManager::new(vtree);
+            let mut mgr = super::SddManager::<CompressionCanonicalizer>::new(vtree);
             let cnf = mgr.from_cnf(&c);
             cnf.is_compressed()
         }
@@ -681,7 +682,7 @@ mod test_sdd_manager {
 
     quickcheck! {
         fn sdd_trimmed_arbitrary_vtree(c: Cnf, vtree: VTree) -> bool {
-            let mut mgr = super::SddManager::new(vtree);
+            let mut mgr = super::SddManager::<CompressionCanonicalizer>::new(vtree);
             let cnf = mgr.from_cnf(&c);
             cnf.is_trimmed()
         }
@@ -689,10 +690,10 @@ mod test_sdd_manager {
 
     quickcheck! {
         fn prob_equiv_trivial(c: Cnf, vtree:VTree) -> bool {
-            let mut mgr1 = super::SddManager::new(vtree.clone());
+            let mut mgr1 = super::SddManager::<CompressionCanonicalizer>::new(vtree.clone());
             let c1 = mgr1.from_cnf(&c);
 
-            let mut mgr2 = super::SddManager::new(vtree);
+            let mut mgr2 = super::SddManager::<CompressionCanonicalizer>::new(vtree);
             let c2 = mgr2.from_cnf(&c);
 
             let prime = 1123; // large enough for our purposes
@@ -707,10 +708,10 @@ mod test_sdd_manager {
 
     quickcheck! {
         fn prob_equiv_sdd_identity_uncompressed(c: Cnf, vtree:VTree) -> TestResult {
-            let mut compr_mgr = super::SddManager::new(vtree.clone());
+            let mut compr_mgr = super::SddManager::<CompressionCanonicalizer>::new(vtree.clone());
             let compr_cnf = compr_mgr.from_cnf(&c);
 
-            let mut uncompr_mgr = super::SddManager::new(vtree);
+            let mut uncompr_mgr = super::SddManager::<CompressionCanonicalizer>::new(vtree);
             uncompr_mgr.set_compression(false);
             let uncompr_cnf = uncompr_mgr.from_cnf(&c);
 
@@ -735,7 +736,7 @@ mod test_sdd_manager {
 
     quickcheck! {
         fn prob_equiv_sdd_inequality(c1: Cnf, c2: Cnf, vtree:VTree) -> TestResult {
-            let mut mgr = super::SddManager::new(vtree);
+            let mut mgr = super::SddManager::<CompressionCanonicalizer>::new(vtree);
             let cnf_1 = mgr.from_cnf(&c1);
             let cnf_2 = mgr.from_cnf(&c2);
 

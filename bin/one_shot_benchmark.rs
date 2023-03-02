@@ -94,7 +94,7 @@ fn compile_sdd_dtree(str: String, _args: &Args) -> BenchResult {
     let cnf = Cnf::from_file(str);
     let dtree = DTree::from_cnf(&cnf, &VarOrder::linear_order(cnf.num_vars()));
     let vtree = VTree::from_dtree(&dtree).unwrap();
-    let mut man = SddManager::new(vtree.clone());
+    let mut man = SddManager::<CompressionCanonicalizer>::new(vtree.clone());
     let _sdd = man.from_cnf(&cnf);
 
     match &_args.dump_sdd {
@@ -130,7 +130,7 @@ fn compile_sdd_rightlinear(str: String, _args: &Args) -> BenchResult {
         .map(|x| VarLabel::new(x as u64))
         .collect();
     let vtree = VTree::right_linear(&o);
-    let mut man = SddManager::new(vtree.clone());
+    let mut man = SddManager::<CompressionCanonicalizer>::new(vtree.clone());
     let _sdd = man.from_cnf(&cnf);
 
     match &_args.dump_sdd {
