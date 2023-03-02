@@ -3,7 +3,6 @@
 
 use std::cmp::Ordering;
 use std::collections::HashMap;
-use std::fmt::Binary;
 
 use rand::seq::SliceRandom;
 use rand::thread_rng;
@@ -805,7 +804,7 @@ impl SddManager {
     }
 
     /// get an iterator over all unique allocated nodes by the manager
-    pub fn node_iter(&self) -> impl Iterator<Item = SddPtr> + '_ { 
+    pub fn node_iter(&self) -> impl Iterator<Item = SddPtr> + '_ {
         let bdditer = self.bdd_iter().map(|x| SddPtr::bdd(x));
         self.or_iter().map(|x| SddPtr::Reg(x)).chain(bdditer)
     }

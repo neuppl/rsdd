@@ -140,7 +140,7 @@ where
             propagate(&mut self.tbl, self.cap, i.clone(), (i.hash as usize) % c);
         }
     }
-    
+
     pub fn iter(&self) -> impl Iterator<Item = *mut T> + '_ {
         self.tbl.iter().filter(|x| x.is_occupied()).map(|x| x.ptr)
     }
