@@ -774,9 +774,9 @@ mod test_sdd_manager {
         fn qc_sdd_canonicity(c1: Cnf, vtree:VTree) -> TestResult {
             let mut mgr = super::SddManager::new(vtree);
             let _ = mgr.from_cnf(&c1);
-            // take a large prime to make collisions impossible 
+            // take a large prime to make collisions impossible
             // useful site: http://compoasso.free.fr/primelistweb/page/prime/liste_online_en.php
-            let prime = 500057; 
+            let prime = 500057;
 
             // running iteratively, taking majority
             let map = mgr.create_prob_map(prime);
