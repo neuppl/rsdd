@@ -125,6 +125,7 @@ impl SddManager {
     fn unique_or(&mut self, mut node: Vec<SddAnd>, table: VTreeIndex) -> SddPtr {
         // check if it is a BDD; if it is, return that
         if node.len() == 2 && node[0].prime().is_var() && node[1].prime().is_var() {
+            // this is a BDD
             // this SDD may be unsorted, so extract the low and high value
             // based on whether or not node[0]'s prime is negated
             let v = node[1].prime().get_var().get_label();
@@ -164,7 +165,7 @@ impl SddManager {
         }
 
         // uniqify BDD
-        if bdd.high().is_neg() || bdd.high().is_false() {
+        if bdd.high().is_neg() || bdd.high().is_false() || bdd.high().is_neg_var() {
             let neg_bdd =
                 BinarySDD::new(bdd.label(), bdd.low().neg(), bdd.high().neg(), bdd.vtree());
             SddPtr::bdd(self.bdd_tbl.get_or_insert(neg_bdd)).neg()
@@ -603,8 +604,8 @@ impl SddManager {
                     l.get_label().value()
                 ));
             } else if ptr.is_bdd() {
-                let l = helper(_man, ptr.low());
-                let h = helper(_man, ptr.high());
+                let l = helper(_man, ptr.low_raw());
+                let h = helper(_man, ptr.high_raw());
                 let mut doc: Doc<BoxDoc> = Doc::from("");
                 doc = doc.append(Doc::newline()).append(
                     (Doc::from(format!("ITE {:?} {}", ptr, ptr.topvar().value()))

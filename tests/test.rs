@@ -553,6 +553,7 @@ mod test_sdd_manager {
     use rsdd::builder::cache::all_app::AllTable;
     use rsdd::repr::bdd::BddPtr;
     use rsdd::repr::ddnnf::DDNNFPtr;
+    use rsdd::repr::sdd::SddPtr;
     use rsdd::repr::vtree::VTree;
     use rsdd::repr::wmc::WmcParams;
     use std::collections::{HashMap, HashSet};
@@ -775,16 +776,22 @@ mod test_sdd_manager {
             let _ = mgr.from_cnf(&c1);
             // take a large prime to make collisions impossible 
             // useful site: http://compoasso.free.fr/primelistweb/page/prime/liste_online_en.php
-            let prime = 10037; 
+            let prime = 500057; 
 
             // running iteratively, taking majority
             let map = mgr.create_prob_map(prime);
-            let seen_hashes : HashSet<u128> = HashSet::new();
+            let mut seen_hashes : HashMap<u128, SddPtr> = HashMap::new();
             for sdd in mgr.node_iter() {
                 let hash = sdd.get_semantic_hash(&map, prime);
-                if seen_hashes.contains(&hash) {
+                if seen_hashes.contains_key(&hash) {
+                    let c = seen_hashes.get(&hash).unwrap();
+                    println!("cnf: {}", c1.to_string());
+                    println!("collision found for hash value {}", hash);
+                    println!("sdd a: {}\n", mgr.print_sdd(sdd));
+                    println!("sdd b: {}\n", mgr.print_sdd(*c));
                     return TestResult::from_bool(false);
                 }
+                seen_hashes.insert(hash, sdd);
             }
             return TestResult::from_bool(true);
         }
