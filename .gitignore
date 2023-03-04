@@ -6,3 +6,4 @@ Cargo.lock
 .DS_Store
 .vscode/*
 .pre-commit-config.yaml
+/result
