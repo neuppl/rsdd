@@ -776,7 +776,7 @@ mod test_sdd_manager {
             let _ = mgr.from_cnf(&c1);
             // take a large prime to make collisions impossible
             // useful site: http://compoasso.free.fr/primelistweb/page/prime/liste_online_en.php
-            let prime = 500057;
+            let prime = 100000000069; // use u128 max
 
             // running iteratively, taking majority
             let map = mgr.create_prob_map(prime);
@@ -786,6 +786,7 @@ mod test_sdd_manager {
                 if seen_hashes.contains_key(&hash) {
                     let c = seen_hashes.get(&hash).unwrap();
                     println!("cnf: {}", c1.to_string());
+                    println!("probmap: {:?}", map);
                     println!("collision found for hash value {}", hash);
                     println!("sdd a: {}\n", mgr.print_sdd(sdd));
                     println!("sdd b: {}\n", mgr.print_sdd(*c));

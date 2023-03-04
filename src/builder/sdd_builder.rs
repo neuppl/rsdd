@@ -5,7 +5,7 @@ use std::cmp::Ordering;
 use std::collections::HashMap;
 
 use rand::seq::SliceRandom;
-use rand::thread_rng;
+use rand::{thread_rng, Rng};
 
 use super::cache::all_app::AllTable;
 use super::cache::ite::Ite;
@@ -779,10 +779,13 @@ impl SddManager {
         // theoretical guarantee from paper; need to verify more!
         assert!((2 * vars.len() as u128) < prime);
 
+        let rng = &mut thread_rng();
         let mut random_order = vars;
-        random_order.shuffle(&mut thread_rng());
+        random_order.shuffle(rng);
 
-        let mut value_range: Vec<u128> = (2..prime / 2).collect();
+        let mut value_range: Vec<u128> = (2..(random_order.len() + 2) as u128)
+            .map(|_| rng.gen::<u128>() % prime)
+            .collect();
         value_range.shuffle(&mut thread_rng());
 
         let mut map = HashMap::<usize, u128>::new();
