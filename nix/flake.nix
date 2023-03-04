@@ -20,25 +20,10 @@
       };
       naersk = pkgs.callPackage inputs.naersk {};
       rsdd = pkgs.callPackage ./. {};
-      # rsdd = (naersk.buildPackage { src = ../.; })
-      #   .overrideAttrs (prev: {
-      #     fixupPhase =
-      #       ''
-      #         # FIXME move to the .lib output
-      #         mkdir $out/lib
-      #         mv target/release/librsdd.a $out/lib/
-      #       ''
-      #       + (
-      #         if pkgs.stdenv.isDarwin
-      #         then "mv target/release/librsdd.dylib $out/lib/" # untested
-      #         else "mv target/release/librsdd.so $out/lib/"
-      #       );
-      #   });
       py = pkgs.python3.withPackages (p: [p.graphviz]);
       render-graphviz = pkgs.writeScriptBin "render-graphviz" ''
         ${py}/bin/python ${../bin/render_graphviz.py}
       '';
-      # visualize = ;
     in {
       packages = {
         inherit rsdd render-graphviz;
@@ -49,12 +34,24 @@
           type = "app";
           program = "${render-graphviz}/bin/render-graphviz";
         };
+        bayesian_network_compiler = {
+          type = "app";
+          program = "${rsdd}/bin/bayesian_network_compiler";
+        };
+        compare_canonicalize = {
+          type = "app";
+          program = "${rsdd}/bin/compare_canonicalize";
+        };
+        one_shot_benchmark = {
+          type = "app";
+          program = "${rsdd}/bin/one_shot_benchmark";
+        };
       };
 
       devShell = inputs.devenv.lib.mkShell {
         inherit inputs pkgs;
         modules = [
-          {
+          rec {
             pre-commit.hooks = {
               shellcheck.enable = true;
               clippy.enable = true;
@@ -67,27 +64,19 @@
             # add a rust-repl
             scripts.repl.exec = "${pkgs.evcxr}/bin/evcxr";
             env.DEVSHELL = "devshell+flake.nix";
-            enterShell = ''
-              echo ""
-              echo "Hello from $DEVSHELL!"
-              echo "Some tools this environment is equipped with:"
-              echo ""
-              echo "lldb                -- ${pkgs.lldb.meta.description}"
-              echo "cargo               -- ${pkgs.cargo.meta.description}"
-              echo "rustc               -- ${pkgs.rustc.meta.description}"
-              echo "rustfmt             -- ${pkgs.rustfmt.meta.description}"
-              echo "rust-analyzer       -- ${pkgs.rust-analyzer.meta.description}"
-              echo "clippy              -- ${pkgs.clippy.meta.description}"
-              echo "cargo-watch         -- ${pkgs.cargo-watch.meta.description}"
-              echo "cargo-nextest       -- ${pkgs.cargo-nextest.meta.description}"
-              echo "cargo-expand        -- ${pkgs.cargo-expand.meta.description}"
-              echo "cargo-llvm-lines    -- ${pkgs.cargo-llvm-lines.meta.description}"
-              echo "cargo-inspect       -- ${pkgs.cargo-inspect.meta.description}"
-              echo "cargo-criterion     -- ${pkgs.cargo-criterion.meta.description}"
-              echo "cargo-play          -- ${pkgs.cargo-play.meta.description}"
-              echo "evcxr (alias: repl) -- ${pkgs.evcxr.meta.description}"
-              echo ""
-            '';
+            enterShell = pkgs.lib.strings.concatStringsSep "\n" ([
+                ''
+                  echo ""
+                  echo "Hello from $DEVSHELL!"
+                  echo "Some tools this environment is equipped with:"
+                  echo ""
+                ''
+              ]
+              ++ (builtins.map (
+                  p: "echo \"${p.pname}\t\t-- ${p.meta.description}\""
+                )
+                packages)
+              ++ ["echo \"\""]);
 
             packages =
               with pkgs;
