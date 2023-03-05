@@ -5,7 +5,6 @@ use rustc_hash::FxHashMap;
 use crate::repr::sdd::{SddAnd, SddPtr};
 
 pub trait SddApply {
-    // fn new() -> Self;
     fn get(&self, and: SddAnd) -> Option<SddPtr>;
     fn insert(&mut self, and: SddAnd, ptr: SddPtr);
 }

@@ -41,8 +41,6 @@ pub trait SddCanonicalizationScheme {
     fn should_compress(&self) -> bool;
     fn sdd_eq(&self, s1: SddPtr, s2: SddPtr) -> bool;
     fn app_cache(&mut self) -> Box<&mut dyn SddApply>;
-    // fn canonicalize(&mut self, node: Vec<SddAnd>, table: VTreeIndex) -> SddPtr;
-    // fn compress(&mut self, node: &mut Vec<SddAnd>);
 }
 
 pub struct CompressionCanonicalizer {
