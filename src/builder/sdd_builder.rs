@@ -4,8 +4,7 @@
 use std::cmp::Ordering;
 use std::collections::HashMap;
 
-use rand::seq::SliceRandom;
-use rand::thread_rng;
+use rand::{thread_rng, Rng};
 
 use super::cache::all_app::AllTable;
 use super::cache::ite::Ite;
@@ -85,15 +84,15 @@ impl SemanticCanoncalizer {
         // theoretical guarantee from paper; need to verify more!
         assert!((2 * vars.len() as u128) < *prime);
 
-        let mut random_order = vars;
-        random_order.shuffle(&mut thread_rng());
+        let rng = &mut thread_rng();
 
-        let mut value_range: Vec<u128> = (2..*prime / 2).collect();
-        value_range.shuffle(&mut thread_rng());
+        let value_range: Vec<u128> = (0..vars.len() as u128)
+            .map(|_| rng.gen_range(2..*prime))
+            .collect();
 
         let mut map = HashMap::<usize, u128>::new();
 
-        for (&var, &value) in random_order.iter().zip(value_range.iter()) {
+        for (&var, &value) in vars.iter().zip(value_range.iter()) {
             map.insert(var, value);
         }
 
@@ -219,6 +218,7 @@ impl<T: SddCanonicalizationScheme> SddManager<T> {
     fn unique_or(&mut self, mut node: Vec<SddAnd>, table: VTreeIndex) -> SddPtr {
         // check if it is a BDD; if it is, return that
         if node.len() == 2 && node[0].prime().is_var() && node[1].prime().is_var() {
+            // this is a BDD
             // this SDD may be unsorted, so extract the low and high value
             // based on whether or not node[0]'s prime is negated
             let v = node[1].prime().get_var().get_label();
@@ -258,7 +258,7 @@ impl<T: SddCanonicalizationScheme> SddManager<T> {
         }
 
         // uniqify BDD
-        if bdd.high().is_neg() || bdd.high().is_false() {
+        if bdd.high().is_neg() || bdd.high().is_false() || bdd.high().is_neg_var() {
             let neg_bdd =
                 BinarySDD::new(bdd.label(), bdd.low().neg(), bdd.high().neg(), bdd.vtree());
             SddPtr::bdd(self.bdd_tbl.get_or_insert(neg_bdd)).neg()
@@ -695,8 +695,8 @@ impl<T: SddCanonicalizationScheme> SddManager<T> {
                     l.get_label().value()
                 ));
             } else if ptr.is_bdd() {
-                let l = helper(ptr.low());
-                let h = helper(ptr.high());
+                let l = helper(ptr.low_raw());
+                let h = helper(ptr.high_raw());
                 let mut doc: Doc<BoxDoc> = Doc::from("");
                 doc = doc.append(Doc::newline()).append(
                     (Doc::from(format!("ITE {:?} {}", ptr, ptr.topvar().value()))
@@ -872,19 +872,35 @@ impl<T: SddCanonicalizationScheme> SddManager<T> {
         // theoretical guarantee from paper; need to verify more!
         assert!((2 * vars.len() as u128) < prime);
 
-        let mut random_order = vars;
-        random_order.shuffle(&mut thread_rng());
+        let rng = &mut thread_rng();
 
-        let mut value_range: Vec<u128> = (2..prime / 2).collect();
-        value_range.shuffle(&mut thread_rng());
+        let value_range: Vec<u128> = (0..vars.len() as u128)
+            .map(|_| rng.gen_range(2..prime))
+            .collect();
 
         let mut map = HashMap::<usize, u128>::new();
 
-        for (&var, &value) in random_order.iter().zip(value_range.iter()) {
+        for (&var, &value) in vars.iter().zip(value_range.iter()) {
             map.insert(var, value);
         }
 
         map
+    }
+
+    /// get an iterator over all allocated or-nodes
+    fn or_iter(&self) -> impl Iterator<Item = *mut SddOr> + '_ {
+        self.sdd_tbl.iter()
+    }
+
+    /// get an iterator over all allocated bdd nodes
+    fn bdd_iter(&self) -> impl Iterator<Item = *mut BinarySDD> + '_ {
+        self.bdd_tbl.iter()
+    }
+
+    /// get an iterator over all unique allocated nodes by the manager
+    pub fn node_iter(&self) -> impl Iterator<Item = SddPtr> + '_ {
+        let bdditer = self.bdd_iter().map(|x| SddPtr::bdd(x));
+        self.or_iter().map(|x| SddPtr::Reg(x)).chain(bdditer)
     }
 
     pub fn get_stats(&self) -> &SddStats {

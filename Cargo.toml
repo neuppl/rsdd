@@ -34,7 +34,6 @@ rsgm = { git = "https://github.com/pmall-neu/rsgm" }
 [lib]
 name = "rsdd"
 path = "src/lib.rs"
-crate-type = ["staticlib", "rlib", "dylib"]
 
 
 [profile.release]

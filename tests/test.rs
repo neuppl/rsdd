@@ -554,9 +554,10 @@ mod test_sdd_manager {
     use rsdd::builder::sdd_builder::CompressionCanonicalizer;
     use rsdd::repr::bdd::BddPtr;
     use rsdd::repr::ddnnf::DDNNFPtr;
+    use rsdd::repr::sdd::SddPtr;
     use rsdd::repr::vtree::VTree;
     use rsdd::repr::wmc::WmcParams;
-    use std::collections::HashMap;
+    use std::collections::{HashMap, HashSet};
     use std::iter::FromIterator;
 
     quickcheck! {
@@ -766,6 +767,35 @@ mod test_sdd_manager {
                 }
             }
             TestResult::from_bool(num_collisions < 2) // less than half
+        }
+    }
+
+    quickcheck! {
+        /// verify that every node in the SDD has a unique semantic hash
+        fn qc_sdd_canonicity(c1: Cnf, vtree:VTree) -> TestResult {
+            let mut mgr = super::SddManager::<CompressionCanonicalizer>::new(vtree);
+            let _ = mgr.from_cnf(&c1);
+            // take a large prime to make collisions impossible
+            // useful site: http://compoasso.free.fr/primelistweb/page/prime/liste_online_en.php
+            let prime = 100000000069; // use u128 max
+
+            // running iteratively, taking majority
+            let map = mgr.create_prob_map(prime);
+            let mut seen_hashes : HashMap<u128, SddPtr> = HashMap::new();
+            for sdd in mgr.node_iter() {
+                let hash = sdd.get_semantic_hash(&map, prime);
+                if seen_hashes.contains_key(&hash) {
+                    let c = seen_hashes.get(&hash).unwrap();
+                    println!("cnf: {}", c1.to_string());
+                    println!("probmap: {:?}", map);
+                    println!("collision found for hash value {}", hash);
+                    println!("sdd a: {}\n", mgr.print_sdd(sdd));
+                    println!("sdd b: {}\n", mgr.print_sdd(*c));
+                    return TestResult::from_bool(false);
+                }
+                seen_hashes.insert(hash, sdd);
+            }
+            return TestResult::from_bool(true);
         }
     }
 }

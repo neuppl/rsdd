@@ -141,6 +141,10 @@ where
         }
     }
 
+    pub fn iter(&self) -> impl Iterator<Item = *mut T> + '_ {
+        self.tbl.iter().filter(|x| x.is_occupied()).map(|x| x.ptr)
+    }
+
     // pub fn average_offset(&self) -> f64 {
     //     let total = self.tbl.iter().fold(0, |sum, cur| cur.offset() + sum);
     //     (total as f64) / (self.len as f64)
