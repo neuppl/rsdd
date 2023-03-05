@@ -557,7 +557,7 @@ mod test_sdd_manager {
     use rsdd::repr::sdd::SddPtr;
     use rsdd::repr::vtree::VTree;
     use rsdd::repr::wmc::WmcParams;
-    use std::collections::{HashMap, HashSet};
+    use std::collections::HashMap;
     use std::iter::FromIterator;
 
     quickcheck! {
@@ -786,7 +786,7 @@ mod test_sdd_manager {
                 let hash = sdd.get_semantic_hash(&map, prime);
                 if seen_hashes.contains_key(&hash) {
                     let c = seen_hashes.get(&hash).unwrap();
-                    println!("cnf: {}", c1.to_string());
+                    println!("cnf: {}", c1);
                     println!("probmap: {:?}", map);
                     println!("collision found for hash value {}", hash);
                     println!("sdd a: {}\n", mgr.print_sdd(sdd));
@@ -795,7 +795,7 @@ mod test_sdd_manager {
                 }
                 seen_hashes.insert(hash, sdd);
             }
-            return TestResult::from_bool(true);
+            TestResult::from_bool(true)
         }
     }
 }
