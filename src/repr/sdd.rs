@@ -141,6 +141,10 @@ impl SddAnd {
     pub fn new(prime: SddPtr, sub: SddPtr) -> SddAnd {
         SddAnd { prime, sub }
     }
+
+    pub fn get_semantic_hash(&self, map: &HashMap<usize, u128>, prime: u128) -> u128 {
+        self.prime().get_semantic_hash(map, prime) * self.sub().get_semantic_hash(map, prime)
+    }
 }
 
 /// An SddOr node is a vector of (prime, sub) pairs.
@@ -539,10 +543,7 @@ impl SddPtr {
             Reg(_) => {
                 let raw_hash: u128 = self
                     .node_iter()
-                    .map(|and| {
-                        and.prime().get_semantic_hash(map, prime)
-                            * and.sub().get_semantic_hash(map, prime)
-                    })
+                    .map(|and| and.get_semantic_hash(map, prime))
                     .sum();
                 raw_hash % prime
             }

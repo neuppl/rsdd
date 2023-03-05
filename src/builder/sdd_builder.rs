@@ -8,7 +8,7 @@ use rand::{thread_rng, Rng};
 
 use super::cache::all_app::AllTable;
 use super::cache::ite::Ite;
-use super::cache::sdd_apply_cache::SddApply;
+use super::cache::sdd_apply_cache::{SddApply, SddApplyCompression, SddApplySemantic};
 use super::cache::LruTable;
 use crate::backing_store::bump_table::BackedRobinhoodTable;
 use crate::backing_store::UniqueTable;
@@ -40,12 +40,14 @@ pub trait SddCanonicalizationScheme {
     fn set_compress(&mut self, b: bool);
     fn should_compress(&self) -> bool;
     fn sdd_eq(&self, s1: SddPtr, s2: SddPtr) -> bool;
+    fn app_cache(&mut self) -> Box<&mut dyn SddApply>;
     // fn canonicalize(&mut self, node: Vec<SddAnd>, table: VTreeIndex) -> SddPtr;
     // fn compress(&mut self, node: &mut Vec<SddAnd>);
 }
 
 pub struct CompressionCanonicalizer {
-    pub use_compression: bool,
+    use_compression: bool,
+    app_cache: SddApplyCompression,
 }
 
 impl CompressionCanonicalizer {}
@@ -54,6 +56,7 @@ impl SddCanonicalizationScheme for CompressionCanonicalizer {
     fn new(_vtree: &VTree) -> Self {
         CompressionCanonicalizer {
             use_compression: true,
+            app_cache: SddApplyCompression::new(),
         }
     }
 
@@ -68,16 +71,21 @@ impl SddCanonicalizationScheme for CompressionCanonicalizer {
     fn should_compress(&self) -> bool {
         self.use_compression
     }
+
+    fn app_cache(&mut self) -> Box<&mut dyn SddApply> {
+        Box::new(&mut self.app_cache)
+    }
 }
 
 pub struct SemanticCanonicalizer {
     prime: u128,
-    vtree: VTree,
+    map: HashMap<usize, u128>,
+    app_cache: SddApplySemantic,
 }
 
 impl SemanticCanonicalizer {
     // Generates a mapping from variables to numbers in [2, PRIME)
-    pub fn create_prob_map(&self, vtree: &VTree, prime: &u128) -> HashMap<usize, u128> {
+    pub fn create_prob_map(vtree: &VTree, prime: &u128) -> HashMap<usize, u128> {
         let all_vars = vtree.get_all_vars();
         let vars = all_vars.into_iter().collect::<Vec<usize>>();
 
@@ -102,16 +110,19 @@ impl SemanticCanonicalizer {
 
 impl SddCanonicalizationScheme for SemanticCanonicalizer {
     fn new(vtree: &VTree) -> Self {
+        let prime: u128 = 100000000069; // TODO: change this on the fly?
+        let map = SemanticCanonicalizer::create_prob_map(&vtree.clone(), &prime);
+        let app_cache = SddApplySemantic::new(prime, map.clone());
         SemanticCanonicalizer {
-            prime: 100000000069, // TODO: change this on the fly?
-            vtree: vtree.clone(),
+            prime,
+            app_cache,
+            map,
         }
     }
 
     fn sdd_eq(&self, s1: SddPtr, s2: SddPtr) -> bool {
-        let map = self.create_prob_map(&self.vtree, &self.prime);
-        let h1 = s1.get_semantic_hash(&map, self.prime);
-        let h2 = s2.get_semantic_hash(&map, self.prime);
+        let h1 = s1.get_semantic_hash(&self.map, self.prime);
+        let h2 = s2.get_semantic_hash(&self.map, self.prime);
         h1 == h2
     }
 
@@ -120,6 +131,10 @@ impl SddCanonicalizationScheme for SemanticCanonicalizer {
     }
 
     fn set_compress(&mut self, _b: bool) {}
+
+    fn app_cache(&mut self) -> Box<&mut dyn SddApply> {
+        Box::new(&mut self.app_cache)
+    }
 }
 
 pub struct SddManager<T: SddCanonicalizationScheme> {
@@ -129,7 +144,6 @@ pub struct SddManager<T: SddCanonicalizationScheme> {
     vtree: VTreeManager,
     stats: SddStats,
     /// the apply cache
-    app_cache: SddApply,
     ite_cache: AllTable<SddPtr>,
 }
 
@@ -142,7 +156,6 @@ impl<T: SddCanonicalizationScheme> SddManager<T> {
             ite_cache: AllTable::new(),
             canonicalizer: T::new(&vtree),
             vtree: VTreeManager::new(vtree),
-            app_cache: SddApply::new(),
         }
     }
 
@@ -530,9 +543,7 @@ impl<T: SddCanonicalizationScheme> SddManager<T> {
         let lca = self.vtree.lca(av, bv);
 
         // check if we have this application cached
-        let c = self.app_cache.get(SddAnd::new(a, b));
-
-        if let Some(x) = c {
+        if let Some(x) = self.canonicalizer.app_cache().get(SddAnd::new(a, b)) {
             return x;
         }
 
@@ -559,7 +570,7 @@ impl<T: SddCanonicalizationScheme> SddManager<T> {
             self.and_indep(a, b, lca)
         };
         // cache and return
-        self.app_cache.insert(SddAnd::new(a, b), r);
+        self.canonicalizer.app_cache().insert(SddAnd::new(a, b), r);
         r
     }
 
@@ -1196,5 +1207,10 @@ fn prob_equiv_sdd_demorgan() {
     let res = man.or(x, y).neg();
     let expected = man.and(x.neg(), y.neg());
 
-    assert!(man.sdd_eq(res, expected), "Not eq:\nGot: {:?}\nExpected: {:?}", res, expected);
+    assert!(
+        man.sdd_eq(res, expected),
+        "Not eq:\nGot: {:?}\nExpected: {:?}",
+        res,
+        expected
+    );
 }
