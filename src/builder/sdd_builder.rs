@@ -781,7 +781,7 @@ impl SddManager {
         let rng = &mut thread_rng();
 
         let value_range: Vec<u128> = (0..vars.len() as u128)
-            .map(|_| rng.gen::<u128>() % prime)
+            .map(|_| rng.gen_range(2..prime))
             .collect();
 
         let mut map = HashMap::<usize, u128>::new();
