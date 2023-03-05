@@ -812,6 +812,27 @@ mod test_sdd_manager {
     }
 
     quickcheck! {
+        fn prob_equiv_sdd_eq_vs_prob_eq(c1: Cnf, c2: Cnf, vtree:VTree) -> TestResult {
+            let mut mgr = super::SddManager::<SemanticCanonicalizer>::new(vtree);
+            mgr.set_compression(true); // necessary to make sure we don't generate two uncompressed SDDs that canonicalize to the same SDD
+            let cnf_1 = mgr.from_cnf(&c1);
+            let cnf_2 = mgr.from_cnf(&c2);
+
+            let h_eq = mgr.sdd_eq(cnf_1, cnf_2);
+
+            if h_eq != (cnf_1 == cnf_2) {
+                println!("disagreement!");
+                println!("ptr eq: {}, mgr_eq: {}", cnf_1 == cnf_2, h_eq);
+                println!("sdd 1: {}", mgr.print_sdd(cnf_1));
+                println!("sdd 2: {}", mgr.print_sdd(cnf_2));
+                TestResult::from_bool(false)
+            } else {
+                TestResult::from_bool(true)
+            }
+        }
+    }
+
+    quickcheck! {
         /// verify that every node in the SDD has a unique semantic hash
         fn qc_sdd_canonicity(c1: Cnf, vtree:VTree) -> TestResult {
             let mut mgr = super::SddManager::<CompressionCanonicalizer>::new(vtree);
