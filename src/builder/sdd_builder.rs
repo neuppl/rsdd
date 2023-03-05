@@ -70,12 +70,12 @@ impl SddCanonicalizationScheme for CompressionCanonicalizer {
     }
 }
 
-pub struct SemanticCanoncalizer {
+pub struct SemanticCanonicalizer {
     prime: u128,
     vtree: VTree,
 }
 
-impl SemanticCanoncalizer {
+impl SemanticCanonicalizer {
     // Generates a mapping from variables to numbers in [2, PRIME)
     pub fn create_prob_map(&self, vtree: &VTree, prime: &u128) -> HashMap<usize, u128> {
         let all_vars = vtree.get_all_vars();
@@ -100,28 +100,19 @@ impl SemanticCanoncalizer {
     }
 }
 
-impl SddCanonicalizationScheme for SemanticCanoncalizer {
+impl SddCanonicalizationScheme for SemanticCanonicalizer {
     fn new(vtree: &VTree) -> Self {
-        SemanticCanoncalizer {
-            prime: 1123, // TODO: change this on the fly?
+        SemanticCanonicalizer {
+            prime: 100000000069, // TODO: change this on the fly?
             vtree: vtree.clone(),
         }
     }
 
     fn sdd_eq(&self, s1: SddPtr, s2: SddPtr) -> bool {
-        let mut num_collisions = 0;
-
-        for _ in 1..5 {
-            // TODO: infer this from the prime / var number
-            let map = self.create_prob_map(&self.vtree, &self.prime);
-            let h1 = s1.get_semantic_hash(&map, self.prime);
-            let h2 = s2.get_semantic_hash(&map, self.prime);
-            if h1 == h2 {
-                num_collisions += 1
-            }
-        }
-
-        num_collisions < 2
+        let map = self.create_prob_map(&self.vtree, &self.prime);
+        let h1 = s1.get_semantic_hash(&map, self.prime);
+        let h2 = s2.get_semantic_hash(&map, self.prime);
+        h1 == h2
     }
 
     fn should_compress(&self) -> bool {
@@ -267,6 +258,7 @@ impl<T: SddCanonicalizationScheme> SddManager<T> {
         }
     }
 
+    #[inline]
     fn canonicalize_base_case(&mut self, node: &Vec<SddAnd>) -> Option<SddPtr> {
         if node.is_empty() {
             return Some(SddPtr::true_ptr());
@@ -1189,7 +1181,7 @@ fn sdd_wmc1() {
 
 #[test]
 fn prob_equiv_sdd_demorgan() {
-    let mut man = SddManager::<CompressionCanonicalizer>::new(VTree::even_split(
+    let mut man = SddManager::<SemanticCanonicalizer>::new(VTree::even_split(
         &[
             VarLabel::new(0),
             VarLabel::new(1),
@@ -1199,19 +1191,10 @@ fn prob_equiv_sdd_demorgan() {
         ],
         1,
     ));
-    man.set_compression(false);
     let x = SddPtr::var(VarLabel::new(0), true);
     let y = SddPtr::var(VarLabel::new(3), true);
     let res = man.or(x, y).neg();
     let expected = man.and(x.neg(), y.neg());
 
-    let prime = 1223; // small enough for this circuit
-    let map = man.create_prob_map(prime);
-
-    let sh1 = res.get_semantic_hash(&map, prime);
-    let sh2 = expected.get_semantic_hash(&map, prime);
-
-    // TODO: need to express this as pointer eq, not semantic eq
-    // assert!(res != expected);
-    assert!(sh1 == sh2, "Not eq:\nGot: {}\nExpected: {}", sh1, sh2);
+    assert!(man.sdd_eq(res, expected), "Not eq:\nGot: {:?}\nExpected: {:?}", res, expected);
 }
