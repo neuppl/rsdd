@@ -551,7 +551,7 @@ mod test_sdd_manager {
     use crate::repr::var_label::{Literal, VarLabel};
     use quickcheck::TestResult;
     use rsdd::builder::cache::all_app::AllTable;
-    use rsdd::builder::sdd_builder::CompressionCanonicalizer;
+    use rsdd::builder::sdd_builder::{CompressionCanonicalizer, SemanticCanonicalizer};
     use rsdd::repr::bdd::BddPtr;
     use rsdd::repr::ddnnf::DDNNFPtr;
     use rsdd::repr::sdd::SddPtr;
@@ -708,7 +708,7 @@ mod test_sdd_manager {
     }
 
     quickcheck! {
-        fn prob_equiv_sdd_identity_uncompressed(c: Cnf, vtree:VTree) -> TestResult {
+        fn prob_equiv_sdd_identity_uncompressed_depr(c: Cnf, vtree:VTree) -> TestResult {
             let mut compr_mgr = super::SddManager::<CompressionCanonicalizer>::new(vtree.clone());
             let compr_cnf = compr_mgr.from_cnf(&c);
 
@@ -736,7 +736,26 @@ mod test_sdd_manager {
     }
 
     quickcheck! {
-        fn prob_equiv_sdd_inequality(c1: Cnf, c2: Cnf, vtree:VTree) -> TestResult {
+        fn prob_equiv_sdd_identity_uncompressed(c: Cnf, vtree:VTree) -> TestResult {
+            let mut compr_mgr = super::SddManager::<CompressionCanonicalizer>::new(vtree.clone());
+            let compr_cnf = compr_mgr.from_cnf(&c);
+
+            let mut uncompr_mgr = super::SddManager::<SemanticCanonicalizer>::new(vtree);
+            let uncompr_cnf = uncompr_mgr.from_cnf(&c);
+
+            if !uncompr_mgr.sdd_eq(compr_cnf, uncompr_cnf) {
+                println!("not equal!");
+                println!("compr sdd: {}", compr_mgr.print_sdd(compr_cnf));
+                println!("uncompr sdd: {}", uncompr_mgr.print_sdd(uncompr_cnf));
+                TestResult::from_bool(false)
+            } else {
+                TestResult::from_bool(true)
+            }
+        }
+    }
+
+    quickcheck! {
+        fn prob_equiv_sdd_inequality_depr(c1: Cnf, c2: Cnf, vtree:VTree) -> TestResult {
             let mut mgr = super::SddManager::<CompressionCanonicalizer>::new(vtree);
             let cnf_1 = mgr.from_cnf(&c1);
             let cnf_2 = mgr.from_cnf(&c2);
@@ -767,6 +786,28 @@ mod test_sdd_manager {
                 }
             }
             TestResult::from_bool(num_collisions < 2) // less than half
+        }
+    }
+
+    quickcheck! {
+        fn prob_equiv_sdd_inequality(c1: Cnf, c2: Cnf, vtree:VTree) -> TestResult {
+            let mut mgr = super::SddManager::<SemanticCanonicalizer>::new(vtree);
+            mgr.set_compression(true); // necessary to make sure we don't generate two uncompressed SDDs that canonicalize to the same SDD
+            let cnf_1 = mgr.from_cnf(&c1);
+            let cnf_2 = mgr.from_cnf(&c2);
+
+            if cnf_1 == cnf_2 {
+                return TestResult::discard();
+            }
+
+            if mgr.sdd_eq(cnf_1, cnf_2) {
+                println!("collision!");
+                println!("sdd 1: {}", mgr.print_sdd(cnf_1));
+                println!("sdd 2: {}", mgr.print_sdd(cnf_2));
+                TestResult::from_bool(false)
+            } else {
+                TestResult::from_bool(true)
+            }
         }
     }
 

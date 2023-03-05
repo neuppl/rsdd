@@ -81,6 +81,7 @@ pub struct SemanticCanonicalizer {
     prime: u128,
     map: HashMap<usize, u128>,
     app_cache: SddApplySemantic,
+    use_compression: bool,
 }
 
 impl SemanticCanonicalizer {
@@ -117,6 +118,7 @@ impl SddCanonicalizationScheme for SemanticCanonicalizer {
             prime,
             app_cache,
             map,
+            use_compression: false,
         }
     }
 
@@ -126,11 +128,13 @@ impl SddCanonicalizationScheme for SemanticCanonicalizer {
         h1 == h2
     }
 
-    fn should_compress(&self) -> bool {
-        false
+    fn set_compress(&mut self, b: bool) {
+        self.use_compression = b
     }
 
-    fn set_compress(&mut self, _b: bool) {}
+    fn should_compress(&self) -> bool {
+        self.use_compression
+    }
 
     fn app_cache(&mut self) -> Box<&mut dyn SddApply> {
         Box::new(&mut self.app_cache)
@@ -1212,5 +1216,42 @@ fn prob_equiv_sdd_demorgan() {
         "Not eq:\nGot: {:?}\nExpected: {:?}",
         res,
         expected
+    );
+}
+
+#[test]
+fn prob_equiv_sdd_wmc1() {
+    // semantic hash version of above test
+
+    let vtree = VTree::even_split(
+        &[
+            VarLabel::new(0),
+            VarLabel::new(1),
+            VarLabel::new(2),
+            VarLabel::new(3),
+        ],
+        1,
+    );
+    let mut man = SddManager::<SemanticCanonicalizer>::new(vtree);
+    let mut wmc_map = crate::repr::wmc::WmcParams::new(0.0, 1.0);
+    let x = SddPtr::var(VarLabel::new(0), true);
+    wmc_map.set_weight(VarLabel::new(0), 1.0, 1.0);
+    let y = SddPtr::var(VarLabel::new(1), true);
+    wmc_map.set_weight(VarLabel::new(1), 1.0, 1.0);
+    let fx = SddPtr::var(VarLabel::new(2), true);
+    wmc_map.set_weight(VarLabel::new(2), 0.5, 0.5);
+    let fy = SddPtr::var(VarLabel::new(3), true);
+    wmc_map.set_weight(VarLabel::new(3), 0.5, 0.5);
+    let x_fx = man.iff(x, fx);
+    let y_fy = man.iff(y, fy);
+    let ptr = man.and(x_fx, y_fy);
+    let wmc_res: f64 = ptr.wmc(man.get_vtree_manager(), &wmc_map);
+    let expected: f64 = 1.0;
+    let diff = (wmc_res - expected).abs();
+    assert!(
+        (diff < 0.0001),
+        "Not eq: \n Expected: {:?} \n WMC: {:?}",
+        expected,
+        wmc_res
     );
 }
