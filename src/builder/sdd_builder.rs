@@ -36,11 +36,13 @@ impl Default for SddStats {
 }
 
 pub trait SddCanonicalizationScheme {
+    type ApplyCacheMethod: SddApply;
+
     fn new(vtree: &VTree) -> Self;
     fn set_compress(&mut self, b: bool);
     fn should_compress(&self) -> bool;
     fn sdd_eq(&self, s1: SddPtr, s2: SddPtr) -> bool;
-    fn app_cache(&mut self) -> Box<&mut dyn SddApply>;
+    fn app_cache(&mut self) -> &mut Self::ApplyCacheMethod;
 }
 
 pub struct CompressionCanonicalizer {
@@ -51,6 +53,8 @@ pub struct CompressionCanonicalizer {
 impl CompressionCanonicalizer {}
 
 impl SddCanonicalizationScheme for CompressionCanonicalizer {
+    type ApplyCacheMethod = SddApplyCompression;
+
     fn new(_vtree: &VTree) -> Self {
         CompressionCanonicalizer {
             use_compression: true,
@@ -70,8 +74,8 @@ impl SddCanonicalizationScheme for CompressionCanonicalizer {
         self.use_compression
     }
 
-    fn app_cache(&mut self) -> Box<&mut dyn SddApply> {
-        Box::new(&mut self.app_cache)
+    fn app_cache(&mut self) -> &mut Self::ApplyCacheMethod {
+        &mut self.app_cache
     }
 }
 
@@ -108,6 +112,8 @@ impl SemanticCanonicalizer {
 }
 
 impl SddCanonicalizationScheme for SemanticCanonicalizer {
+    type ApplyCacheMethod = SddApplySemantic;
+
     fn new(vtree: &VTree) -> Self {
         let prime: u128 = 100000000069; // TODO: change this on the fly?
         let map = SemanticCanonicalizer::create_prob_map(&vtree.clone(), &prime);
@@ -134,8 +140,8 @@ impl SddCanonicalizationScheme for SemanticCanonicalizer {
         self.use_compression
     }
 
-    fn app_cache(&mut self) -> Box<&mut dyn SddApply> {
-        Box::new(&mut self.app_cache)
+    fn app_cache(&mut self) -> &mut Self::ApplyCacheMethod {
+        &mut self.app_cache
     }
 }
 
