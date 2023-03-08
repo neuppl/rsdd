@@ -68,7 +68,7 @@ pub struct FiniteField<const P: u128> {
 
 impl<const P: u128> FiniteField<P> {
     pub fn new(v: u128) -> FiniteField<P> {
-        FiniteField { v }
+        FiniteField { v: v % P}
     }
     pub fn value(&self) -> u128 {
         self.v
@@ -101,6 +101,11 @@ impl<const P: u128> ops::Mul<FiniteField<P>> for FiniteField<P> {
     }
 }
 
+impl<const P: u128> Display for FiniteField<P> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.v)
+    }
+}
 
 
 pub trait TropicalSemiring: Debug + Clone + Copy + ops::Add + ops::Mul {

@@ -557,7 +557,7 @@ mod test_sdd_manager {
     use rsdd::repr::sdd::SddPtr;
     use rsdd::repr::vtree::VTree;
     use rsdd::repr::wmc::WmcParams;
-    use rsdd::util::semiring::RealSemiring;
+    use rsdd::util::semiring::{RealSemiring, FiniteField};
     use std::collections::HashMap;
     use std::iter::FromIterator;
 
@@ -698,11 +698,10 @@ mod test_sdd_manager {
             let mut mgr2 = super::SddManager::new(vtree);
             let c2 = mgr2.from_cnf(&c);
 
-            let prime = 1123; // large enough for our purposes
-            let map = mgr1.create_prob_map(prime);
+            let map : WmcParams<FiniteField<1123>> = mgr1.create_prob_map();
 
-            let h1 = c1.get_semantic_hash(&map, prime);
-            let h2 = c2.get_semantic_hash(&map, prime);
+            let h1 = c1.get_semantic_hash(mgr1.get_vtree_manager(), &map);
+            let h2 = c2.get_semantic_hash(mgr2.get_vtree_manager(), &map);
 
             h1 == h2
         }
@@ -717,12 +716,11 @@ mod test_sdd_manager {
             uncompr_mgr.set_compression(false);
             let uncompr_cnf = uncompr_mgr.from_cnf(&c);
 
-            let prime = 4391; // large enough for our purposes
 
-            let map = uncompr_mgr.create_prob_map(prime);
+            let map : WmcParams<FiniteField<4391>> = uncompr_mgr.create_prob_map();
 
-            let compr_h = compr_cnf.get_semantic_hash(&map, prime);
-            let uncompr_h = uncompr_cnf.get_semantic_hash(&map, prime);
+            let compr_h = compr_cnf.get_semantic_hash(compr_mgr.get_vtree_manager(), &map);
+            let uncompr_h = uncompr_cnf.get_semantic_hash(uncompr_mgr.get_vtree_manager(), &map);
 
             if compr_h != uncompr_h {
                 println!("not equal! hashes: compr: {compr_h}, uncompr: {uncompr_h}");
@@ -746,18 +744,16 @@ mod test_sdd_manager {
                 return TestResult::discard();
             }
 
-            let prime = 4391; // large enough for our purposes
-
             // running iteratively, taking majority
 
             let mut num_collisions = 0;
 
             for _ in 1 .. 5 {
 
-                let map = mgr.create_prob_map(prime);
+                let map : WmcParams<FiniteField<4391>> = mgr.create_prob_map();
 
-                let h1 = cnf_1.get_semantic_hash(&map, prime);
-                let h2 = cnf_2.get_semantic_hash(&map, prime);
+                let h1 = cnf_1.get_semantic_hash(mgr.get_vtree_manager(), &map);
+                let h2 = cnf_2.get_semantic_hash(mgr.get_vtree_manager(), &map);
 
                 if h1 == h2 {
                     println!("collision! h1: {h1}, h2: {h2}");
@@ -778,15 +774,14 @@ mod test_sdd_manager {
             let _ = mgr.from_cnf(&c1);
             // take a large prime to make collisions impossible
             // useful site: http://compoasso.free.fr/primelistweb/page/prime/liste_online_en.php
-            let prime = 100000000069; // use u128 max
 
             // running iteratively, taking majority
-            let map = mgr.create_prob_map(prime);
+            let map : WmcParams<FiniteField<100000000069>>= mgr.create_prob_map();
             let mut seen_hashes : HashMap<u128, SddPtr> = HashMap::new();
             for sdd in mgr.node_iter() {
-                let hash = sdd.get_semantic_hash(&map, prime);
-                if seen_hashes.contains_key(&hash) {
-                    let c = seen_hashes.get(&hash).unwrap();
+                let hash = sdd.get_semantic_hash(mgr.get_vtree_manager(), &map);
+                if seen_hashes.contains_key(&hash.value()) {
+                    let c = seen_hashes.get(&hash.value()).unwrap();
                     println!("cnf: {}", c1);
                     println!("probmap: {:?}", map);
                     println!("collision found for hash value {}", hash);
@@ -794,7 +789,7 @@ mod test_sdd_manager {
                     println!("sdd b: {}\n", mgr.print_sdd(*c));
                     return TestResult::from_bool(false);
                 }
-                seen_hashes.insert(hash, sdd);
+                seen_hashes.insert(hash.value(), sdd);
             }
             TestResult::from_bool(true)
         }

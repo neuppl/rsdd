@@ -13,10 +13,11 @@ use super::cache::sdd_apply_cache::SddApply;
 use super::cache::LruTable;
 use crate::backing_store::bump_table::BackedRobinhoodTable;
 use crate::backing_store::UniqueTable;
+use crate::repr::bdd::WmcParams;
 use crate::repr::ddnnf::DDNNFPtr;
 use crate::repr::sdd::{BinarySDD, SddAnd, SddOr, SddPtr};
 use crate::repr::vtree::{VTree, VTreeIndex, VTreeManager};
-use crate::util::semiring::RealSemiring;
+use crate::util::semiring::{RealSemiring, FiniteField, Semiring};
 use crate::{repr::cnf::Cnf, repr::logical_expr::LogicalExpr, repr::var_label::VarLabel};
 
 #[derive(Debug, Clone)]
@@ -773,26 +774,29 @@ impl SddManager {
     }
 
     // Generates a mapping from variables to numbers in [2, PRIME)
-    pub fn create_prob_map(&self, prime: u128) -> HashMap<usize, u128> {
+    pub fn create_prob_map<const P: u128>(&self) -> WmcParams<FiniteField<P>> {
         let all_vars = self.get_vtree_root().get_all_vars();
         let vars = all_vars.into_iter().collect::<Vec<usize>>();
 
         // theoretical guarantee from paper; need to verify more!
-        assert!((2 * vars.len() as u128) < prime);
+        assert!((2 * vars.len() as u128) < P);
 
         let rng = &mut thread_rng();
 
-        let value_range: Vec<u128> = (0..vars.len() as u128)
-            .map(|_| rng.gen_range(2..prime))
-            .collect();
+        let value_range: Vec<(FiniteField<P>, FiniteField<P>)> = (0..vars.len() as u128)
+            .map(|_| {
+                let h = FiniteField::new(rng.gen_range(2..P));
+                let l = FiniteField::new(P - h.value() + 1);
+                (l, h)
+            }).collect();
 
-        let mut map = HashMap::<usize, u128>::new();
+        let mut map = HashMap::new();
 
         for (&var, &value) in vars.iter().zip(value_range.iter()) {
-            map.insert(var, value);
+            map.insert(VarLabel::new_usize(var), value);
         }
 
-        map
+        WmcParams::new_with_default(FiniteField::zero(), FiniteField::one(), map)
     }
 
     /// get an iterator over all allocated or-nodes
@@ -1113,13 +1117,12 @@ fn prob_equiv_sdd_demorgan() {
     let res = man.or(x, y).neg();
     let expected = man.and(x.neg(), y.neg());
 
-    let prime = 1223; // small enough for this circuit
-    let map = man.create_prob_map(prime);
+    let map : WmcParams<FiniteField<1223>> = man.create_prob_map();
 
-    let sh1 = res.get_semantic_hash(&map, prime);
-    let sh2 = expected.get_semantic_hash(&map, prime);
+    let sh1 = res.get_semantic_hash(man.get_vtree_manager(), &map);
+    let sh2 = expected.get_semantic_hash(man.get_vtree_manager(), &map);
 
     // TODO: need to express this as pointer eq, not semantic eq
     // assert!(res != expected);
-    assert!(sh1 == sh2, "Not eq:\nGot: {}\nExpected: {}", sh1, sh2);
+    assert!(sh1 == sh2, "Not eq:\nGot: {:?}\nExpected: {:?}", sh1, sh2);
 }

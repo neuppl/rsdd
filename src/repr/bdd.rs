@@ -23,7 +23,6 @@ pub enum BddPtr {
 use bit_set::BitSet;
 use bumpalo::Bump;
 use BddPtr::*;
-use num::traits::real::Real;
 
 /// The intermediate representation for a BddPtr that is being folded in a
 /// [`Fold`] computation.

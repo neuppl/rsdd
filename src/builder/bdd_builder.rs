@@ -861,7 +861,8 @@ mod tests {
         let r1 = man.or(v1, v2);
         let weights = hashmap! {VarLabel::new(0) => (RealSemiring(0.2), RealSemiring(0.8)),
         VarLabel::new(1) => (RealSemiring(0.1), RealSemiring(0.9))};
-        let params = WmcParams::new_with_default(RealSemiring::zero(), RealSemiring::one(), weights);
+        let params =
+            WmcParams::new_with_default(RealSemiring::zero(), RealSemiring::one(), weights);
         let wmc = r1.wmc(man.get_order(), &params);
         assert!(abs(wmc.0 - (1.0 - 0.2 * 0.1)) < 0.000001);
     }

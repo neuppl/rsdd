@@ -3,7 +3,6 @@ extern crate rsdd;
 extern crate rsgm;
 
 use clap::Parser;
-use num::traits::real::Real;
 use rsdd::builder::cache::all_app::AllTable;
 use rsdd::builder::decision_nnf_builder::DecisionNNFBuilder;
 use rsdd::builder::sdd_builder;
