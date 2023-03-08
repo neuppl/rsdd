@@ -2,7 +2,7 @@
 
 use crate::repr::var_label::{Literal, VarLabel};
 use crate::repr::var_order::VarOrder;
-use crate::util::semiring::{FiniteField, RealSemiring, Semiring};
+use crate::util::semiring::Semiring;
 use petgraph::prelude::UnGraph;
 use rand;
 use rand::rngs::ThreadRng;
@@ -698,6 +698,7 @@ impl fmt::Display for Cnf {
 
 #[test]
 fn test_cnf_wmc() {
+    use crate::util::semiring::FiniteField;
     use maplit::*;
 
     let v = vec![vec![

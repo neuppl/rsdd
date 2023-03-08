@@ -4,7 +4,6 @@
 use std::cmp::Ordering;
 use std::collections::HashMap;
 
-use num::traits::real::Real;
 use rand::{thread_rng, Rng};
 
 use super::cache::all_app::AllTable;
@@ -17,7 +16,7 @@ use crate::repr::bdd::WmcParams;
 use crate::repr::ddnnf::DDNNFPtr;
 use crate::repr::sdd::{BinarySDD, SddAnd, SddOr, SddPtr};
 use crate::repr::vtree::{VTree, VTreeIndex, VTreeManager};
-use crate::util::semiring::{RealSemiring, FiniteField, Semiring};
+use crate::util::semiring::{FiniteField, Semiring};
 use crate::{repr::cnf::Cnf, repr::logical_expr::LogicalExpr, repr::var_label::VarLabel};
 
 #[derive(Debug, Clone)]
@@ -788,7 +787,8 @@ impl SddManager {
                 let h = FiniteField::new(rng.gen_range(2..P));
                 let l = FiniteField::new(P - h.value() + 1);
                 (l, h)
-            }).collect();
+            })
+            .collect();
 
         let mut map = HashMap::new();
 
@@ -1054,6 +1054,7 @@ fn sdd_circuit2() {
 
 #[test]
 fn sdd_wmc1() {
+    use crate::util::semiring::RealSemiring;
     // modeling the formula (x<=>fx) && (y<=>fy), with f weight of 0.5
 
     // let vtree = VTree::right_linear(
@@ -1117,7 +1118,7 @@ fn prob_equiv_sdd_demorgan() {
     let res = man.or(x, y).neg();
     let expected = man.and(x.neg(), y.neg());
 
-    let map : WmcParams<FiniteField<1223>> = man.create_prob_map();
+    let map: WmcParams<FiniteField<1223>> = man.create_prob_map();
 
     let sh1 = res.get_semantic_hash(man.get_vtree_manager(), &map);
     let sh2 = expected.get_semantic_hash(man.get_vtree_manager(), &map);

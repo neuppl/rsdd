@@ -1,10 +1,13 @@
 //! Defines the internal representations for a trimmed and compressed SDD with
 //! complemented edges.
 
-use crate::{repr::{
-    ddnnf::DDNNF,
-    var_label::{VarLabel, VarSet},
-}, util::semiring::FiniteField};
+use crate::{
+    repr::{
+        ddnnf::DDNNF,
+        var_label::{VarLabel, VarSet},
+    },
+    util::semiring::FiniteField,
+};
 use bumpalo::Bump;
 use std::collections::HashSet;
 use std::fmt::Debug;
@@ -170,9 +173,10 @@ impl PartialEq for SddOr {
 use std::hash::{Hash, Hasher};
 
 use super::{
+    bdd::WmcParams,
     ddnnf::DDNNFPtr,
     var_label::Literal,
-    vtree::{VTreeIndex, VTreeManager, VTree}, bdd::WmcParams,
+    vtree::{VTreeIndex, VTreeManager},
 };
 impl Hash for SddOr {
     fn hash<H: Hasher>(&self, state: &mut H) {
@@ -509,7 +513,11 @@ impl SddPtr {
     // heavy lifting for getting the semantic hash of SDD; assumes current is the root
     // this function doesn't allocate anything!
     // for more info, see https://tr.inf.unibe.ch/pdf/iam-06-001.pdf
-    pub fn get_semantic_hash<const P: u128>(&self, vtree: &VTreeManager, map: &WmcParams<FiniteField<P>>) -> FiniteField<P> {
+    pub fn get_semantic_hash<const P: u128>(
+        &self,
+        vtree: &VTreeManager,
+        map: &WmcParams<FiniteField<P>>,
+    ) -> FiniteField<P> {
         self.wmc(vtree, map)
     }
 }
