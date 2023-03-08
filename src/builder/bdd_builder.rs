@@ -791,6 +791,7 @@ impl<T: LruTable<BddPtr>> BddManager<T> {
 mod tests {
 
     use crate::repr::wmc::WmcParams;
+    use crate::util::semiring::{RealSemiring, Semiring};
     use crate::{builder::cache::all_app::AllTable, repr::ddnnf::DDNNFPtr};
     use maplit::*;
     use num::abs;
@@ -858,11 +859,11 @@ mod tests {
         let v1 = man.var(VarLabel::new(0), true);
         let v2 = man.var(VarLabel::new(1), true);
         let r1 = man.or(v1, v2);
-        let weights = hashmap! {VarLabel::new(0) => (0.2,0.8),
-        VarLabel::new(1) => (0.1,0.9)};
-        let params = WmcParams::new_with_default(0.0, 1.0, weights);
+        let weights = hashmap! {VarLabel::new(0) => (RealSemiring(0.2), RealSemiring(0.8)),
+        VarLabel::new(1) => (RealSemiring(0.1), RealSemiring(0.9))};
+        let params = WmcParams::new_with_default(RealSemiring::zero(), RealSemiring::one(), weights);
         let wmc = r1.wmc(man.get_order(), &params);
-        assert!(abs(wmc - (1.0 - 0.2 * 0.1)) < 0.000001);
+        assert!(abs(wmc.0 - (1.0 - 0.2 * 0.1)) < 0.000001);
     }
 
     #[test]
@@ -1064,18 +1065,18 @@ mod tests {
         let y = man.var(VarLabel::new(1), true);
         let f1 = man.var(VarLabel::new(2), true);
         let f2 = man.var(VarLabel::new(3), true);
-        let map = hashmap! { VarLabel::new(0) => (1.0, 1.0),
-        VarLabel::new(1) => (1.0, 1.0),
-        VarLabel::new(2) => (0.8, 0.2),
-        VarLabel::new(3) => (0.7, 0.3) };
-        let wmc = WmcParams::new_with_default(0.0, 1.0, map);
+        let map = hashmap! { VarLabel::new(0) => (RealSemiring(1.0), RealSemiring(1.0)),
+        VarLabel::new(1) => (RealSemiring(1.0), RealSemiring(1.0)),
+        VarLabel::new(2) => (RealSemiring(0.8), RealSemiring(0.2)),
+        VarLabel::new(3) => (RealSemiring(0.7), RealSemiring(0.3)) };
+        let wmc = WmcParams::new_with_default(RealSemiring::zero(), RealSemiring::one(), map);
         let iff1 = man.iff(x, f1);
         let iff2 = man.iff(y, f2);
         let obs = man.or(x, y);
         let and1 = man.and(iff1, iff2);
         let f = man.and(and1, obs);
         assert_eq!(
-            f.wmc(man.get_order(), &wmc),
+            f.wmc(man.get_order(), &wmc).0,
             0.2 * 0.3 + 0.2 * 0.7 + 0.8 * 0.3
         );
     }

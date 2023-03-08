@@ -4,6 +4,7 @@
 use std::cmp::Ordering;
 use std::collections::HashMap;
 
+use num::traits::real::Real;
 use rand::{thread_rng, Rng};
 
 use super::cache::all_app::AllTable;
@@ -15,6 +16,7 @@ use crate::backing_store::UniqueTable;
 use crate::repr::ddnnf::DDNNFPtr;
 use crate::repr::sdd::{BinarySDD, SddAnd, SddOr, SddPtr};
 use crate::repr::vtree::{VTree, VTreeIndex, VTreeManager};
+use crate::util::semiring::RealSemiring;
 use crate::{repr::cnf::Cnf, repr::logical_expr::LogicalExpr, repr::var_label::VarLabel};
 
 #[derive(Debug, Clone)]
@@ -1069,21 +1071,21 @@ fn sdd_wmc1() {
         1,
     );
     let mut man = SddManager::new(vtree);
-    let mut wmc_map = crate::repr::wmc::WmcParams::new(0.0, 1.0);
+    let mut wmc_map = crate::repr::wmc::WmcParams::new(RealSemiring(0.0), RealSemiring(1.0));
     let x = SddPtr::var(VarLabel::new(0), true);
-    wmc_map.set_weight(VarLabel::new(0), 1.0, 1.0);
+    wmc_map.set_weight(VarLabel::new(0), RealSemiring(1.0), RealSemiring(1.0));
     let y = SddPtr::var(VarLabel::new(1), true);
-    wmc_map.set_weight(VarLabel::new(1), 1.0, 1.0);
+    wmc_map.set_weight(VarLabel::new(1), RealSemiring(1.0), RealSemiring(1.0));
     let fx = SddPtr::var(VarLabel::new(2), true);
-    wmc_map.set_weight(VarLabel::new(2), 0.5, 0.5);
+    wmc_map.set_weight(VarLabel::new(2), RealSemiring(0.5), RealSemiring(0.5));
     let fy = SddPtr::var(VarLabel::new(3), true);
-    wmc_map.set_weight(VarLabel::new(3), 0.5, 0.5);
+    wmc_map.set_weight(VarLabel::new(3), RealSemiring(0.5), RealSemiring(0.5));
     let x_fx = man.iff(x, fx);
     let y_fy = man.iff(y, fy);
     let ptr = man.and(x_fx, y_fy);
-    let wmc_res: f64 = ptr.wmc(man.get_vtree_manager(), &wmc_map);
-    let expected: f64 = 1.0;
-    let diff = (wmc_res - expected).abs();
+    let wmc_res: RealSemiring = ptr.wmc(man.get_vtree_manager(), &wmc_map);
+    let expected = RealSemiring(1.0);
+    let diff = (wmc_res - expected).0.abs();
     println!("sdd: {}", man.print_sdd(ptr));
     assert!(
         (diff < 0.0001),

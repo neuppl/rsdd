@@ -2,7 +2,7 @@
 
 use crate::repr::var_label::{Literal, VarLabel};
 use crate::repr::var_order::VarOrder;
-use num::Num;
+use crate::util::semiring::{Semiring, RealSemiring, FiniteField};
 use petgraph::prelude::UnGraph;
 use rand;
 use rand::rngs::ThreadRng;
@@ -458,7 +458,7 @@ impl Cnf {
     /// compute a weighted model count of a CNF
     /// Note: not efficient! this is exponential in #variables
     /// mostly for internal testing purposes
-    pub fn wmc<T: Num + Copy>(&self, weights: &HashMap<VarLabel, (T, T)>) -> T {
+    pub fn wmc<T: Semiring +  std::ops::Mul<Output = T> +  std::ops::Add<Output = T>>(&self, weights: &HashMap<VarLabel, (T, T)>) -> T {
         let mut total: T = T::zero();
         let mut weight_vec = Vec::new();
         for i in 0..self.num_vars() {
@@ -474,7 +474,7 @@ impl Cnf {
                     .enumerate()
                     .fold(T::one(), |v, (idx, &polarity)| {
                         let (loww, highw) = weight_vec[idx];
-                        v * (if polarity { highw } else { loww })
+                        v.mul(if polarity { highw } else { loww })
                     });
                 total = total + assgn_w;
             }
@@ -702,9 +702,9 @@ fn test_cnf_wmc() {
         Literal::new(VarLabel::new(1), false),
     ]];
     let cnf = Cnf::new(v);
-    let weights = hashmap! {
-        VarLabel::new(0) => (1, 1),
-        VarLabel::new(1) => (1, 1),
+    let weights : HashMap<VarLabel, (FiniteField<1000001>, FiniteField<1000001>)> = hashmap! {
+        VarLabel::new(0) => (FiniteField::new(1), FiniteField::new(1)),
+        VarLabel::new(1) => (FiniteField::new(1), FiniteField::new(1)),
     };
-    assert_eq!(cnf.wmc(&weights), 3);
+    assert_eq!(cnf.wmc(&weights), FiniteField::new(3));
 }

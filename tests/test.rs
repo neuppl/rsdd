@@ -325,6 +325,7 @@ mod test_bdd_manager {
     use rsdd::repr::model::PartialModel;
     use rsdd::repr::var_order::VarOrder;
     use rsdd::repr::wmc::WmcParams;
+    use rsdd::util::semiring::{RealSemiring, Semiring};
     use std::collections::HashMap;
     use std::iter::FromIterator;
 
@@ -447,13 +448,13 @@ mod test_bdd_manager {
             if c1.clauses().len() > 16 { return TestResult::discard() }
 
             let mut mgr = super::BddManager::<AllTable<BddPtr>>::new_default_order(c1.num_vars());
-            let weight_map : HashMap<VarLabel, (f64, f64)> = HashMap::from_iter(
-                (0..16).map(|x| (VarLabel::new(x as u64), (0.2, 0.8))));
+            let weight_map : HashMap<VarLabel, (RealSemiring, RealSemiring)> = HashMap::from_iter(
+                (0..16).map(|x| (VarLabel::new(x as u64), (RealSemiring(0.2), RealSemiring(0.8)))));
             let cnf1 = mgr.from_cnf(&c1);
-            let bddwmc = super::repr::wmc::WmcParams::new_with_default(0.0, 1.0, weight_map.clone());
+            let bddwmc = super::repr::wmc::WmcParams::new_with_default(RealSemiring(0.0), RealSemiring(1.0), weight_map.clone());
             let bddres = cnf1.wmc(mgr.get_order(), &bddwmc);
             let cnfres = c1.wmc(&weight_map);
-            TestResult::from_bool(abs(bddres - cnfres) < 0.00001)
+            TestResult::from_bool(abs(bddres.0 - cnfres.0) < 0.00001)
         }
     }
 
@@ -464,17 +465,17 @@ mod test_bdd_manager {
             if c1.clauses().len() > 16 { return TestResult::discard() }
 
             let mut mgr = super::BddManager::<AllTable<BddPtr>>::new_default_order(c1.num_vars());
-            let weight_map : HashMap<VarLabel, (f64, f64)> = HashMap::from_iter(
-                (0..16).map(|x| (VarLabel::new(x as u64), (0.3, 0.7))));
+            let weight_map : HashMap<VarLabel, (RealSemiring, RealSemiring)> = HashMap::from_iter(
+                (0..16).map(|x| (VarLabel::new(x as u64), (RealSemiring(0.3), RealSemiring(0.7)))));
             let cnf1 = mgr.from_cnf(&c1);
 
             let mut mgr2 = DecisionNNFBuilder::new(c1.num_vars());
             let dnnf = mgr2.from_cnf_topdown(&VarOrder::linear_order(c1.num_vars()), &c1);
 
-            let bddwmc = super::repr::wmc::WmcParams::new_with_default(0.0, 1.0, weight_map);
+            let bddwmc = super::repr::wmc::WmcParams::new_with_default(RealSemiring::zero(), RealSemiring::one(), weight_map);
             let bddres = cnf1.wmc(mgr.get_order(),  &bddwmc);
             let dnnfres = dnnf.wmc(mgr.get_order(), &bddwmc);
-            let eps = f64::abs(bddres - dnnfres) < 0.0001;
+            let eps = f64::abs(bddres.0 - dnnfres.0) < 0.0001;
             if !eps {
               println!("error on input {}: bddres {}, cnfres {}\n topdown bdd: {}\nbottom-up bdd: {}",
                 c1, bddres, dnnfres, dnnf.to_string_debug(), cnf1.to_string_debug());
@@ -489,15 +490,15 @@ mod test_bdd_manager {
             let mut mgr1 = super::BddManager::<AllTable<BddPtr>>::new_default_order(16);
             let mut mgr2 = super::BddManager::<BddApplyTable<BddPtr>>::new_default_order_lru(16);
 
-            let weight_map : HashMap<VarLabel, (f64, f64)> = HashMap::from_iter(
-                (0..16).map(|x| (VarLabel::new(x as u64), (0.3, 0.7))));
+            let weight_map : HashMap<VarLabel, (RealSemiring, RealSemiring)> = HashMap::from_iter(
+                (0..16).map(|x| (VarLabel::new(x as u64), (RealSemiring(0.3), RealSemiring(0.7)))));
 
-            let bddwmc = super::repr::wmc::WmcParams::new_with_default(0.0, 1.0, weight_map);
+            let bddwmc = super::repr::wmc::WmcParams::new_with_default(RealSemiring::zero(), RealSemiring::one(), weight_map);
             let cnf1 = mgr1.from_cnf(&c1);
             let cnf2 = mgr2.from_cnf(&c1);
             let wmc1 = cnf1.wmc(mgr1.get_order(), &bddwmc);
             let wmc2 = cnf2.wmc(mgr2.get_order(), &bddwmc);
-            TestResult::from_bool(f64::abs(wmc1 - wmc2) < 0.00001)
+            TestResult::from_bool(f64::abs(wmc1.0 - wmc2.0) < 0.00001)
         }
     }
 
@@ -509,11 +510,11 @@ mod test_bdd_manager {
             if c1.clauses().len() > 14 { return TestResult::discard() }
 
             let mut mgr = super::BddManager::<AllTable<BddPtr>>::new_default_order(c1.num_vars());
-            let weight_map : HashMap<VarLabel, (f64, f64)> = HashMap::from_iter(
-                (0..16).map(|x| (VarLabel::new(x as u64), (0.3, 0.7))));
+            let weight_map : HashMap<VarLabel, (RealSemiring, RealSemiring)> = HashMap::from_iter(
+                (0..16).map(|x| (VarLabel::new(x as u64), (RealSemiring(0.3), RealSemiring(0.7)))));
             let cnf = mgr.from_cnf(&c1);
             let vars = vec![VarLabel::new(0), VarLabel::new(2), VarLabel::new(4)];
-            let wmc = WmcParams::new_with_default(0.0, 1.0, weight_map);
+            let wmc = WmcParams::new_with_default(RealSemiring::zero(), RealSemiring::one(), weight_map);
             let (marg_prob, _marg_assgn) = cnf.marginal_map(&vars, mgr.num_vars(), &wmc);
             let assignments = vec![(true, true, true), (true, true, false), (true, false, true), (true, false, false),
                                    (false, true, true), (false, true, false), (false, false, true), (false, false, false)];
@@ -528,8 +529,8 @@ mod test_bdd_manager {
                 conj = mgr.and(conj, z);
                 conj = mgr.and(conj, cnf);
                 let poss_max = conj.wmc(mgr.get_order(), &wmc);
-                if poss_max > max {
-                    max = poss_max;
+                if poss_max.0 > max {
+                    max = poss_max.0;
                     max_assgn.set(VarLabel::new(0), *v1);
                     max_assgn.set(VarLabel::new(2), *v2);
                     max_assgn.set(VarLabel::new(4), *v3);
@@ -556,6 +557,7 @@ mod test_sdd_manager {
     use rsdd::repr::sdd::SddPtr;
     use rsdd::repr::vtree::VTree;
     use rsdd::repr::wmc::WmcParams;
+    use rsdd::util::semiring::RealSemiring;
     use std::collections::HashMap;
     use std::iter::FromIterator;
 
@@ -627,13 +629,13 @@ mod test_sdd_manager {
             if cnf.num_vars() < 9 || cnf.num_vars() > 16 { return TestResult::discard() }
             if cnf.clauses().len() > 16 { return TestResult::discard() }
 
-           let weight_map : HashMap<VarLabel, (f64, f64)> = HashMap::from_iter(
-                (0..cnf.num_vars()).map(|x| (VarLabel::new(x as u64), (0.5, 0.5))));
+           let weight_map : HashMap<VarLabel, (RealSemiring, RealSemiring)> = HashMap::from_iter(
+                (0..cnf.num_vars()).map(|x| (VarLabel::new(x as u64), (RealSemiring(0.5), RealSemiring(0.5)))));
 
             let order : Vec<VarLabel> = (0..cnf.num_vars()).map(|x| VarLabel::new(x as u64)).collect();
             let mut mgr = super::SddManager::new(VTree::even_split(&order, 3));
             let cnf_sdd = mgr.from_cnf(&cnf);
-            let sdd_wmc = WmcParams::new_with_default(0.0, 1.0, weight_map);
+            let sdd_wmc = WmcParams::new_with_default(RealSemiring(0.0), RealSemiring(1.0), weight_map);
             let sdd_res = cnf_sdd.wmc(mgr.get_vtree_manager(), &sdd_wmc);
 
 
@@ -641,7 +643,7 @@ mod test_sdd_manager {
             let cnf_bdd = bddmgr.from_cnf(&cnf);
             let bdd_res = cnf_bdd.wmc(bddmgr.get_order(), &sdd_wmc);
 
-            if f64::abs(sdd_res - bdd_res) > 0.00001 {
+            if f64::abs(sdd_res.0 - bdd_res.0) > 0.00001 {
                 println!("not equal for cnf {}: sdd_res:{sdd_res}, bdd_res: {bdd_res}", cnf);
                 println!("sdd: {}", mgr.print_sdd(cnf_sdd));
                 TestResult::from_bool(false)
