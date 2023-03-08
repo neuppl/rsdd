@@ -9,8 +9,6 @@
 use std::fmt::{Debug, Display};
 use std::ops;
 
-
-
 pub trait Semiring: Debug + Clone + Copy + ops::Add + ops::Mul {
     fn one() -> Self;
     fn zero() -> Self;
@@ -63,12 +61,12 @@ impl Semiring for RealSemiring {
 /// a finite-field abstraction. The parameter `p` is the size of the field.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct FiniteField<const P: u128> {
-    v: u128
+    v: u128,
 }
 
 impl<const P: u128> FiniteField<P> {
     pub fn new(v: u128) -> FiniteField<P> {
-        FiniteField { v: v % P}
+        FiniteField { v: v % P }
     }
     pub fn value(&self) -> u128 {
         self.v
@@ -106,7 +104,6 @@ impl<const P: u128> Display for FiniteField<P> {
         write!(f, "{}", self.v)
     }
 }
-
 
 pub trait TropicalSemiring: Debug + Clone + Copy + ops::Add + ops::Mul {
     fn one() -> Self;
