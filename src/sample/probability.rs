@@ -1,7 +1,7 @@
 //! A representation of a numeric probability
 
 use std::fmt;
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub struct Probability(f64);
 
 impl fmt::Display for Probability {
