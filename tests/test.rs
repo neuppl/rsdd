@@ -379,19 +379,6 @@ mod test_bdd_manager {
     }
 
     quickcheck! {
-        fn bdd_topdown(c1: Cnf) -> TestResult {
-            if c1.num_vars() == 0 || c1.num_vars() > 8 { return TestResult::discard() }
-            if c1.clauses().len() > 12 { return TestResult::discard() }
-            let mut mgr = super::BddManager::<AllTable<BddPtr>>::new_default_order(c1.num_vars());
-            let cnf1 = mgr.from_cnf(&c1);
-            let cnf2 = mgr.from_cnf_topdown(&c1);
-            // println!("bdd 1: {}, bdd 2: {}", mgr.to_string_debug(cnf1), mgr.to_string_debug(cnf2));
-            assert_eq!(cnf1, cnf2);
-            TestResult::from_bool(cnf1 == cnf2)
-        }
-    }
-
-    quickcheck! {
         fn compile_with_assignments(c1: Cnf) -> TestResult {
             if c1.num_vars() < 3 || c1.num_vars() > 8 { return TestResult::discard() }
             if c1.clauses().len() > 12 { return TestResult::discard() }
@@ -408,38 +395,6 @@ mod test_bdd_manager {
         }
     }
 
-    quickcheck! {
-        fn compile_topdown_with_assignments(c1: Cnf) -> TestResult {
-            if c1.num_vars() < 3 || c1.num_vars() > 8 { return TestResult::discard() }
-            if c1.clauses().len() > 12 { return TestResult::discard() }
-            let mut mgr = super::BddManager::<AllTable<BddPtr>>::new_default_order(c1.num_vars());
-            let mut pm = PartialModel::from_litvec(&Vec::new(), c1.num_vars());
-            pm.set(VarLabel::new(0), true);
-            pm.set(VarLabel::new(1), true);
-            let cnf1 = mgr.from_cnf_topdown_partial(&c1, &pm);
-            let mut cnf2 = mgr.from_cnf(&c1);
-            cnf2 = mgr.condition(cnf2, VarLabel::new(0), true);
-            cnf2 = mgr.condition(cnf2, VarLabel::new(1), true);
-            assert_eq!(cnf1, cnf2);
-            TestResult::from_bool(cnf1 == cnf2)
-        }
-    }
-
-    quickcheck! {
-        fn bdd_partial_topdown(c1: Cnf) -> TestResult {
-            if c1.num_vars() < 3 || c1.num_vars() > 8 { return TestResult::discard() }
-            if c1.clauses().len() > 12 { return TestResult::discard() }
-            let mut mgr = super::BddManager::<AllTable<BddPtr>>::new_default_order(c1.num_vars());
-            let mut pm = PartialModel::from_litvec(&Vec::new(), c1.num_vars());
-            pm.set(VarLabel::new(0), true);
-            pm.set(VarLabel::new(1), true);
-            let cnf1 = mgr.from_cnf_with_assignments(&c1, &pm);
-            let cnf2 = mgr.from_cnf_topdown_partial(&c1, &pm);
-            // println!("bdd 1: {}, bdd 2: {}", mgr.to_string_debug(cnf1), mgr.to_string_debug(cnf2));
-            assert_eq!(cnf1, cnf2);
-            TestResult::from_bool(cnf1 == cnf2)
-        }
-    }
 
     quickcheck! {
         fn wmc_eq(c1: Cnf) -> TestResult {
@@ -469,7 +424,7 @@ mod test_bdd_manager {
                 (0..16).map(|x| (VarLabel::new(x as u64), (RealSemiring(0.3), RealSemiring(0.7)))));
             let cnf1 = mgr.from_cnf(&c1);
 
-            let mut mgr2 = DecisionNNFBuilder::new(c1.num_vars());
+            let mut mgr2 = DecisionNNFBuilder::new();
             let dnnf = mgr2.from_cnf_topdown(&VarOrder::linear_order(c1.num_vars()), &c1);
 
             let bddwmc = super::repr::wmc::WmcParams::new_with_default(RealSemiring::zero(), RealSemiring::one(), weight_map);

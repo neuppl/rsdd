@@ -300,7 +300,7 @@ fn compile_sdd_cnf(network: BayesianNetwork) {
 fn compile_topdown(network: BayesianNetwork) {
     println!("############################\n\tCompiling topdown\n############################");
     let bn = BayesianNetworkCNF::new(&network);
-    let mut compiler = DecisionNNFBuilder::new(bn.cnf.num_vars());
+    let mut compiler = DecisionNNFBuilder::new();
 
     println!("Compiling");
     let start = Instant::now();

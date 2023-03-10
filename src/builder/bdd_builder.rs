@@ -6,11 +6,10 @@ use bumpalo::Bump;
 
 use crate::repr::bdd::BddNode;
 use crate::repr::model::PartialModel;
-use crate::repr::sat_solver::SATSolver;
 use crate::repr::var_order::VarOrder;
 use crate::{
     backing_store::bump_table::BackedRobinhoodTable, repr::cnf::*, repr::logical_expr::LogicalExpr,
-    repr::model, repr::var_label::Literal,
+    repr::model
 };
 
 use super::cache::all_app::AllTable;
@@ -18,8 +17,7 @@ use super::cache::ite::Ite;
 use super::cache::lru_app::BddApplyTable;
 use crate::backing_store::*;
 use std::cmp::Ordering;
-use std::collections::HashMap;
-use std::collections::{BinaryHeap, HashSet};
+use std::collections::BinaryHeap;
 use std::fmt::Debug;
 
 use super::bdd_plan::BddPlan;
@@ -628,158 +626,6 @@ impl<T: LruTable<BddPtr>> BddManager<T> {
         }
     }
 
-    /// Returns A BDD that represents `cnf` conditioned on all
-    ///     variables set in the current top model
-    /// We need both of these BDDs for sound CNF caching
-    /// `cache`: a map from hashed CNFs to their compiled BDDs
-    fn topdown_h(
-        &mut self,
-        cnf: &Cnf,
-        sat: &mut SATSolver,
-        level: usize,
-        cache: &mut HashMap<HashedCNF, BddPtr>,
-    ) -> BddPtr {
-        // check for base case
-        let assgn = sat.get_implied_units();
-        if level >= cnf.num_vars() || cnf.is_sat_partial(&assgn) {
-            return BddPtr::true_ptr();
-        }
-
-        let cur_v = self.get_order().var_at_level(level);
-
-        // check if this literal is currently set in unit propagation; if
-        // it is, skip it
-        if assgn.is_set(cur_v) {
-            return self.topdown_h(cnf, sat, level + 1, cache);
-        }
-
-        // check cache
-        let hashed = cnf.get_hasher().hash(&assgn);
-        match cache.get(&hashed) {
-            None => (),
-            Some(v) => {
-                return *v;
-            }
-        }
-
-        // recurse on both values of cur_v
-        sat.push();
-        sat.decide(Literal::new(cur_v, true));
-        let unsat = sat.unsat_unit();
-        let high_bdd = if !unsat {
-            let new_assgn = sat.get_implied_units();
-            let mut lit_cube = BddPtr::true_ptr();
-            let implied_lits = new_assgn
-                .get_vec()
-                .iter()
-                .enumerate()
-                .zip(assgn.get_vec())
-                .filter_map(|((idx, new), prev)| {
-                    if new != prev && idx != cur_v.value_usize() {
-                        Some(Literal::new(VarLabel::new_usize(idx), new.unwrap()))
-                    } else {
-                        None
-                    }
-                });
-
-            for l in implied_lits {
-                if l.get_label() == cur_v {
-                    continue;
-                }
-                let v = self.var(l.get_label(), l.get_polarity());
-                lit_cube = self.and(lit_cube, v);
-            }
-            let sub = self.topdown_h(cnf, sat, level + 1, cache);
-            self.and(sub, lit_cube)
-        } else {
-            BddPtr::false_ptr()
-        };
-
-        sat.pop();
-        sat.push();
-        sat.decide(Literal::new(cur_v, false));
-        let unsat = sat.unsat_unit();
-        let low_bdd = if !unsat {
-            let new_assgn = sat.get_implied_units();
-            let implied_lits = new_assgn
-                .get_vec()
-                .iter()
-                .enumerate()
-                .zip(assgn.get_vec())
-                .filter_map(|((idx, new), prev)| {
-                    if new != prev && idx != cur_v.value_usize() {
-                        Some(Literal::new(VarLabel::new_usize(idx), new.unwrap()))
-                    } else {
-                        None
-                    }
-                });
-            let mut lit_cube = BddPtr::true_ptr();
-            for l in implied_lits {
-                if l.get_label() == cur_v {
-                    continue;
-                }
-                let v = self.var(l.get_label(), l.get_polarity());
-                lit_cube = self.and(lit_cube, v);
-            }
-            let sub = self.topdown_h(cnf, sat, level + 1, cache);
-            self.and(sub, lit_cube)
-        } else {
-            BddPtr::false_ptr()
-        };
-
-        sat.pop();
-        let r = if high_bdd == low_bdd {
-            high_bdd
-        } else {
-            let bdd = BddNode::new(cur_v, low_bdd, high_bdd);
-            self.get_or_insert(bdd)
-        };
-        cache.insert(hashed, r);
-        r
-    }
-
-    pub fn from_cnf_topdown(&mut self, cnf: &Cnf) -> BddPtr {
-        self.from_cnf_topdown_partial(cnf, &PartialModel::from_litvec(&Vec::new(), cnf.num_vars()))
-    }
-
-    /// Compile a CNF to a BDD top-down beginning from the partial model given in `model`
-    pub fn from_cnf_topdown_partial(&mut self, cnf: &Cnf, model: &PartialModel) -> BddPtr {
-        self.from_cnf_topdown_partial_cached(cnf, model, &mut HashMap::new())
-    }
-
-    /// Compile a CNF to a BDD top-down beginning from the partial model given in `model`
-    /// takes a cache as an argument
-    pub fn from_cnf_topdown_partial_cached(
-        &mut self,
-        cnf: &Cnf,
-        model: &PartialModel,
-        cache: &mut HashMap<HashedCNF, BddPtr>,
-    ) -> BddPtr {
-        let mut sat = SATSolver::new(cnf);
-        for assgn in model.assignment_iter() {
-            sat.decide(assgn);
-        }
-
-        if sat.unsat_unit() {
-            return BddPtr::false_ptr();
-        }
-
-        let mut lit_cube = BddPtr::true_ptr();
-        let assign_set: HashSet<Literal> = model.assignment_iter().collect();
-        for lit in sat.get_implied_units().assignment_iter() {
-            // conjoin in literals that are implied but not initially set
-            if !assign_set.contains(&lit) {
-                let v = self.var(lit.get_label(), lit.get_polarity());
-                lit_cube = self.and(v, lit_cube);
-            }
-        }
-
-        let r = self.topdown_h(cnf, &mut sat, 0, cache);
-
-        // conjoin in any initially implied literals
-        self.and(r, lit_cube)
-    }
-
     /// Prints the total number of recursive calls executed so far by the BddManager
     /// This is a stable way to track performance
     pub fn num_recursive_calls(&self) -> usize {
@@ -801,7 +647,7 @@ mod tests {
         repr::{
             bdd::BddPtr,
             cnf::Cnf,
-            var_label::{Literal, VarLabel},
+            var_label::VarLabel,
         },
     };
 
@@ -1101,88 +947,7 @@ mod tests {
         assert!(true);
     }
 
-    #[test]
-    fn test_topdown_1() {
-        let clauses = vec![vec![
-            Literal::new(VarLabel::new(0), true),
-            Literal::new(VarLabel::new(1), true),
-        ]];
-        let cnf = Cnf::new(clauses);
-        let mut mgr = BddManager::<AllTable<BddPtr>>::new_default_order(2);
-        let c1 = mgr.from_cnf(&cnf);
-        let c2 = mgr.from_cnf_topdown(&cnf);
-        assert_eq!(
-            c1,
-            c2,
-            "BDD not equal: got {}, expected {}",
-            c2.to_string_debug(),
-            c1.to_string_debug()
-        );
-    }
 
-    #[test]
-    fn test_topdown_2() {
-        let clauses = vec![vec![
-            Literal::new(VarLabel::new(0), false),
-            Literal::new(VarLabel::new(1), false),
-        ]];
-        let cnf = Cnf::new(clauses);
-        let mut mgr = BddManager::<AllTable<BddPtr>>::new_default_order(2);
-        let c1 = mgr.from_cnf(&cnf);
-        let c2 = mgr.from_cnf_topdown(&cnf);
-        assert_eq!(
-            c1,
-            c2,
-            "BDD not equal: got {}, expected {}",
-            c2.to_string_debug(),
-            c1.to_string_debug()
-        );
-    }
-
-    #[test]
-    fn test_topdown_3() {
-        let clauses = vec![
-            vec![
-                Literal::new(VarLabel::new(1), true),
-                Literal::new(VarLabel::new(3), true),
-            ],
-            vec![
-                Literal::new(VarLabel::new(3), false),
-                Literal::new(VarLabel::new(2), true),
-                Literal::new(VarLabel::new(4), true),
-            ],
-        ];
-        let cnf = Cnf::new(clauses);
-        let mut mgr = BddManager::<AllTable<BddPtr>>::new_default_order(cnf.num_vars());
-        let c1 = mgr.from_cnf(&cnf);
-        let c2 = mgr.from_cnf_topdown(&cnf);
-        assert_eq!(
-            c1,
-            c2,
-            "BDD not equal: got {}, expected {}",
-            c2.to_string_debug(),
-            c1.to_string_debug()
-        );
-    }
-
-    #[test]
-    fn test_topdown_4() {
-        let clauses = vec![
-            vec![Literal::new(VarLabel::new(0), true)],
-            vec![Literal::new(VarLabel::new(0), true)],
-        ];
-        let cnf = Cnf::new(clauses);
-        let mut mgr = BddManager::<AllTable<BddPtr>>::new_default_order(cnf.num_vars());
-        let c1 = mgr.from_cnf(&cnf);
-        let c2 = mgr.from_cnf_topdown(&cnf);
-        assert_eq!(
-            c1,
-            c2,
-            "BDD not equal: got {}, expected {}",
-            c2.to_string_debug(),
-            c1.to_string_debug()
-        );
-    }
 
     #[test]
     fn test_ite_1() {
