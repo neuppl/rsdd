@@ -29,8 +29,6 @@ use super::{
 };
 use bit_set::BitSet;
 
-
-
 type ClauseIdx = usize;
 type LitIdx = usize;
 
@@ -82,7 +80,7 @@ pub struct UnitPropagate {
 
 enum UnitPropResult {
     UNSAT,
-    PartialSAT(PartialModel)
+    PartialSAT(PartialModel),
 }
 
 impl UnitPropagate {
@@ -128,7 +126,7 @@ impl UnitPropagate {
         for i in implied {
             match cur.decide(cur_state, i) {
                 UnitPropResult::UNSAT => return None,
-                UnitPropResult::PartialSAT(r) => { 
+                UnitPropResult::PartialSAT(r) => {
                     cur_state = r;
                 }
             }
@@ -145,9 +143,9 @@ impl UnitPropagate {
             None => (),
             Some(v) => {
                 if v == new_assignment.get_polarity() {
-                    return UnitPropResult::PartialSAT(cur_state)
+                    return UnitPropResult::PartialSAT(cur_state);
                 } else {
-                    return UnitPropResult::UNSAT
+                    return UnitPropResult::UNSAT;
                 }
             }
         };
@@ -196,13 +194,12 @@ impl UnitPropagate {
             }
 
             // gather a list of all remaining unassigned literals in the current clause
-            let mut remaining_lits =
-                clause
-                    .iter()
-                    .filter(|x| match cur_state.get(x.get_label()) {
-                        None => true,
-                        Some(_) => false,
-                    });
+            let mut remaining_lits = clause
+                .iter()
+                .filter(|x| match cur_state.get(x.get_label()) {
+                    None => true,
+                    Some(_) => false,
+                });
 
             let num_remaining = remaining_lits.clone().count();
             if num_remaining == 0 {
@@ -213,9 +210,7 @@ impl UnitPropagate {
                 // just found a unit. propagate it and move onto the next watcher
                 let new_unit = remaining_lits.next().unwrap();
                 match self.decide(cur_state, *new_unit) {
-                    UnitPropResult::UNSAT => {
-                        return UnitPropResult::UNSAT
-                    },
+                    UnitPropResult::UNSAT => return UnitPropResult::UNSAT,
                     UnitPropResult::PartialSAT(new_state) => {
                         cur_state = new_state;
                         watcher_idx += 1;
@@ -274,14 +269,14 @@ impl UnitPropagate {
 pub enum DecisionResult {
     SAT,
     UNSAT,
-    Unknown
+    Unknown,
 }
 
 #[derive(Clone, Debug)]
 struct SatState {
     model: PartialModel,
     hash: u128,
-    sat_clauses: BitSet
+    sat_clauses: BitSet,
 }
 
 pub struct SATSolver {
@@ -314,7 +309,11 @@ impl SATSolver {
 
         // first handle subsumed clause case (case 2)
         for lit in new_model.difference(&self.top_state().model) {
-            let matching_polarity = if lit.get_polarity() { &self.contains_pos_lit } else { &self.contains_neg_lit };
+            let matching_polarity = if lit.get_polarity() {
+                &self.contains_pos_lit
+            } else {
+                &self.contains_neg_lit
+            };
             for clause_idx in matching_polarity[lit.get_label().value_usize()].iter() {
                 if new_set.contains(clause_idx) {
                     continue;
@@ -330,7 +329,11 @@ impl SATSolver {
 
         // now handle case 3
         for lit in new_model.difference(&self.top_state().model) {
-            let opposite_polarity = if lit.get_polarity() { &self.contains_neg_lit } else { &self.contains_pos_lit };
+            let opposite_polarity = if lit.get_polarity() {
+                &self.contains_neg_lit
+            } else {
+                &self.contains_pos_lit
+            };
             for clause_idx in opposite_polarity[lit.get_label().value_usize()].iter() {
                 if new_set.contains(clause_idx) {
                     // avoid double-counting
@@ -344,33 +347,31 @@ impl SATSolver {
                 }
             }
         }
-        
+
         return (hash, new_set);
     }
-
-
 
     /// returns a new SATSolver
     /// None if initially UNSAT
     pub fn new(cnf: Cnf) -> Option<SATSolver> {
         match UnitPropagate::new(cnf.clone()) {
-            None => { 
-                return None
-            },
+            None => return None,
             Some((up, state)) => {
                 // normalize the clauses by (1) deduplicating and (2) filtering
                 // out all clauses that contain a literal and its negation
-                let mut clauses : Vec<Vec<Literal>> = cnf.clauses().iter().map(|x| x.clone()).collect();
+                let mut clauses: Vec<Vec<Literal>> =
+                    cnf.clauses().iter().map(|x| x.clone()).collect();
                 for i in 0..clauses.len() {
                     clauses[i].sort();
                     clauses[i].dedup();
                 }
                 let i = clauses.iter().filter(|clause| {
                     for i in 0..clause.len() {
-                        for j in (i+1)..clause.len() {
-                            if clause[i].get_label() == clause[j].get_label() && 
-                                clause[i].get_polarity() == !clause[j].get_polarity() {
-                                    return false
+                        for j in (i + 1)..clause.len() {
+                            if clause[i].get_label() == clause[j].get_label()
+                                && clause[i].get_polarity() == !clause[j].get_polarity()
+                            {
+                                return false;
                             }
                         }
                     }
@@ -379,7 +380,8 @@ impl SATSolver {
 
                 // weight each literal
                 let mut primes = primal::Primes::all();
-                let clauses : Vec<Vec<(Literal, u128)>> = i.map({
+                let clauses: Vec<Vec<(Literal, u128)>> = i
+                    .map({
                         |clause| {
                             clause
                                 .iter()
@@ -388,7 +390,6 @@ impl SATSolver {
                         }
                     })
                     .collect();
-
 
                 // initialize pos_lit and neg_lit
                 let mut pos_lit = Vec::new();
@@ -408,12 +409,26 @@ impl SATSolver {
                     }
                 }
 
-                let top_state = SatState { model: PartialModel::new(cnf.num_vars()), hash: 1, sat_clauses: BitSet::new() };
-                let mut solver = SATSolver { up, clauses, contains_pos_lit: pos_lit, contains_neg_lit: neg_lit, state_stack: vec![top_state] };
+                let top_state = SatState {
+                    model: PartialModel::new(cnf.num_vars()),
+                    hash: 1,
+                    sat_clauses: BitSet::new(),
+                };
+                let mut solver = SATSolver {
+                    up,
+                    clauses,
+                    contains_pos_lit: pos_lit,
+                    contains_neg_lit: neg_lit,
+                    state_stack: vec![top_state],
+                };
 
                 let (new_hash, new_sat_set) = solver.update_hash_and_sat_set(&state);
-                
-                solver.state_stack.push(SatState { model: state, hash: new_hash, sat_clauses: new_sat_set });
+
+                solver.state_stack.push(SatState {
+                    model: state,
+                    hash: new_hash,
+                    sat_clauses: new_sat_set,
+                });
 
                 return Some(solver);
             }
@@ -436,20 +451,26 @@ impl SATSolver {
             UnitPropResult::PartialSAT(new_model) => {
                 let (new_hash, new_sat) = self.update_hash_and_sat_set(&new_model);
                 let num_set = new_sat.len();
-                self.state_stack.push(SatState { model: new_model, hash: new_hash, sat_clauses: new_sat });
-                if num_set  == self.clauses.len() {
+                self.state_stack.push(SatState {
+                    model: new_model,
+                    hash: new_hash,
+                    sat_clauses: new_sat,
+                });
+                if num_set == self.clauses.len() {
                     return DecisionResult::SAT;
                 } else {
                     return DecisionResult::Unknown;
                 }
-            },
+            }
         }
     }
 
-    /// Get an iterator over the difference between the units implied at 
+    /// Get an iterator over the difference between the units implied at
     /// the top and second-to-top decision
-    pub fn get_difference<'a>(&'a self) -> impl Iterator<Item=Literal> + 'a {
-        self.top_state().model.difference(&self.state_stack[self.state_stack.len() - 2].model)
+    pub fn get_difference<'a>(&'a self) -> impl Iterator<Item = Literal> + 'a {
+        self.top_state()
+            .model
+            .difference(&self.state_stack[self.state_stack.len() - 2].model)
     }
 
     pub fn get_cur_hash(&self) -> u128 {
@@ -457,7 +478,7 @@ impl SATSolver {
     }
 
     pub fn is_sat(&self) -> bool {
-        return self.top_state().sat_clauses.len() == self.clauses.len()
+        return self.top_state().sat_clauses.len() == self.clauses.len();
     }
 
     pub fn is_set(&self, var: VarLabel) -> bool {
@@ -492,7 +513,8 @@ fn test_unit_propagate_1() {
 
 #[test]
 fn test_unit_propagate_2() {
-    let v = vec![vec![
+    let v = vec![
+        vec![
             Literal::new(VarLabel::new(0), true),
             Literal::new(VarLabel::new(1), false),
         ],
@@ -506,9 +528,9 @@ fn test_unit_propagate_2() {
     match UnitPropagate::new(cnf) {
         None => assert!(false),
         Some((_, assgn)) => {
-            assert_eq!(assgn.get(VarLabel::new(0)), None); 
-            assert_eq!(assgn.get(VarLabel::new(1)), None); 
-            assert_eq!(assgn.get(VarLabel::new(2)), None); 
+            assert_eq!(assgn.get(VarLabel::new(0)), None);
+            assert_eq!(assgn.get(VarLabel::new(1)), None);
+            assert_eq!(assgn.get(VarLabel::new(2)), None);
         }
     }
 }

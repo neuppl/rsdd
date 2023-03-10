@@ -1,6 +1,12 @@
 //! Top-down decision DNNF compiler and manipulator
 
-use crate::{backing_store::*, repr::{ddnnf::DDNNFPtr, unit_prop::{SATSolver, DecisionResult}}};
+use crate::{
+    backing_store::*,
+    repr::{
+        ddnnf::DDNNFPtr,
+        unit_prop::{DecisionResult, SATSolver},
+    },
+};
 use bumpalo::Bump;
 
 use rustc_hash::FxHashMap;
@@ -14,9 +20,6 @@ use crate::{
         var_order::VarOrder,
     },
 };
-
-
-
 
 pub struct DecisionNNFBuilder {
     compute_table: BackedRobinhoodTable<BddNode>,
@@ -102,15 +105,13 @@ impl DecisionNNFBuilder {
 
         // recurse on both values of cur_v
         let high_bdd = match sat.decide(Literal::new(cur_v, true)) {
-            DecisionResult::UNSAT => {
-                BddPtr::false_ptr()
-            }, 
+            DecisionResult::UNSAT => BddPtr::false_ptr(),
             DecisionResult::SAT => {
                 let new_assgn = sat.get_difference().filter(|x| x.get_label() != cur_v);
                 let r = self.conjoin_implied(new_assgn, BddPtr::true_ptr());
                 sat.pop();
                 r
-            },
+            }
             DecisionResult::Unknown => {
                 let sub = self.topdown_h(cnf, sat, level + 1, order, cache);
                 let new_assgn = sat.get_difference().filter(|x| x.get_label() != cur_v);
@@ -120,15 +121,13 @@ impl DecisionNNFBuilder {
             }
         };
         let low_bdd = match sat.decide(Literal::new(cur_v, false)) {
-            DecisionResult::UNSAT => {
-                BddPtr::false_ptr()
-            }, 
+            DecisionResult::UNSAT => BddPtr::false_ptr(),
             DecisionResult::SAT => {
                 let new_assgn = sat.get_difference().filter(|x| x.get_label() != cur_v);
                 let r = self.conjoin_implied(new_assgn, BddPtr::true_ptr());
                 sat.pop();
                 r
-            },
+            }
             DecisionResult::Unknown => {
                 let sub = self.topdown_h(cnf, sat, level + 1, order, cache);
                 let new_assgn = sat.get_difference().filter(|x| x.get_label() != cur_v);
@@ -153,16 +152,10 @@ impl DecisionNNFBuilder {
     pub fn from_cnf_topdown(&mut self, order: &VarOrder, cnf: &Cnf) -> BddPtr {
         let mut sat = match SATSolver::new(cnf.clone()) {
             Some(v) => v,
-            None => return BddPtr::false_ptr()
+            None => return BddPtr::false_ptr(),
         };
 
-        let mut r = self.topdown_h(
-            cnf,
-            &mut sat,
-            0,
-            order,
-            &mut FxHashMap::default(),
-        );
+        let mut r = self.topdown_h(cnf, &mut sat, 0, order, &mut FxHashMap::default());
 
         // conjoin in any initially implied literals
         for l in sat.get_difference() {

@@ -109,7 +109,9 @@ impl VarSet {
     }
 
     pub fn new_with_num_vars(num_vars: usize) -> VarSet {
-        VarSet { b: BitSet::with_capacity(num_vars) }
+        VarSet {
+            b: BitSet::with_capacity(num_vars),
+        }
     }
 
     /// unions self with other in-place

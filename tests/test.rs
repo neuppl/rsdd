@@ -395,7 +395,6 @@ mod test_bdd_manager {
         }
     }
 
-
     quickcheck! {
         fn wmc_eq(c1: Cnf) -> TestResult {
             // constrain the size

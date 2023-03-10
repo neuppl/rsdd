@@ -9,7 +9,7 @@ use crate::repr::model::PartialModel;
 use crate::repr::var_order::VarOrder;
 use crate::{
     backing_store::bump_table::BackedRobinhoodTable, repr::cnf::*, repr::logical_expr::LogicalExpr,
-    repr::model
+    repr::model,
 };
 
 use super::cache::all_app::AllTable;
@@ -644,11 +644,7 @@ mod tests {
 
     use crate::{
         builder::bdd_builder::BddManager,
-        repr::{
-            bdd::BddPtr,
-            cnf::Cnf,
-            var_label::VarLabel,
-        },
+        repr::{bdd::BddPtr, cnf::Cnf, var_label::VarLabel},
     };
 
     // check that (a \/ b) /\ a === a
@@ -946,8 +942,6 @@ mod tests {
             .fold(BddPtr::true_ptr(), |acc, x| man.and(acc, *x));
         assert!(true);
     }
-
-
 
     #[test]
     fn test_ite_1() {

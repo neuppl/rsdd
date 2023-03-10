@@ -6,13 +6,15 @@ use super::var_label::{Literal, VarLabel, VarSet};
 pub struct PartialModel {
     /// None if variable is unset
     true_assignments: VarSet,
-    false_assignments: VarSet
-    // assignments: Vec<Option<bool>>,
+    false_assignments: VarSet, // assignments: Vec<Option<bool>>,
 }
 
 impl PartialModel {
     pub fn new(num_vars: usize) -> PartialModel {
-        PartialModel { true_assignments: VarSet::new_with_num_vars(num_vars), false_assignments: VarSet::new_with_num_vars(num_vars) }
+        PartialModel {
+            true_assignments: VarSet::new_with_num_vars(num_vars),
+            false_assignments: VarSet::new_with_num_vars(num_vars),
+        }
     }
 
     pub fn from_vec(assignments: Vec<Option<bool>>) -> PartialModel {
@@ -22,10 +24,13 @@ impl PartialModel {
             match assignments[i] {
                 Some(true) => true_v.insert(VarLabel::new_usize(i)),
                 Some(false) => false_v.insert(VarLabel::new_usize(i)),
-                None => ()
+                None => (),
             }
         }
-        PartialModel { true_assignments: true_v, false_assignments: false_v }
+        PartialModel {
+            true_assignments: true_v,
+            false_assignments: false_v,
+        }
     }
 
     /// Creates a partial model from a total model (assignment to all vars)
@@ -60,11 +65,11 @@ impl PartialModel {
     /// Returns the value of a variable (None if unset)
     pub fn get(&self, label: VarLabel) -> Option<bool> {
         if self.true_assignments.contains(label) {
-            return Some(true)
+            return Some(true);
         } else if self.false_assignments.contains(label) {
-            return Some(false)
-        } else { 
-            return None
+            return Some(false);
+        } else {
+            return None;
         }
     }
 
@@ -84,22 +89,28 @@ impl PartialModel {
 
     /// True if this is a set variable, false otherwise
     pub fn is_set(&self, label: VarLabel) -> bool {
-        return self.true_assignments.contains(label) || self.false_assignments.contains(label)
+        return self.true_assignments.contains(label) || self.false_assignments.contains(label);
     }
 
     /// Produces an iterator of all the assigned literals
     pub fn assignment_iter<'a>(&'a self) -> impl Iterator<Item = Literal> + 'a {
-        let false_iter = self.false_assignments.iter().map(|x| Literal::new(x, false));
+        let false_iter = self
+            .false_assignments
+            .iter()
+            .map(|x| Literal::new(x, false));
         let true_iter = self.true_assignments.iter().map(|x| Literal::new(x, true));
         false_iter.chain(true_iter)
     }
 
     pub fn difference<'a>(&'a self, other: &'a Self) -> impl Iterator<Item = Literal> + 'a {
-        let true_diff = self.true_assignments.difference(&other.true_assignments).map(|x| Literal::new(x, true));
-        let false_diff = self.false_assignments.difference(&other.false_assignments).map(|x| Literal::new(x, false));
+        let true_diff = self
+            .true_assignments
+            .difference(&other.true_assignments)
+            .map(|x| Literal::new(x, true));
+        let false_diff = self
+            .false_assignments
+            .difference(&other.false_assignments)
+            .map(|x| Literal::new(x, false));
         false_diff.chain(true_diff)
     }
-
-    
 }
-
