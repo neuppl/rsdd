@@ -710,7 +710,7 @@ mod test_sdd_manager {
             let mut compr_mgr = super::SddManager::<CompressionCanonicalizer>::new(vtree.clone());
             let compr_cnf = compr_mgr.from_cnf(&c);
 
-            let mut uncompr_mgr = super::SddManager::<SemanticCanonicalizer<100000000069>>::new(vtree);
+            let mut uncompr_mgr = super::SddManager::<SemanticCanonicalizer<{ crate::BIG_PRIME }>>::new(vtree);
             let uncompr_cnf = uncompr_mgr.from_cnf(&c);
 
             if !uncompr_mgr.sdd_eq(compr_cnf, uncompr_cnf) {
@@ -759,7 +759,7 @@ mod test_sdd_manager {
 
     quickcheck! {
         fn prob_equiv_sdd_inequality(c1: Cnf, c2: Cnf, vtree:VTree) -> TestResult {
-            let mut mgr = super::SddManager::<SemanticCanonicalizer<100000000069>>::new(vtree);
+            let mut mgr = super::SddManager::<SemanticCanonicalizer<{ crate::BIG_PRIME }>>::new(vtree);
             mgr.set_compression(true); // necessary to make sure we don't generate two uncompressed SDDs that canonicalize to the same SDD
             let cnf_1 = mgr.from_cnf(&c1);
             let cnf_2 = mgr.from_cnf(&c2);
@@ -781,7 +781,7 @@ mod test_sdd_manager {
 
     quickcheck! {
         fn prob_equiv_sdd_eq_vs_prob_eq(c1: Cnf, c2: Cnf, vtree:VTree) -> TestResult {
-            let mut mgr = super::SddManager::<SemanticCanonicalizer<100000000069>>::new(vtree);
+            let mut mgr = super::SddManager::<SemanticCanonicalizer<{ crate::BIG_PRIME }>>::new(vtree);
             mgr.set_compression(true); // necessary to make sure we don't generate two uncompressed SDDs that canonicalize to the same SDD
             let cnf_1 = mgr.from_cnf(&c1);
             let cnf_2 = mgr.from_cnf(&c2);
@@ -809,7 +809,7 @@ mod test_sdd_manager {
             // useful site: http://compoasso.free.fr/primelistweb/page/prime/liste_online_en.php
 
             // running iteratively, taking majority
-            let map : WmcParams<FiniteField<100000000069>>= create_semantic_hash_map(mgr.num_vars());
+            let map : WmcParams<FiniteField<{ crate::BIG_PRIME }>>= create_semantic_hash_map(mgr.num_vars());
             let mut seen_hashes : HashMap<u128, SddPtr> = HashMap::new();
             for sdd in mgr.node_iter() {
                 let hash = sdd.semantic_hash(mgr.get_vtree_manager(), &map);
