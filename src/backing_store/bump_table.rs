@@ -1,10 +1,9 @@
 //! A unique table based on a bump allocator and robin-hood hashing
 //! this is the primary unique table for storing all nodes
 
-use super::UniqueTable;
+use super::{UniqueTable, UniqueTableHasher};
 use bumpalo::Bump;
-use rustc_hash::FxHasher;
-use std::hash::{Hash, Hasher};
+use std::hash::Hash;
 use std::marker::PhantomData;
 use std::mem;
 
@@ -84,7 +83,7 @@ fn propagate<T: Clone>(
 pub struct BackedRobinhoodTable<T, H>
 where
     T: Hash + PartialEq + Eq + Clone,
-    H: BRTHasher<T>,
+    H: UniqueTableHasher<T>,
 {
     /// hash table which stores indexes in the elem vector
     tbl: Vec<HashTableElement<T>>,
@@ -100,7 +99,7 @@ where
 impl<T: Clone, H> BackedRobinhoodTable<T, H>
 where
     T: Hash + PartialEq + Eq + Clone,
-    H: BRTHasher<T>,
+    H: UniqueTableHasher<T>,
 {
     /// reserve a robin-hood table capable of holding at least `sz` elements
     pub fn new() -> BackedRobinhoodTable<T, H> {
@@ -161,15 +160,15 @@ where
     }
 }
 
-impl<T: Eq + PartialEq + Hash + Clone, H: BRTHasher<T>> UniqueTable<T>
+impl<T: Eq + PartialEq + Hash + Clone, H: UniqueTableHasher<T>> UniqueTable<T, H>
     for BackedRobinhoodTable<T, H>
 {
-    fn get_or_insert(&mut self, elem: T) -> *mut T {
+    fn get_or_insert(&mut self, elem: T, hasher: &H) -> *mut T {
         if (self.len + 1) as f64 > (self.cap as f64 * LOAD_FACTOR) {
             self.grow();
         }
 
-        let elem_hash = H::u64hash(&elem);
+        let elem_hash = hasher.u64hash(&elem);
 
         // the current index into the array
         let mut pos: usize = (elem_hash as usize) % self.cap;
@@ -211,19 +210,5 @@ impl<T: Eq + PartialEq + Hash + Clone, H: BRTHasher<T>> UniqueTable<T>
                 return ptr;
             }
         }
-    }
-}
-
-pub trait BRTHasher<T: Eq + PartialEq + Hash + Clone> {
-    fn u64hash(elem: &T) -> u64;
-}
-
-pub struct DefaultBRTHasher {}
-
-impl<T: Eq + PartialEq + Hash + Clone> BRTHasher<T> for DefaultBRTHasher {
-    fn u64hash(elem: &T) -> u64 {
-        let mut hasher = FxHasher::default();
-        elem.hash(&mut hasher);
-        hasher.finish()
     }
 }

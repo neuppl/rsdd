@@ -10,8 +10,8 @@ use super::cache::all_app::AllTable;
 use super::cache::ite::Ite;
 use super::cache::sdd_apply_cache::{SddApply, SddApplyCompression, SddApplySemantic};
 use super::cache::LruTable;
-use crate::backing_store::bump_table::{BRTHasher, BackedRobinhoodTable, DefaultBRTHasher};
-use crate::backing_store::UniqueTable;
+use crate::backing_store::bump_table::BackedRobinhoodTable;
+use crate::backing_store::{DefaultUniqueTableHasher, UniqueTable, UniqueTableHasher};
 use crate::repr::bdd::WmcParams;
 use crate::repr::ddnnf::DDNNFPtr;
 use crate::repr::sdd::{BinarySDD, SddAnd, SddOr, SddPtr};
@@ -39,8 +39,8 @@ impl Default for SddStats {
 
 pub trait SddCanonicalizationScheme {
     type ApplyCacheMethod: SddApply;
-    type BddHasher: BRTHasher<BinarySDD>;
-    type SddOrHasher: BRTHasher<SddOr>;
+    type BddHasher: UniqueTableHasher<BinarySDD>;
+    type SddOrHasher: UniqueTableHasher<SddOr>;
 
     fn new(vtree: &VTreeManager) -> Self;
     fn set_compress(&mut self, b: bool);
@@ -48,25 +48,29 @@ pub trait SddCanonicalizationScheme {
     fn sdd_eq(&self, s1: SddPtr, s2: SddPtr) -> bool;
     fn app_cache(&mut self) -> &mut Self::ApplyCacheMethod;
 
+    // BackedRobinhoodTable-related methods
     fn bdd_tbl(&self) -> &BackedRobinhoodTable<BinarySDD, Self::BddHasher>;
     fn sdd_tbl(&self) -> &BackedRobinhoodTable<SddOr, Self::SddOrHasher>;
-    fn bdd_tbl_mut(&mut self) -> &mut BackedRobinhoodTable<BinarySDD, Self::BddHasher>;
-    fn sdd_tbl_mut(&mut self) -> &mut BackedRobinhoodTable<SddOr, Self::SddOrHasher>;
+    fn bdd_hasher(&self) -> &Self::BddHasher;
+    fn sdd_hasher(&self) -> &Self::SddOrHasher;
+    fn bdd_get_or_insert(&mut self, item: BinarySDD) -> *mut BinarySDD;
+    fn sdd_get_or_insert(&mut self, item: SddOr) -> *mut SddOr;
 }
 
 pub struct CompressionCanonicalizer {
     use_compression: bool,
     app_cache: SddApplyCompression,
-    bdd_tbl: BackedRobinhoodTable<BinarySDD, DefaultBRTHasher>,
-    sdd_tbl: BackedRobinhoodTable<SddOr, DefaultBRTHasher>,
+    bdd_tbl: BackedRobinhoodTable<BinarySDD, DefaultUniqueTableHasher>,
+    sdd_tbl: BackedRobinhoodTable<SddOr, DefaultUniqueTableHasher>,
+    hasher: DefaultUniqueTableHasher,
 }
 
 impl CompressionCanonicalizer {}
 
 impl SddCanonicalizationScheme for CompressionCanonicalizer {
     type ApplyCacheMethod = SddApplyCompression;
-    type BddHasher = DefaultBRTHasher;
-    type SddOrHasher = DefaultBRTHasher;
+    type BddHasher = DefaultUniqueTableHasher;
+    type SddOrHasher = DefaultUniqueTableHasher;
 
     fn new(_vtree: &VTreeManager) -> Self {
         CompressionCanonicalizer {
@@ -74,6 +78,7 @@ impl SddCanonicalizationScheme for CompressionCanonicalizer {
             app_cache: SddApplyCompression::new(),
             bdd_tbl: BackedRobinhoodTable::new(),
             sdd_tbl: BackedRobinhoodTable::new(),
+            hasher: DefaultUniqueTableHasher::default(),
         }
     }
 
@@ -101,12 +106,53 @@ impl SddCanonicalizationScheme for CompressionCanonicalizer {
         &self.sdd_tbl
     }
 
-    fn bdd_tbl_mut(&mut self) -> &mut BackedRobinhoodTable<BinarySDD, Self::BddHasher> {
-        &mut self.bdd_tbl
+    fn bdd_hasher(&self) -> &Self::BddHasher {
+        &self.hasher
     }
 
-    fn sdd_tbl_mut(&mut self) -> &mut BackedRobinhoodTable<SddOr, Self::SddOrHasher> {
-        &mut self.sdd_tbl
+    fn sdd_hasher(&self) -> &Self::SddOrHasher {
+        &self.hasher
+    }
+
+    fn bdd_get_or_insert(&mut self, item: BinarySDD) -> *mut BinarySDD {
+        self.bdd_tbl.get_or_insert(item, &self.hasher)
+    }
+
+    fn sdd_get_or_insert(&mut self, item: SddOr) -> *mut SddOr {
+        self.sdd_tbl.get_or_insert(item, &self.hasher)
+    }
+}
+
+pub struct SemanticUniqueTableHasher<const P: u128> {
+    map: WmcParams<FiniteField<P>>,
+    vtree: VTreeManager,
+}
+
+impl<const P: u128> SemanticUniqueTableHasher<P> {
+    pub fn new(vtree: VTreeManager, map: WmcParams<FiniteField<P>>) -> Self {
+        Self { vtree, map }
+    }
+}
+
+impl<const P: u128> UniqueTableHasher<BinarySDD> for SemanticUniqueTableHasher<P> {
+    fn u64hash(&self, elem: &BinarySDD) -> u64 {
+        (elem.low().get_semantic_hash(&self.vtree, &self.map)
+            * elem.high().get_semantic_hash(&self.vtree, &self.map))
+        .value() as u64
+    }
+}
+
+impl<const P: u128> UniqueTableHasher<SddOr> for SemanticUniqueTableHasher<P> {
+    fn u64hash(&self, elem: &SddOr) -> u64 {
+        elem.nodes
+            .clone()
+            .into_iter()
+            .map(|and| {
+                and.prime().get_semantic_hash(&self.vtree, &self.map)
+                    * and.sub().get_semantic_hash(&self.vtree, &self.map)
+            })
+            .fold(FiniteField::new(0), |accum, elem| accum + elem)
+            .value() as u64
     }
 }
 
@@ -115,8 +161,9 @@ pub struct SemanticCanonicalizer<const P: u128> {
     app_cache: SddApplySemantic<P>,
     use_compression: bool,
     vtree: VTreeManager,
-    bdd_tbl: BackedRobinhoodTable<BinarySDD, DefaultBRTHasher>,
-    sdd_tbl: BackedRobinhoodTable<SddOr, DefaultBRTHasher>,
+    bdd_tbl: BackedRobinhoodTable<BinarySDD, SemanticUniqueTableHasher<P>>,
+    sdd_tbl: BackedRobinhoodTable<SddOr, SemanticUniqueTableHasher<P>>,
+    hasher: SemanticUniqueTableHasher<P>,
 }
 
 impl<const P: u128> SemanticCanonicalizer<P> {
@@ -150,19 +197,20 @@ impl<const P: u128> SemanticCanonicalizer<P> {
 
 impl<const P: u128> SddCanonicalizationScheme for SemanticCanonicalizer<P> {
     type ApplyCacheMethod = SddApplySemantic<P>;
-    type BddHasher = DefaultBRTHasher;
-    type SddOrHasher = DefaultBRTHasher;
+    type BddHasher = SemanticUniqueTableHasher<P>;
+    type SddOrHasher = SemanticUniqueTableHasher<P>;
 
     fn new(vtree: &VTreeManager) -> Self {
         let map = SemanticCanonicalizer::create_prob_map(&vtree.clone());
         let app_cache = SddApplySemantic::new(map.clone(), vtree.clone());
         SemanticCanonicalizer {
-            map,
             app_cache,
             use_compression: false,
             vtree: vtree.clone(),
             bdd_tbl: BackedRobinhoodTable::new(),
             sdd_tbl: BackedRobinhoodTable::new(),
+            hasher: SemanticUniqueTableHasher::new(vtree.clone(), map.clone()),
+            map,
         }
     }
 
@@ -192,18 +240,24 @@ impl<const P: u128> SddCanonicalizationScheme for SemanticCanonicalizer<P> {
         &self.sdd_tbl
     }
 
-    fn bdd_tbl_mut(&mut self) -> &mut BackedRobinhoodTable<BinarySDD, Self::BddHasher> {
-        &mut self.bdd_tbl
+    fn bdd_hasher(&self) -> &Self::BddHasher {
+        &self.hasher
     }
 
-    fn sdd_tbl_mut(&mut self) -> &mut BackedRobinhoodTable<SddOr, Self::SddOrHasher> {
-        &mut self.sdd_tbl
+    fn sdd_hasher(&self) -> &Self::SddOrHasher {
+        &self.hasher
+    }
+
+    fn bdd_get_or_insert(&mut self, item: BinarySDD) -> *mut BinarySDD {
+        self.bdd_tbl.get_or_insert(item, &self.hasher)
+    }
+
+    fn sdd_get_or_insert(&mut self, item: SddOr) -> *mut SddOr {
+        self.sdd_tbl.get_or_insert(item, &self.hasher)
     }
 }
 
 pub struct SddManager<T: SddCanonicalizationScheme> {
-    // sdd_tbl: BackedRobinhoodTable<SddOr>,
-    // bdd_tbl: BackedRobinhoodTable<BinarySDD>,
     canonicalizer: T,
     vtree: VTreeManager,
     stats: SddStats,
@@ -214,8 +268,6 @@ impl<T: SddCanonicalizationScheme> SddManager<T> {
     pub fn new(vtree: VTree) -> SddManager<T> {
         let vtree_man = VTreeManager::new(vtree);
         SddManager {
-            // sdd_tbl: BackedRobinhoodTable::new(),
-            // bdd_tbl: BackedRobinhoodTable::new(),
             stats: SddStats::new(),
             ite_cache: AllTable::new(),
             canonicalizer: T::new(&vtree_man),
@@ -258,7 +310,7 @@ impl<T: SddCanonicalizationScheme> SddManager<T> {
 
     /// Normalizes and fetches a node from the store
     pub fn get_or_insert(&mut self, sdd: SddOr) -> SddPtr {
-        let p = self.canonicalizer.sdd_tbl_mut().get_or_insert(sdd);
+        let p = self.canonicalizer.sdd_get_or_insert(sdd);
         SddPtr::or(p)
     }
 
@@ -329,9 +381,9 @@ impl<T: SddCanonicalizationScheme> SddManager<T> {
         if bdd.high().is_neg() || bdd.high().is_false() || bdd.high().is_neg_var() {
             let neg_bdd =
                 BinarySDD::new(bdd.label(), bdd.low().neg(), bdd.high().neg(), bdd.vtree());
-            SddPtr::bdd(self.canonicalizer.bdd_tbl_mut().get_or_insert(neg_bdd)).neg()
+            SddPtr::bdd(self.canonicalizer.bdd_get_or_insert(neg_bdd)).neg()
         } else {
-            SddPtr::bdd(self.canonicalizer.bdd_tbl_mut().get_or_insert(bdd))
+            SddPtr::bdd(self.canonicalizer.bdd_get_or_insert(bdd))
         }
     }
 
