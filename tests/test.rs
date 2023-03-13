@@ -666,7 +666,8 @@ mod test_sdd_manager {
             let mut mgr1 = super::SddManager::<CompressionCanonicalizer>::new(vtree.clone());
             let c1 = mgr1.from_cnf(&c);
 
-            let mut mgr2 = super::SddManager::<CompressionCanonicalizer>::new(vtree);
+            // in this test, compression is still enabled; c2 should be identical to c1
+            let mut mgr2 = super::SddManager::<SemanticCanonicalizer<{ crate::BIG_PRIME }>>::new(vtree);
             let c2 = mgr2.from_cnf(&c);
 
             let map : WmcParams<FiniteField<1123>> = create_semantic_hash_map(mgr1.num_vars());
@@ -721,39 +722,6 @@ mod test_sdd_manager {
             } else {
                 TestResult::from_bool(true)
             }
-        }
-    }
-
-    quickcheck! {
-        fn prob_equiv_sdd_inequality_depr(c1: Cnf, c2: Cnf, vtree:VTree) -> TestResult {
-            let mut mgr = super::SddManager::<CompressionCanonicalizer>::new(vtree);
-            let cnf_1 = mgr.from_cnf(&c1);
-            let cnf_2 = mgr.from_cnf(&c2);
-
-            if cnf_1 == cnf_2 {
-                return TestResult::discard();
-            }
-
-            // running iteratively, taking majority
-
-            let mut num_collisions = 0;
-
-            for _ in 1 .. 5 {
-
-                let map : WmcParams<FiniteField<4391>> = create_semantic_hash_map(mgr.num_vars());
-
-                let h1 = cnf_1.semantic_hash(mgr.get_vtree_manager(), &map);
-                let h2 = cnf_2.semantic_hash(mgr.get_vtree_manager(), &map);
-
-                if h1 == h2 {
-                    println!("collision! h1: {h1}, h2: {h2}");
-                    println!("map: {:?}", map);
-                    println!("sdd1: {}", mgr.print_sdd(cnf_1));
-                    println!("sdd2: {}", mgr.print_sdd(cnf_2));
-                    num_collisions += 1;
-                }
-            }
-            TestResult::from_bool(num_collisions < 2) // less than half
         }
     }
 
