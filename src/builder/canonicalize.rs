@@ -35,8 +35,6 @@ pub struct CompressionCanonicalizer {
     hasher: DefaultUniqueTableHasher,
 }
 
-impl CompressionCanonicalizer {}
-
 impl SddCanonicalizationScheme for CompressionCanonicalizer {
     type ApplyCacheMethod = SddApplyCompression;
     type BddHasher = DefaultUniqueTableHasher;
@@ -105,6 +103,7 @@ impl<const P: u128> SemanticUniqueTableHasher<P> {
 }
 
 impl<const P: u128> UniqueTableHasher<BinarySDD> for SemanticUniqueTableHasher<P> {
+    // TODO: we should be able to de-duplicate this with fold
     fn u64hash(&self, elem: &BinarySDD) -> u64 {
         (elem.low().semantic_hash(&self.vtree, &self.map)
             * elem.high().semantic_hash(&self.vtree, &self.map))
@@ -115,12 +114,8 @@ impl<const P: u128> UniqueTableHasher<BinarySDD> for SemanticUniqueTableHasher<P
 impl<const P: u128> UniqueTableHasher<SddOr> for SemanticUniqueTableHasher<P> {
     fn u64hash(&self, elem: &SddOr) -> u64 {
         elem.nodes
-            .clone()
-            .into_iter()
-            .map(|and| {
-                and.prime().semantic_hash(&self.vtree, &self.map)
-                    * and.sub().semantic_hash(&self.vtree, &self.map)
-            })
+            .iter()
+            .map(|and| and.semantic_hash(&self.vtree, &self.map))
             .fold(FiniteField::new(0), |accum, elem| accum + elem)
             .value() as u64
     }
