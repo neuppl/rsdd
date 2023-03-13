@@ -85,7 +85,7 @@ impl BddManagerStats {
 }
 
 pub struct BddManager<T: LruTable<BddPtr>> {
-    compute_table: BackedRobinhoodTable<BddNode, DefaultUniqueTableHasher>,
+    compute_table: BackedRobinhoodTable<BddNode>,
     apply_table: T,
     stats: BddManagerStats,
     order: VarOrder,

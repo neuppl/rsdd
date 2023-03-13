@@ -21,7 +21,7 @@ use crate::{
 };
 
 pub struct DecisionNNFBuilder {
-    compute_table: BackedRobinhoodTable<BddNode, DefaultUniqueTableHasher>,
+    compute_table: BackedRobinhoodTable<BddNode>,
 }
 
 impl DecisionNNFBuilder {

@@ -4,7 +4,6 @@
 use super::{UniqueTable, UniqueTableHasher};
 use bumpalo::Bump;
 use std::hash::Hash;
-use std::marker::PhantomData;
 use std::mem;
 
 use crate::util::*;
@@ -80,10 +79,9 @@ fn propagate<T: Clone>(
 
 /// Implements a mutable vector-backed robin-hood linear probing hash table,
 /// whose keys are given by BDD pointers.
-pub struct BackedRobinhoodTable<T, H>
+pub struct BackedRobinhoodTable<T>
 where
     T: Hash + PartialEq + Eq + Clone,
-    H: UniqueTableHasher<T>,
 {
     /// hash table which stores indexes in the elem vector
     tbl: Vec<HashTableElement<T>>,
@@ -92,17 +90,14 @@ where
     cap: usize,
     /// the length of `tbl`
     len: usize,
-    /// needed for generic flexibility
-    hasher_type: PhantomData<H>,
 }
 
-impl<T: Clone, H> BackedRobinhoodTable<T, H>
+impl<T: Clone> BackedRobinhoodTable<T>
 where
     T: Hash + PartialEq + Eq + Clone,
-    H: UniqueTableHasher<T>,
 {
     /// reserve a robin-hood table capable of holding at least `sz` elements
-    pub fn new() -> BackedRobinhoodTable<T, H> {
+    pub fn new() -> BackedRobinhoodTable<T> {
         let v: Vec<HashTableElement<T>> = zero_vec(DEFAULT_SIZE);
 
         BackedRobinhoodTable {
@@ -110,7 +105,6 @@ where
             alloc: Bump::new(),
             cap: DEFAULT_SIZE,
             len: 0,
-            hasher_type: PhantomData,
         }
     }
 
@@ -161,7 +155,7 @@ where
 }
 
 impl<T: Eq + PartialEq + Hash + Clone, H: UniqueTableHasher<T>> UniqueTable<T, H>
-    for BackedRobinhoodTable<T, H>
+    for BackedRobinhoodTable<T>
 {
     fn get_or_insert(&mut self, elem: T, hasher: &H) -> *mut T {
         if (self.len + 1) as f64 > (self.cap as f64 * LOAD_FACTOR) {

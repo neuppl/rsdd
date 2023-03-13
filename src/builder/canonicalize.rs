@@ -19,8 +19,8 @@ pub trait SddCanonicalizationScheme {
     fn app_cache(&mut self) -> &mut Self::ApplyCacheMethod;
 
     // BackedRobinhoodTable-related methods
-    fn bdd_tbl(&self) -> &BackedRobinhoodTable<BinarySDD, Self::BddHasher>;
-    fn sdd_tbl(&self) -> &BackedRobinhoodTable<SddOr, Self::SddOrHasher>;
+    fn bdd_tbl(&self) -> &BackedRobinhoodTable<BinarySDD>;
+    fn sdd_tbl(&self) -> &BackedRobinhoodTable<SddOr>;
     fn bdd_hasher(&self) -> &Self::BddHasher;
     fn sdd_hasher(&self) -> &Self::SddOrHasher;
     fn bdd_get_or_insert(&mut self, item: BinarySDD) -> *mut BinarySDD;
@@ -30,8 +30,8 @@ pub trait SddCanonicalizationScheme {
 pub struct CompressionCanonicalizer {
     use_compression: bool,
     app_cache: SddApplyCompression,
-    bdd_tbl: BackedRobinhoodTable<BinarySDD, DefaultUniqueTableHasher>,
-    sdd_tbl: BackedRobinhoodTable<SddOr, DefaultUniqueTableHasher>,
+    bdd_tbl: BackedRobinhoodTable<BinarySDD>,
+    sdd_tbl: BackedRobinhoodTable<SddOr>,
     hasher: DefaultUniqueTableHasher,
 }
 
@@ -68,11 +68,11 @@ impl SddCanonicalizationScheme for CompressionCanonicalizer {
         &mut self.app_cache
     }
 
-    fn bdd_tbl(&self) -> &BackedRobinhoodTable<BinarySDD, Self::BddHasher> {
+    fn bdd_tbl(&self) -> &BackedRobinhoodTable<BinarySDD> {
         &self.bdd_tbl
     }
 
-    fn sdd_tbl(&self) -> &BackedRobinhoodTable<SddOr, Self::SddOrHasher> {
+    fn sdd_tbl(&self) -> &BackedRobinhoodTable<SddOr> {
         &self.sdd_tbl
     }
 
@@ -131,8 +131,8 @@ pub struct SemanticCanonicalizer<const P: u128> {
     app_cache: SddApplySemantic<P>,
     use_compression: bool,
     vtree: VTreeManager,
-    bdd_tbl: BackedRobinhoodTable<BinarySDD, SemanticUniqueTableHasher<P>>,
-    sdd_tbl: BackedRobinhoodTable<SddOr, SemanticUniqueTableHasher<P>>,
+    bdd_tbl: BackedRobinhoodTable<BinarySDD>,
+    sdd_tbl: BackedRobinhoodTable<SddOr>,
     hasher: SemanticUniqueTableHasher<P>,
 }
 
@@ -173,11 +173,11 @@ impl<const P: u128> SddCanonicalizationScheme for SemanticCanonicalizer<P> {
         &mut self.app_cache
     }
 
-    fn bdd_tbl(&self) -> &BackedRobinhoodTable<BinarySDD, Self::BddHasher> {
+    fn bdd_tbl(&self) -> &BackedRobinhoodTable<BinarySDD> {
         &self.bdd_tbl
     }
 
-    fn sdd_tbl(&self) -> &BackedRobinhoodTable<SddOr, Self::SddOrHasher> {
+    fn sdd_tbl(&self) -> &BackedRobinhoodTable<SddOr> {
         &self.sdd_tbl
     }
 
