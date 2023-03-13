@@ -324,7 +324,7 @@ mod test_bdd_manager {
     use rsdd::builder::cache::lru_app::BddApplyTable;
 
     use rsdd::repr::bdd::BddPtr;
-    use rsdd::repr::ddnnf::{DDNNFPtr, create_semantic_hash_map};
+    use rsdd::repr::ddnnf::{create_semantic_hash_map, DDNNFPtr};
     use rsdd::repr::model::PartialModel;
     use rsdd::repr::var_order::VarOrder;
     use rsdd::repr::vtree::VTree;
@@ -428,7 +428,6 @@ mod test_bdd_manager {
             bdd.semantic_hash(bdd_mgr.get_order(), &map) == sdd.semantic_hash(sdd_mgr.get_vtree_manager(), &map)
         }
     }
-
 
     quickcheck! {
         fn wmc_bdd_dnnf_eq(c1: Cnf) -> TestResult {

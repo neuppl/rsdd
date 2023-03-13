@@ -329,7 +329,6 @@ impl BddPtr {
         self.mut_node_ref().data = (alloc.alloc(v) as *const T) as usize;
     }
 
-
     /// true if the scratch is current cleared
     pub fn is_scratch_cleared(&self) -> bool {
         if !self.is_const() {
