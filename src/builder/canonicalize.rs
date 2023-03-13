@@ -1,16 +1,11 @@
-use std::collections::HashMap;
-
-use rand::{thread_rng, Rng};
-
 use super::bdd_builder::DDNNFPtr;
 use super::cache::sdd_apply_cache::{SddApply, SddApplyCompression, SddApplySemantic};
 use crate::backing_store::bump_table::BackedRobinhoodTable;
 use crate::backing_store::{DefaultUniqueTableHasher, UniqueTable, UniqueTableHasher};
-use crate::repr::bdd::WmcParams;
+use crate::repr::bdd::{create_semantic_hash_map, WmcParams};
 use crate::repr::sdd::{BinarySDD, SddOr, SddPtr};
-use crate::repr::var_label::VarLabel;
 use crate::repr::vtree::VTreeManager;
-use crate::util::semiring::{FiniteField, Semiring};
+use crate::util::semiring::FiniteField;
 
 pub trait SddCanonicalizationScheme {
     type ApplyCacheMethod: SddApply;
@@ -141,42 +136,13 @@ pub struct SemanticCanonicalizer<const P: u128> {
     hasher: SemanticUniqueTableHasher<P>,
 }
 
-impl<const P: u128> SemanticCanonicalizer<P> {
-    // Generates a mapping from variables to numbers in [2, PRIME)
-    pub fn create_prob_map(vtree: &VTreeManager) -> WmcParams<FiniteField<P>> {
-        let all_vars = vtree.vtree_root().get_all_vars();
-        let vars = all_vars.into_iter().collect::<Vec<usize>>();
-
-        // theoretical guarantee from paper; need to verify more!
-        assert!((2 * vars.len() as u128) < P);
-
-        let rng = &mut thread_rng();
-
-        let value_range: Vec<(FiniteField<P>, FiniteField<P>)> = (0..vars.len() as u128)
-            .map(|_| {
-                let h = FiniteField::new(rng.gen_range(2..P));
-                let l = FiniteField::new(P - h.value() + 1);
-                (l, h)
-            })
-            .collect();
-
-        let mut map = HashMap::new();
-
-        for (&var, &value) in vars.iter().zip(value_range.iter()) {
-            map.insert(VarLabel::new_usize(var), value);
-        }
-
-        WmcParams::new_with_default(FiniteField::zero(), FiniteField::one(), map)
-    }
-}
-
 impl<const P: u128> SddCanonicalizationScheme for SemanticCanonicalizer<P> {
     type ApplyCacheMethod = SddApplySemantic<P>;
     type BddHasher = SemanticUniqueTableHasher<P>;
     type SddOrHasher = SemanticUniqueTableHasher<P>;
 
     fn new(vtree: &VTreeManager) -> Self {
-        let map = SemanticCanonicalizer::create_prob_map(&vtree.clone());
+        let map = create_semantic_hash_map(vtree.num_vars());
         let app_cache = SddApplySemantic::new(map.clone(), vtree.clone());
         SemanticCanonicalizer {
             app_cache,
