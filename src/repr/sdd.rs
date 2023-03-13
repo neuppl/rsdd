@@ -144,12 +144,12 @@ impl SddAnd {
     pub fn new(prime: SddPtr, sub: SddPtr) -> SddAnd {
         SddAnd { prime, sub }
     }
-    pub fn get_semantic_hash<const P: u128>(
+    pub fn semantic_hash<const P: u128>(
         &self,
         vtree: &VTreeManager,
         map: &WmcParams<FiniteField<P>>,
     ) -> FiniteField<P> {
-        self.prime.get_semantic_hash(vtree, map) * self.sub.get_semantic_hash(vtree, map)
+        self.prime.semantic_hash(vtree, map) * self.sub.semantic_hash(vtree, map)
     }
 }
 
@@ -234,6 +234,16 @@ impl SddPtr {
         }
     }
 
+    pub fn is_scratch_cleared(&self) -> bool {
+        if self.is_bdd() {
+            self.mut_bdd_ref().scratch == 0
+        } else if self.is_node() {
+            self.node_ref_mut().scratch == 0
+        } else {
+            true
+        }
+    }
+
     /// recursively traverses the SDD and clears all scratch
     pub fn clear_scratch(&self) {
         if self.is_const() || self.is_var() {
@@ -311,6 +321,10 @@ impl SddPtr {
 
     pub fn is_bdd(&self) -> bool {
         matches!(self, BDD(_) | ComplBDD(_))
+    }
+
+    pub fn is_node(&self) -> bool {
+        matches!(self, Compl(_) | Reg(_))
     }
 
     /// Get a mutable reference to the node that &self points to
@@ -517,16 +531,6 @@ impl SddPtr {
             }
         }
     }
-    // heavy lifting for getting the semantic hash of SDD; assumes current is the root
-    // this function doesn't allocate anything!
-    // for more info, see https://tr.inf.unibe.ch/pdf/iam-06-001.pdf
-    pub fn get_semantic_hash<const P: u128>(
-        &self,
-        vtree: &VTreeManager,
-        map: &WmcParams<FiniteField<P>>,
-    ) -> FiniteField<P> {
-        self.wmc(vtree, map)
-    }
 }
 
 type DDNNFCache<T> = (Option<T>, Option<T>);
@@ -541,6 +545,7 @@ impl DDNNFPtr for SddPtr {
         _v: &VTreeManager,
         f: F,
     ) -> T {
+        debug_assert!(self.is_scratch_cleared());
         fn bottomup_pass_h<T: Clone + Copy + Debug, F: Fn(DDNNF<T>) -> T>(
             ptr: SddPtr,
             f: &F,
@@ -596,6 +601,7 @@ impl DDNNFPtr for SddPtr {
     }
 
     fn count_nodes(&self) -> usize {
+        debug_assert!(self.is_scratch_cleared());
         fn count_h(ptr: SddPtr, alloc: &mut Bump) -> usize {
             if ptr.is_const() || ptr.is_var() {
                 return 0;
@@ -615,7 +621,9 @@ impl DDNNFPtr for SddPtr {
                 }
             }
         }
-        count_h(*self, &mut Bump::new())
+        let r = count_h(*self, &mut Bump::new());
+        self.clear_scratch();
+        return r;
     }
 
     fn false_ptr() -> SddPtr {

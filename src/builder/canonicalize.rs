@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use rand::{thread_rng, Rng};
 
+use super::bdd_builder::DDNNFPtr;
 use super::cache::sdd_apply_cache::{SddApply, SddApplyCompression, SddApplySemantic};
 use crate::backing_store::bump_table::BackedRobinhoodTable;
 use crate::backing_store::{DefaultUniqueTableHasher, UniqueTable, UniqueTableHasher};
@@ -110,8 +111,8 @@ impl<const P: u128> SemanticUniqueTableHasher<P> {
 
 impl<const P: u128> UniqueTableHasher<BinarySDD> for SemanticUniqueTableHasher<P> {
     fn u64hash(&self, elem: &BinarySDD) -> u64 {
-        (elem.low().get_semantic_hash(&self.vtree, &self.map)
-            * elem.high().get_semantic_hash(&self.vtree, &self.map))
+        (elem.low().semantic_hash(&self.vtree, &self.map)
+            * elem.high().semantic_hash(&self.vtree, &self.map))
         .value() as u64
     }
 }
@@ -122,8 +123,8 @@ impl<const P: u128> UniqueTableHasher<SddOr> for SemanticUniqueTableHasher<P> {
             .clone()
             .into_iter()
             .map(|and| {
-                and.prime().get_semantic_hash(&self.vtree, &self.map)
-                    * and.sub().get_semantic_hash(&self.vtree, &self.map)
+                and.prime().semantic_hash(&self.vtree, &self.map)
+                    * and.sub().semantic_hash(&self.vtree, &self.map)
             })
             .fold(FiniteField::new(0), |accum, elem| accum + elem)
             .value() as u64
@@ -189,8 +190,8 @@ impl<const P: u128> SddCanonicalizationScheme for SemanticCanonicalizer<P> {
     }
 
     fn sdd_eq(&self, s1: SddPtr, s2: SddPtr) -> bool {
-        let h1 = s1.get_semantic_hash(&self.vtree, &self.map);
-        let h2 = s2.get_semantic_hash(&self.vtree, &self.map);
+        let h1 = s1.semantic_hash(&self.vtree, &self.map);
+        let h2 = s2.semantic_hash(&self.vtree, &self.map);
         h1 == h2
     }
 

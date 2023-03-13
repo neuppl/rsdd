@@ -135,6 +135,7 @@ impl VTree {
 }
 
 impl Arbitrary for VTree {
+    /// generate an arbitrary vtree on 16 variables
     fn arbitrary(g: &mut Gen) -> VTree {
         let mut rng = SmallRng::seed_from_u64(u64::arbitrary(g));
         let mut vars: Vec<VarLabel> = (0..16).map(VarLabel::new).collect();
@@ -264,5 +265,10 @@ impl VTreeManager {
         // as simple as comparing their indices (see Figure 1 from
         // 'SDD: A New Canonical Representation of Propositional Knowledge Bases'
         l.0 < r.0
+    }
+
+    /// produces the number of variables allocated by this vtree
+    pub fn num_vars(&self) -> usize {
+        self.vtree_root().get_all_vars().into_iter().max().unwrap()
     }
 }

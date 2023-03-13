@@ -329,6 +329,15 @@ impl BddPtr {
         self.mut_node_ref().data = (alloc.alloc(v) as *const T) as usize;
     }
 
+    /// true if the scratch is current cleared
+    pub fn is_scratch_cleared(&self) -> bool {
+        if !self.is_const() {
+            self.mut_node_ref().data == 0
+        } else {
+            true
+        }
+    }
+
     pub fn to_string_debug(&self) -> String {
         fn print_bdd_helper(ptr: BddPtr) -> String {
             if ptr.is_true() {
@@ -590,6 +599,7 @@ impl DDNNFPtr for BddPtr {
     // TODO: we should be able to remove this; e.g. replace v.clone() with *v
     #[allow(clippy::clone_on_copy)]
     fn fold<T: Clone + Copy + Debug, F: Fn(DDNNF<T>) -> T>(&self, _o: &VarOrder, f: F) -> T {
+        debug_assert!(self.is_scratch_cleared());
         fn bottomup_pass_h<T: Clone + Copy + Debug, F: Fn(DDNNF<T>) -> T>(
             ptr: BddPtr,
             f: &F,
@@ -657,6 +667,7 @@ impl DDNNFPtr for BddPtr {
     }
 
     fn count_nodes(&self) -> usize {
+        debug_assert!(self.is_scratch_cleared());
         fn count_h(ptr: BddPtr, alloc: &mut Bump) -> usize {
             if ptr.is_const() {
                 return 0;
@@ -672,7 +683,9 @@ impl DDNNFPtr for BddPtr {
                 }
             }
         }
-        count_h(*self, &mut Bump::new())
+        let r = count_h(*self, &mut Bump::new());
+        self.clear_scratch();
+        return r;
     }
 
     fn neg(&self) -> Self {

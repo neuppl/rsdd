@@ -15,6 +15,7 @@ extern crate bit_set;
 extern crate bumpalo;
 extern crate petgraph;
 extern crate quickcheck;
+extern crate rand_chacha;
 extern crate rustc_hash;
 extern crate segment_tree;
 extern crate time_test;

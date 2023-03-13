@@ -424,6 +424,7 @@ impl<T: LruTable<BddPtr>> BddManager<T> {
     ///
     /// Pre-condition: scratch cleared
     pub fn condition_model(&mut self, bdd: BddPtr, m: &PartialModel) -> BddPtr {
+        debug_assert!(bdd.is_scratch_cleared());
         let mut alloc = Bump::new();
         let r = self.cond_model_h(bdd, m, &mut alloc);
         bdd.clear_scratch();
