@@ -223,6 +223,16 @@ impl SddPtr {
         }
     }
 
+    pub fn is_scratch_cleared(&self) -> bool {
+        if self.is_bdd() {
+            self.mut_bdd_ref().scratch == 0
+        } else if self.is_node() {
+            self.node_ref_mut().scratch == 0
+        } else {
+            true
+        }
+    }
+
     /// recursively traverses the SDD and clears all scratch
     pub fn clear_scratch(&self) {
         if self.is_const() || self.is_var() {
@@ -300,6 +310,10 @@ impl SddPtr {
 
     pub fn is_bdd(&self) -> bool {
         matches!(self, BDD(_) | ComplBDD(_))
+    }
+
+    pub fn is_node(&self) -> bool {
+        matches!(self, Compl(_) | Reg(_))
     }
 
     /// Get a mutable reference to the node that &self points to
@@ -520,6 +534,7 @@ impl DDNNFPtr for SddPtr {
         _v: &VTreeManager,
         f: F,
     ) -> T {
+        debug_assert!(self.is_scratch_cleared());
         fn bottomup_pass_h<T: Clone + Copy + Debug, F: Fn(DDNNF<T>) -> T>(
             ptr: SddPtr,
             f: &F,
@@ -575,6 +590,7 @@ impl DDNNFPtr for SddPtr {
     }
 
     fn count_nodes(&self) -> usize {
+        debug_assert!(self.is_scratch_cleared());
         fn count_h(ptr: SddPtr, alloc: &mut Bump) -> usize {
             if ptr.is_const() || ptr.is_var() {
                 return 0;
