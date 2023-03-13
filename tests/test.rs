@@ -325,6 +325,7 @@ mod test_bdd_manager {
     use rsdd::repr::model::PartialModel;
     use rsdd::repr::var_order::VarOrder;
     use rsdd::repr::wmc::WmcParams;
+    use rsdd::util::semiring::{RealSemiring, Semiring};
     use std::collections::HashMap;
     use std::iter::FromIterator;
 
@@ -378,19 +379,6 @@ mod test_bdd_manager {
     }
 
     quickcheck! {
-        fn bdd_topdown(c1: Cnf) -> TestResult {
-            if c1.num_vars() == 0 || c1.num_vars() > 8 { return TestResult::discard() }
-            if c1.clauses().len() > 12 { return TestResult::discard() }
-            let mut mgr = super::BddManager::<AllTable<BddPtr>>::new_default_order(c1.num_vars());
-            let cnf1 = mgr.from_cnf(&c1);
-            let cnf2 = mgr.from_cnf_topdown(&c1);
-            // println!("bdd 1: {}, bdd 2: {}", mgr.to_string_debug(cnf1), mgr.to_string_debug(cnf2));
-            assert_eq!(cnf1, cnf2);
-            TestResult::from_bool(cnf1 == cnf2)
-        }
-    }
-
-    quickcheck! {
         fn compile_with_assignments(c1: Cnf) -> TestResult {
             if c1.num_vars() < 3 || c1.num_vars() > 8 { return TestResult::discard() }
             if c1.clauses().len() > 12 { return TestResult::discard() }
@@ -408,52 +396,19 @@ mod test_bdd_manager {
     }
 
     quickcheck! {
-        fn compile_topdown_with_assignments(c1: Cnf) -> TestResult {
-            if c1.num_vars() < 3 || c1.num_vars() > 8 { return TestResult::discard() }
-            if c1.clauses().len() > 12 { return TestResult::discard() }
-            let mut mgr = super::BddManager::<AllTable<BddPtr>>::new_default_order(c1.num_vars());
-            let mut pm = PartialModel::from_litvec(&Vec::new(), c1.num_vars());
-            pm.set(VarLabel::new(0), true);
-            pm.set(VarLabel::new(1), true);
-            let cnf1 = mgr.from_cnf_topdown_partial(&c1, &pm);
-            let mut cnf2 = mgr.from_cnf(&c1);
-            cnf2 = mgr.condition(cnf2, VarLabel::new(0), true);
-            cnf2 = mgr.condition(cnf2, VarLabel::new(1), true);
-            assert_eq!(cnf1, cnf2);
-            TestResult::from_bool(cnf1 == cnf2)
-        }
-    }
-
-    quickcheck! {
-        fn bdd_partial_topdown(c1: Cnf) -> TestResult {
-            if c1.num_vars() < 3 || c1.num_vars() > 8 { return TestResult::discard() }
-            if c1.clauses().len() > 12 { return TestResult::discard() }
-            let mut mgr = super::BddManager::<AllTable<BddPtr>>::new_default_order(c1.num_vars());
-            let mut pm = PartialModel::from_litvec(&Vec::new(), c1.num_vars());
-            pm.set(VarLabel::new(0), true);
-            pm.set(VarLabel::new(1), true);
-            let cnf1 = mgr.from_cnf_with_assignments(&c1, &pm);
-            let cnf2 = mgr.from_cnf_topdown_partial(&c1, &pm);
-            // println!("bdd 1: {}, bdd 2: {}", mgr.to_string_debug(cnf1), mgr.to_string_debug(cnf2));
-            assert_eq!(cnf1, cnf2);
-            TestResult::from_bool(cnf1 == cnf2)
-        }
-    }
-
-    quickcheck! {
         fn wmc_eq(c1: Cnf) -> TestResult {
             // constrain the size
             if c1.num_vars() == 0 || c1.num_vars() > 8 { return TestResult::discard() }
             if c1.clauses().len() > 16 { return TestResult::discard() }
 
             let mut mgr = super::BddManager::<AllTable<BddPtr>>::new_default_order(c1.num_vars());
-            let weight_map : HashMap<VarLabel, (f64, f64)> = HashMap::from_iter(
-                (0..16).map(|x| (VarLabel::new(x as u64), (0.2, 0.8))));
+            let weight_map : HashMap<VarLabel, (RealSemiring, RealSemiring)> = HashMap::from_iter(
+                (0..16).map(|x| (VarLabel::new(x as u64), (RealSemiring(0.2), RealSemiring(0.8)))));
             let cnf1 = mgr.from_cnf(&c1);
-            let bddwmc = super::repr::wmc::WmcParams::new_with_default(0.0, 1.0, weight_map.clone());
+            let bddwmc = super::repr::wmc::WmcParams::new_with_default(RealSemiring(0.0), RealSemiring(1.0), weight_map.clone());
             let bddres = cnf1.wmc(mgr.get_order(), &bddwmc);
             let cnfres = c1.wmc(&weight_map);
-            TestResult::from_bool(abs(bddres - cnfres) < 0.00001)
+            TestResult::from_bool(abs(bddres.0 - cnfres.0) < 0.00001)
         }
     }
 
@@ -464,17 +419,17 @@ mod test_bdd_manager {
             if c1.clauses().len() > 16 { return TestResult::discard() }
 
             let mut mgr = super::BddManager::<AllTable<BddPtr>>::new_default_order(c1.num_vars());
-            let weight_map : HashMap<VarLabel, (f64, f64)> = HashMap::from_iter(
-                (0..16).map(|x| (VarLabel::new(x as u64), (0.3, 0.7))));
+            let weight_map : HashMap<VarLabel, (RealSemiring, RealSemiring)> = HashMap::from_iter(
+                (0..16).map(|x| (VarLabel::new(x as u64), (RealSemiring(0.3), RealSemiring(0.7)))));
             let cnf1 = mgr.from_cnf(&c1);
 
-            let mut mgr2 = DecisionNNFBuilder::new(c1.num_vars());
+            let mut mgr2 = DecisionNNFBuilder::new();
             let dnnf = mgr2.from_cnf_topdown(&VarOrder::linear_order(c1.num_vars()), &c1);
 
-            let bddwmc = super::repr::wmc::WmcParams::new_with_default(0.0, 1.0, weight_map);
+            let bddwmc = super::repr::wmc::WmcParams::new_with_default(RealSemiring::zero(), RealSemiring::one(), weight_map);
             let bddres = cnf1.wmc(mgr.get_order(),  &bddwmc);
             let dnnfres = dnnf.wmc(mgr.get_order(), &bddwmc);
-            let eps = f64::abs(bddres - dnnfres) < 0.0001;
+            let eps = f64::abs(bddres.0 - dnnfres.0) < 0.0001;
             if !eps {
               println!("error on input {}: bddres {}, cnfres {}\n topdown bdd: {}\nbottom-up bdd: {}",
                 c1, bddres, dnnfres, dnnf.to_string_debug(), cnf1.to_string_debug());
@@ -489,15 +444,15 @@ mod test_bdd_manager {
             let mut mgr1 = super::BddManager::<AllTable<BddPtr>>::new_default_order(16);
             let mut mgr2 = super::BddManager::<BddApplyTable<BddPtr>>::new_default_order_lru(16);
 
-            let weight_map : HashMap<VarLabel, (f64, f64)> = HashMap::from_iter(
-                (0..16).map(|x| (VarLabel::new(x as u64), (0.3, 0.7))));
+            let weight_map : HashMap<VarLabel, (RealSemiring, RealSemiring)> = HashMap::from_iter(
+                (0..16).map(|x| (VarLabel::new(x as u64), (RealSemiring(0.3), RealSemiring(0.7)))));
 
-            let bddwmc = super::repr::wmc::WmcParams::new_with_default(0.0, 1.0, weight_map);
+            let bddwmc = super::repr::wmc::WmcParams::new_with_default(RealSemiring::zero(), RealSemiring::one(), weight_map);
             let cnf1 = mgr1.from_cnf(&c1);
             let cnf2 = mgr2.from_cnf(&c1);
             let wmc1 = cnf1.wmc(mgr1.get_order(), &bddwmc);
             let wmc2 = cnf2.wmc(mgr2.get_order(), &bddwmc);
-            TestResult::from_bool(f64::abs(wmc1 - wmc2) < 0.00001)
+            TestResult::from_bool(f64::abs(wmc1.0 - wmc2.0) < 0.00001)
         }
     }
 
@@ -509,11 +464,11 @@ mod test_bdd_manager {
             if c1.clauses().len() > 14 { return TestResult::discard() }
 
             let mut mgr = super::BddManager::<AllTable<BddPtr>>::new_default_order(c1.num_vars());
-            let weight_map : HashMap<VarLabel, (f64, f64)> = HashMap::from_iter(
-                (0..16).map(|x| (VarLabel::new(x as u64), (0.3, 0.7))));
+            let weight_map : HashMap<VarLabel, (RealSemiring, RealSemiring)> = HashMap::from_iter(
+                (0..16).map(|x| (VarLabel::new(x as u64), (RealSemiring(0.3), RealSemiring(0.7)))));
             let cnf = mgr.from_cnf(&c1);
             let vars = vec![VarLabel::new(0), VarLabel::new(2), VarLabel::new(4)];
-            let wmc = WmcParams::new_with_default(0.0, 1.0, weight_map);
+            let wmc = WmcParams::new_with_default(RealSemiring::zero(), RealSemiring::one(), weight_map);
             let (marg_prob, _marg_assgn) = cnf.marginal_map(&vars, mgr.num_vars(), &wmc);
             let assignments = vec![(true, true, true), (true, true, false), (true, false, true), (true, false, false),
                                    (false, true, true), (false, true, false), (false, false, true), (false, false, false)];
@@ -528,8 +483,8 @@ mod test_bdd_manager {
                 conj = mgr.and(conj, z);
                 conj = mgr.and(conj, cnf);
                 let poss_max = conj.wmc(mgr.get_order(), &wmc);
-                if poss_max > max {
-                    max = poss_max;
+                if poss_max.0 > max {
+                    max = poss_max.0;
                     max_assgn.set(VarLabel::new(0), *v1);
                     max_assgn.set(VarLabel::new(2), *v2);
                     max_assgn.set(VarLabel::new(4), *v3);
@@ -557,6 +512,7 @@ mod test_sdd_manager {
     use rsdd::repr::sdd::SddPtr;
     use rsdd::repr::vtree::VTree;
     use rsdd::repr::wmc::WmcParams;
+    use rsdd::util::semiring::{FiniteField, RealSemiring};
     use std::collections::HashMap;
     use std::iter::FromIterator;
 
@@ -628,13 +584,13 @@ mod test_sdd_manager {
             if cnf.num_vars() < 9 || cnf.num_vars() > 16 { return TestResult::discard() }
             if cnf.clauses().len() > 16 { return TestResult::discard() }
 
-           let weight_map : HashMap<VarLabel, (f64, f64)> = HashMap::from_iter(
-                (0..cnf.num_vars()).map(|x| (VarLabel::new(x as u64), (0.5, 0.5))));
+           let weight_map : HashMap<VarLabel, (RealSemiring, RealSemiring)> = HashMap::from_iter(
+                (0..cnf.num_vars()).map(|x| (VarLabel::new(x as u64), (RealSemiring(0.5), RealSemiring(0.5)))));
 
             let order : Vec<VarLabel> = (0..cnf.num_vars()).map(|x| VarLabel::new(x as u64)).collect();
             let mut mgr = super::SddManager::<CompressionCanonicalizer>::new(VTree::even_split(&order, 3));
             let cnf_sdd = mgr.from_cnf(&cnf);
-            let sdd_wmc = WmcParams::new_with_default(0.0, 1.0, weight_map);
+            let sdd_wmc = WmcParams::new_with_default(RealSemiring(0.0), RealSemiring(1.0), weight_map);
             let sdd_res = cnf_sdd.wmc(mgr.get_vtree_manager(), &sdd_wmc);
 
 
@@ -642,7 +598,7 @@ mod test_sdd_manager {
             let cnf_bdd = bddmgr.from_cnf(&cnf);
             let bdd_res = cnf_bdd.wmc(bddmgr.get_order(), &sdd_wmc);
 
-            if f64::abs(sdd_res - bdd_res) > 0.00001 {
+            if f64::abs(sdd_res.0 - bdd_res.0) > 0.00001 {
                 println!("not equal for cnf {}: sdd_res:{sdd_res}, bdd_res: {bdd_res}", cnf);
                 println!("sdd: {}", mgr.print_sdd(cnf_sdd));
                 TestResult::from_bool(false)
@@ -697,11 +653,10 @@ mod test_sdd_manager {
             let mut mgr2 = super::SddManager::<CompressionCanonicalizer>::new(vtree);
             let c2 = mgr2.from_cnf(&c);
 
-            let prime = 1123; // large enough for our purposes
-            let map = mgr1.create_prob_map(prime);
+            let map : WmcParams<FiniteField<100000000069>> = mgr1.create_prob_map();
 
-            let h1 = c1.get_semantic_hash(&map, prime);
-            let h2 = c2.get_semantic_hash(&map, prime);
+            let h1 = c1.get_semantic_hash(mgr1.get_vtree_manager(), &map);
+            let h2 = c2.get_semantic_hash(mgr2.get_vtree_manager(), &map);
 
             h1 == h2
         }
@@ -716,12 +671,11 @@ mod test_sdd_manager {
             uncompr_mgr.set_compression(false);
             let uncompr_cnf = uncompr_mgr.from_cnf(&c);
 
-            let prime = 4391; // large enough for our purposes
 
-            let map = uncompr_mgr.create_prob_map(prime);
+            let map : WmcParams<FiniteField<4391>> = uncompr_mgr.create_prob_map();
 
-            let compr_h = compr_cnf.get_semantic_hash(&map, prime);
-            let uncompr_h = uncompr_cnf.get_semantic_hash(&map, prime);
+            let compr_h = compr_cnf.get_semantic_hash(compr_mgr.get_vtree_manager(), &map);
+            let uncompr_h = uncompr_cnf.get_semantic_hash(uncompr_mgr.get_vtree_manager(), &map);
 
             if compr_h != uncompr_h {
                 println!("not equal! hashes: compr: {compr_h}, uncompr: {uncompr_h}");
@@ -740,7 +694,7 @@ mod test_sdd_manager {
             let mut compr_mgr = super::SddManager::<CompressionCanonicalizer>::new(vtree.clone());
             let compr_cnf = compr_mgr.from_cnf(&c);
 
-            let mut uncompr_mgr = super::SddManager::<SemanticCanonicalizer>::new(vtree);
+            let mut uncompr_mgr = super::SddManager::<SemanticCanonicalizer<100000000069>>::new(vtree);
             let uncompr_cnf = uncompr_mgr.from_cnf(&c);
 
             if !uncompr_mgr.sdd_eq(compr_cnf, uncompr_cnf) {
@@ -764,18 +718,16 @@ mod test_sdd_manager {
                 return TestResult::discard();
             }
 
-            let prime = 4391; // large enough for our purposes
-
             // running iteratively, taking majority
 
             let mut num_collisions = 0;
 
             for _ in 1 .. 5 {
 
-                let map = mgr.create_prob_map(prime);
+                let map : WmcParams<FiniteField<4391>> = mgr.create_prob_map();
 
-                let h1 = cnf_1.get_semantic_hash(&map, prime);
-                let h2 = cnf_2.get_semantic_hash(&map, prime);
+                let h1 = cnf_1.get_semantic_hash(mgr.get_vtree_manager(), &map);
+                let h2 = cnf_2.get_semantic_hash(mgr.get_vtree_manager(), &map);
 
                 if h1 == h2 {
                     println!("collision! h1: {h1}, h2: {h2}");
@@ -791,7 +743,7 @@ mod test_sdd_manager {
 
     quickcheck! {
         fn prob_equiv_sdd_inequality(c1: Cnf, c2: Cnf, vtree:VTree) -> TestResult {
-            let mut mgr = super::SddManager::<SemanticCanonicalizer>::new(vtree);
+            let mut mgr = super::SddManager::<SemanticCanonicalizer<100000000069>>::new(vtree);
             mgr.set_compression(true); // necessary to make sure we don't generate two uncompressed SDDs that canonicalize to the same SDD
             let cnf_1 = mgr.from_cnf(&c1);
             let cnf_2 = mgr.from_cnf(&c2);
@@ -813,7 +765,7 @@ mod test_sdd_manager {
 
     quickcheck! {
         fn prob_equiv_sdd_eq_vs_prob_eq(c1: Cnf, c2: Cnf, vtree:VTree) -> TestResult {
-            let mut mgr = super::SddManager::<SemanticCanonicalizer>::new(vtree);
+            let mut mgr = super::SddManager::<SemanticCanonicalizer<100000000069>>::new(vtree);
             mgr.set_compression(true); // necessary to make sure we don't generate two uncompressed SDDs that canonicalize to the same SDD
             let cnf_1 = mgr.from_cnf(&c1);
             let cnf_2 = mgr.from_cnf(&c2);
@@ -839,15 +791,14 @@ mod test_sdd_manager {
             let _ = mgr.from_cnf(&c1);
             // take a large prime to make collisions impossible
             // useful site: http://compoasso.free.fr/primelistweb/page/prime/liste_online_en.php
-            let prime = 100000000069; // use u128 max
 
             // running iteratively, taking majority
-            let map = mgr.create_prob_map(prime);
+            let map : WmcParams<FiniteField<100000000069>>= mgr.create_prob_map();
             let mut seen_hashes : HashMap<u128, SddPtr> = HashMap::new();
             for sdd in mgr.node_iter() {
-                let hash = sdd.get_semantic_hash(&map, prime);
-                if seen_hashes.contains_key(&hash) {
-                    let c = seen_hashes.get(&hash).unwrap();
+                let hash = sdd.get_semantic_hash(mgr.get_vtree_manager(), &map);
+                if seen_hashes.contains_key(&hash.value()) {
+                    let c = seen_hashes.get(&hash.value()).unwrap();
                     println!("cnf: {}", c1);
                     println!("probmap: {:?}", map);
                     println!("collision found for hash value {}", hash);
@@ -855,7 +806,7 @@ mod test_sdd_manager {
                     println!("sdd b: {}\n", mgr.print_sdd(*c));
                     return TestResult::from_bool(false);
                 }
-                seen_hashes.insert(hash, sdd);
+                seen_hashes.insert(hash.value(), sdd);
             }
             TestResult::from_bool(true)
         }

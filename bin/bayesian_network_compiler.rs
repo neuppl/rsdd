@@ -11,6 +11,7 @@ use rsdd::repr::ddnnf::DDNNFPtr;
 use rsdd::repr::dtree::DTree;
 use rsdd::repr::var_order::VarOrder;
 use rsdd::repr::vtree::VTree;
+use rsdd::util::semiring::{RealSemiring, Semiring};
 use rsdd::{builder::bdd_builder::BddManager, repr::wmc::WmcParams};
 
 use std::collections::HashMap;
@@ -28,13 +29,13 @@ pub struct BayesianNetworkCNF {
     cnf: Cnf,
     /// maps Variable Name -> (Variable Assignment -> Label)
     indicators: HashMap<String, HashMap<String, VarLabel>>,
-    params: WmcParams<f64>,
+    params: WmcParams<RealSemiring>,
 }
 
 impl BayesianNetworkCNF {
     pub fn new(network: &BayesianNetwork) -> BayesianNetworkCNF {
         let mut clauses: Vec<Vec<Literal>> = Vec::new();
-        let mut wmc_params: HashMap<VarLabel, (f64, f64)> = HashMap::new();
+        let mut wmc_params: HashMap<VarLabel, (RealSemiring, RealSemiring)> = HashMap::new();
         let mut var_count = 0;
 
         // create one indicator for every variable assignment
@@ -48,7 +49,7 @@ impl BayesianNetworkCNF {
             for varassgn in network.get_all_assignments(&v) {
                 let cur_var = VarLabel::new_usize(var_count);
                 let new_indic = Literal::new(cur_var, true);
-                wmc_params.insert(cur_var, (1.0, 1.0));
+                wmc_params.insert(cur_var, (RealSemiring::one(), RealSemiring::one()));
                 cur_indic.push(new_indic);
                 indicators
                     .get_mut(&v)
@@ -59,7 +60,7 @@ impl BayesianNetworkCNF {
                 for passgn in network.parent_assignments(&v) {
                     let cur_param = VarLabel::new_usize(var_count);
                     let cur_prob = network.get_conditional_prob(&v, varassgn, &passgn);
-                    wmc_params.insert(cur_param, (1.0, cur_prob));
+                    wmc_params.insert(cur_param, (RealSemiring::one(), RealSemiring(cur_prob)));
                     // println!("w({:?}) = {cur_prob}", cur_param);
                     var_count += 1;
 
@@ -88,7 +89,7 @@ impl BayesianNetworkCNF {
         BayesianNetworkCNF {
             cnf: Cnf::new(clauses),
             indicators,
-            params: WmcParams::new_with_default(0.0, 1.0, wmc_params),
+            params: WmcParams::new_with_default(RealSemiring(0.0), RealSemiring(1.0), wmc_params),
         }
     }
 
@@ -188,7 +189,7 @@ fn compile_bdd_cnf(args: &Args, network: BayesianNetwork) {
             let z = cond.wmc(compiler.get_order(), &bn.params);
             println!(
                 "Marginal query: Pr({query_var} = {query_val}) = {p}, z = {z}, p / z = {}",
-                p / z
+                p.0 / z.0
             );
         }
         _ => (),
@@ -301,7 +302,7 @@ fn compile_sdd_cnf(network: BayesianNetwork) {
 fn compile_topdown(network: BayesianNetwork) {
     println!("############################\n\tCompiling topdown\n############################");
     let bn = BayesianNetworkCNF::new(&network);
-    let mut compiler = DecisionNNFBuilder::new(bn.cnf.num_vars());
+    let mut compiler = DecisionNNFBuilder::new();
 
     println!("Compiling");
     let start = Instant::now();

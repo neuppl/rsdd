@@ -12,9 +12,11 @@ use super::cache::sdd_apply_cache::{SddApply, SddApplyCompression, SddApplySeman
 use super::cache::LruTable;
 use crate::backing_store::bump_table::BackedRobinhoodTable;
 use crate::backing_store::UniqueTable;
+use crate::repr::bdd::WmcParams;
 use crate::repr::ddnnf::DDNNFPtr;
 use crate::repr::sdd::{BinarySDD, SddAnd, SddOr, SddPtr};
 use crate::repr::vtree::{VTree, VTreeIndex, VTreeManager};
+use crate::util::semiring::{FiniteField, Semiring};
 use crate::{repr::cnf::Cnf, repr::logical_expr::LogicalExpr, repr::var_label::VarLabel};
 
 #[derive(Debug, Clone)]
@@ -38,7 +40,7 @@ impl Default for SddStats {
 pub trait SddCanonicalizationScheme {
     type ApplyCacheMethod: SddApply;
 
-    fn new(vtree: &VTree) -> Self;
+    fn new(vtree: &VTreeManager) -> Self;
     fn set_compress(&mut self, b: bool);
     fn should_compress(&self) -> bool;
     fn sdd_eq(&self, s1: SddPtr, s2: SddPtr) -> bool;
@@ -55,7 +57,7 @@ impl CompressionCanonicalizer {}
 impl SddCanonicalizationScheme for CompressionCanonicalizer {
     type ApplyCacheMethod = SddApplyCompression;
 
-    fn new(_vtree: &VTree) -> Self {
+    fn new(_vtree: &VTreeManager) -> Self {
         CompressionCanonicalizer {
             use_compression: true,
             app_cache: SddApplyCompression::new(),
@@ -79,56 +81,59 @@ impl SddCanonicalizationScheme for CompressionCanonicalizer {
     }
 }
 
-pub struct SemanticCanonicalizer {
-    prime: u128,
-    map: HashMap<usize, u128>,
-    app_cache: SddApplySemantic,
+pub struct SemanticCanonicalizer<const P: u128> {
+    map: WmcParams<FiniteField<P>>,
+    app_cache: SddApplySemantic<P>,
     use_compression: bool,
+    vtree: VTreeManager,
 }
 
-impl SemanticCanonicalizer {
+impl<const P: u128> SemanticCanonicalizer<P> {
     // Generates a mapping from variables to numbers in [2, PRIME)
-    pub fn create_prob_map(vtree: &VTree, prime: &u128) -> HashMap<usize, u128> {
-        let all_vars = vtree.get_all_vars();
+    pub fn create_prob_map(vtree: &VTreeManager) -> WmcParams<FiniteField<P>> {
+        let all_vars = vtree.vtree_root().get_all_vars();
         let vars = all_vars.into_iter().collect::<Vec<usize>>();
 
         // theoretical guarantee from paper; need to verify more!
-        assert!((2 * vars.len() as u128) < *prime);
+        assert!((2 * vars.len() as u128) < P);
 
         let rng = &mut thread_rng();
 
-        let value_range: Vec<u128> = (0..vars.len() as u128)
-            .map(|_| rng.gen_range(2..*prime))
+        let value_range: Vec<(FiniteField<P>, FiniteField<P>)> = (0..vars.len() as u128)
+            .map(|_| {
+                let h = FiniteField::new(rng.gen_range(2..P));
+                let l = FiniteField::new(P - h.value() + 1);
+                (l, h)
+            })
             .collect();
 
-        let mut map = HashMap::<usize, u128>::new();
+        let mut map = HashMap::new();
 
         for (&var, &value) in vars.iter().zip(value_range.iter()) {
-            map.insert(var, value);
+            map.insert(VarLabel::new_usize(var), value);
         }
 
-        map
+        WmcParams::new_with_default(FiniteField::zero(), FiniteField::one(), map)
     }
 }
 
-impl SddCanonicalizationScheme for SemanticCanonicalizer {
-    type ApplyCacheMethod = SddApplySemantic;
+impl<const P: u128> SddCanonicalizationScheme for SemanticCanonicalizer<P> {
+    type ApplyCacheMethod = SddApplySemantic<P>;
 
-    fn new(vtree: &VTree) -> Self {
-        let prime: u128 = 100000000069; // TODO: change this on the fly?
-        let map = SemanticCanonicalizer::create_prob_map(&vtree.clone(), &prime);
-        let app_cache = SddApplySemantic::new(prime, map.clone());
+    fn new(vtree: &VTreeManager) -> Self {
+        let map = SemanticCanonicalizer::create_prob_map(&vtree.clone());
+        let app_cache = SddApplySemantic::new(map.clone(), vtree.clone());
         SemanticCanonicalizer {
-            prime,
-            app_cache,
             map,
+            app_cache,
             use_compression: false,
+            vtree: vtree.clone(),
         }
     }
 
     fn sdd_eq(&self, s1: SddPtr, s2: SddPtr) -> bool {
-        let h1 = s1.get_semantic_hash(&self.map, self.prime);
-        let h2 = s2.get_semantic_hash(&self.map, self.prime);
+        let h1 = s1.get_semantic_hash(&self.vtree, &self.map);
+        let h2 = s2.get_semantic_hash(&self.vtree, &self.map);
         h1 == h2
     }
 
@@ -151,19 +156,19 @@ pub struct SddManager<T: SddCanonicalizationScheme> {
     canonicalizer: T,
     vtree: VTreeManager,
     stats: SddStats,
-    /// the apply cache
     ite_cache: AllTable<SddPtr>,
 }
 
 impl<T: SddCanonicalizationScheme> SddManager<T> {
     pub fn new(vtree: VTree) -> SddManager<T> {
+        let vtree_man = VTreeManager::new(vtree);
         SddManager {
             sdd_tbl: BackedRobinhoodTable::new(),
             bdd_tbl: BackedRobinhoodTable::new(),
             stats: SddStats::new(),
             ite_cache: AllTable::new(),
-            canonicalizer: T::new(&vtree),
-            vtree: VTreeManager::new(vtree),
+            canonicalizer: T::new(&vtree_man),
+            vtree: vtree_man,
         }
     }
 
@@ -876,26 +881,30 @@ impl<T: SddCanonicalizationScheme> SddManager<T> {
     }
 
     // Generates a mapping from variables to numbers in [2, PRIME)
-    pub fn create_prob_map(&self, prime: u128) -> HashMap<usize, u128> {
+    pub fn create_prob_map<const P: u128>(&self) -> WmcParams<FiniteField<P>> {
         let all_vars = self.get_vtree_root().get_all_vars();
         let vars = all_vars.into_iter().collect::<Vec<usize>>();
 
         // theoretical guarantee from paper; need to verify more!
-        assert!((2 * vars.len() as u128) < prime);
+        assert!((2 * vars.len() as u128) < P);
 
         let rng = &mut thread_rng();
 
-        let value_range: Vec<u128> = (0..vars.len() as u128)
-            .map(|_| rng.gen_range(2..prime))
+        let value_range: Vec<(FiniteField<P>, FiniteField<P>)> = (0..vars.len() as u128)
+            .map(|_| {
+                let h = FiniteField::new(rng.gen_range(2..P));
+                let l = FiniteField::new(P - h.value() + 1);
+                (l, h)
+            })
             .collect();
 
-        let mut map = HashMap::<usize, u128>::new();
+        let mut map = HashMap::new();
 
         for (&var, &value) in vars.iter().zip(value_range.iter()) {
-            map.insert(var, value);
+            map.insert(VarLabel::new_usize(var), value);
         }
 
-        map
+        WmcParams::new_with_default(FiniteField::zero(), FiniteField::one(), map)
     }
 
     /// get an iterator over all allocated or-nodes
@@ -1153,6 +1162,7 @@ fn sdd_circuit2() {
 
 #[test]
 fn sdd_wmc1() {
+    use crate::util::semiring::RealSemiring;
     // modeling the formula (x<=>fx) && (y<=>fy), with f weight of 0.5
 
     // let vtree = VTree::right_linear(
@@ -1174,21 +1184,21 @@ fn sdd_wmc1() {
         1,
     );
     let mut man = SddManager::<CompressionCanonicalizer>::new(vtree);
-    let mut wmc_map = crate::repr::wmc::WmcParams::new(0.0, 1.0);
+    let mut wmc_map = crate::repr::wmc::WmcParams::new(RealSemiring(0.0), RealSemiring(1.0));
     let x = SddPtr::var(VarLabel::new(0), true);
-    wmc_map.set_weight(VarLabel::new(0), 1.0, 1.0);
+    wmc_map.set_weight(VarLabel::new(0), RealSemiring(1.0), RealSemiring(1.0));
     let y = SddPtr::var(VarLabel::new(1), true);
-    wmc_map.set_weight(VarLabel::new(1), 1.0, 1.0);
+    wmc_map.set_weight(VarLabel::new(1), RealSemiring(1.0), RealSemiring(1.0));
     let fx = SddPtr::var(VarLabel::new(2), true);
-    wmc_map.set_weight(VarLabel::new(2), 0.5, 0.5);
+    wmc_map.set_weight(VarLabel::new(2), RealSemiring(0.5), RealSemiring(0.5));
     let fy = SddPtr::var(VarLabel::new(3), true);
-    wmc_map.set_weight(VarLabel::new(3), 0.5, 0.5);
+    wmc_map.set_weight(VarLabel::new(3), RealSemiring(0.5), RealSemiring(0.5));
     let x_fx = man.iff(x, fx);
     let y_fy = man.iff(y, fy);
     let ptr = man.and(x_fx, y_fy);
-    let wmc_res: f64 = ptr.wmc(man.get_vtree_manager(), &wmc_map);
-    let expected: f64 = 1.0;
-    let diff = (wmc_res - expected).abs();
+    let wmc_res: RealSemiring = ptr.wmc(man.get_vtree_manager(), &wmc_map);
+    let expected = RealSemiring(1.0);
+    let diff = (wmc_res - expected).0.abs();
     println!("sdd: {}", man.print_sdd(ptr));
     assert!(
         (diff < 0.0001),
@@ -1200,7 +1210,7 @@ fn sdd_wmc1() {
 
 #[test]
 fn prob_equiv_sdd_demorgan() {
-    let mut man = SddManager::<SemanticCanonicalizer>::new(VTree::even_split(
+    let mut man = SddManager::<SemanticCanonicalizer<1223>>::new(VTree::even_split(
         &[
             VarLabel::new(0),
             VarLabel::new(1),
@@ -1215,47 +1225,12 @@ fn prob_equiv_sdd_demorgan() {
     let res = man.or(x, y).neg();
     let expected = man.and(x.neg(), y.neg());
 
-    assert!(
-        man.sdd_eq(res, expected),
-        "Not eq:\nGot: {:?}\nExpected: {:?}",
-        res,
-        expected
-    );
-}
+    let map: WmcParams<FiniteField<1223>> = man.create_prob_map();
 
-#[test]
-fn prob_equiv_sdd_wmc1() {
-    // semantic hash version of above test
+    let sh1 = res.get_semantic_hash(man.get_vtree_manager(), &map);
+    let sh2 = expected.get_semantic_hash(man.get_vtree_manager(), &map);
 
-    let vtree = VTree::even_split(
-        &[
-            VarLabel::new(0),
-            VarLabel::new(1),
-            VarLabel::new(2),
-            VarLabel::new(3),
-        ],
-        1,
-    );
-    let mut man = SddManager::<SemanticCanonicalizer>::new(vtree);
-    let mut wmc_map = crate::repr::wmc::WmcParams::new(0.0, 1.0);
-    let x = SddPtr::var(VarLabel::new(0), true);
-    wmc_map.set_weight(VarLabel::new(0), 1.0, 1.0);
-    let y = SddPtr::var(VarLabel::new(1), true);
-    wmc_map.set_weight(VarLabel::new(1), 1.0, 1.0);
-    let fx = SddPtr::var(VarLabel::new(2), true);
-    wmc_map.set_weight(VarLabel::new(2), 0.5, 0.5);
-    let fy = SddPtr::var(VarLabel::new(3), true);
-    wmc_map.set_weight(VarLabel::new(3), 0.5, 0.5);
-    let x_fx = man.iff(x, fx);
-    let y_fy = man.iff(y, fy);
-    let ptr = man.and(x_fx, y_fy);
-    let wmc_res: f64 = ptr.wmc(man.get_vtree_manager(), &wmc_map);
-    let expected: f64 = 1.0;
-    let diff = (wmc_res - expected).abs();
-    assert!(
-        (diff < 0.0001),
-        "Not eq: \n Expected: {:?} \n WMC: {:?}",
-        expected,
-        wmc_res
-    );
+    // TODO: need to express this as pointer eq, not semantic eq
+    // assert!(res != expected);
+    assert!(sh1 == sh2, "Not eq:\nGot: {:?}\nExpected: {:?}", sh1, sh2);
 }

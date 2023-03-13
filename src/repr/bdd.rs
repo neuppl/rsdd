@@ -1,5 +1,5 @@
 //! Binary decision diagram representation
-use crate::repr::var_label::VarSet;
+use crate::{repr::var_label::VarSet, util::semiring::RealSemiring};
 
 pub use super::{
     ddnnf::*,
@@ -435,15 +435,15 @@ impl BddPtr {
         &self,
         partial_map_assgn: &PartialModel,
         map_vars: &BitSet,
-        wmc: &WmcParams<f64>,
-    ) -> f64 {
+        wmc: &WmcParams<RealSemiring>,
+    ) -> RealSemiring {
         let mut v = self.bdd_fold(
             &|varlabel, low, high| {
                 let (low_w, high_w) = wmc.get_var_weight(varlabel);
                 match partial_map_assgn.get(varlabel) {
                     None => {
                         if map_vars.contains(varlabel.value_usize()) {
-                            f64::max(*low_w * low, *high_w * high)
+                            RealSemiring(f64::max((*low_w * low).0, (*high_w * high).0))
                         } else {
                             (*low_w * low) + (*high_w * high)
                         }
@@ -459,9 +459,9 @@ impl BddPtr {
         for lit in partial_map_assgn.assignment_iter() {
             let (l, h) = wmc.get_var_weight(lit.get_label());
             if lit.get_polarity() {
-                v *= h;
+                v = v * (*h);
             } else {
-                v *= l;
+                v = v * (*l);
             }
         }
         v
@@ -472,15 +472,15 @@ impl BddPtr {
         cur_lb: f64,
         cur_best: PartialModel,
         margvars: &[VarLabel],
-        wmc: &WmcParams<f64>,
+        wmc: &WmcParams<RealSemiring>,
         cur_assgn: PartialModel,
     ) -> (f64, PartialModel) {
         match margvars {
             [] => {
                 let margvar_bits = BitSet::new();
                 let possible_best = self.marginal_map_eval(&cur_assgn, &margvar_bits, wmc);
-                if possible_best > cur_lb {
-                    (possible_best, cur_assgn)
+                if possible_best.0 > cur_lb {
+                    (possible_best.0, cur_assgn)
                 } else {
                     (cur_lb, cur_best)
                 }
@@ -501,14 +501,14 @@ impl BddPtr {
                 let false_ub = self.marginal_map_eval(&false_model, &margvar_bits, wmc);
 
                 // branch on the greater upper-bound first
-                let order = if true_ub > false_ub {
+                let order = if true_ub.0 > false_ub.0 {
                     [(true_ub, true_model), (false_ub, false_model)]
                 } else {
                     [(false_ub, false_model), (true_ub, true_model)]
                 };
                 for (upper_bound, partialmodel) in order {
                     // branch + bound
-                    if upper_bound > best_lb {
+                    if upper_bound.0 > best_lb {
                         (best_lb, best_model) = self.marginal_map_h(
                             best_lb,
                             best_model,
@@ -529,7 +529,7 @@ impl BddPtr {
         &self,
         vars: &[VarLabel],
         num_vars: usize,
-        wmc: &WmcParams<f64>,
+        wmc: &WmcParams<RealSemiring>,
     ) -> (f64, PartialModel) {
         let mut marg_vars = BitSet::new();
         for v in vars {
@@ -541,7 +541,7 @@ impl BddPtr {
         let lower_bound = self.marginal_map_eval(&cur_assgn, &BitSet::new(), wmc);
 
         self.marginal_map_h(
-            lower_bound,
+            lower_bound.0,
             cur_assgn,
             vars,
             wmc,

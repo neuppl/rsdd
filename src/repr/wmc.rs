@@ -1,13 +1,14 @@
 use core::fmt::Debug;
-use num::Num;
 use std::collections::HashMap;
+
+use crate::util::semiring::Semiring;
 
 use super::var_label::{Literal, VarLabel};
 
 /// Weighted model counting parameters for a BDD. It primarily is a storage for
 /// the weight on each variable.
 #[derive(Debug, Clone)]
-pub struct WmcParams<T: Num + Clone + Debug + Copy> {
+pub struct WmcParams<T: Semiring> {
     pub zero: T,
     pub one: T,
     /// a vector which maps variable labels to `(low, high)`
@@ -15,7 +16,7 @@ pub struct WmcParams<T: Num + Clone + Debug + Copy> {
     var_to_val: Vec<Option<(T, T)>>,
 }
 
-impl<T: Num + Clone + Debug + Copy> WmcParams<T> {
+impl<T: Semiring + std::ops::Mul<Output = T> + std::ops::Add<Output = T>> WmcParams<T> {
     /// Generates a new `BddWmc` with a default `var_to_val`; it is private because we
     /// do not want to expose the structure of the associative array
     pub fn new_with_default(

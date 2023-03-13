@@ -1,7 +1,8 @@
 //! Implementing of a generic decision decomposable deterministic negation normal form
 //! (d-DNNF) pointer type
 use core::fmt::Debug;
-use num::Num;
+
+use crate::util::semiring::Semiring;
 
 use super::{
     var_label::{VarLabel, VarSet},
@@ -27,10 +28,14 @@ pub trait DDNNFPtr: Clone + Debug + PartialEq + Eq + Hash + Copy {
     type Order;
 
     /// performs a memoized bottom-up pass with aggregating function `f` calls
-    fn fold<T: Clone + Copy + Debug, F: Fn(DDNNF<T>) -> T>(&self, o: &Self::Order, f: F) -> T;
+    fn fold<T: Semiring, F: Fn(DDNNF<T>) -> T>(&self, o: &Self::Order, f: F) -> T;
 
     /// Weighted-model count
-    fn wmc<T: Num + Clone + Debug + Copy>(&self, o: &Self::Order, params: &WmcParams<T>) -> T {
+    fn wmc<T: Semiring + std::ops::Add<Output = T> + std::ops::Mul<Output = T>>(
+        &self,
+        o: &Self::Order,
+        params: &WmcParams<T>,
+    ) -> T {
         self.fold(o, |ddnnf| {
             use DDNNF::*;
             match ddnnf {

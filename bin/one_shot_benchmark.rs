@@ -79,7 +79,7 @@ struct BenchResult {
 
 fn compile_topdown_nnf(str: String, _args: &Args) -> BenchResult {
     let cnf = Cnf::from_file(str);
-    let mut man = rsdd::builder::decision_nnf_builder::DecisionNNFBuilder::new(cnf.num_vars());
+    let mut man = rsdd::builder::decision_nnf_builder::DecisionNNFBuilder::new();
     let order = VarOrder::linear_order(cnf.num_vars());
     // let order = cnf.force_order();
     let ddnnf = man.from_cnf_topdown(&order, &cnf);

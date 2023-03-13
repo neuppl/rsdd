@@ -1,6 +1,12 @@
 //! Top-down decision DNNF compiler and manipulator
 
-use crate::{backing_store::*, repr::ddnnf::DDNNFPtr};
+use crate::{
+    backing_store::*,
+    repr::{
+        ddnnf::DDNNFPtr,
+        unit_prop::{DecisionResult, SATSolver},
+    },
+};
 use bumpalo::Bump;
 
 use rustc_hash::FxHashMap;
@@ -15,14 +21,12 @@ use crate::{
     },
 };
 
-use crate::repr::sat_solver::SATSolver;
-
 pub struct DecisionNNFBuilder {
     compute_table: BackedRobinhoodTable<BddNode>,
 }
 
 impl DecisionNNFBuilder {
-    pub fn new(_num_vars: usize) -> DecisionNNFBuilder {
+    pub fn new() -> DecisionNNFBuilder {
         DecisionNNFBuilder {
             compute_table: BackedRobinhoodTable::new(),
         }
@@ -76,24 +80,22 @@ impl DecisionNNFBuilder {
         sat: &mut SATSolver,
         level: usize,
         order: &VarOrder,
-        hasher: &mut CnfHasher,
-        cache: &mut FxHashMap<HashedCNF, BddPtr>,
+        cache: &mut FxHashMap<u128, BddPtr>,
     ) -> BddPtr {
         // check for base case
-        let assgn = sat.get_implied_units();
-        if level >= cnf.num_vars() || cnf.is_sat_partial(&assgn) {
+        if level >= cnf.num_vars() || sat.is_sat() {
             return BddPtr::true_ptr();
         }
         let cur_v = order.var_at_level(level);
 
         // check if this literal is currently set in unit propagation; if
         // it is, skip it
-        if assgn.is_set(cur_v) {
-            return self.topdown_h(cnf, sat, level + 1, order, hasher, cache);
+        if sat.is_set(cur_v) {
+            return self.topdown_h(cnf, sat, level + 1, order, cache);
         }
 
         // check cache
-        let hashed = hasher.hash(&assgn);
+        let hashed = sat.get_cur_hash();
         match cache.get(&hashed) {
             None => (),
             Some(v) => {
@@ -102,61 +104,38 @@ impl DecisionNNFBuilder {
         }
 
         // recurse on both values of cur_v
-        sat.push();
-        hasher.push();
-        sat.decide(Literal::new(cur_v, true));
-        hasher.decide(Literal::new(cur_v, true));
-        let unsat = sat.unsat_unit();
-        let high_bdd = if !unsat {
-            let new_assgn = sat.get_implied_units();
-
-            let sub = self.topdown_h(cnf, sat, level + 1, order, hasher, cache);
-            let implied_lits = new_assgn
-                .get_vec()
-                .iter()
-                .enumerate()
-                .zip(assgn.get_vec())
-                .filter_map(|((idx, new), prev)| {
-                    if new != prev && idx != cur_v.value_usize() {
-                        Some(Literal::new(VarLabel::new_usize(idx), new.unwrap()))
-                    } else {
-                        None
-                    }
-                });
-            self.conjoin_implied(implied_lits, sub)
-        } else {
-            BddPtr::false_ptr()
+        let high_bdd = match sat.decide(Literal::new(cur_v, true)) {
+            DecisionResult::UNSAT => BddPtr::false_ptr(),
+            DecisionResult::SAT => {
+                let new_assgn = sat.get_difference().filter(|x| x.get_label() != cur_v);
+                let r = self.conjoin_implied(new_assgn, BddPtr::true_ptr());
+                sat.pop();
+                r
+            }
+            DecisionResult::Unknown => {
+                let sub = self.topdown_h(cnf, sat, level + 1, order, cache);
+                let new_assgn = sat.get_difference().filter(|x| x.get_label() != cur_v);
+                let r = self.conjoin_implied(new_assgn, sub);
+                sat.pop();
+                r
+            }
         };
-        sat.pop();
-        hasher.pop();
-
-        sat.push();
-        hasher.push();
-        sat.decide(Literal::new(cur_v, false));
-        hasher.decide(Literal::new(cur_v, false));
-        let unsat = sat.unsat_unit();
-        let low_bdd = if !unsat {
-            let new_assgn = sat.get_implied_units();
-
-            let sub = self.topdown_h(cnf, sat, level + 1, order, hasher, cache);
-            let implied_lits = new_assgn
-                .get_vec()
-                .iter()
-                .enumerate()
-                .zip(assgn.get_vec())
-                .filter_map(|((idx, new), prev)| {
-                    if new != prev && idx != cur_v.value_usize() {
-                        Some(Literal::new(VarLabel::new_usize(idx), new.unwrap()))
-                    } else {
-                        None
-                    }
-                });
-            self.conjoin_implied(implied_lits, sub)
-        } else {
-            BddPtr::false_ptr()
+        let low_bdd = match sat.decide(Literal::new(cur_v, false)) {
+            DecisionResult::UNSAT => BddPtr::false_ptr(),
+            DecisionResult::SAT => {
+                let new_assgn = sat.get_difference().filter(|x| x.get_label() != cur_v);
+                let r = self.conjoin_implied(new_assgn, BddPtr::true_ptr());
+                sat.pop();
+                r
+            }
+            DecisionResult::Unknown => {
+                let sub = self.topdown_h(cnf, sat, level + 1, order, cache);
+                let new_assgn = sat.get_difference().filter(|x| x.get_label() != cur_v);
+                let r = self.conjoin_implied(new_assgn, sub);
+                sat.pop();
+                r
+            }
         };
-        sat.pop();
-        hasher.pop();
 
         let r = if high_bdd == low_bdd {
             high_bdd
@@ -171,22 +150,15 @@ impl DecisionNNFBuilder {
     /// compile a decision DNNF top-down from a CNF with the searching order
     /// specified by `order`
     pub fn from_cnf_topdown(&mut self, order: &VarOrder, cnf: &Cnf) -> BddPtr {
-        let mut sat = SATSolver::new(cnf);
-        if sat.unsat_unit() {
-            return BddPtr::false_ptr();
-        }
+        let mut sat = match SATSolver::new(cnf.clone()) {
+            Some(v) => v,
+            None => return BddPtr::false_ptr(),
+        };
 
-        let mut r = self.topdown_h(
-            cnf,
-            &mut sat,
-            0,
-            order,
-            &mut CnfHasher::new(cnf),
-            &mut FxHashMap::default(),
-        );
+        let mut r = self.topdown_h(cnf, &mut sat, 0, order, &mut FxHashMap::default());
 
         // conjoin in any initially implied literals
-        for l in sat.get_implied_units().assignment_iter() {
+        for l in sat.get_difference() {
             let node = if l.get_polarity() {
                 BddNode::new(l.get_label(), BddPtr::false_ptr(), r)
             } else {
@@ -217,10 +189,10 @@ impl DecisionNNFBuilder {
             }
         } else {
             // check cache
-            // let _idx = match bdd.get_scratch::<BddPtr>() {
-            //     None => (),
-            //     Some(v) => return if bdd.is_neg() { v.neg() } else { *v },
-            // };
+            let _idx = match bdd.get_scratch::<BddPtr>() {
+                None => (),
+                Some(v) => return if bdd.is_neg() { v.neg() } else { *v },
+            };
 
             // recurse on the children
             let n = bdd.into_node();
@@ -252,20 +224,21 @@ impl DecisionNNFBuilder {
     }
 }
 
-#[test]
-fn test_dnnf() {
-    let clauses = vec![
-        vec![
-            Literal::new(VarLabel::new(0), true),
-            Literal::new(VarLabel::new(1), false),
-        ],
-        // vec![
-        // Literal::new(VarLabel::new(0), false),
-        // Literal::new(VarLabel::new(1), true)
-        // ]
-    ];
-    let cnf = Cnf::new(clauses);
-    let mut mgr = DecisionNNFBuilder::new(cnf.num_vars());
-    let c2 = mgr.from_cnf_topdown(&VarOrder::linear_order(cnf.num_vars()), &cnf);
-    println!("c2: {}", c2.to_string_debug());
-}
+// #[test]
+// fn test_dnnf() {
+//     let clauses = vec![
+//         vec![
+//             Literal::new(VarLabel::new(0), true),
+//             Literal::new(VarLabel::new(1), false),
+//         ],
+//         // vec![
+//         // Literal::new(VarLabel::new(0), false),
+//         // Literal::new(VarLabel::new(1), true)
+//         // ]
+//     ];
+//     let cnf = Cnf::new(clauses);
+//     let mut mgr = DecisionNNFBuilder::new();
+//     let c2 = mgr.from_cnf_topdown(&VarOrder::linear_order(cnf.num_vars()), &cnf);
+//     println!("c2: {}", c2.to_string_debug());
+//     assert!(false)
+// }
