@@ -14,7 +14,7 @@
 //
 //! Example: Assume we have the following CNF, with its literals annotated with
 //! distinct primes:
-//! ```
+//! ```text
 //! // `(a \/ b) /\ (!a \/ c)`
 //! //   ^    ^      ^     ^
 //! //   2    3      5     7
@@ -41,13 +41,13 @@ type LitIdx = usize;
 /// The literals A and !B are watched in c0, and C and !A  are watched in c1
 /// This is stored in the watch lists as:
 /// watch_list_pos:
-///    A: [c0]
-///    B: []
-///    C: [c1]
+///    A: \[ c0 \]
+///    B: \[ \]
+///    C: \[ c1 \]
 /// watch_list_neg:
-///    A: [c1]
-///    B: [c0]
-///    C: []
+///    A: \[ c1 \]
+///    B: \[ c0 \]
+///    C: \[ \]
 ///
 /// The invariant maintained by the watched literals is that, for a given
 /// partial model state, the watched literal is either (1) satisfied by the
@@ -282,8 +282,8 @@ struct SatState {
 pub struct SATSolver {
     up: UnitPropagate,
     clauses: Vec<Vec<(Literal, u128)>>,
-    /// contains_pos_lit[i] is the set of clauses that contains positive
-    /// varlabel i
+    // contains_pos_lit[i] is the set of clauses that contains positive
+    // varlabel i
     contains_pos_lit: Vec<BitSet>,
     contains_neg_lit: Vec<BitSet>,
     state_stack: Vec<SatState>,
