@@ -650,6 +650,7 @@ impl Cnf {
 }
 
 impl Arbitrary for Cnf {
+    /// generate an arbitrary CNF with at most 9 variables and at most 16 clauses
     fn arbitrary(g: &mut Gen) -> Cnf {
         let num_vars = (u64::arbitrary(g) % 8) + 1;
         let num_clauses = (usize::arbitrary(g) % 16) + 1;

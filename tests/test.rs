@@ -14,6 +14,9 @@ use rsdd::repr::vtree::VTree;
 use rsdd::*;
 extern crate rand;
 
+/// a prime large enough to ensure no collisions for semantic hashing
+const BIG_PRIME: u128 = 100000049;
+
 /// A list of canonical forms in DIMACS form. The goal of these tests is to ensure that caching
 /// and application are working as intended
 static C1_A: &str = "
@@ -321,9 +324,10 @@ mod test_bdd_manager {
     use rsdd::builder::cache::lru_app::BddApplyTable;
 
     use rsdd::repr::bdd::BddPtr;
-    use rsdd::repr::ddnnf::DDNNFPtr;
+    use rsdd::repr::ddnnf::{DDNNFPtr, create_semantic_hash_map};
     use rsdd::repr::model::PartialModel;
     use rsdd::repr::var_order::VarOrder;
+    use rsdd::repr::vtree::VTree;
     use rsdd::repr::wmc::WmcParams;
     use rsdd::util::semiring::{RealSemiring, Semiring};
     use std::collections::HashMap;
@@ -396,6 +400,7 @@ mod test_bdd_manager {
     }
 
     quickcheck! {
+        /// test that an SDD and BDD both compiled from the same CNF compute identical WMC
         fn wmc_eq(c1: Cnf) -> TestResult {
             // constrain the size
             if c1.num_vars() == 0 || c1.num_vars() > 8 { return TestResult::discard() }
@@ -411,6 +416,19 @@ mod test_bdd_manager {
             TestResult::from_bool(abs(bddres.0 - cnfres.0) < 0.00001)
         }
     }
+
+    quickcheck! {
+        /// test that an SDD and BDD both have the same semantic hash
+        fn sdd_semantic_eq_bdd(c1: Cnf, vtree: VTree) -> bool {
+            let mut bdd_mgr = super::BddManager::<AllTable<BddPtr>>::new_default_order(c1.num_vars());
+            let mut sdd_mgr = super::SddManager::new(vtree);
+            let map : WmcParams<rsdd::util::semiring::FiniteField<{ crate::BIG_PRIME }>>= create_semantic_hash_map(c1.num_vars());
+            let bdd = bdd_mgr.from_cnf(&c1);
+            let sdd = sdd_mgr.from_cnf(&c1);
+            bdd.semantic_hash(bdd_mgr.get_order(), &map) == sdd.semantic_hash(sdd_mgr.get_vtree_manager(), &map)
+        }
+    }
+
 
     quickcheck! {
         fn wmc_bdd_dnnf_eq(c1: Cnf) -> TestResult {
@@ -555,10 +573,8 @@ mod test_sdd_manager {
 
     quickcheck! {
         fn ite_iff_split(c1: Cnf, c2: Cnf) -> bool {
-            // println!("testing with cnf {:?}, {:?}", c1, c2);
             let order : Vec<VarLabel> = (0..16).map(VarLabel::new).collect();
             let vtree = VTree::even_split(&order, 4);
-            // let vtree = VTree::right_linear(&order);
             let mut mgr = super::SddManager::new(vtree);
             let cnf1 = mgr.from_cnf(&c1);
             let cnf2 = mgr.from_cnf(&c2);

@@ -135,6 +135,7 @@ impl VTree {
 }
 
 impl Arbitrary for VTree {
+    /// generate an arbitrary vtree on 16 variables
     fn arbitrary(g: &mut Gen) -> VTree {
         let mut rng = SmallRng::seed_from_u64(u64::arbitrary(g));
         let mut vars: Vec<VarLabel> = (0..16).map(VarLabel::new).collect();
