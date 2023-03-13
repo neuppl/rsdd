@@ -712,7 +712,7 @@ fn is_trimmed_trivial() {
 #[test]
 fn is_trimmed_simple_demorgan() {
     let mut man = crate::builder::sdd_builder::SddManager::<
-        crate::builder::sdd_builder::CompressionCanonicalizer,
+        crate::builder::canonicalize::CompressionCanonicalizer,
     >::new(crate::repr::vtree::VTree::even_split(
         &[
             VarLabel::new(0),
@@ -743,7 +743,7 @@ fn is_canonical_trivial() {
 #[test]
 fn is_canonical_simple_demorgan() {
     let mut man = crate::builder::sdd_builder::SddManager::<
-        crate::builder::sdd_builder::CompressionCanonicalizer,
+        crate::builder::canonicalize::CompressionCanonicalizer,
     >::new(crate::repr::vtree::VTree::even_split(
         &[
             VarLabel::new(0),

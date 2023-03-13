@@ -6,6 +6,7 @@ extern crate serde_json;
 use clap::Parser;
 use rsdd::builder::bdd_plan::BddPlan;
 use rsdd::builder::cache::lru_app::BddApplyTable;
+use rsdd::builder::canonicalize::*;
 use rsdd::repr::cnf::Cnf;
 use rsdd::repr::ddnnf::DDNNFPtr;
 use rsdd::repr::dtree::DTree;

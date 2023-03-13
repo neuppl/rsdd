@@ -5,7 +5,8 @@ extern crate rsgm;
 
 use clap::Parser;
 use criterion::black_box;
-use rsdd::builder::sdd_builder::{self, CompressionCanonicalizer};
+use rsdd::builder::canonicalize::*;
+use rsdd::builder::sdd_builder::{self};
 use rsdd::repr::vtree::VTree;
 
 use rsdd::repr::cnf::Cnf;

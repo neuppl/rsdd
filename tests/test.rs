@@ -8,7 +8,8 @@ use crate::repr::cnf::Cnf;
 use crate::repr::var_label::VarLabel;
 use rsdd::builder::bdd_builder::BddManager;
 use rsdd::builder::cache::all_app::AllTable;
-use rsdd::builder::sdd_builder::{CompressionCanonicalizer, SddManager};
+use rsdd::builder::canonicalize::*;
+use rsdd::builder::sdd_builder::SddManager;
 use rsdd::repr::bdd::BddPtr;
 use rsdd::repr::vtree::VTree;
 use rsdd::*;
@@ -506,7 +507,7 @@ mod test_sdd_manager {
     use crate::repr::var_label::{Literal, VarLabel};
     use quickcheck::TestResult;
     use rsdd::builder::cache::all_app::AllTable;
-    use rsdd::builder::sdd_builder::{CompressionCanonicalizer, SemanticCanonicalizer};
+    use rsdd::builder::canonicalize::*;
     use rsdd::repr::bdd::BddPtr;
     use rsdd::repr::ddnnf::DDNNFPtr;
     use rsdd::repr::sdd::SddPtr;
