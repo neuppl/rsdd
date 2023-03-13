@@ -1,10 +1,11 @@
 //! Top-down decision DNNF compiler and manipulator
 
+
 use crate::{
     backing_store::*,
     repr::{
         ddnnf::DDNNFPtr,
-        unit_prop::{DecisionResult, SATSolver},
+        unit_prop::{DecisionResult, SATSolver}
     },
 };
 use bumpalo::Bump;
@@ -222,6 +223,7 @@ impl DecisionNNFBuilder {
             res
         }
     }
+
 }
 
 // #[test]

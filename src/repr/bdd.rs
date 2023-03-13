@@ -672,7 +672,9 @@ impl DDNNFPtr for BddPtr {
                 }
             }
         }
-        count_h(*self, &mut Bump::new())
+        let r = count_h(*self, &mut Bump::new());
+        self.clear_scratch();
+        return r;
     }
 
     fn neg(&self) -> Self {

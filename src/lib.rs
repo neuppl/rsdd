@@ -17,6 +17,7 @@ extern crate petgraph;
 extern crate quickcheck;
 extern crate rustc_hash;
 extern crate segment_tree;
+extern crate rand_chacha;
 extern crate time_test;
 extern crate tinyvec;
 

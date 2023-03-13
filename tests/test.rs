@@ -395,6 +395,7 @@ mod test_bdd_manager {
         }
     }
 
+
     quickcheck! {
         fn wmc_eq(c1: Cnf) -> TestResult {
             // constrain the size
@@ -507,7 +508,7 @@ mod test_sdd_manager {
     use quickcheck::TestResult;
     use rsdd::builder::cache::all_app::AllTable;
     use rsdd::repr::bdd::BddPtr;
-    use rsdd::repr::ddnnf::DDNNFPtr;
+    use rsdd::repr::ddnnf::{DDNNFPtr, create_semantic_hash_map};
     use rsdd::repr::sdd::SddPtr;
     use rsdd::repr::vtree::VTree;
     use rsdd::repr::wmc::WmcParams;
@@ -652,10 +653,10 @@ mod test_sdd_manager {
             let mut mgr2 = super::SddManager::new(vtree);
             let c2 = mgr2.from_cnf(&c);
 
-            let map : WmcParams<FiniteField<1123>> = mgr1.create_prob_map();
+            let map : WmcParams<FiniteField<1123>> = create_semantic_hash_map(mgr1.num_vars());
 
-            let h1 = c1.get_semantic_hash(mgr1.get_vtree_manager(), &map);
-            let h2 = c2.get_semantic_hash(mgr2.get_vtree_manager(), &map);
+            let h1 = c1.semantic_hash(mgr1.get_vtree_manager(), &map);
+            let h2 = c2.semantic_hash(mgr2.get_vtree_manager(), &map);
 
             h1 == h2
         }
@@ -671,10 +672,10 @@ mod test_sdd_manager {
             let uncompr_cnf = uncompr_mgr.from_cnf(&c);
 
 
-            let map : WmcParams<FiniteField<4391>> = uncompr_mgr.create_prob_map();
+            let map : WmcParams<FiniteField<4391>> = create_semantic_hash_map(compr_mgr.num_vars());
 
-            let compr_h = compr_cnf.get_semantic_hash(compr_mgr.get_vtree_manager(), &map);
-            let uncompr_h = uncompr_cnf.get_semantic_hash(uncompr_mgr.get_vtree_manager(), &map);
+            let compr_h = compr_cnf.semantic_hash(compr_mgr.get_vtree_manager(), &map);
+            let uncompr_h = uncompr_cnf.semantic_hash(uncompr_mgr.get_vtree_manager(), &map);
 
             if compr_h != uncompr_h {
                 println!("not equal! hashes: compr: {compr_h}, uncompr: {uncompr_h}");
@@ -704,10 +705,10 @@ mod test_sdd_manager {
 
             for _ in 1 .. 5 {
 
-                let map : WmcParams<FiniteField<4391>> = mgr.create_prob_map();
+                let map : WmcParams<FiniteField<4391>> = create_semantic_hash_map(mgr.num_vars());
 
-                let h1 = cnf_1.get_semantic_hash(mgr.get_vtree_manager(), &map);
-                let h2 = cnf_2.get_semantic_hash(mgr.get_vtree_manager(), &map);
+                let h1 = cnf_1.semantic_hash(mgr.get_vtree_manager(), &map);
+                let h2 = cnf_2.semantic_hash(mgr.get_vtree_manager(), &map);
 
                 if h1 == h2 {
                     println!("collision! h1: {h1}, h2: {h2}");
@@ -730,10 +731,10 @@ mod test_sdd_manager {
             // useful site: http://compoasso.free.fr/primelistweb/page/prime/liste_online_en.php
 
             // running iteratively, taking majority
-            let map : WmcParams<FiniteField<100000000069>>= mgr.create_prob_map();
+            let map : WmcParams<FiniteField<100000000069>>= create_semantic_hash_map(mgr.num_vars());
             let mut seen_hashes : HashMap<u128, SddPtr> = HashMap::new();
             for sdd in mgr.node_iter() {
-                let hash = sdd.get_semantic_hash(mgr.get_vtree_manager(), &map);
+                let hash = sdd.semantic_hash(mgr.get_vtree_manager(), &map);
                 if seen_hashes.contains_key(&hash.value()) {
                     let c = seen_hashes.get(&hash.value()).unwrap();
                     println!("cnf: {}", c1);

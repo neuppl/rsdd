@@ -2,9 +2,8 @@
 //! with SDDs.
 
 use std::cmp::Ordering;
-use std::collections::HashMap;
+use std::collections::HashSet;
 
-use rand::{thread_rng, Rng};
 
 use super::cache::all_app::AllTable;
 use super::cache::ite::Ite;
@@ -12,11 +11,10 @@ use super::cache::sdd_apply_cache::SddApply;
 use super::cache::LruTable;
 use crate::backing_store::bump_table::BackedRobinhoodTable;
 use crate::backing_store::UniqueTable;
-use crate::repr::bdd::WmcParams;
+use crate::repr::bdd::create_semantic_hash_map;
 use crate::repr::ddnnf::DDNNFPtr;
 use crate::repr::sdd::{BinarySDD, SddAnd, SddOr, SddPtr};
 use crate::repr::vtree::{VTree, VTreeIndex, VTreeManager};
-use crate::util::semiring::{FiniteField, Semiring};
 use crate::{repr::cnf::Cnf, repr::logical_expr::LogicalExpr, repr::var_label::VarLabel};
 
 #[derive(Debug, Clone)]
@@ -72,6 +70,10 @@ impl SddManager {
 
     pub fn get_vtree_manager(&self) -> &VTreeManager {
         &self.vtree
+    }
+
+    pub fn num_vars(&self) -> usize {
+        self.vtree.num_vars()
     }
 
     /// Canonicalizes the list of (prime, sub) terms in-place
@@ -772,33 +774,6 @@ impl SddManager {
         // }
     }
 
-    // Generates a mapping from variables to numbers in [2, PRIME)
-    pub fn create_prob_map<const P: u128>(&self) -> WmcParams<FiniteField<P>> {
-        let all_vars = self.get_vtree_root().get_all_vars();
-        let vars = all_vars.into_iter().collect::<Vec<usize>>();
-
-        // theoretical guarantee from paper; need to verify more!
-        assert!((2 * vars.len() as u128) < P);
-
-        let rng = &mut thread_rng();
-
-        let value_range: Vec<(FiniteField<P>, FiniteField<P>)> = (0..vars.len() as u128)
-            .map(|_| {
-                let h = FiniteField::new(rng.gen_range(2..P));
-                let l = FiniteField::new(P - h.value() + 1);
-                (l, h)
-            })
-            .collect();
-
-        let mut map = HashMap::new();
-
-        for (&var, &value) in vars.iter().zip(value_range.iter()) {
-            map.insert(VarLabel::new_usize(var), value);
-        }
-
-        WmcParams::new_with_default(FiniteField::zero(), FiniteField::one(), map)
-    }
-
     /// get an iterator over all allocated or-nodes
     fn or_iter(&self) -> impl Iterator<Item = *mut SddOr> + '_ {
         self.sdd_tbl.iter()
@@ -822,6 +797,23 @@ impl SddManager {
     pub fn print_stats(&self) {
         println!("***************[ SDD Stats ]***************");
         println!("\tNumber of recursive calls: {}", self.stats.num_rec);
+    }
+
+
+    /// computes the number of logically redundant nodes allocated by the
+    /// manager (nodes that have the same semantic hash)
+    pub fn num_logically_redundant(&self) -> usize {
+        let mut s : HashSet<u128> = HashSet::new();
+        let hasher = create_semantic_hash_map::<100000000063>(self.num_vars() + 1000); // TODO FIX THIS BADNESS
+        let mut num_collisions = 0;
+        for n in self.node_iter() {
+            let h = n.semantic_hash(self.get_vtree_manager(), &hasher);
+            if s.contains(&h.value()) {
+                num_collisions += 1;
+            }
+            s.insert(h.value());
+        }
+        return num_collisions;
     }
 }
 
@@ -1102,6 +1094,10 @@ fn sdd_wmc1() {
 
 #[test]
 fn prob_equiv_sdd_demorgan() {
+    use crate::repr::bdd::create_semantic_hash_map;
+    use crate::repr::bdd::WmcParams;
+    use crate::util::semiring::FiniteField;
+
     let mut man = SddManager::new(VTree::even_split(
         &[
             VarLabel::new(0),
@@ -1118,10 +1114,10 @@ fn prob_equiv_sdd_demorgan() {
     let res = man.or(x, y).neg();
     let expected = man.and(x.neg(), y.neg());
 
-    let map: WmcParams<FiniteField<1223>> = man.create_prob_map();
+    let map: WmcParams<FiniteField<1223>> = create_semantic_hash_map(man.num_vars());
 
-    let sh1 = res.get_semantic_hash(man.get_vtree_manager(), &map);
-    let sh2 = expected.get_semantic_hash(man.get_vtree_manager(), &map);
+    let sh1 = res.semantic_hash(man.get_vtree_manager(), &map);
+    let sh2 = expected.semantic_hash(man.get_vtree_manager(), &map);
 
     // TODO: need to express this as pointer eq, not semantic eq
     // assert!(res != expected);

@@ -6,7 +6,6 @@ use crate::{
         ddnnf::DDNNF,
         var_label::{VarLabel, VarSet},
     },
-    util::semiring::FiniteField,
 };
 use bumpalo::Bump;
 use std::collections::HashSet;
@@ -173,7 +172,6 @@ impl PartialEq for SddOr {
 use std::hash::{Hash, Hasher};
 
 use super::{
-    bdd::WmcParams,
     ddnnf::DDNNFPtr,
     var_label::Literal,
     vtree::{VTreeIndex, VTreeManager},
@@ -510,16 +508,6 @@ impl SddPtr {
             }
         }
     }
-    // heavy lifting for getting the semantic hash of SDD; assumes current is the root
-    // this function doesn't allocate anything!
-    // for more info, see https://tr.inf.unibe.ch/pdf/iam-06-001.pdf
-    pub fn get_semantic_hash<const P: u128>(
-        &self,
-        vtree: &VTreeManager,
-        map: &WmcParams<FiniteField<P>>,
-    ) -> FiniteField<P> {
-        self.wmc(vtree, map)
-    }
 }
 
 type DDNNFCache<T> = (Option<T>, Option<T>);
@@ -608,7 +596,9 @@ impl DDNNFPtr for SddPtr {
                 }
             }
         }
-        count_h(*self, &mut Bump::new())
+        let r = count_h(*self, &mut Bump::new());
+        self.clear_scratch();
+        return r;
     }
 
     fn false_ptr() -> SddPtr {

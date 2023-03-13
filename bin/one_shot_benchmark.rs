@@ -95,6 +95,7 @@ fn compile_sdd_dtree(str: String, _args: &Args) -> BenchResult {
     let dtree = DTree::from_cnf(&cnf, &VarOrder::linear_order(cnf.num_vars()));
     let vtree = VTree::from_dtree(&dtree).unwrap();
     let mut man = SddManager::new(vtree.clone());
+    // man.set_compression(false);
     let _sdd = man.from_cnf(&cnf);
 
     if let Some(path) = &_args.dump_sdd {
@@ -110,6 +111,9 @@ fn compile_sdd_dtree(str: String, _args: &Args) -> BenchResult {
         let r = file.write_all(serde_json::to_string(&json).unwrap().as_bytes());
         assert!(r.is_ok(), "Error writing file");
     }
+
+    // println!("num redundant: {}", man.num_logically_redundant());
+    // println!("num nodes: {}", man.node_iter().count());
 
     BenchResult {
         num_recursive: man.get_stats().num_rec,
@@ -140,6 +144,7 @@ fn compile_sdd_rightlinear(str: String, _args: &Args) -> BenchResult {
         let r = file.write_all(serde_json::to_string(&json).unwrap().as_bytes());
         assert!(r.is_ok(), "Error writing file");
     }
+
 
     BenchResult {
         num_recursive: man.get_stats().num_rec,

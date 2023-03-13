@@ -2,13 +2,45 @@
 //! (d-DNNF) pointer type
 use core::fmt::Debug;
 
-use crate::util::semiring::Semiring;
+use crate::util::semiring::{Semiring, FiniteField};
+use rand::{SeedableRng, Rng};
+use rand_chacha::ChaCha8Rng;
+
+/// creates a weighting that can be used for semantically hashing a DDNNF node
+/// the constant `P` denotes the size of the field over which the semantic hash will 
+/// be computed. For more info, see https://tr.inf.unibe.ch/pdf/iam-06-001.pdf
+pub fn create_semantic_hash_map<const P: u128>(num_vars: usize) -> WmcParams<FiniteField<P>> {
+    let vars : Vec<VarLabel> = (0..num_vars).map(|x| VarLabel::new_usize(x)).collect();
+
+    // theoretical guarantee from paper; need to verify more!
+    assert!((2 * vars.len() as u128) < P);
+
+    // seed the RNG deterministically for reproducible weights across
+    // different calls to `create_semantic_hash_map`
+    let mut rng = ChaCha8Rng::seed_from_u64(101249);
+
+    let value_range: Vec<(FiniteField<P>, FiniteField<P>)> = (0..vars.len() as u128)
+        .map(|_| {
+            let h = FiniteField::new(rng.gen_range(2..P));
+            let l = FiniteField::new(P - h.value() + 1);
+            (l, h)
+        })
+        .collect();
+
+    let mut map = HashMap::new();
+
+    for (&var, &value) in vars.iter().zip(value_range.iter()) {
+        map.insert(var, value);
+    }
+
+    WmcParams::new_with_default(FiniteField::zero(), FiniteField::one(), map)
+}
 
 use super::{
     var_label::{VarLabel, VarSet},
     wmc::WmcParams,
 };
-use std::hash::Hash;
+use std::{hash::Hash, collections::HashMap};
 /// A base d-DNNF type
 pub enum DDNNF<T> {
     /// contains the cached values for the children, and the VarSet that
@@ -53,6 +85,15 @@ pub trait DDNNFPtr: Clone + Debug + PartialEq + Eq + Hash + Copy {
                 }
             }
         })
+    }
+
+    /// compute the semantic hash for this pointer
+    fn semantic_hash<const P: u128>(
+        &self,
+        order: &Self::Order,
+        map: &WmcParams<FiniteField<P>>,
+    ) -> FiniteField<P> {
+        self.wmc(order, map)
     }
 
     /// Negate the pointer

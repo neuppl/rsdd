@@ -265,4 +265,9 @@ impl VTreeManager {
         // 'SDD: A New Canonical Representation of Propositional Knowledge Bases'
         l.0 < r.0
     }
+
+    /// produces the number of variables allocated by this vtree
+    pub fn num_vars(&self) -> usize {
+        self.vtree_root().get_all_vars().into_iter().max().unwrap()
+    }
 }
