@@ -1,14 +1,13 @@
 //! Top-down decision DNNF compiler and manipulator
 
 use crate::{
-    backing_store::*,
+    backing_store::{bump_table::DefaultBRTHasher, *},
     repr::{
         ddnnf::DDNNFPtr,
         unit_prop::{DecisionResult, SATSolver},
     },
 };
 use bumpalo::Bump;
-
 use rustc_hash::FxHashMap;
 
 use crate::{
@@ -22,7 +21,7 @@ use crate::{
 };
 
 pub struct DecisionNNFBuilder {
-    compute_table: BackedRobinhoodTable<BddNode>,
+    compute_table: BackedRobinhoodTable<BddNode, DefaultBRTHasher>,
 }
 
 impl DecisionNNFBuilder {

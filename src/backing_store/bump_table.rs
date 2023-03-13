@@ -3,12 +3,12 @@
 
 use super::UniqueTable;
 use bumpalo::Bump;
+use rustc_hash::FxHasher;
 use std::hash::{Hash, Hasher};
+use std::marker::PhantomData;
 use std::mem;
 
 use crate::util::*;
-
-use rustc_hash::FxHasher;
 
 /// The load factor of the table, i.e. how full the table will be when it
 /// automatically resizes
@@ -81,9 +81,10 @@ fn propagate<T: Clone>(
 
 /// Implements a mutable vector-backed robin-hood linear probing hash table,
 /// whose keys are given by BDD pointers.
-pub struct BackedRobinhoodTable<T>
+pub struct BackedRobinhoodTable<T, H>
 where
     T: Hash + PartialEq + Eq + Clone,
+    H: BRTHasher<T>,
 {
     /// hash table which stores indexes in the elem vector
     tbl: Vec<HashTableElement<T>>,
@@ -92,14 +93,17 @@ where
     cap: usize,
     /// the length of `tbl`
     len: usize,
+    /// needed for generic flexibility
+    hasher_type: PhantomData<H>,
 }
 
-impl<T: Clone> BackedRobinhoodTable<T>
+impl<T: Clone, H> BackedRobinhoodTable<T, H>
 where
     T: Hash + PartialEq + Eq + Clone,
+    H: BRTHasher<T>,
 {
     /// reserve a robin-hood table capable of holding at least `sz` elements
-    pub fn new() -> BackedRobinhoodTable<T> {
+    pub fn new() -> BackedRobinhoodTable<T, H> {
         let v: Vec<HashTableElement<T>> = zero_vec(DEFAULT_SIZE);
 
         BackedRobinhoodTable {
@@ -107,6 +111,7 @@ where
             alloc: Bump::new(),
             cap: DEFAULT_SIZE,
             len: 0,
+            hasher_type: PhantomData,
         }
     }
 
@@ -156,14 +161,15 @@ where
     }
 }
 
-impl<T: Eq + PartialEq + Hash + Clone> UniqueTable<T> for BackedRobinhoodTable<T> {
+impl<T: Eq + PartialEq + Hash + Clone, H: BRTHasher<T>> UniqueTable<T>
+    for BackedRobinhoodTable<T, H>
+{
     fn get_or_insert(&mut self, elem: T) -> *mut T {
         if (self.len + 1) as f64 > (self.cap as f64 * LOAD_FACTOR) {
             self.grow();
         }
-        let mut hasher = FxHasher::default();
-        elem.hash(&mut hasher);
-        let elem_hash = hasher.finish();
+
+        let elem_hash = H::u64hash(&elem);
 
         // the current index into the array
         let mut pos: usize = (elem_hash as usize) % self.cap;
@@ -205,5 +211,19 @@ impl<T: Eq + PartialEq + Hash + Clone> UniqueTable<T> for BackedRobinhoodTable<T
                 return ptr;
             }
         }
+    }
+}
+
+pub trait BRTHasher<T: Eq + PartialEq + Hash + Clone> {
+    fn u64hash(elem: &T) -> u64;
+}
+
+pub struct DefaultBRTHasher {}
+
+impl<T: Eq + PartialEq + Hash + Clone> BRTHasher<T> for DefaultBRTHasher {
+    fn u64hash(elem: &T) -> u64 {
+        let mut hasher = FxHasher::default();
+        elem.hash(&mut hasher);
+        hasher.finish()
     }
 }

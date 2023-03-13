@@ -4,6 +4,7 @@
 
 use bumpalo::Bump;
 
+use crate::backing_store::bump_table::DefaultBRTHasher;
 use crate::repr::bdd::BddNode;
 use crate::repr::model::PartialModel;
 use crate::repr::var_order::VarOrder;
@@ -85,7 +86,7 @@ impl BddManagerStats {
 }
 
 pub struct BddManager<T: LruTable<BddPtr>> {
-    compute_table: BackedRobinhoodTable<BddNode>,
+    compute_table: BackedRobinhoodTable<BddNode, DefaultBRTHasher>,
     apply_table: T,
     stats: BddManagerStats,
     order: VarOrder,
