@@ -1,11 +1,9 @@
 //! Defines the internal representations for a trimmed and compressed SDD with
 //! complemented edges.
 
-use crate::{
-    repr::{
-        ddnnf::DDNNF,
-        var_label::{VarLabel, VarSet},
-    },
+use crate::repr::{
+    ddnnf::DDNNF,
+    var_label::{VarLabel, VarSet},
 };
 use bumpalo::Bump;
 use std::collections::HashSet;

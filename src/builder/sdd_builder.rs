@@ -4,7 +4,6 @@
 use std::cmp::Ordering;
 use std::collections::HashSet;
 
-
 use super::cache::all_app::AllTable;
 use super::cache::ite::Ite;
 use super::cache::sdd_apply_cache::SddApply;
@@ -799,11 +798,10 @@ impl SddManager {
         println!("\tNumber of recursive calls: {}", self.stats.num_rec);
     }
 
-
     /// computes the number of logically redundant nodes allocated by the
     /// manager (nodes that have the same semantic hash)
     pub fn num_logically_redundant(&self) -> usize {
-        let mut s : HashSet<u128> = HashSet::new();
+        let mut s: HashSet<u128> = HashSet::new();
         let hasher = create_semantic_hash_map::<100000000063>(self.num_vars() + 1000); // TODO FIX THIS BADNESS
         let mut num_collisions = 0;
         for n in self.node_iter() {

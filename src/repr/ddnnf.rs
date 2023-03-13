@@ -2,15 +2,15 @@
 //! (d-DNNF) pointer type
 use core::fmt::Debug;
 
-use crate::util::semiring::{Semiring, FiniteField};
-use rand::{SeedableRng, Rng};
+use crate::util::semiring::{FiniteField, Semiring};
+use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha8Rng;
 
 /// creates a weighting that can be used for semantically hashing a DDNNF node
-/// the constant `P` denotes the size of the field over which the semantic hash will 
+/// the constant `P` denotes the size of the field over which the semantic hash will
 /// be computed. For more info, see https://tr.inf.unibe.ch/pdf/iam-06-001.pdf
 pub fn create_semantic_hash_map<const P: u128>(num_vars: usize) -> WmcParams<FiniteField<P>> {
-    let vars : Vec<VarLabel> = (0..num_vars).map(|x| VarLabel::new_usize(x)).collect();
+    let vars: Vec<VarLabel> = (0..num_vars).map(|x| VarLabel::new_usize(x)).collect();
 
     // theoretical guarantee from paper; need to verify more!
     assert!((2 * vars.len() as u128) < P);
@@ -40,7 +40,7 @@ use super::{
     var_label::{VarLabel, VarSet},
     wmc::WmcParams,
 };
-use std::{hash::Hash, collections::HashMap};
+use std::{collections::HashMap, hash::Hash};
 /// A base d-DNNF type
 pub enum DDNNF<T> {
     /// contains the cached values for the children, and the VarSet that

@@ -395,7 +395,6 @@ mod test_bdd_manager {
         }
     }
 
-
     quickcheck! {
         fn wmc_eq(c1: Cnf) -> TestResult {
             // constrain the size
@@ -508,7 +507,7 @@ mod test_sdd_manager {
     use quickcheck::TestResult;
     use rsdd::builder::cache::all_app::AllTable;
     use rsdd::repr::bdd::BddPtr;
-    use rsdd::repr::ddnnf::{DDNNFPtr, create_semantic_hash_map};
+    use rsdd::repr::ddnnf::{create_semantic_hash_map, DDNNFPtr};
     use rsdd::repr::sdd::SddPtr;
     use rsdd::repr::vtree::VTree;
     use rsdd::repr::wmc::WmcParams;

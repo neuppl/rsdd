@@ -145,7 +145,6 @@ fn compile_sdd_rightlinear(str: String, _args: &Args) -> BenchResult {
         assert!(r.is_ok(), "Error writing file");
     }
 
-
     BenchResult {
         num_recursive: man.get_stats().num_rec,
         size: _sdd.count_nodes(),
