@@ -1,0 +1,44 @@
+* Nix support for RSDD
+This folder includes flake support for RSDD. The [[https://devenv.sh/][devenv.sh]] is maintained for development, but the derivation is experimental and may break.
+
+** Setting up nix-direnv
+For a quick nix-direnv, create a ~.envrc~ in the root of RSDD with the following:
+
+#+begin_example
+use flake ./nix --impure
+#+end_example
+
+Then ~direnv allow~ should produce the following output:
+
+#+begin_example
+Hello from devshell+flake.nix!
+Some tools this environment is equipped with:
+
+lldb		-- A next-generation high-performance debugger
+cargo		-- Downloads your Rust project's dependencies and builds your project
+rustc		-- A safe, concurrent, practical language
+rustfmt		-- A tool for formatting Rust code according to style guidelines
+rust-analyzer		-- A modular compiler frontend for the Rust language
+clippy		-- A bunch of lints to catch common mistakes and improve your Rust code
+cargo-watch		-- A Cargo subcommand for watching over Cargo project's source
+cargo-nextest		-- Next-generation test runner for Rust projects
+cargo-expand		-- A utility and Cargo subcommand designed to let people expand macros in their Rust source code
+cargo-llvm-lines		-- Count the number of lines of LLVM IR across all instantiations of a generic function
+cargo-inspect		-- See what Rust is doing behind the curtains
+cargo-criterion		-- Cargo extension for running Criterion.rs benchmarks
+evcxr		-- An evaluation context for Rust
+cargo-play		-- Run your rust code without setting up cargo
+cargo-rr		-- Cargo subcommand rr: a light wrapper around rr, the time-travelling debugger
+rr		-- Records nondeterministic executions and debugs them deterministically
+#+end_example
+
+** Using the derivation
+#+begin_quote
+Be aware! This derivation is not maintained (yet) and is not included in CI! There is a little more work to be done, including cachix support.
+#+end_quote
+
+To include this in a flake of your own, include the ~?dir=~ parameter to the rsdd input:
+
+#+begin_example
+inputs.rsdd.url = "github:stites/rsdd?dir=nix";
+#+end_example
