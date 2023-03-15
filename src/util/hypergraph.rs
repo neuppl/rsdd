@@ -157,6 +157,10 @@ impl<T: Clone + Debug + PartialEq + Eq + Hash> Hypergraph<T> {
         }
         true
     }
+    /// add a vertex to the hypergraph. Returns false if the vertex is already in the hypergraph
+    pub fn insert_vertex(&mut self, v: T) -> bool {
+        self.vertices.insert(v)
+    }
 
     /// cut a vertex out of the hypergraph
     pub fn cut_vertex(&mut self, v: &T) -> bool {
