@@ -394,8 +394,11 @@ impl SddPtr {
     }
 
     /// returns number of (prime, sub) pairs this node points to
-    /// panics if not an or-node
+    /// panics if not an or-node or const
     pub fn num_nodes(&self) -> usize {
+        if self.is_const() {
+            return 1;
+        }
         if self.is_bdd() {
             2
         } else {

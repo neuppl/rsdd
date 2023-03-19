@@ -57,5 +57,5 @@ name = "bayesian_network_compiler"
 path = "bin/bayesian_network_compiler.rs"
 
 [[bin]]
-name = "compare_canonicalize"
-path = "bin/compare_canonicalize.rs"
+name = "semantic_hash_experiment"
+path = "bin/semantic_hash_experiment.rs"

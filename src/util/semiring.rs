@@ -91,6 +91,14 @@ impl<const P: u128> ops::Add<FiniteField<P>> for FiniteField<P> {
     }
 }
 
+impl<const P: u128> ops::Sub<FiniteField<P>> for FiniteField<P> {
+    type Output = FiniteField<P>;
+
+    fn sub(self, rhs: FiniteField<P>) -> Self::Output {
+        FiniteField::new((P + self.v - rhs.v) % P)
+    }
+}
+
 impl<const P: u128> ops::Mul<FiniteField<P>> for FiniteField<P> {
     type Output = FiniteField<P>;
 

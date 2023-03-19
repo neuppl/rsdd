@@ -581,6 +581,7 @@ impl<T: SddCanonicalizationScheme> SddManager<T> {
     fn print_sdd_internal(&self, ptr: SddPtr) -> String {
         use pretty::*;
         // TODO: this lifetime might be wrong
+        self.canonicalizer.on_sdd_print_dump_state(ptr);
         fn helper(ptr: SddPtr) -> Doc<'static, BoxDoc<'static>> {
             if ptr.is_true() {
                 return Doc::from("T");

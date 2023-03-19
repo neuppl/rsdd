@@ -25,6 +25,9 @@ pub trait SddCanonicalizationScheme {
     fn sdd_hasher(&self) -> &Self::SddOrHasher;
     fn bdd_get_or_insert(&mut self, item: BinarySDD) -> *mut BinarySDD;
     fn sdd_get_or_insert(&mut self, item: SddOr) -> *mut SddOr;
+
+    // debugging util
+    fn on_sdd_print_dump_state(&self, ptr: SddPtr);
 }
 
 pub struct CompressionCanonicalizer {
@@ -89,6 +92,8 @@ impl SddCanonicalizationScheme for CompressionCanonicalizer {
     fn sdd_get_or_insert(&mut self, item: SddOr) -> *mut SddOr {
         self.sdd_tbl.get_or_insert(item, &self.hasher)
     }
+
+    fn on_sdd_print_dump_state(&self, _ptr: SddPtr) {}
 }
 
 pub struct SemanticUniqueTableHasher<const P: u128> {
@@ -105,9 +110,11 @@ impl<const P: u128> SemanticUniqueTableHasher<P> {
 impl<const P: u128> UniqueTableHasher<BinarySDD> for SemanticUniqueTableHasher<P> {
     // TODO: we should be able to de-duplicate this with fold
     fn u64hash(&self, elem: &BinarySDD) -> u64 {
-        (elem.low().semantic_hash(&self.vtree, &self.map)
-            * elem.high().semantic_hash(&self.vtree, &self.map))
-        .value() as u64
+        let var_weight = self.map.get_var_weight(elem.label());
+
+        (((self.map.one - elem.low().semantic_hash(&self.vtree, &self.map)) * var_weight.0
+            + elem.high().semantic_hash(&self.vtree, &self.map) * var_weight.1)
+            .value()) as u64
     }
 }
 
@@ -190,5 +197,9 @@ impl<const P: u128> SddCanonicalizationScheme for SemanticCanonicalizer<P> {
 
     fn sdd_get_or_insert(&mut self, item: SddOr) -> *mut SddOr {
         self.sdd_tbl.get_or_insert(item, &self.hasher)
+    }
+
+    fn on_sdd_print_dump_state(&self, ptr: SddPtr) {
+        println!("h: {}", ptr.semantic_hash(&self.vtree, &self.map))
     }
 }
