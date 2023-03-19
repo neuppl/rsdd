@@ -110,10 +110,10 @@ impl<const P: u128> SemanticUniqueTableHasher<P> {
 impl<const P: u128> UniqueTableHasher<BinarySDD> for SemanticUniqueTableHasher<P> {
     // TODO: we should be able to de-duplicate this with fold
     fn u64hash(&self, elem: &BinarySDD) -> u64 {
-        let var_weight = self.map.get_var_weight(elem.label());
+        let (low_w, high_w) = self.map.get_var_weight(elem.label());
 
-        (((self.map.one - elem.low().semantic_hash(&self.vtree, &self.map)) * var_weight.0
-            + elem.high().semantic_hash(&self.vtree, &self.map) * var_weight.1)
+        (((self.map.one - elem.low().semantic_hash(&self.vtree, &self.map)) * *low_w
+            + elem.high().semantic_hash(&self.vtree, &self.map) * *high_w)
             .value()) as u64
     }
 }

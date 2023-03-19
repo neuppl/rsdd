@@ -60,7 +60,7 @@ impl<const P: u128> SddApplySemantic<P> {
 impl<const P: u128> SddApply for SddApplySemantic<P> {
     fn get(&self, and: SddAnd) -> Option<SddPtr> {
         let h = and.semantic_hash(&self.vtree, &self.map);
-        self.table.get(&h).cloned()
+        self.table.get(&h).copied()
     }
     fn insert(&mut self, and: SddAnd, ptr: SddPtr) {
         let h = and.semantic_hash(&self.vtree, &self.map);

@@ -42,8 +42,9 @@ fn run_canonicalizer_experiment(c: Cnf, vtree: VTree) {
     let start = Instant::now();
     println!("creating semantic...");
 
+    // 18,446,744,073,709,551,616 - 25
     // TODO: make the prime a CLI arg
-    let mut sem_mgr = SddManager::<SemanticCanonicalizer<100000049>>::new(vtree);
+    let mut sem_mgr = SddManager::<SemanticCanonicalizer<18_446_744_073_709_551_591>>::new(vtree);
     let sem_cnf = sem_mgr.from_cnf(&c);
 
     let duration = start.elapsed();
