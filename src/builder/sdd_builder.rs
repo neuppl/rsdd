@@ -51,6 +51,10 @@ impl<T: SddCanonicalizationScheme> SddManager<T> {
         }
     }
 
+    pub fn canonicalizer(&self) -> &T {
+        &self.canonicalizer
+    }
+
     pub fn set_compression(&mut self, b: bool) {
         self.canonicalizer.set_compress(b)
     }

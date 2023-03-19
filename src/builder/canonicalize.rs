@@ -25,6 +25,8 @@ pub trait SddCanonicalizationScheme {
     fn sdd_hasher(&self) -> &Self::SddOrHasher;
     fn bdd_get_or_insert(&mut self, item: BinarySDD) -> *mut BinarySDD;
     fn sdd_get_or_insert(&mut self, item: SddOr) -> *mut SddOr;
+    fn bdd_num_uniq(&self) -> usize;
+    fn sdd_num_uniq(&self) -> usize;
 
     // debugging util
     fn on_sdd_print_dump_state(&self, ptr: SddPtr);
@@ -91,6 +93,14 @@ impl SddCanonicalizationScheme for CompressionCanonicalizer {
 
     fn sdd_get_or_insert(&mut self, item: SddOr) -> *mut SddOr {
         self.sdd_tbl.get_or_insert(item, &self.hasher)
+    }
+
+    fn bdd_num_uniq(&self) -> usize {
+        self.bdd_tbl.num_nodes()
+    }
+
+    fn sdd_num_uniq(&self) -> usize {
+        self.sdd_tbl.num_nodes()
     }
 
     fn on_sdd_print_dump_state(&self, _ptr: SddPtr) {}
@@ -197,6 +207,14 @@ impl<const P: u128> SddCanonicalizationScheme for SemanticCanonicalizer<P> {
 
     fn sdd_get_or_insert(&mut self, item: SddOr) -> *mut SddOr {
         self.sdd_tbl.get_or_insert(item, &self.hasher)
+    }
+
+    fn bdd_num_uniq(&self) -> usize {
+        self.bdd_tbl.num_nodes()
+    }
+
+    fn sdd_num_uniq(&self) -> usize {
+        self.sdd_tbl.num_nodes()
     }
 
     fn on_sdd_print_dump_state(&self, ptr: SddPtr) {

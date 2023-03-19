@@ -3,7 +3,7 @@ extern crate rsdd;
 use clap::Parser;
 use rsdd::{
     builder::{
-        canonicalize::{CompressionCanonicalizer, SemanticCanonicalizer},
+        canonicalize::{CompressionCanonicalizer, SemanticCanonicalizer, SddCanonicalizationScheme},
         sdd_builder::SddManager,
     },
     repr::{cnf::Cnf, var_label::VarLabel, vtree::VTree},
@@ -46,6 +46,8 @@ fn run_canonicalizer_experiment(c: Cnf, vtree: VTree) {
     // TODO: make the prime a CLI arg
     let mut sem_mgr = SddManager::<SemanticCanonicalizer<18_446_744_073_709_551_591>>::new(vtree);
     let sem_cnf = sem_mgr.from_cnf(&c);
+    // saving this before we run sdd_eq, which could add nodes to the table
+    let sem_uniq = sem_mgr.canonicalizer().bdd_num_uniq() + sem_mgr.canonicalizer().sdd_num_uniq();
 
     let duration = start.elapsed();
     println!("time: {:?}", duration);
@@ -65,12 +67,21 @@ fn run_canonicalizer_experiment(c: Cnf, vtree: VTree) {
     }
 
     println!(
-        "savings (uncompressed/compressed): {}",
-        uncompr_cnf.num_nodes() / compr_cnf.num_nodes()
+        "uncompr: {} nodes, {} uniq",
+        uncompr_cnf.num_nodes(),
+        uncompr_mgr.canonicalizer().bdd_num_uniq() + uncompr_mgr.canonicalizer().sdd_num_uniq()
     );
+
     println!(
-        "savings (uncompressed/semantic): {}",
-        uncompr_cnf.num_nodes() / sem_cnf.num_nodes()
+        "compr: {} nodes, {} uniq",
+        compr_cnf.num_nodes(),
+        compr_mgr.canonicalizer().bdd_num_uniq() + compr_mgr.canonicalizer().sdd_num_uniq()
+    );
+
+    println!(
+        "sem: {} nodes, {} uniq",
+        sem_cnf.num_nodes(),
+        sem_uniq
     );
 }
 

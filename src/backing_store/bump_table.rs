@@ -148,7 +148,6 @@ where
     //     (total as f64) / (self.len as f64)
     // }
 
-    #[allow(dead_code)]
     pub fn num_nodes(&self) -> usize {
         self.len
     }
