@@ -91,6 +91,7 @@ impl<const P: u128> ops::Add<FiniteField<P>> for FiniteField<P> {
     }
 }
 
+// TODO: perhaps, remove this, since it's not a quality of a semiring
 impl<const P: u128> ops::Sub<FiniteField<P>> for FiniteField<P> {
     type Output = FiniteField<P>;
 

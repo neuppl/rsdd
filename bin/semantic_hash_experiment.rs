@@ -3,7 +3,9 @@ extern crate rsdd;
 use clap::Parser;
 use rsdd::{
     builder::{
-        canonicalize::{CompressionCanonicalizer, SemanticCanonicalizer, SddCanonicalizationScheme},
+        canonicalize::{
+            CompressionCanonicalizer, SddCanonicalizationScheme, SemanticCanonicalizer,
+        },
         sdd_builder::SddManager,
     },
     repr::{cnf::Cnf, var_label::VarLabel, vtree::VTree},
@@ -78,11 +80,7 @@ fn run_canonicalizer_experiment(c: Cnf, vtree: VTree) {
         compr_mgr.canonicalizer().bdd_num_uniq() + compr_mgr.canonicalizer().sdd_num_uniq()
     );
 
-    println!(
-        "sem: {} nodes, {} uniq",
-        sem_cnf.num_nodes(),
-        sem_uniq
-    );
+    println!("sem: {} nodes, {} uniq", sem_cnf.num_nodes(), sem_uniq);
 }
 
 fn main() {
