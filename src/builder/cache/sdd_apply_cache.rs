@@ -1,27 +1,69 @@
 use rustc_hash::FxHashMap;
 
-use crate::repr::sdd::{SddAnd, SddPtr};
+use crate::{
+    repr::{
+        bdd::WmcParams,
+        sdd::{SddAnd, SddPtr},
+        vtree::VTreeManager,
+    },
+    util::semiring::FiniteField,
+};
 
-pub struct SddApply {
+pub trait SddApply {
+    fn get(&self, and: SddAnd) -> Option<SddPtr>;
+    fn insert(&mut self, and: SddAnd, ptr: SddPtr);
+}
+
+pub struct SddApplyCompression {
     table: FxHashMap<SddAnd, SddPtr>,
 }
 
-impl SddApply {
-    pub fn new() -> SddApply {
-        SddApply {
+impl SddApplyCompression {
+    pub fn new() -> SddApplyCompression {
+        SddApplyCompression {
             table: FxHashMap::default(),
         }
     }
-    pub fn get(&self, and: SddAnd) -> Option<SddPtr> {
+}
+
+impl SddApply for SddApplyCompression {
+    fn get(&self, and: SddAnd) -> Option<SddPtr> {
         self.table.get(&and).cloned()
     }
-    pub fn insert(&mut self, and: SddAnd, ptr: SddPtr) {
+    fn insert(&mut self, and: SddAnd, ptr: SddPtr) {
         self.table.insert(and, ptr);
     }
 }
 
-impl Default for SddApply {
+impl Default for SddApplyCompression {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+pub struct SddApplySemantic<const P: u128> {
+    table: FxHashMap<FiniteField<P>, SddPtr>,
+    map: WmcParams<FiniteField<P>>,
+    vtree: VTreeManager,
+}
+
+impl<const P: u128> SddApplySemantic<P> {
+    pub fn new<'a>(map: WmcParams<FiniteField<P>>, vtree: VTreeManager) -> SddApplySemantic<P> {
+        SddApplySemantic {
+            table: FxHashMap::default(),
+            map,
+            vtree,
+        }
+    }
+}
+
+impl<const P: u128> SddApply for SddApplySemantic<P> {
+    fn get(&self, and: SddAnd) -> Option<SddPtr> {
+        let h = and.semantic_hash(&self.vtree, &self.map);
+        self.table.get(&h).copied()
+    }
+    fn insert(&mut self, and: SddAnd, ptr: SddPtr) {
+        let h = and.semantic_hash(&self.vtree, &self.map);
+        self.table.insert(h, ptr);
     }
 }

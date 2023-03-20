@@ -8,7 +8,6 @@ use crate::{
     },
 };
 use bumpalo::Bump;
-
 use rustc_hash::FxHashMap;
 
 use crate::{
@@ -36,10 +35,16 @@ impl DecisionNNFBuilder {
     fn get_or_insert(&mut self, bdd: BddNode) -> BddPtr {
         if bdd.high.is_neg() {
             let bdd = BddNode::new(bdd.var, bdd.low.neg(), bdd.high.neg());
-            BddPtr::new_compl(self.compute_table.get_or_insert(bdd))
+            BddPtr::new_compl(
+                self.compute_table
+                    .get_or_insert(bdd, &DefaultUniqueTableHasher::default()),
+            )
         } else {
             let bdd = BddNode::new(bdd.var, bdd.low, bdd.high);
-            BddPtr::new_reg(self.compute_table.get_or_insert(bdd))
+            BddPtr::new_reg(
+                self.compute_table
+                    .get_or_insert(bdd, &DefaultUniqueTableHasher::default()),
+            )
         }
     }
 

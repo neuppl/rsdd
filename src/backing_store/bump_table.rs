@@ -1,14 +1,12 @@
 //! A unique table based on a bump allocator and robin-hood hashing
 //! this is the primary unique table for storing all nodes
 
-use super::UniqueTable;
+use super::{UniqueTable, UniqueTableHasher};
 use bumpalo::Bump;
-use std::hash::{Hash, Hasher};
+use std::hash::Hash;
 use std::mem;
 
 use crate::util::*;
-
-use rustc_hash::FxHasher;
 
 /// The load factor of the table, i.e. how full the table will be when it
 /// automatically resizes
@@ -150,20 +148,20 @@ where
     //     (total as f64) / (self.len as f64)
     // }
 
-    #[allow(dead_code)]
     pub fn num_nodes(&self) -> usize {
         self.len
     }
 }
 
-impl<T: Eq + PartialEq + Hash + Clone> UniqueTable<T> for BackedRobinhoodTable<T> {
-    fn get_or_insert(&mut self, elem: T) -> *mut T {
+impl<T: Eq + PartialEq + Hash + Clone, H: UniqueTableHasher<T>> UniqueTable<T, H>
+    for BackedRobinhoodTable<T>
+{
+    fn get_or_insert(&mut self, elem: T, hasher: &H) -> *mut T {
         if (self.len + 1) as f64 > (self.cap as f64 * LOAD_FACTOR) {
             self.grow();
         }
-        let mut hasher = FxHasher::default();
-        elem.hash(&mut hasher);
-        let elem_hash = hasher.finish();
+
+        let elem_hash = hasher.u64hash(&elem);
 
         // the current index into the array
         let mut pos: usize = (elem_hash as usize) % self.cap;

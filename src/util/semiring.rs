@@ -59,7 +59,7 @@ impl Semiring for RealSemiring {
 }
 
 /// a finite-field abstraction. The parameter `p` is the size of the field.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct FiniteField<const P: u128> {
     v: u128,
 }
@@ -88,6 +88,15 @@ impl<const P: u128> ops::Add<FiniteField<P>> for FiniteField<P> {
 
     fn add(self, rhs: FiniteField<P>) -> Self::Output {
         FiniteField::new((self.v + rhs.v) % P)
+    }
+}
+
+// TODO: perhaps, remove this, since it's not a quality of a semiring
+impl<const P: u128> ops::Sub<FiniteField<P>> for FiniteField<P> {
+    type Output = FiniteField<P>;
+
+    fn sub(self, rhs: FiniteField<P>) -> Self::Output {
+        FiniteField::new((P + self.v - rhs.v) % P)
     }
 }
 

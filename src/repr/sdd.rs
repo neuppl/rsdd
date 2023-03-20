@@ -1,9 +1,12 @@
 //! Defines the internal representations for a trimmed and compressed SDD with
 //! complemented edges.
 
-use crate::repr::{
-    ddnnf::DDNNF,
-    var_label::{VarLabel, VarSet},
+use crate::{
+    repr::{
+        ddnnf::DDNNF,
+        var_label::{VarLabel, VarSet},
+    },
+    util::semiring::FiniteField,
 };
 use bumpalo::Bump;
 use std::collections::HashSet;
@@ -141,6 +144,14 @@ impl SddAnd {
     pub fn new(prime: SddPtr, sub: SddPtr) -> SddAnd {
         SddAnd { prime, sub }
     }
+    // TODO: we should be able to de-duplicate this with fold
+    pub fn semantic_hash<const P: u128>(
+        &self,
+        vtree: &VTreeManager,
+        map: &WmcParams<FiniteField<P>>,
+    ) -> FiniteField<P> {
+        self.prime.semantic_hash(vtree, map) * self.sub.semantic_hash(vtree, map)
+    }
 }
 
 /// An SddOr node is a vector of (prime, sub) pairs.
@@ -170,6 +181,7 @@ impl PartialEq for SddOr {
 use std::hash::{Hash, Hasher};
 
 use super::{
+    bdd::WmcParams,
     ddnnf::DDNNFPtr,
     var_label::Literal,
     vtree::{VTreeIndex, VTreeManager},
@@ -382,8 +394,11 @@ impl SddPtr {
     }
 
     /// returns number of (prime, sub) pairs this node points to
-    /// panics if not an or-node
+    /// panics if not an or-node or const
     pub fn num_nodes(&self) -> usize {
+        if self.is_const() {
+            return 1;
+        }
         if self.is_bdd() {
             2
         } else {
@@ -708,17 +723,18 @@ fn is_trimmed_trivial() {
 
 #[test]
 fn is_trimmed_simple_demorgan() {
-    let mut man =
-        crate::builder::sdd_builder::SddManager::new(crate::repr::vtree::VTree::even_split(
-            &[
-                VarLabel::new(0),
-                VarLabel::new(1),
-                VarLabel::new(2),
-                VarLabel::new(3),
-                VarLabel::new(4),
-            ],
-            1,
-        ));
+    let mut man = crate::builder::sdd_builder::SddManager::<
+        crate::builder::canonicalize::CompressionCanonicalizer,
+    >::new(crate::repr::vtree::VTree::even_split(
+        &[
+            VarLabel::new(0),
+            VarLabel::new(1),
+            VarLabel::new(2),
+            VarLabel::new(3),
+            VarLabel::new(4),
+        ],
+        1,
+    ));
 
     let x = SddPtr::var(VarLabel::new(0), true);
     let y = SddPtr::var(VarLabel::new(3), true);
@@ -738,17 +754,18 @@ fn is_canonical_trivial() {
 
 #[test]
 fn is_canonical_simple_demorgan() {
-    let mut man =
-        crate::builder::sdd_builder::SddManager::new(crate::repr::vtree::VTree::even_split(
-            &[
-                VarLabel::new(0),
-                VarLabel::new(1),
-                VarLabel::new(2),
-                VarLabel::new(3),
-                VarLabel::new(4),
-            ],
-            1,
-        ));
+    let mut man = crate::builder::sdd_builder::SddManager::<
+        crate::builder::canonicalize::CompressionCanonicalizer,
+    >::new(crate::repr::vtree::VTree::even_split(
+        &[
+            VarLabel::new(0),
+            VarLabel::new(1),
+            VarLabel::new(2),
+            VarLabel::new(3),
+            VarLabel::new(4),
+        ],
+        1,
+    ));
     let x = SddPtr::var(VarLabel::new(0), true);
     let y = SddPtr::var(VarLabel::new(3), true);
     let res = man.or(x, y).neg();
