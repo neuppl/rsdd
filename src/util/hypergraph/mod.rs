@@ -20,11 +20,11 @@ fn calculate_hash<T: Hash>(t: &T) -> u64 {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Edge<V>(HashSet<V>)
 where
-    V: Clone + Debug + PartialEq + Eq + Hash;
+    V: Eq + Hash;
 
 impl<V> Hash for Edge<V>
 where
-    V: Clone + Debug + PartialEq + Eq + Hash,
+    V: Eq + Hash,
 {
     fn hash<H>(&self, state: &mut H)
     where
@@ -37,12 +37,12 @@ where
     }
 }
 
-impl<V> Edge<V>
+impl<T, const N: usize> From<[T; N]> for Edge<T>
 where
-    V: Clone + Debug + PartialEq + Eq + Hash,
+    T: Eq + Hash,
 {
-    pub fn from(i: &[V]) -> Self {
-        Edge(i.iter().cloned().collect())
+    fn from(arr: [T; N]) -> Self {
+        Edge(HashSet::from(arr))
     }
 }
 
@@ -51,7 +51,7 @@ pub struct Rank(pub usize);
 
 pub trait Hypergraph
 where
-    <Self as Hypergraph>::Vertex: Clone + Debug + PartialEq + Eq + Hash,
+    <Self as Hypergraph>::Vertex: Clone + Eq + Hash,
 {
     type Vertex;
     fn vertices(&self) -> &HashSet<Self::Vertex>;

@@ -82,17 +82,17 @@ mod hgraph_test {
         g.insert_vertex(7);
         g.insert_vertex(8);
         g.insert_vertex(9);
-        g.insert_edge(Edge::from(&[0, 2]));
+        g.insert_edge(Edge::from([0, 2]));
         assert_eq!(g.covers().size(), 1);
-        g.insert_edge(Edge::from(&[1, 2]));
+        g.insert_edge(Edge::from([1, 2]));
         assert_eq!(g.covers().size(), 1);
-        g.insert_edge(Edge::from(&[0, 1, 2]));
+        g.insert_edge(Edge::from([0, 1, 2]));
         let cs = g.covers();
         assert_eq!(cs.size(), 1);
         let c = cs.covers.into_iter().nth(0).unwrap();
         assert_eq!(c.edges.len(), 3);
 
-        g.insert_edge(Edge::from(&[7, 8, 9]));
+        g.insert_edge(Edge::from([7, 8, 9]));
         assert_eq!(g.covers().covers.len(), 2);
     }
 
@@ -102,9 +102,9 @@ mod hgraph_test {
         g.insert_vertex(0);
         g.insert_vertex(1);
         g.insert_vertex(2);
-        let e0 = Edge::from(&[0]);
-        let e1 = Edge::from(&[1, 2]);
-        let e2 = Edge::from(&[0, 1, 2]);
+        let e0 = Edge::from([0]);
+        let e1 = Edge::from([1, 2]);
+        let e2 = Edge::from([0, 1, 2]);
         g.insert_edge(e0.clone());
         g.insert_edge(e1.clone());
         g.insert_edge(e2.clone());
@@ -116,32 +116,11 @@ mod hgraph_test {
         g.insert_vertex(7);
         g.insert_vertex(8);
         g.insert_vertex(9);
-        let e3 = Edge::from(&[7, 8, 9]);
+        let e3 = Edge::from([7, 8, 9]);
         g.insert_edge(e3.clone());
         let mut cs = g.covers();
         cs.remove_edge(&e3);
         assert_eq!(cs.size(), 1);
-    }
-
-    #[test]
-    #[ignore = "todo"]
-    fn test_grid_cutset_construction() {
-        let mut g: HGraph<usize> = Default::default();
-        g.insert_vertex(0);
-        g.insert_vertex(1);
-        g.insert_vertex(2);
-        g.insert_vertex(3);
-        let e0 = Edge::from(&[0]);
-        let e1 = Edge::from(&[0, 1]);
-        let e2 = Edge::from(&[0, 2]);
-        let e3 = Edge::from(&[0, 1, 2, 3]);
-        g.insert_edge(e0.clone());
-        g.insert_edge(e1.clone());
-        g.insert_edge(e2.clone());
-        g.insert_edge(e3.clone());
-        let cs = g.covers();
-        assert_eq!(cs.size(), 1);
-        todo!();
     }
 }
 

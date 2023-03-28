@@ -9,14 +9,14 @@ use std::hash::{Hash, Hasher};
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Cover<V>
 where
-    V: Clone + Debug + PartialEq + Eq + Hash,
+    V: Clone + Eq + Hash,
 {
     pub(in crate::util::hypergraph) cover: HashSet<V>,
     pub(in crate::util::hypergraph) edges: HashSet<Edge<V>>,
 }
 impl<V> Hash for Cover<V>
 where
-    V: Clone + Debug + PartialEq + Eq + Hash,
+    V: Clone + Eq + Hash,
 {
     fn hash<H>(&self, state: &mut H)
     where
@@ -35,7 +35,7 @@ where
 
 impl<V> Cover<V>
 where
-    V: Clone + Debug + PartialEq + Eq + Hash,
+    V: Clone + Eq + Hash,
 {
     pub fn empty() -> Self {
         Self {
@@ -62,13 +62,13 @@ where
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct AllCovers<V>
 where
-    V: Clone + Debug + PartialEq + Eq + Hash,
+    V: Clone + Eq + Hash,
 {
     pub(in crate::util::hypergraph) covers: HashSet<Cover<V>>,
 }
 impl<V> AllCovers<V>
 where
-    V: Clone + Debug + PartialEq + Eq + Hash,
+    V: Clone + Eq + Hash,
 {
     pub fn size(&self) -> usize {
         self.covers.len()

@@ -1,4 +1,3 @@
-// use super::btree::BTree;
 use super::hgraph::HGraph;
 use super::*;
 use core::fmt::Debug;
@@ -9,7 +8,7 @@ use std::hash::{Hash, Hasher};
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Cluster<V>(HashSet<V>)
 where
-    V: Clone + Debug + PartialEq + Eq + Hash;
+    V: Eq + Hash;
 impl<V> Hash for Cluster<V>
 where
     V: Clone + Debug + PartialEq + Eq + Hash,
@@ -22,6 +21,15 @@ where
         hashes.sort();
         let hashstr = hashes.into_iter().map(|x| x.to_string()).join("");
         hashstr.hash(state);
+    }
+}
+
+impl<T, const N: usize> From<[T; N]> for Cluster<T>
+where
+    T: Eq + Hash,
+{
+    fn from(arr: [T; N]) -> Self {
+        Cluster(HashSet::from(arr))
     }
 }
 
@@ -146,5 +154,34 @@ where
         let mut sorted_edges = self.edgecuts_ranked();
         sorted_edges.sort_by(|(_, a), (_, b)| b.cmp(&a));
         sorted_edges
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_grid2x2_cutset_construction() {
+        let mut g: ClusterGraph<usize> = Default::default();
+        let n1 = Cluster::from([1]);
+        let n2 = Cluster::from([1, 2]);
+        let n3 = Cluster::from([1, 3]);
+        let n4 = Cluster::from([2, 3, 4]);
+        g.insert_vertex(n1.clone());
+        g.insert_vertex(n2.clone());
+        g.insert_vertex(n3.clone());
+        g.insert_vertex(n4.clone());
+        let e1 = Edge::from([n1.clone(), n2.clone(), n3.clone()]);
+        let e2 = Edge::from([n2.clone(), n4.clone()]);
+        let e3 = Edge::from([n3.clone(), n4.clone()]);
+        let e4 = Edge::from([n4.clone()]);
+        g.insert_edge(e1.clone());
+        g.insert_edge(e2.clone());
+        g.insert_edge(e3.clone());
+        g.insert_edge(e4.clone());
+        let cs = g.covers();
+        assert_eq!(cs.size(), 1);
+        todo!();
     }
 }
