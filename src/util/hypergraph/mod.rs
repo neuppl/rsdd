@@ -5,6 +5,7 @@ use std::collections::hash_map::DefaultHasher;
 use std::collections::HashSet;
 use std::hash::{Hash, Hasher};
 
+pub mod clustergraph;
 pub mod cover;
 pub mod hgraph;
 
