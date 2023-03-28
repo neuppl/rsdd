@@ -87,6 +87,31 @@ pub trait DDNNFPtr: Clone + Debug + PartialEq + Eq + Hash + Copy {
         })
     }
 
+    // /// Multi-rooted Weighted-model count
+    // fn mr_wmc<T: Semiring + std::ops::Add<Output = T> + std::ops::Mul<Output = T>>(
+    //     &Vec<Self>,
+    //     o: &Self::Order,
+    //     params: &WmcParams<T>,
+    // ) -> T {
+    //     mr_fold(o, |ddnnf| {
+    //         use DDNNF::*;
+    //         match ddnnf {
+    //             Or(l, r, _) => l + r,
+    //             And(l, r) => l * r,
+    //             True => params.one,
+    //             False => params.zero,
+    //             Lit(lbl, polarity) => {
+    //                 let (low_w, high_w) = params.get_var_weight(lbl);
+    //                 if polarity {
+    //                     *high_w
+    //                 } else {
+    //                     *low_w
+    //                 }
+    //             }
+    //         }
+    //     })
+    // }
+
     /// compute the semantic hash for this pointer
     fn semantic_hash<const P: u128>(
         &self,
