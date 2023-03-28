@@ -42,7 +42,7 @@ impl Default for SddApplyCompression {
 }
 
 pub struct SddApplySemantic<const P: u128> {
-    table: FxHashMap<FiniteField<P>, SddPtr>,
+    table: FxHashMap<u128, SddPtr>,
     map: WmcParams<FiniteField<P>>,
     vtree: VTreeManager,
 }
@@ -60,10 +60,16 @@ impl<const P: u128> SddApplySemantic<P> {
 impl<const P: u128> SddApply for SddApplySemantic<P> {
     fn get(&self, and: SddAnd) -> Option<SddPtr> {
         let h = and.semantic_hash(&self.vtree, &self.map);
-        self.table.get(&h).copied()
+        match h.value() {
+            0 => Some(SddPtr::PtrFalse),
+            1 => Some(SddPtr::PtrTrue),
+            _ => self.table.get(&h.value()).copied(),
+        }
     }
     fn insert(&mut self, and: SddAnd, ptr: SddPtr) {
         let h = and.semantic_hash(&self.vtree, &self.map);
-        self.table.insert(h, ptr);
+        if h.value() > 1 {
+            self.table.insert(h.value(), ptr);
+        }
     }
 }

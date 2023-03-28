@@ -66,6 +66,15 @@ impl<T: Semiring + std::ops::Mul<Output = T> + std::ops::Add<Output = T>> WmcPar
     }
 
     pub fn get_var_weight(&self, label: VarLabel) -> &(T, T) {
+        // TODO(matt): write a better error message - attempting to get label
         return (self.var_to_val[label.value_usize()]).as_ref().unwrap();
+    }
+
+    pub fn dump_all_var_weights(&self) {
+        self.var_to_val.iter().for_each(|f| {
+            let (low, high) = f.unwrap();
+            print!("low: {:?}, high: {:?} | ", low, high)
+        });
+        println!(" ")
     }
 }

@@ -17,7 +17,8 @@ pub fn create_semantic_hash_map<const P: u128>(num_vars: usize) -> WmcParams<Fin
 
     // seed the RNG deterministically for reproducible weights across
     // different calls to `create_semantic_hash_map`
-    let mut rng = ChaCha8Rng::seed_from_u64(101249);
+    // let mut rng = ChaCha8Rng::seed_from_u64(101249);
+    let mut rng = ChaCha8Rng::from_entropy();
 
     let value_range: Vec<(FiniteField<P>, FiniteField<P>)> = (0..vars.len() as u128)
         .map(|_| {
