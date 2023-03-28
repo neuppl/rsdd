@@ -111,3 +111,36 @@ pub trait TropicalSemiring: Debug + Clone + Copy + ops::Add + ops::Mul {
     fn max(&self, other: &Self) -> Self;
     fn min(&self, other: &Self) -> Self;
 }
+
+
+
+// Expected Utility Semiring.
+#[derive(Debug, Clone, Copy)]
+pub struct ExpectedUtility(f64, f64);
+
+impl ops::Add<ExpectedUtility> for ExpectedUtility {
+    type Output = ExpectedUtility;
+
+    fn add(self, rhs: ExpectedUtility) -> Self::Output {
+        ExpectedUtility(self.0 + rhs.0, self.1 + rhs.1)
+    }
+}
+
+impl ops::Mul<ExpectedUtility> for ExpectedUtility {
+    type Output = ExpectedUtility;
+
+    fn mul(self, rhs: ExpectedUtility) -> Self::Output {
+        let eu : f64 = (self.0 * rhs.1) + (self.1 * rhs.0); 
+        ExpectedUtility(self.0 * rhs.0, eu)
+    }
+}
+
+impl Semiring for ExpectedUtility {
+    fn one() -> Self {
+        ExpectedUtility(1.0, 0.0)
+    }
+
+    fn zero() -> Self {
+        ExpectedUtility(0.0, 0.0)
+    }
+}
