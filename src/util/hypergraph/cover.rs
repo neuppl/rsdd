@@ -43,6 +43,12 @@ where
             edges: Default::default(),
         }
     }
+    pub fn singleton(v: V) -> Self {
+        Self {
+            cover: HashSet::from([v.clone()]),
+            edges: HashSet::from([Edge::from([v.clone()])]),
+        }
+    }
     pub fn from_edge(e: &Edge<V>) -> Self {
         Self {
             cover: e.0.clone(),
@@ -65,6 +71,7 @@ where
     V: Clone + Eq + Hash,
 {
     pub(in crate::util::hypergraph) covers: HashSet<Cover<V>>,
+    pub(in crate::util::hypergraph) vertices: HashSet<V>,
 }
 impl<V> AllCovers<V>
 where
@@ -75,11 +82,13 @@ where
     }
 
     pub fn new(covers: HashSet<Cover<V>>) -> Self {
-        AllCovers { covers }
+        let vertices: HashSet<_> = covers.iter().map(|c| c.cover.clone()).flatten().collect();
+        AllCovers { covers, vertices }
     }
     pub fn from_edges(es: impl Iterator<Item = Edge<V>>) -> Self {
         let empty = AllCovers {
             covers: Default::default(),
+            vertices: Default::default(),
         };
         let seen: HashSet<V> = HashSet::new();
         es.fold((empty, seen), |(mut all, mut seen), edge| {
@@ -116,5 +125,31 @@ where
         to_split.edges.remove(e);
         let new_covers = Self::from_edges(to_split.edges.into_iter());
         self.covers.extend(new_covers.covers);
+    }
+    pub fn remove_edges(&mut self, edges: &HashSet<Edge<V>>) {
+        for e in edges {
+            self.remove_edge(e);
+        }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    #[test]
+    fn test_remove_edges_2x2() {
+        let e1 = Edge::from([1, 2, 3]);
+        let e2 = Edge::from([2, 4]);
+        let e3 = Edge::from([3, 4]);
+        let e4 = Edge::from([4]);
+        let cover = HashSet::from([1, 2, 3, 4]);
+        let edges = HashSet::from([e1.clone(), e2.clone(), e3.clone(), e4.clone()]);
+        let cover = Cover { cover, edges };
+        let mut allcs = AllCovers {
+            covers: HashSet::from([cover]),
+            vertices: HashSet::from([1, 2, 3, 4]),
+        };
+        allcs.remove_edges(&HashSet::from([e1.clone()]));
+        assert_eq!(allcs.size(), 2); // should be cover over singleton 1 and 2 3 4
     }
 }
