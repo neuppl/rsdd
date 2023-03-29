@@ -59,6 +59,13 @@ where
     V: Clone + Debug + PartialEq + Eq + Hash,
 {
     type Vertex = Cluster<V>;
+    fn new(vertices: HashSet<Cluster<V>>, hyperedges: HashSet<Edge<Cluster<V>>>) -> Self {
+        Self {
+            graph: HGraph::new(vertices, hyperedges),
+            ..Default::default()
+        }
+    }
+
     fn vertices(&self) -> &HashSet<Self::Vertex> {
         self.graph.vertices()
     }

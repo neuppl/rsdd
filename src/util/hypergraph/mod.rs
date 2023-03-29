@@ -1,15 +1,17 @@
 // use super::btree::BTree;
+use crate::util::hypergraph::cover::partitions;
 use core::fmt::Debug;
 use itertools::Itertools;
 use std::collections::hash_map::DefaultHasher;
 use std::collections::HashSet;
+use std::convert::TryInto;
 use std::hash::{Hash, Hasher};
 
 pub mod clustergraph;
 pub mod cover;
 pub mod hgraph;
 
-use cover::AllCovers;
+use cover::{AllCovers, Cover};
 
 fn calculate_hash<T: Hash>(t: &T) -> u64 {
     let mut s = DefaultHasher::new();
@@ -62,6 +64,7 @@ where
     <Self as Hypergraph>::Vertex: Clone + Debug + Eq + Hash,
 {
     type Vertex;
+    fn new(vs: HashSet<Self::Vertex>, es: HashSet<Edge<Self::Vertex>>) -> Self;
     fn vertices(&self) -> &HashSet<Self::Vertex>;
     fn hyperedges(&self) -> std::vec::IntoIter<Edge<Self::Vertex>>;
     fn insert_edge(&mut self, edge: Edge<Self::Vertex>) -> bool;
@@ -156,4 +159,66 @@ where
     // follow Kernighan-Lin algorithm for finding a minimum-cut 2-partition
     // todo!()
     // }
+}
+
+#[derive(Clone, Debug)]
+pub enum ADTree<V>
+where
+    V: Eq + Hash + Clone,
+{
+    Node {
+        l: Box<ADTree<V>>,
+        r: Box<ADTree<V>>,
+        vars: HashSet<Edge<V>>,
+    },
+    Leaf {
+        vars: HashSet<V>,
+    },
+}
+
+pub fn hg2dt_h<H: Hypergraph<Vertex = V>, V: Eq + Hash + Clone + Debug + 'static>(
+    h: &H,
+    e: &HashSet<Edge<V>>,
+) -> ADTree<V> {
+    let vtxs = h.vertices();
+    if vtxs.len() == 1 {
+        let vars: HashSet<V> = vtxs.clone();
+        ADTree::Leaf { vars }
+    } else {
+        let all_edges: HashSet<Edge<V>> = h.hyperedges().map(|x| x.clone()).collect();
+        let covers = h.covers();
+        let mut estar = vec![];
+        let nparts = 2;
+        for (cutset, sim) in partitions(&covers, nparts) {
+            if cutset.is_disjoint(e) {
+                let partition_sizes = sim.covers.iter().map(|x| x.cover.len()).collect_vec();
+                let total = partition_sizes.iter().sum::<usize>() as f64;
+                let n = nparts as f64;
+                let var = partition_sizes
+                    .iter()
+                    .map(|x| (1.0 / n) * (((*x as f64) / total) - (total / n)).powf(2.0))
+                    .sum::<f64>();
+                estar.push((cutset, sim, var));
+            }
+        }
+        assert!(estar.len() > 0);
+        estar.sort_by(|(_, _, a), (_, _, b)| a.total_cmp(b));
+        let (cuts, sim, _) = &estar[0];
+        let mut new_edges = cuts.clone();
+        new_edges.extend(e.clone());
+        let [cleft, cright]: [&Cover<V>; 2] = sim.covers.iter().collect_vec().try_into().unwrap();
+        let hleft: H = Hypergraph::new(cleft.cover.clone(), all_edges.clone());
+        let hright: H = Hypergraph::new(cright.cover.clone(), all_edges.clone());
+        let mut next_edges = e.clone();
+        let tleft = hg2dt_h(&hleft, &new_edges);
+        let tright = hg2dt_h(&hright, &new_edges);
+        ADTree::Node {
+            l: Box::new(tleft),
+            r: Box::new(tright),
+            vars: cuts.clone(),
+        }
+    }
+}
+pub fn hg2dt<V: Eq + Hash + Clone + Debug + 'static>(h: &impl Hypergraph<Vertex = V>) -> ADTree<V> {
+    hg2dt_h(h, &Default::default())
 }

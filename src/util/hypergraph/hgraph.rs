@@ -28,6 +28,12 @@ where
     V: Clone + Debug + PartialEq + Eq + Hash,
 {
     type Vertex = V;
+    fn new(vertices: HashSet<V>, hyperedges: HashSet<Edge<V>>) -> Self {
+        Self {
+            vertices,
+            hyperedges,
+        }
+    }
 
     fn vertices(&self) -> &HashSet<V> {
         &self.vertices
