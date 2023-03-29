@@ -316,13 +316,16 @@ mod test {
             println!("{} @ {:?}: {}", size, partition_sizes, show_cutset);
         }
         println!("-------------");
-        let mut avg: Option<f64> = None;
-        let mut var: Option<f64> = None;
-        let nparts = 3;
+        let nparts = 2;
 
+        let mut cuts_for_2 = vec![];
         for (cutset, sim) in partitions(&allcs, nparts) {
             let partition_sizes = sim.covers.iter().map(|x| x.cover.len()).collect_vec();
-            let show_cutset = cutset.into_iter().map(|e| e.show_compact()).join(", ");
+            let show_cutset = cutset
+                .clone()
+                .into_iter()
+                .map(|e| e.show_compact())
+                .join(", ");
             let total = partition_sizes.iter().sum::<usize>() as f64;
             let n = nparts as f64;
             let var = partition_sizes
@@ -336,8 +339,10 @@ mod test {
                 var,
                 show_cutset
             );
+            cuts_for_2.push((cutset, var));
         }
-
-        todo!();
+        cuts_for_2.sort_by(|(_, a), (_, b)| a.total_cmp(b));
+        println!("{:?}", cuts_for_2);
+        assert_eq!(cuts_for_2[0].0, HashSet::from([e2, e3]));
     }
 }
