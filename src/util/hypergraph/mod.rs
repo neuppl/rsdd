@@ -45,13 +45,21 @@ where
         Edge(HashSet::from(arr))
     }
 }
+impl<V> Edge<V>
+where
+    V: Debug + Eq + Hash,
+{
+    pub fn show_compact(&self) -> String {
+        self.0.iter().map(|x| format!("{:?}", x)).join("")
+    }
+}
 
 #[derive(Clone, Copy, Hash, Debug, Eq, PartialEq, Ord, PartialOrd)]
 pub struct Rank(pub usize);
 
 pub trait Hypergraph
 where
-    <Self as Hypergraph>::Vertex: Clone + Eq + Hash,
+    <Self as Hypergraph>::Vertex: Clone + Debug + Eq + Hash,
 {
     type Vertex;
     fn vertices(&self) -> &HashSet<Self::Vertex>;

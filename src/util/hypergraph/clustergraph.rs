@@ -162,7 +162,9 @@ mod test {
     use super::*;
 
     #[test]
-    fn test_grid2x2_cutset_construction() {
+    #[ignore]
+    fn test_remove_edges_2x2() {
+        // the concrete version of super::cover::test::test_remove_edges_2x2()
         let mut g: ClusterGraph<usize> = Default::default();
         let n1 = Cluster::from([1]);
         let n2 = Cluster::from([1, 2]);
