@@ -125,7 +125,7 @@ pub trait TropicalSemiring: Debug + Clone + Copy + ops::Add + ops::Mul {
 
 // Expected Utility Semiring.
 #[derive(Debug, Clone, Copy)]
-pub struct ExpectedUtility(f64, f64);
+pub struct ExpectedUtility(pub f64, pub f64);
 
 impl ops::Add<ExpectedUtility> for ExpectedUtility {
     type Output = ExpectedUtility;

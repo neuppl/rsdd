@@ -1,5 +1,5 @@
 //! Binary decision diagram representation
-use crate::{repr::var_label::VarSet, util::semiring::RealSemiring};
+use crate::{repr::var_label::VarSet, util::semiring::RealSemiring, util::semiring::ExpectedUtility};
 
 pub use super::{
     ddnnf::*,
@@ -9,7 +9,7 @@ pub use super::{
     wmc::WmcParams,
 };
 use core::fmt::Debug;
-use std::iter::FromIterator;
+use std::{iter::FromIterator};
 
 /// Core BDD pointer datatype
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Copy, PartialOrd, Ord)]
@@ -553,6 +553,135 @@ impl BddPtr {
             lower_bound.0,
             cur_assgn,
             vars,
+            wmc,
+            PartialModel::from_litvec(&[], num_vars),
+        )
+    }
+
+    /// upper-bounding the expected utility 
+    fn eu_ub(
+        &self,
+        partial_decisions: &PartialModel,
+        decision_vars: &BitSet,
+        wmc: &WmcParams<ExpectedUtility>,
+    ) -> ExpectedUtility {
+        // accumulator for EU via bdd_fold
+        let mut v = self.bdd_fold(
+            &|varlabel, low : ExpectedUtility, high : ExpectedUtility| {
+                // get True and False weights for VarLabel
+                let (false_w, true_w) = wmc.get_var_weight(varlabel);
+                // Check if our partial model has already assigned my variable.
+                match partial_decisions.get(varlabel) {
+                    // If not...
+                    None => {
+                        // If it's a decision variable, we do  
+                        if decision_vars.contains(varlabel.value_usize()) {
+                            let max_pr = f64::max(low.0, high.0);
+                            let max_eu = f64::max(low.1, high.1);
+                            ExpectedUtility(max_pr,max_eu)
+                        // Otherwise it's just a probabilistic variable so you do
+                        // the usual stuff...
+                        } else {
+                            (*false_w * low) + (*true_w * high)
+                        }
+                    }
+                    Some(true) => high,
+                    Some(false) => low,
+                }
+            },
+            wmc.zero,
+            wmc.one,
+        );
+        // multiply in weights of all variables in the partial assignment
+        for lit in partial_decisions.assignment_iter() {
+            let (l, h) = wmc.get_var_weight(lit.get_label());
+            if lit.get_polarity() {
+                v = v * (*h);
+            } else {
+                v = v * (*l);
+            }
+        }
+        v
+    }
+
+    fn meu_h(
+        &self,
+        cur_lb: ExpectedUtility,
+        cur_best: PartialModel,
+        decision_vars: &[VarLabel],
+        wmc: &WmcParams<ExpectedUtility>,
+        cur_assgn: PartialModel,
+    ) -> (ExpectedUtility, PartialModel) {
+        match decision_vars {
+            [] => {
+                let decision_bitset = BitSet::new();
+                let possible_best = self.eu_ub(&cur_assgn, &decision_bitset, wmc);
+                if possible_best.1 > cur_lb.1 {
+                    (possible_best, cur_assgn)
+                } else {
+                    (cur_lb, cur_best)
+                }
+            }
+            [x, end @ ..] => {
+                let mut best_model = cur_best;
+                let mut best_lb = cur_lb;
+                let margvar_bits = BitSet::from_iter(end.iter().map(|x| x.value_usize()));
+
+                let mut true_model = cur_assgn.clone();
+                true_model.set(*x, true);
+                #[allow(clippy::redundant_clone)]
+                // TODO: remove this, it seems like it's a reasonable lint
+                let mut false_model = cur_assgn.clone();
+                false_model.set(*x, false);
+
+                let true_ub = self.eu_ub(&true_model, &margvar_bits, wmc);
+                let false_ub = self.eu_ub(&false_model, &margvar_bits, wmc);
+
+                // branch on the greater upper-bound first
+                let order = if true_ub.0 > false_ub.0 {
+                    [(true_ub, true_model), (false_ub, false_model)]
+                } else {
+                    [(false_ub, false_model), (true_ub, true_model)]
+                };
+                for (upper_bound, partialmodel) in order {
+                    // branch + bound
+                    if upper_bound.1 > best_lb.1 {
+                        (best_lb, best_model) = self.meu_h(
+                            best_lb,
+                            best_model,
+                            end,
+                            wmc,
+                            partialmodel.clone(),
+                        );
+                    }
+                }
+                (best_lb, best_model)
+            }
+        }
+    }
+
+    /// Computes the marginal map over variables `vars` of `ptr`
+    /// I.e., computes argmax_{v in vars} \sum_{v not in vars} w(ptr)
+    pub fn meu(
+        &self,
+        decision_vars: &[VarLabel],
+        num_vars: usize,
+        wmc: &WmcParams<ExpectedUtility>,
+    ) -> (ExpectedUtility, PartialModel) {
+        // copying decision vars into a new mutable bitset
+        let mut decisions = BitSet::new();
+        for v in decision_vars {
+            decisions.insert(v.value_usize());
+        }
+
+        let all_true: Vec<Literal> = decision_vars.iter().map(|x| Literal::new(*x, true)).collect();
+        let cur_assgn = PartialModel::from_litvec(&all_true, num_vars);
+        let lower_bound = self.eu_ub(&cur_assgn, &BitSet::new(), wmc);
+
+        self.meu_h(
+            lower_bound,
+            cur_assgn,
+            decision_vars,
             wmc,
             PartialModel::from_litvec(&[], num_vars),
         )
