@@ -3,9 +3,10 @@ use super::*;
 use core::fmt::Debug;
 use itertools::{max, Itertools};
 use std::collections::{HashMap, HashSet};
+use std::fmt;
 use std::hash::{Hash, Hasher};
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct Cluster<V>(HashSet<V>)
 where
     V: Eq + Hash;
@@ -21,6 +22,16 @@ where
         hashes.sort();
         let hashstr = hashes.into_iter().map(|x| x.to_string()).join("");
         hashstr.hash(state);
+    }
+}
+
+impl<V: Eq + Hash + fmt::Debug> Debug for Cluster<V> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        f.write_str("C[");
+        for v in &self.0 {
+            f.write_fmt(format_args!("{:?}", v));
+        }
+        f.write_str("]")
     }
 }
 
@@ -170,27 +181,113 @@ mod test {
 
     #[test]
     #[ignore]
-    fn test_remove_edges_2x2() {
-        // the concrete version of super::cover::test::test_remove_edges_2x2()
+    fn test_2x2_grid_to_dtree() {
+        // add a precise graph of a 2x2 grid with clusters
         let mut g: ClusterGraph<usize> = Default::default();
         let n1 = Cluster::from([1]);
         let n2 = Cluster::from([1, 2]);
         let n3 = Cluster::from([1, 3]);
         let n4 = Cluster::from([2, 3, 4]);
-        g.insert_vertex(n1.clone());
-        g.insert_vertex(n2.clone());
-        g.insert_vertex(n3.clone());
-        g.insert_vertex(n4.clone());
+        g.insert_vertices(
+            [&n1, &n2, &n3, &n4]
+                .iter()
+                .map(|x| x.clone())
+                .cloned()
+                .collect(),
+        );
+
         let e1 = Edge::from([n1.clone(), n2.clone(), n3.clone()]);
         let e2 = Edge::from([n2.clone(), n4.clone()]);
         let e3 = Edge::from([n3.clone(), n4.clone()]);
         let e4 = Edge::from([n4.clone()]);
-        g.insert_edge(e1.clone());
-        g.insert_edge(e2.clone());
-        g.insert_edge(e3.clone());
-        g.insert_edge(e4.clone());
-        let cs = g.covers();
-        assert_eq!(cs.size(), 1);
-        todo!();
+        g.insert_edges(HashSet::from([
+            e1.clone(),
+            e2.clone(),
+            e3.clone(),
+            e4.clone(),
+        ]));
+        let dt = hg2dt(&g);
+        println!("{:?}", dt);
+        todo!()
+    }
+
+    #[test]
+    fn test_2x2_grid_plus_minus_to_dtree() {
+        // add a precise graph of a 2x2 grid with clusters
+        let mut g: ClusterGraph<usize> = Default::default();
+        let n1 = Cluster::from([1]);
+        let n2 = Cluster::from([1, 2]);
+        let n3 = Cluster::from([1, 3]);
+        let n4 = Cluster::from([2, 3, 4]);
+        let n5 = Cluster::from([4, 5]);
+        g.insert_vertices(
+            [&n1, &n2, &n3, &n4, &n5]
+                .iter()
+                .map(|x| x.clone())
+                .cloned()
+                .collect(),
+        );
+        let e1 = Edge::from([n1.clone(), n2.clone(), n3.clone()]);
+        let e2 = Edge::from([n2.clone(), n4.clone()]);
+        let e3 = Edge::from([n3.clone(), n4.clone()]);
+        let e4 = Edge::from([n4.clone(), n5.clone()]);
+        let e5 = Edge::from([n5.clone()]);
+        g.insert_edges(HashSet::from([
+            e1.clone(),
+            e2.clone(),
+            e3.clone(),
+            e4.clone(),
+            e5.clone(),
+        ]));
+        let dt = hg2dt(&g);
+        println!("{:?}", dt);
+        todo!()
+    }
+
+    #[test]
+    #[ignore]
+    fn test_3x3_grid_to_dtree() {
+        // add a precise graph of a 2x2 grid with clusters
+        let mut g: ClusterGraph<usize> = Default::default();
+        let n1 = Cluster::from([1]);
+        let n2 = Cluster::from([1, 2]);
+        let n3 = Cluster::from([1, 3]);
+        let n4 = Cluster::from([2, 4]);
+        let n5 = Cluster::from([2, 3, 5]);
+        let n6 = Cluster::from([3, 6]);
+        let n7 = Cluster::from([4, 5, 7]);
+        let n8 = Cluster::from([5, 6, 8]);
+        let n9 = Cluster::from([7, 8, 9]);
+        g.insert_vertices(
+            [&n1, &n2, &n3, &n4, &n5, &n6, &n7, &n8, &n9]
+                .iter()
+                .map(|x| x.clone())
+                .cloned()
+                .collect(),
+        );
+
+        let e1 = Edge::from([n1.clone(), n2.clone(), n3.clone()]);
+        let e2 = Edge::from([n2.clone(), n4.clone(), n5.clone()]);
+        let e3 = Edge::from([n3.clone(), n5.clone(), n6.clone()]);
+        let e4 = Edge::from([n4.clone(), n7.clone()]);
+        let e5 = Edge::from([n5.clone(), n7.clone(), n8.clone()]);
+        let e6 = Edge::from([n6.clone(), n8.clone()]);
+        let e7 = Edge::from([n7.clone(), n9.clone()]);
+        let e8 = Edge::from([n8.clone(), n9.clone()]);
+        let e9 = Edge::from([n9.clone()]);
+        g.insert_edges(HashSet::from([
+            e1.clone(),
+            e2.clone(),
+            e3.clone(),
+            e4.clone(),
+            e5.clone(),
+            e6.clone(),
+            e7.clone(),
+            e8.clone(),
+            e9.clone(),
+        ]));
+        let dt = hg2dt(&g);
+        println!("{:#?}", dt);
+        todo!()
     }
 }

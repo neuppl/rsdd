@@ -57,10 +57,12 @@ where
         }
     }
     pub fn from_edge(e: &Edge<V>) -> Self {
-        Self {
-            cover: e.0.clone(),
-            edges: HashSet::from([e.clone()]),
-        }
+        Self::from_edges(HashSet::from([e.clone()]))
+    }
+    pub fn from_edges(es: HashSet<Edge<V>>) -> Self {
+        let edges = es.clone();
+        let cover = Edge::cover(&es);
+        Self { cover, edges }
     }
     pub fn merge(cs: HashSet<Cover<V>>) -> Self {
         let ret = cs.into_iter().fold(Self::empty(), |mut ret, cover| {
@@ -164,21 +166,18 @@ where
             .flatten();
 
         self.covers.extend(new_covers);
-
-        // I am not currently supporting this. It seems like it is a subclass of AllCovers.
-        //
-        // // TODO: It might be that the graph will produce new singleton nodes
-        // // as a result of removing an edge, because a variable is no longer covered.
-        // // this depends on the semantics of the graph
-        //
-        // let covered = self.cover(); // compare before and after
-        // let remainder: HashSet<Cover<V>> = self
-        //     .vertices
-        //     .difference(&covered)
-        //     .cloned()
-        //     .map(|v| Cover::singleton(v))
-        //     .collect();
-        // self.covers.extend(remainder);
+    }
+    // remove edges, but turn uncovered vertices into singleton edges
+    pub fn _remove_edges_with_singletons(&mut self, edges: &HashSet<Edge<V>>) {
+        let cover = self.cover(); // compare before and after
+        self.remove_edges(edges);
+        let next_cover = self.cover(); // compare before and after
+        let remainder: HashSet<Cover<V>> = cover
+            .difference(&next_cover)
+            .cloned()
+            .map(|v| Cover::singleton(v))
+            .collect();
+        self.covers.extend(remainder);
     }
 }
 pub struct PartitionIter<'a, V>
@@ -199,17 +198,22 @@ where
     fn rage(
         covers: AllCovers<V>,
         npartitions: usize,
+        with_singletons: bool,
     ) -> impl Fn(Vec<Edge<V>>) -> (HashSet<Edge<V>>, AllCovers<V>, usize) {
         move |cutset: Vec<Edge<V>>| {
             let mut sim = covers.clone();
             let cutset: HashSet<Edge<V>> = cutset.into_iter().map(|x| x.clone()).collect();
-            sim.remove_edges(&cutset);
+            if with_singletons {
+                sim._remove_edges_with_singletons(&cutset);
+            } else {
+                sim.remove_edges(&cutset);
+            }
             (cutset, sim, npartitions)
         }
     }
 
     /// brute-force partitioning
-    pub fn new(covers: &AllCovers<V>, npartitions: usize) -> Self {
+    pub fn new(covers: &AllCovers<V>, npartitions: usize, with_singletons: bool) -> Self {
         let edges: HashSet<_> = covers
             .covers
             .iter()
@@ -221,7 +225,7 @@ where
             .into_iter()
             .powerset()
             .skip(1) // skip the empty set
-            .map(Self::rage(covers.clone(), npartitions))
+            .map(Self::rage(covers.clone(), npartitions, with_singletons))
             .collect_vec()
             .into_iter();
         Self {
@@ -259,7 +263,7 @@ pub fn partitions<V: Debug + Eq + Hash + Clone + 'static>(
     covers: &AllCovers<V>,
     npartitions: usize,
 ) -> impl Iterator<Item = (HashSet<Edge<V>>, AllCovers<V>)> {
-    PartitionIter::new(covers, npartitions)
+    PartitionIter::new(covers, npartitions, false)
 }
 #[cfg(test)]
 mod test {
