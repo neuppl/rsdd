@@ -174,13 +174,41 @@ where
         sorted_edges
     }
 }
-
+impl<V> ADTree<Cluster<V>>
+where
+    V: Eq + Hash + Clone + Debug,
+{
+    pub fn cutset(&self) -> HashSet<V> {
+        match &self {
+            Self::Leaf { .. } => HashSet::new(),
+            Self::Node { l, r, .. } => {
+                let lvs = l.vars();
+                let rvs = r.vars();
+                lvs.intersection(&rvs).cloned().collect()
+            }
+        }
+    }
+    pub fn vars(&self) -> HashSet<V> {
+        match &self {
+            Self::Leaf { vars, .. } => vars
+                .clone()
+                .into_iter()
+                .map(|c| c.0.clone())
+                .flatten()
+                .collect(),
+            Self::Node { l, r, .. } => {
+                let mut cs = l.vars();
+                cs.extend(r.vars());
+                cs
+            }
+        }
+    }
+}
 #[cfg(test)]
 mod test {
     use super::*;
 
     #[test]
-    #[ignore]
     fn test_2x2_grid_to_dtree() {
         // add a precise graph of a 2x2 grid with clusters
         let mut g: ClusterGraph<usize> = Default::default();
@@ -207,8 +235,8 @@ mod test {
             e4.clone(),
         ]));
         let dt = hg2dt(&g);
-        println!("{:?}", dt);
-        todo!()
+        let cs = dt.cutset();
+        assert_eq!(cs, HashSet::from([3, 2]));
     }
 
     #[test]
@@ -240,12 +268,11 @@ mod test {
             e5.clone(),
         ]));
         let dt = hg2dt(&g);
-        println!("{:?}", dt);
-        todo!()
+        let cs = dt.cutset();
+        assert_eq!(cs, HashSet::from([4]));
     }
 
     #[test]
-    #[ignore]
     fn test_3x3_grid_to_dtree() {
         // add a precise graph of a 2x2 grid with clusters
         let mut g: ClusterGraph<usize> = Default::default();
@@ -287,7 +314,7 @@ mod test {
             e9.clone(),
         ]));
         let dt = hg2dt(&g);
-        println!("{:#?}", dt);
-        todo!()
+        let cs = dt.cutset();
+        assert_eq!(cs, HashSet::from([3, 2]));
     }
 }
