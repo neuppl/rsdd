@@ -7,7 +7,7 @@ use std::fmt;
 use std::hash::{Hash, Hasher};
 
 #[derive(Clone, PartialEq, Eq)]
-pub struct Cluster<V>(HashSet<V>)
+pub struct Cluster<V>(pub HashSet<V>)
 where
     V: Eq + Hash;
 impl<V> Hash for Cluster<V>
@@ -49,9 +49,9 @@ pub struct ClusterGraph<V>
 where
     V: Clone + Debug + PartialEq + Eq + Hash,
 {
-    graph: HGraph<Cluster<V>>,
-    intersections_inv: HashMap<Edge<Cluster<V>>, HashSet<V>>,
-    intersections: HashMap<V, HashSet<Edge<Cluster<V>>>>,
+    pub graph: HGraph<Cluster<V>>,
+    pub intersections_inv: HashMap<Edge<Cluster<V>>, HashSet<V>>,
+    pub intersections: HashMap<V, HashSet<Edge<Cluster<V>>>>,
 }
 impl<V> Default for ClusterGraph<V>
 where

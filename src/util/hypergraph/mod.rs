@@ -9,8 +9,11 @@ use std::fmt;
 use std::hash::{Hash, Hasher};
 
 pub mod clustergraph;
+pub use clustergraph::*;
 pub mod cover;
+pub use cover::*;
 pub mod hgraph;
+pub use hgraph::*;
 
 use cover::{AllCovers, Cover};
 
@@ -21,7 +24,7 @@ fn calculate_hash<T: Hash>(t: &T) -> u64 {
 }
 
 #[derive(Clone, PartialEq, Eq)]
-pub struct Edge<V>(HashSet<V>)
+pub struct Edge<V>(pub HashSet<V>)
 where
     V: Eq + Hash;
 
