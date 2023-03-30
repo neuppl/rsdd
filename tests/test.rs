@@ -12,7 +12,11 @@ use rsdd::builder::canonicalize::*;
 use rsdd::builder::sdd_builder::SddManager;
 use rsdd::repr::bdd::BddPtr;
 use rsdd::repr::vtree::VTree;
+use rsdd::util::semiring::ExpectedUtility;
+use rsdd::repr::wmc::WmcParams;
 use rsdd::*;
+use serde::de::Expected;
+use std::collections::HashMap;
 extern crate rand;
 
 /// a prime large enough to ensure no collisions for semantic hashing
@@ -314,6 +318,47 @@ fn test_sdd_is_canonical() {
     }
 }
 
+// daPPL MEU unit tests
+
+static daPPL1 : &str = "
+p cnf 4 2
+1 -2 3 0
+-1 2 4 0
+";
+
+#[test]
+fn test_meu() {
+    // construct BDD from CNF
+    let cnf = Cnf::from_file(String::from(daPPL1));
+    let mut man = BddManager::<AllTable<BddPtr>>::new_default_order(cnf.num_vars());
+    let cnf_bdd = man.from_cnf(&cnf);
+
+    // map of elements in EU semring
+    let mut eu_map : HashMap<VarLabel, (ExpectedUtility, ExpectedUtility)> = HashMap::new();
+    eu_map.insert(
+        VarLabel::new(1),
+        (ExpectedUtility(1.0,0.0), ExpectedUtility(1.0,0.0)),
+    );
+    eu_map.insert(
+        VarLabel::new(2),
+        (ExpectedUtility(1.0,0.0), ExpectedUtility(1.0,0.0)),
+    );
+    eu_map.insert(
+        VarLabel::new(3),
+        (ExpectedUtility(1.0,10.0), ExpectedUtility(1.0,0.0)),
+    );
+    eu_map.insert(
+        VarLabel::new(4),
+        (ExpectedUtility(1.0,5.0), ExpectedUtility(1.0,0.0)),
+    );
+    
+    //Setting up the MEU
+    let vars = vec![VarLabel::new(0), VarLabel::new(2), VarLabel::new(3), VarLabel::new(4)];
+    let wmc = WmcParams::new_with_default(ExpectedUtility(0.0,0.0), ExpectedUtility(1.0, 0.0), eu_map);
+
+    //
+}
+
 #[cfg(test)]
 mod test_bdd_manager {
     use crate::builder::decision_nnf_builder::DecisionNNFBuilder;
@@ -323,7 +368,6 @@ mod test_bdd_manager {
     use quickcheck::TestResult;
     use rsdd::builder::cache::all_app::AllTable;
     use rsdd::builder::cache::lru_app::BddApplyTable;
-
     use rsdd::repr::bdd::BddPtr;
     use rsdd::repr::ddnnf::{create_semantic_hash_map, DDNNFPtr};
     use rsdd::repr::model::PartialModel;
@@ -533,7 +577,7 @@ mod test_sdd_manager {
     use rsdd::repr::sdd::SddPtr;
     use rsdd::repr::vtree::VTree;
     use rsdd::repr::wmc::WmcParams;
-    use rsdd::util::semiring::{FiniteField, RealSemiring};
+    use rsdd::util::semiring::{FiniteField, RealSemiring, ExpectedUtility};
     use std::collections::HashMap;
     use std::iter::FromIterator;
 

@@ -400,8 +400,10 @@ impl BddPtr {
         high_v: T,
         alloc: &mut Bump,
     ) -> T {
+        // If current node is true leaf, return accumulated high_v value
         if self.is_true() {
             high_v
+        // Else if current node is false leaf, return accumulated high_v value
         } else if self.is_false() {
             low_v
         } else {
@@ -558,7 +560,7 @@ impl BddPtr {
         )
     }
 
-    /// upper-bounding the expected utility 
+    /// upper-bounding the expected utility, for meu_h
     fn eu_ub(
         &self,
         partial_decisions: &PartialModel,
