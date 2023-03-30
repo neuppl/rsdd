@@ -1,4 +1,4 @@
-use crate::util::hypergraph::{hg2dt, Edge, Hypergraph};
+use crate::util::hypergraph::{Edge, Hypergraph};
 use core::fmt::Debug;
 use itertools::Itertools;
 use std::collections::HashSet;
@@ -79,7 +79,7 @@ where
 #[allow(unused_must_use)]
 mod hgraph_test {
     use super::*;
-    use crate::util::hypergraph::ADTree;
+    use crate::util::hypergraph::{hg2dt, ADTree};
 
     #[test]
     fn test_cover_creation() {

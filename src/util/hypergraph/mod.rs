@@ -42,7 +42,7 @@ where
 
 impl<V: Eq + Hash + fmt::Debug> Debug for Edge<V> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
-        f.write_str("E");
+        f.write_str("E")?;
         f.debug_set().entries(self.0.iter()).finish()
     }
 }

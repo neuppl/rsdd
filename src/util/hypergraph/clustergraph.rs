@@ -27,9 +27,9 @@ where
 
 impl<V: Eq + Hash + fmt::Debug> Debug for Cluster<V> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
-        f.write_str("C[");
+        f.write_str("C[")?;
         for v in &self.0 {
-            f.write_fmt(format_args!("{:?}", v));
+            f.write_fmt(format_args!("{:?}", v))?;
         }
         f.write_str("]")
     }

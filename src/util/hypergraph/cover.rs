@@ -1,7 +1,7 @@
 use crate::util::hypergraph::calculate_hash;
 use crate::util::hypergraph::Edge;
 use core::fmt::Debug;
-use itertools::{Either, Itertools, Powerset};
+use itertools::{Either, Itertools};
 use std::collections::HashSet;
 use std::hash::{Hash, Hasher};
 
@@ -185,9 +185,7 @@ where
     V: Clone + Eq + Hash + Debug,
 {
     over: Box<dyn Iterator<Item = (HashSet<Edge<V>>, AllCovers<V>, usize)> + 'a>,
-    allcovers: AllCovers<V>,
 
-    npartitions: usize,
     last_cutset_size: usize,
     completed: bool,
 }
@@ -230,8 +228,6 @@ where
             .into_iter();
         Self {
             over: Box::new(iter),
-            allcovers: covers.clone(),
-            npartitions,
             last_cutset_size: usize::MAX,
             completed: false,
         }
