@@ -407,16 +407,28 @@ impl BddPtr {
         } else if self.is_false() {
             low_v
         } else {
+            // Every node has an associated cache (scratch)
+            // Scratch data is arbitrary (depends on use case)
+            // fst is negated, snd is non-negated accumulator
             if self.get_scratch::<(Option<T>, Option<T>)>().is_none() {
                 self.set_scratch::<(Option<T>, Option<T>)>(alloc, (None, None));
             }
+            // Actual case
             match self.get_scratch::<(Option<T>, Option<T>)>() {
+                // If complemented and accumulated, use the already memoized value
                 Some((Some(v), _)) if self.is_neg() => *v,
+                // Same for not complemented
                 Some((_, Some(v))) if !self.is_neg() => *v,
+                // (None, None), 
+                // (Some(v), None) but not a complemented node
+                // (None, Some(v)) but a complemented node
                 Some((prev_low, prev_high)) => {
+                    // Standard fold stuff
                     let l = self.low().bdd_fold_h(f, low_v, high_v, alloc);
                     let h = self.high().bdd_fold_h(f, low_v, high_v, alloc);
                     let res = f(self.var(), l, h);
+                    // Set cache (accumulator)
+                    // Then corrects scratch so it traverses correctly in a recursive case downstream
                     if self.is_neg() {
                         self.set_scratch::<(Option<T>, Option<T>)>(alloc, (Some(res), *prev_high));
                     } else {
@@ -568,7 +580,7 @@ impl BddPtr {
         wmc: &WmcParams<ExpectedUtility>,
     ) -> ExpectedUtility {
         // accumulator for EU via bdd_fold
-        let mut v = self.bdd_fold(
+        let v = self.bdd_fold(
             &|varlabel, low : ExpectedUtility, high : ExpectedUtility| {
                 // get True and False weights for VarLabel
                 let (false_w, true_w) = wmc.get_var_weight(varlabel);
@@ -594,15 +606,6 @@ impl BddPtr {
             wmc.zero,
             wmc.one,
         );
-        // multiply in weights of all variables in the partial assignment
-        for lit in partial_decisions.assignment_iter() {
-            let (l, h) = wmc.get_var_weight(lit.get_label());
-            if lit.get_polarity() {
-                v = v * (*h);
-            } else {
-                v = v * (*l);
-            }
-        }
         v
     }
 
@@ -662,24 +665,25 @@ impl BddPtr {
         }
     }
 
-    /// Computes the marginal map over variables `vars` of `ptr`
-    /// I.e., computes argmax_{v in vars} \sum_{v not in vars} w(ptr)
+    /// maximum expected utility calc
     pub fn meu(
         &self,
         decision_vars: &[VarLabel],
         num_vars: usize,
         wmc: &WmcParams<ExpectedUtility>,
     ) -> (ExpectedUtility, PartialModel) {
-        // copying decision vars into a new mutable bitset
-        let mut decisions = BitSet::new();
-        for v in decision_vars {
-            decisions.insert(v.value_usize());
-        }
+        // // copying decision vars into a new mutable bitset
+        // let mut decisions = BitSet::new();
+        // for v in decision_vars {
+        //     decisions.insert(v.value_usize());
+        // }
 
+        // Initialize all the decision variables to be true, partially instantianted resp. to this
         let all_true: Vec<Literal> = decision_vars.iter().map(|x| Literal::new(*x, true)).collect();
         let cur_assgn = PartialModel::from_litvec(&all_true, num_vars);
+        // Calculate bound wrt the partial instantiation.
         let lower_bound = self.eu_ub(&cur_assgn, &BitSet::new(), wmc);
-
+        println!("{}\n",lower_bound.1 );
         self.meu_h(
             lower_bound,
             cur_assgn,
