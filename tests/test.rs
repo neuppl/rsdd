@@ -12,7 +12,7 @@ use rsdd::builder::canonicalize::*;
 use rsdd::builder::sdd_builder::SddManager;
 use rsdd::repr::bdd::BddPtr;
 use rsdd::repr::vtree::VTree;
-use rsdd::util::semiring::ExpectedUtility;
+use rsdd::util::semiring::{ExpectedUtility, Semiring};
 use rsdd::repr::wmc::WmcParams;
 use rsdd::*;
 use serde::de::Expected;
@@ -321,9 +321,8 @@ fn test_sdd_is_canonical() {
 // daPPL MEU unit tests
 
 static daPPL1 : &str = "
-p cnf 4 2
-1 -2 3 0
--1 2 4 0
+p cnf 1 1
+1 0
 ";
 
 #[test]
@@ -336,26 +335,17 @@ fn test_meu() {
     // map of elements in EU semring
     let mut eu_map : HashMap<VarLabel, (ExpectedUtility, ExpectedUtility)> = HashMap::new();
     eu_map.insert(
-        VarLabel::new(1),
-        (ExpectedUtility(1.0,0.0), ExpectedUtility(1.0,0.0)),
+        VarLabel::new(0),
+        (ExpectedUtility(1.0,0.0), ExpectedUtility(1.0,10.0)),
     );
-    eu_map.insert(
-        VarLabel::new(2),
-        (ExpectedUtility(1.0,0.0), ExpectedUtility(1.0,0.0)),
-    );
-    eu_map.insert(
-        VarLabel::new(3),
-        (ExpectedUtility(1.0,10.0), ExpectedUtility(1.0,0.0)),
-    );
-    eu_map.insert(
-        VarLabel::new(4),
-        (ExpectedUtility(1.0,5.0), ExpectedUtility(1.0,0.0)),
-    );
-    
-    //Setting up the MEU
-    let vars = vec![VarLabel::new(0), VarLabel::new(2), VarLabel::new(3), VarLabel::new(4)];
-    let wmc = WmcParams::new_with_default(ExpectedUtility(0.0,0.0), ExpectedUtility(1.0, 0.0), eu_map);
 
+    let eu_mapclone = eu_map.clone();
+    //Setting up the MEU
+    let vars = vec![];
+    let wmc = WmcParams::new_with_default(ExpectedUtility::zero(), ExpectedUtility::one(), eu_map);
+    let (meu, _) = cnf_bdd.meu(&vars, man.num_vars(), &wmc);   
+
+    assert_eq!(meu.1, 10.0);
     //
 }
 
