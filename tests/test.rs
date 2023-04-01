@@ -522,7 +522,10 @@ mod test_sdd_manager {
     use crate::builder::bdd_builder::BddManager;
     use crate::repr::cnf::Cnf;
     use crate::repr::var_label::{Literal, VarLabel};
-    use quickcheck::TestResult;
+    use quickcheck::{Arbitrary, TestResult};
+    use rand::rngs::SmallRng;
+    use rand::seq::SliceRandom;
+    use rand::SeedableRng;
     use rsdd::builder::cache::all_app::AllTable;
     use rsdd::builder::canonicalize::*;
     use rsdd::repr::bdd::BddPtr;
@@ -621,6 +624,36 @@ mod test_sdd_manager {
             } else {
                 TestResult::from_bool(true)
             }
+        }
+    }
+
+    // why does this exist?
+    // well, I wasn't able to figure out how to generate a random permutation of vectors from 0..16 with quickcheck
+    #[derive(Clone, Debug)]
+    struct SixteenVarLabels {
+        order: Vec<VarLabel>,
+    }
+
+    impl Arbitrary for SixteenVarLabels {
+        fn arbitrary(g: &mut quickcheck::Gen) -> Self {
+            let mut rng = SmallRng::seed_from_u64(u64::arbitrary(g));
+            let mut order: Vec<VarLabel> = (0..16).map(VarLabel::new).collect();
+            order.shuffle(&mut rng);
+            SixteenVarLabels { order }
+        }
+    }
+
+    quickcheck! {
+        fn sdd_left_linear_predicate(s: SixteenVarLabels) -> bool {
+            let vtree = VTree::left_linear(&s.order);
+            vtree.is_left_linear()
+        }
+    }
+
+    quickcheck! {
+        fn sdd_right_linear_predicate(s: SixteenVarLabels) -> bool {
+            let vtree = VTree::right_linear(&s.order);
+            vtree.is_right_linear()
         }
     }
 
