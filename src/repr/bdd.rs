@@ -580,7 +580,7 @@ impl BddPtr {
         wmc: &WmcParams<ExpectedUtility>,
     ) -> ExpectedUtility {
         // accumulator for EU via bdd_fold
-        let v = self.bdd_fold(
+        let mut v = self.bdd_fold(
             &|varlabel, low : ExpectedUtility, high : ExpectedUtility| {
                 // get True and False weights for VarLabel
                 let (false_w, true_w) = wmc.get_var_weight(varlabel);
@@ -603,9 +603,18 @@ impl BddPtr {
                     Some(false) => low,
                 }
             },
-            wmc.zero,
             wmc.one,
+            wmc.zero,
         );
+        for lit in partial_decisions.assignment_iter() {
+            let (l, h) = wmc.get_var_weight(lit.get_label());
+            if lit.get_polarity() {
+                v = v * (*h);
+            } else {
+                v = v * (*l);
+            }
+        }
+        println!("{:?}, {}\n",v.0, v.1 );
         v
     }
 
@@ -634,8 +643,6 @@ impl BddPtr {
 
                 let mut true_model = cur_assgn.clone();
                 true_model.set(*x, true);
-                #[allow(clippy::redundant_clone)]
-                // TODO: remove this, it seems like it's a reasonable lint
                 let mut false_model = cur_assgn.clone();
                 false_model.set(*x, false);
 
@@ -672,18 +679,17 @@ impl BddPtr {
         num_vars: usize,
         wmc: &WmcParams<ExpectedUtility>,
     ) -> (ExpectedUtility, PartialModel) {
-        // // copying decision vars into a new mutable bitset
-        // let mut decisions = BitSet::new();
-        // for v in decision_vars {
-        //     decisions.insert(v.value_usize());
-        // }
+        // copying decision vars into a new mutable bitset
+        let mut decisions = BitSet::new();
+        for v in decision_vars {
+            decisions.insert(v.value_usize());
+        }
 
         // Initialize all the decision variables to be true, partially instantianted resp. to this
         let all_true: Vec<Literal> = decision_vars.iter().map(|x| Literal::new(*x, true)).collect();
         let cur_assgn = PartialModel::from_litvec(&all_true, num_vars);
         // Calculate bound wrt the partial instantiation.
         let lower_bound = self.eu_ub(&cur_assgn, &BitSet::new(), wmc);
-        println!("{}\n",lower_bound.1 );
         self.meu_h(
             lower_bound,
             cur_assgn,
