@@ -19,11 +19,22 @@ use crate::{repr::cnf::Cnf, repr::logical_expr::LogicalExpr, repr::var_label::Va
 pub struct SddStats {
     /// total number of recursive calls
     pub num_rec: usize,
+    /// total number of calls to compress
+    pub num_compr: usize,
+    /// total number of new SddAnds generated in compress
+    pub num_compr_and: usize,
+    /// total number of gets/inserts generated in compress
+    pub num_get_or_insert: usize,
 }
 
 impl SddStats {
     pub fn new() -> SddStats {
-        SddStats { num_rec: 0 }
+        SddStats {
+            num_rec: 0,
+            num_compr: 0,
+            num_compr_and: 0,
+            num_get_or_insert: 0,
+        }
     }
 }
 
@@ -77,11 +88,13 @@ impl<T: SddCanonicalizationScheme> SddManager<T> {
         if !self.canonicalizer.should_compress() {
             panic!("compress called when disabled")
         }
+        self.stats.num_compr += 1;
         for i in 0..node.len() {
             // see if we can compress i
             let mut j = i + 1;
             while j < node.len() {
                 if self.sdd_eq(node[i].sub(), node[j].sub()) {
+                    self.stats.num_compr_and += 1;
                     // compress j into i and remove j from the node list
                     node[i] = SddAnd::new(self.or(node[i].prime(), node[j].prime()), node[i].sub());
                     node.swap_remove(j);
@@ -94,6 +107,7 @@ impl<T: SddCanonicalizationScheme> SddManager<T> {
 
     /// Normalizes and fetches a node from the store
     pub fn get_or_insert(&mut self, sdd: SddOr) -> SddPtr {
+        self.stats.num_get_or_insert += 1;
         let p = self.canonicalizer.sdd_get_or_insert(sdd);
         SddPtr::or(p)
     }
@@ -139,7 +153,8 @@ impl<T: SddCanonicalizationScheme> SddManager<T> {
             self.unique_bdd(BinarySDD::new(v, low, high, table))
         } else {
             node.sort_by_key(|a| a.prime());
-            if node[0].sub().is_neg() || node[0].sub().is_false() || node[0].sub().is_neg_var() {
+            if node[0].sub().is_neg() || self.is_false(node[0].sub()) || node[0].sub().is_neg_var()
+            {
                 for x in node.iter_mut() {
                     *x = SddAnd::new(x.prime(), x.sub().neg());
                 }
@@ -154,15 +169,15 @@ impl<T: SddCanonicalizationScheme> SddManager<T> {
         if bdd.high() == bdd.low() {
             return bdd.high();
         }
-        if bdd.high().is_false() && bdd.low().is_true() {
+        if self.is_false(bdd.high()) && self.is_true(bdd.low()) {
             return SddPtr::var(bdd.label(), false);
         }
-        if bdd.high().is_true() && bdd.low().is_false() {
+        if self.is_true(bdd.high()) && self.is_false(bdd.low()) {
             return SddPtr::var(bdd.label(), true);
         }
 
         // uniqify BDD
-        if bdd.high().is_neg() || bdd.high().is_false() || bdd.high().is_neg_var() {
+        if bdd.high().is_neg() || self.is_false(bdd.high()) || bdd.high().is_neg_var() {
             let neg_bdd =
                 BinarySDD::new(bdd.label(), bdd.low().neg(), bdd.high().neg(), bdd.vtree());
             SddPtr::bdd(self.canonicalizer.bdd_get_or_insert(neg_bdd)).neg()
@@ -177,19 +192,19 @@ impl<T: SddCanonicalizationScheme> SddManager<T> {
             return Some(SddPtr::true_ptr());
         }
         if node.len() == 1 {
-            if node[0].prime().is_true() {
+            if self.is_true(node[0].prime()) {
                 return Some(node[0].sub());
             }
 
             // TODO: Why is this only included after compression?
-            if node[0].sub().is_false() {
+            if self.is_false(node[0].sub()) {
                 return Some(SddPtr::false_ptr());
             }
         }
         if node.len() == 2 {
-            if node[0].sub().is_true() && node[1].sub().is_false() {
+            if self.is_true(node[0].sub()) && self.is_false(node[1].sub()) {
                 return Some(node[0].prime());
-            } else if node[0].sub().is_false() && node[1].sub().is_true() {
+            } else if self.is_false(node[0].sub()) && self.is_true(node[1].sub()) {
                 return Some(node[1].prime());
             }
         }
@@ -204,14 +219,15 @@ impl<T: SddCanonicalizationScheme> SddManager<T> {
         }
 
         if self.canonicalizer.should_compress() {
-            self.compress(&mut node)
+            self.compress(&mut node);
+
+            // check for a base case after compression (compression can sometimes
+            // reduce node counts to a base case)
+            if let Some(sdd) = self.canonicalize_base_case(&node) {
+                return sdd;
+            }
         }
 
-        // check for a base case after compression (compression can sometimes
-        // reduce node counts to a base case)
-        if let Some(sdd) = self.canonicalize_base_case(&node) {
-            return sdd;
-        }
         self.unique_or(node, table)
     }
 
@@ -316,14 +332,14 @@ impl<T: SddCanonicalizationScheme> SddManager<T> {
                 let s2 = a2.sub();
                 let p = self.and(p1, p2);
                 // println!("(PRIME) result of {} && {}: {}", self.print_sdd(p1), self.print_sdd(p2), self.print_sdd(p));
-                if p.is_false() {
+                if self.is_false(p) {
                     continue;
                 }
                 let s = self.and(s1, s2);
                 // println!("(SUB) result of {} && {}: {}", self.print_sdd(s1), self.print_sdd(s2), self.print_sdd(s));
                 // check if one of the nodes is true; if it is, we can
                 // return a `true` SddPtr here, for trimming
-                if p.is_true() && s.is_true() {
+                if self.is_true(p) && self.is_true(s) {
                     let new_v = SddPtr::true_ptr();
                     return new_v;
                 }
@@ -337,7 +353,7 @@ impl<T: SddCanonicalizationScheme> SddManager<T> {
         // for a in r.node_iter() {
         //     let p = self.and(a.prime(), d);
         //     let s = if r.is_compl() { a.sub().neg() } else { a.sub() };
-        //     if p.is_false() {
+        //     if self.is_false(p) {
         //         continue;
         //     }
         //     v.push(SddAnd::new(p, s));
@@ -389,13 +405,13 @@ impl<T: SddCanonicalizationScheme> SddManager<T> {
                 let s2 = a2.sub();
                 let s2 = if b.is_neg() { s2.neg() } else { s2 };
                 let p = self.and(p1, p2);
-                if p.is_false() {
+                if self.is_false(p) {
                     continue;
                 }
                 let s = self.and(s1, s2);
                 // check if one of the nodes is true; if it is, we can
                 // return a `true` SddPtr here, for trimming
-                if p.is_true() && s.is_true() {
+                if self.is_true(p) && self.is_true(s) {
                     let new_v = SddPtr::true_ptr();
                     return new_v;
                 }
@@ -418,10 +434,10 @@ impl<T: SddCanonicalizationScheme> SddManager<T> {
         self.stats.num_rec += 1;
         // first, check for a base case
         match (a, b) {
-            (a, b) if a.is_true() => return b,
-            (a, b) if b.is_true() => return a,
-            (a, _) if a.is_false() => return SddPtr::false_ptr(),
-            (_, b) if b.is_false() => return SddPtr::false_ptr(),
+            (a, b) if self.is_true(a) => return b,
+            (a, b) if self.is_true(b) => return a,
+            (a, _) if self.is_false(a) => return SddPtr::false_ptr(),
+            (_, b) if self.is_false(b) => return SddPtr::false_ptr(),
             (a, b) if self.sdd_eq(a, b) => return a,
             (a, b) if self.sdd_eq(a, b.neg()) => return SddPtr::false_ptr(),
             _ => (),
@@ -438,14 +454,14 @@ impl<T: SddCanonicalizationScheme> SddManager<T> {
             (b, a)
         };
 
-        let av = self.get_vtree_idx(a);
-        let bv = self.get_vtree_idx(b);
-        let lca = self.vtree.lca(av, bv);
-
         // check if we have this application cached
         if let Some(x) = self.canonicalizer.app_cache().get(SddAnd::new(a, b)) {
             return x;
         }
+
+        let av = self.get_vtree_idx(a);
+        let bv = self.get_vtree_idx(b);
+        let lca = self.vtree.lca(av, bv);
 
         // now we determine the current iterator for primes and subs
         // consider the following example vtree:
@@ -521,11 +537,11 @@ impl<T: SddCanonicalizationScheme> SddManager<T> {
             let sub = a.sub();
             let newp = self.condition(prime, lbl, value);
             let sub = if f.is_neg() { sub.neg() } else { sub };
-            if newp.is_false() {
+            if self.is_false(newp) {
                 continue;
             };
             let news = self.condition(sub, lbl, value);
-            if newp.is_true() {
+            if self.is_true(newp) {
                 return news;
             }
             v.push(SddAnd::new(newp, news));
@@ -583,9 +599,9 @@ impl<T: SddCanonicalizationScheme> SddManager<T> {
     }
 
     fn print_sdd_internal(&self, ptr: SddPtr) -> String {
+        self.canonicalizer.on_sdd_print_dump_state(ptr);
         use pretty::*;
         // TODO: this lifetime might be wrong
-        self.canonicalizer.on_sdd_print_dump_state(ptr);
         fn helper(ptr: SddPtr) -> Doc<'static, BoxDoc<'static>> {
             if ptr.is_true() {
                 return Doc::from("T");
@@ -638,16 +654,20 @@ impl<T: SddCanonicalizationScheme> SddManager<T> {
         self.print_sdd_internal(ptr)
     }
 
+    pub fn dump_sdd_state(&self, ptr: SddPtr) {
+        self.canonicalizer.on_sdd_print_dump_state(ptr)
+    }
+
     pub fn sdd_eq(&self, a: SddPtr, b: SddPtr) -> bool {
         self.canonicalizer.sdd_eq(a, b)
     }
 
     pub fn is_true(&self, a: SddPtr) -> bool {
-        a.is_true()
+        self.sdd_eq(a, SddPtr::PtrTrue)
     }
 
     pub fn is_false(&self, a: SddPtr) -> bool {
-        a.is_false()
+        self.sdd_eq(a, SddPtr::PtrFalse)
     }
 
     /// compile an SDD from an input CNF

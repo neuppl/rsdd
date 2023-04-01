@@ -144,7 +144,7 @@ impl SddAnd {
     pub fn new(prime: SddPtr, sub: SddPtr) -> SddAnd {
         SddAnd { prime, sub }
     }
-    // TODO: we should be able to de-duplicate this with fold
+    // TODO(matt): we should be able to de-duplicate this with fold/wmc
     pub fn semantic_hash<const P: u128>(
         &self,
         vtree: &VTreeManager,
