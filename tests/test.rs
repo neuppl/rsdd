@@ -321,14 +321,21 @@ fn test_sdd_is_canonical() {
 // daPPL MEU unit tests
 
 static daPPL1 : &str = "
-p cnf 1 1
-1 0
+p cnf 3 2
+1 2 0
+-1 -2 0
+";
+
+static daPPL2 : &str = "
+p cnf 4 2
+5 1 -2 3 -4 0
+-5 -1 2 -3 4 0
 ";
 
 #[test]
 fn test_meu() {
     // construct BDD from CNF
-    let cnf = Cnf::from_file(String::from(daPPL1));
+    let cnf = Cnf::from_file(String::from(daPPL2));
     let mut man = BddManager::<AllTable<BddPtr>>::new_default_order(cnf.num_vars());
     let cnf_bdd = man.from_cnf(&cnf);
 
@@ -336,12 +343,27 @@ fn test_meu() {
     let mut eu_map : HashMap<VarLabel, (ExpectedUtility, ExpectedUtility)> = HashMap::new();
     eu_map.insert(
         VarLabel::new(0),
+        (ExpectedUtility(1.0,0.0), ExpectedUtility(1.0,0.0)),
+    );
+    eu_map.insert(
+        VarLabel::new(1),
+        (ExpectedUtility(1.0,0.0), ExpectedUtility(1.0,0.0)),
+    );
+    eu_map.insert(
+        VarLabel::new(2),
+        (ExpectedUtility(1.0,0.0), ExpectedUtility(1.0,5.0)),
+    );
+    eu_map.insert(
+        VarLabel::new(3),
         (ExpectedUtility(1.0,0.0), ExpectedUtility(1.0,10.0)),
     );
+    eu_map.insert(
+        VarLabel::new(4),
+        (ExpectedUtility(0.5,0.0), ExpectedUtility(0.5,0.0)),
+    );
 
-    let eu_mapclone = eu_map.clone();
     //Setting up the MEU
-    let vars = vec![];
+    let vars = vec![VarLabel::new(0), VarLabel::new(1)];
     let wmc = WmcParams::new_with_default(ExpectedUtility::zero(), ExpectedUtility::one(), eu_map);
     let (meu, _) = cnf_bdd.meu(&vars, man.num_vars(), &wmc);   
 
