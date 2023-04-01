@@ -1,3 +1,7 @@
+use std::hash::{Hash, Hasher};
+
+use rustc_hash::FxHasher;
+
 use super::bdd_builder::DDNNFPtr;
 use super::cache::sdd_apply_cache::{SddApply, SddApplyCompression, SddApplySemantic};
 use crate::backing_store::bump_table::BackedRobinhoodTable;
@@ -118,23 +122,37 @@ impl<const P: u128> SemanticUniqueTableHasher<P> {
 }
 
 impl<const P: u128> UniqueTableHasher<BinarySDD> for SemanticUniqueTableHasher<P> {
-    // TODO: we should be able to de-duplicate this with fold
+    // TODO(matt): we should be able to de-duplicate this with fold/wmc
     fn u64hash(&self, elem: &BinarySDD) -> u64 {
+        let mut hasher = FxHasher::default();
+
         let (low_w, high_w) = self.map.get_var_weight(elem.label());
 
-        (((self.map.one - elem.low().semantic_hash(&self.vtree, &self.map)) * *low_w
-            + elem.high().semantic_hash(&self.vtree, &self.map) * *high_w)
-            .value()) as u64
+        // TODO(matt): investigate if this works properly!
+        FiniteField::<P>::new(
+            elem.low().semantic_hash(&self.vtree, &self.map).value() * low_w.value()
+            // (P - elem.low().semantic_hash(&self.vtree, &self.map).value() + 1) * low_w.value()
+                + elem.high().semantic_hash(&self.vtree, &self.map).value() * high_w.value(),
+        )
+        .value()
+        .hash(&mut hasher);
+        hasher.finish()
     }
 }
 
 impl<const P: u128> UniqueTableHasher<SddOr> for SemanticUniqueTableHasher<P> {
+    // TODO(matt): we should be able to de-duplicate this with fold/wmc
     fn u64hash(&self, elem: &SddOr) -> u64 {
-        elem.nodes
-            .iter()
-            .map(|and| and.semantic_hash(&self.vtree, &self.map))
-            .fold(FiniteField::new(0), |accum, elem| accum + elem)
-            .value() as u64
+        let mut hasher = FxHasher::default();
+        FiniteField::<P>::new(
+            elem.nodes
+                .iter()
+                .map(|and| and.semantic_hash(&self.vtree, &self.map).value())
+                .fold(0, |accum, elem| accum + elem),
+        )
+        .value()
+        .hash(&mut hasher);
+        hasher.finish()
     }
 }
 
@@ -218,6 +236,6 @@ impl<const P: u128> SddCanonicalizationScheme for SemanticCanonicalizer<P> {
     }
 
     fn on_sdd_print_dump_state(&self, ptr: SddPtr) {
-        println!("h: {}", ptr.semantic_hash(&self.vtree, &self.map))
+        println!("h: {}", ptr.semantic_hash(&self.vtree, &self.map),);
     }
 }

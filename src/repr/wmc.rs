@@ -66,6 +66,7 @@ impl<T: Semiring + std::ops::Mul<Output = T> + std::ops::Add<Output = T>> WmcPar
     }
 
     pub fn get_var_weight(&self, label: VarLabel) -> &(T, T) {
+        // TODO(matt): write a better error message - attempting to get label
         return (self.var_to_val[label.value_usize()]).as_ref().unwrap();
     }
 }
