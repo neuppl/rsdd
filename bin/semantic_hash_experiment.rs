@@ -23,7 +23,6 @@ struct Args {
 
 fn run_canonicalizer_experiment(c: Cnf, vtree: VTree) {
     let start = Instant::now();
-    // print!("compressed... ");
 
     let mut compr_mgr = SddManager::<CompressionCanonicalizer>::new(vtree.clone());
     let compr_cnf = compr_mgr.from_cnf(&c);
@@ -43,18 +42,15 @@ fn run_canonicalizer_experiment(c: Cnf, vtree: VTree) {
     );
 
     let start = Instant::now();
-    // print!("semantic... ");
 
+    // TODO: make the prime a CLI arg / iterable?
     // 18,446,744,073,709,551,616 - 25
-    // TODO: make the prime a CLI arg
-    let mut sem_mgr = SddManager::<SemanticCanonicalizer<18_446_744_073_709_551_591>>::new(vtree);
-    // let mut sem_mgr = SddManager::<SemanticCanonicalizer<479001599>>::new(vtree);
+    // let mut sem_mgr = SddManager::<SemanticCanonicalizer<18_446_744_073_709_551_591>>::new(vtree);
     // let mut sem_mgr = SddManager::<SemanticCanonicalizer<100000049>>::new(vtree);
+    let mut sem_mgr = SddManager::<SemanticCanonicalizer<479001599>>::new(vtree);
     let sem_cnf = sem_mgr.from_cnf(&c);
-    // saving this before we run sdd_eq, which could add nodes to the table
 
     let duration = start.elapsed();
-    // println!("time: {:?}", duration);
 
     let stats = sem_mgr.get_stats();
     println!(
@@ -69,9 +65,7 @@ fn run_canonicalizer_experiment(c: Cnf, vtree: VTree) {
     println!("c time: {:?}", cduration);
     println!("s time: {:?}", duration);
     println!(" ");
-    // print!("compr sdd: ");
-    // sem_mgr.dump_sdd_state(compr_cnf);
-    // print!("h: ");
+
     sem_mgr.dump_sdd_state(sem_cnf);
     if !sem_mgr.sdd_eq(compr_cnf, sem_cnf) {
         println!(" ");
@@ -102,7 +96,7 @@ fn main() {
 
     // let dtree = DTree::from_cnf(&cnf, &VarOrder::linear_order(cnf.num_vars()));
     // let vtree = VTree::from_dtree(&dtree).unwrap();
-    let vtree = VTree::even_split(vars, 1);
+    let vtree = VTree::even_split(vars, 2);
 
     run_canonicalizer_experiment(cnf, vtree);
 }

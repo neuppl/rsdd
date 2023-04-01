@@ -153,7 +153,8 @@ impl<T: SddCanonicalizationScheme> SddManager<T> {
             self.unique_bdd(BinarySDD::new(v, low, high, table))
         } else {
             node.sort_by_key(|a| a.prime());
-            if node[0].sub().is_neg() || self.is_false(node[0].sub()) || node[0].sub().is_neg_var() {
+            if node[0].sub().is_neg() || self.is_false(node[0].sub()) || node[0].sub().is_neg_var()
+            {
                 for x in node.iter_mut() {
                     *x = SddAnd::new(x.prime(), x.sub().neg());
                 }
@@ -352,7 +353,7 @@ impl<T: SddCanonicalizationScheme> SddManager<T> {
         // for a in r.node_iter() {
         //     let p = self.and(a.prime(), d);
         //     let s = if r.is_compl() { a.sub().neg() } else { a.sub() };
-        //     if p) {
+        //     if self.is_false(p) {
         //         continue;
         //     }
         //     v.push(SddAnd::new(p, s));
