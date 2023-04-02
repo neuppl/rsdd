@@ -59,3 +59,7 @@ path = "bin/bayesian_network_compiler.rs"
 [[bin]]
 name = "semantic_hash_experiment"
 path = "bin/semantic_hash_experiment.rs"
+
+[[bin]]
+name = "dump_models"
+path = "bin/dump_models.rs"
