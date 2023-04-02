@@ -39,6 +39,19 @@ impl VTree {
         }
     }
 
+    /// produces a left-linear vtree with the variable order given by `order`
+    pub fn left_linear(order: &[VarLabel]) -> VTree {
+        match order {
+            [x] => BTree::Leaf(*x),
+            [cur, rest @ ..] => {
+                let l_tree = Self::left_linear(rest);
+                let r_tree = BTree::Leaf(*cur);
+                BTree::Node((), Box::new(l_tree), Box::new(r_tree))
+            }
+            [] => panic!("invalid right_linear on empty list"),
+        }
+    }
+
     /// produces a right-linear vtree with the variable order given by `order`
     pub fn right_linear(order: &[VarLabel]) -> VTree {
         match order {
@@ -49,6 +62,14 @@ impl VTree {
                 BTree::Node((), Box::new(l_tree), Box::new(r_tree))
             }
             [] => panic!("invalid right_linear on empty list"),
+        }
+    }
+
+    /// true if this vtree is a left-linear fragment
+    pub fn is_left_linear(&self) -> bool {
+        match &self {
+            BTree::Node((), _, r) => r.is_leaf(),
+            _ => false,
         }
     }
 
