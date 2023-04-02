@@ -579,6 +579,8 @@ impl BddPtr {
         decision_vars: &BitSet,
         wmc: &WmcParams<ExpectedUtility>,
     ) -> ExpectedUtility {
+        println!("Assigned decision variables: {:?}", partial_decisions);
+
         // accumulator for EU via bdd_fold
         let mut v = self.bdd_fold(
             &|varlabel, low : ExpectedUtility, high : ExpectedUtility| {
@@ -603,8 +605,8 @@ impl BddPtr {
                     Some(false) => low,
                 }
             },
-            wmc.one,
             wmc.zero,
+            wmc.one,
         );
         for lit in partial_decisions.assignment_iter() {
             let (l, h) = wmc.get_var_weight(lit.get_label());
@@ -614,7 +616,7 @@ impl BddPtr {
                 v = v * (*l);
             }
         }
-        println!("{:?}, {}\n",v.0, v.1 );
+        println!("{}, {}",v.0, v.1 );
         v
     }
 
@@ -680,10 +682,10 @@ impl BddPtr {
         wmc: &WmcParams<ExpectedUtility>,
     ) -> (ExpectedUtility, PartialModel) {
         // copying decision vars into a new mutable bitset
-        let mut decisions = BitSet::new();
-        for v in decision_vars {
-            decisions.insert(v.value_usize());
-        }
+        // let mut decisions = BitSet::new();
+        // for v in decision_vars {
+        //     decisions.insert(v.value_usize());
+        // }
 
         // Initialize all the decision variables to be true, partially instantianted resp. to this
         let all_true: Vec<Literal> = decision_vars.iter().map(|x| Literal::new(*x, true)).collect();
