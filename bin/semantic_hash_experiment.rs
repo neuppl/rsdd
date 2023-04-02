@@ -92,11 +92,11 @@ fn main() {
         .collect::<Vec<VarLabel>>();
     let vars = binding.as_slice();
 
-    // let vtree = VTree::right_linear(vars);
+    let vtree = VTree::left_linear(vars);
 
     // let dtree = DTree::from_cnf(&cnf, &VarOrder::linear_order(cnf.num_vars()));
     // let vtree = VTree::from_dtree(&dtree).unwrap();
-    let vtree = VTree::even_split(vars, 2);
+    // let vtree = VTree::even_split(vars, 2);
 
     run_canonicalizer_experiment(cnf, vtree);
 }
