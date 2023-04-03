@@ -579,7 +579,7 @@ impl BddPtr {
         decision_vars: &BitSet,
         wmc: &WmcParams<ExpectedUtility>,
     ) -> ExpectedUtility {
-        println!("Assigned decision variables: {:?}", partial_decisions);
+        // println!("Assigned decision variables: {:?}", partial_decisions);
 
         // accumulator for EU via bdd_fold
         let mut v = self.bdd_fold(
@@ -616,7 +616,7 @@ impl BddPtr {
                 v = v * (*l);
             }
         }
-        println!("{}, {}",v.0, v.1 );
+        // println!("{}, {}",v.0, v.1 );
         v
     }
 
