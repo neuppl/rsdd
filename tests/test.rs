@@ -614,7 +614,7 @@ mod test_sdd_manager {
     use rsdd::repr::sdd::SddPtr;
     use rsdd::repr::vtree::VTree;
     use rsdd::repr::wmc::WmcParams;
-    use rsdd::util::semiring::{FiniteField, RealSemiring, ExpectedUtility};
+    use rsdd::util::semiring::{FiniteField, RealSemiring};
     use std::collections::HashMap;
     use std::iter::FromIterator;
 
