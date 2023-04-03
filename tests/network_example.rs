@@ -2,18 +2,14 @@
 // Minsung's submission to DRAGSTERS 2023.
 
 extern crate rsdd;
-extern crate quickcheck;
 use crate::repr::var_label::VarLabel;
 use rsdd::builder::bdd_builder::BddManager;
 use rsdd::builder::cache::all_app::AllTable;
-use rsdd::builder::canonicalize::*;
 use rsdd::repr::bdd::BddPtr;
 use rsdd::repr::ddnnf::DDNNFPtr;
-use rsdd::repr::vtree::VTree;
 use rsdd::util::semiring::{ExpectedUtility, Semiring};
 use rsdd::repr::wmc::WmcParams;
 use rsdd::*;
-use serde::de::Expected;
 use std::collections::HashMap;
 extern crate rand;
 
@@ -76,14 +72,12 @@ fn decisions(
     // encodes if adjacent edges were failed, we get reward
     let mut adj_ite : HashMap<BddPtr, BddPtr> = HashMap::new();
     let mut i = 0;
-    let top_labels_cl = top_ptrs.clone();
-    for t in top_labels_cl {
-        let left = man.var(VarLabel::new(i), true);
-        let right = man.var(VarLabel::new(i+1), true);
-        let ifguard = man.or(left.neg(), right.neg());
-        let then_branch = man.and(ifguard, rew_ptr);
-        let else_branch = man.and(ifguard.neg(), rew_ptr.neg());
-        let ite = man.or(then_branch, else_branch);
+    let top_ptrs_cl = top_ptrs.clone();
+    for t in top_ptrs_cl {
+        let left = man.var(VarLabel::new(i), false);
+        let right = man.var(VarLabel::new(i+1), false);
+        let ifguard = man.or(left, right);
+        let ite = man.ite(ifguard, rew_ptr, rew_ptr.neg());
         adj_ite.insert(t, ite);
         i = i+1;
         
@@ -91,14 +85,12 @@ fn decisions(
     // We need this to not accidentally connect the last edge of 
     // top path and first edge of bot path.
     i = i+1;
-    let bot_labels_cl = bot_ptrs.clone();
-    for b in bot_labels_cl {
-        let left = man.var(VarLabel::new(i), true);
-        let right = man.var(VarLabel::new(i+1), true);
-        let ifguard = man.or(left.neg(), right.neg());
-        let then_branch = man.and(ifguard, rew_ptr);
-        let else_branch = man.and(ifguard.neg(), rew_ptr.neg());
-        let ite = man.or(then_branch, else_branch);
+    let bot_ptrs_cl = bot_ptrs.clone();
+    for b in bot_ptrs_cl {
+        let left = man.var(VarLabel::new(i), false);
+        let right = man.var(VarLabel::new(i+1), false);
+        let ifguard = man.or(left, right);
+        let ite = man.ite(ifguard, rew_ptr, rew_ptr.neg());
         adj_ite.insert(b, ite);
         i = i+1;
     }
@@ -107,7 +99,6 @@ fn decisions(
     let mut all_decs_cl = top_ptrs.clone();
     let mut bot_ptrs_cl = bot_ptrs.clone();
     all_decs_cl.append(&mut bot_ptrs_cl);
-    let res_decs = all_decs_cl.clone();
 
     // We get our list of decision branch clauses.
     let mut list_of_branches : Vec<BddPtr> = Vec::new();
@@ -134,24 +125,23 @@ fn decisions(
         match assoc_ite {
             None => panic!(),
             Some(v) => {let join = man.and(neg_all_but_ptr, *v);
-                list_of_branches.push(join)},
+                        list_of_branches.push(join)},
         }
     }
-    let x = list_of_branches.len();
-    print!("list of branches is {}\n", x);
+
     top_labels.append(&mut bot_labels);
     (man.or_lst(&list_of_branches), man, top_labels, rew_label)
 }
 
 #[test]
 fn gen() {
-    let (network, man, edge_lbls) = network_gen(1);
-    let (decs, mut man2, dec_lbls, rw_lbls) = decisions(1, man);
+    let (_, man, edge_lbls) = network_gen(3);
+    let (decs, man2, dec_lbls, rw_lbls) = decisions(3, man);
     let mut eu_map : HashMap<VarLabel, (ExpectedUtility, ExpectedUtility)> 
         = HashMap::new();
     let vars = dec_lbls.clone();
 
-    let probs = [0.55, 0.65, 0.92, 0.73];
+    let probs = [0.52, 0.45, 0.23, 0.69, 0.18, 0.05, 0.33, 0.31];
     let mut i = 0;
     for e in edge_lbls {
         let x = probs[i];
@@ -164,11 +154,11 @@ fn gen() {
     eu_map.insert(rw_lbls, 
                   (ExpectedUtility::one(), ExpectedUtility(1.0, 10.0)));
     
-    let network_fail = network.neg();
-    let end = man2.and(decs, network_fail);
+    // let network_fail = network.neg();
+    // let end = man2.and(decs, network_fail);
     let wmc = WmcParams::new_with_default(ExpectedUtility::zero(), ExpectedUtility::one(), eu_map);
 
-    let (meu_num, pm) = end.meu(&vars, man2.num_vars(), &wmc);   
-    let (meu_dec, _) = network_fail.meu(&vars, man2.num_vars(), &wmc); 
-    println!("MEU: {} \n PM : {:?}", meu_num.1 / meu_dec.0, pm);
+    let (meu_num, pm) = decs.meu(&vars, man2.num_vars(), &wmc);   
+    // let (meu_dec, _) = network_fail.meu(&vars, man2.num_vars(), &wmc); 
+    println!("MEU: {} \n PM : {:?}", meu_num.1, pm);
 }
