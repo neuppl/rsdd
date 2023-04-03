@@ -16,7 +16,6 @@ use rsdd::repr::vtree::VTree;
 use rsdd::util::semiring::{ExpectedUtility, Semiring};
 use rsdd::repr::wmc::WmcParams;
 use rsdd::*;
-use serde::de::Expected;
 use std::collections::HashMap;
 extern crate rand;
 
