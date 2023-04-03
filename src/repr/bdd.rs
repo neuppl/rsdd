@@ -681,12 +681,6 @@ impl BddPtr {
         num_vars: usize,
         wmc: &WmcParams<ExpectedUtility>,
     ) -> (ExpectedUtility, PartialModel) {
-        // copying decision vars into a new mutable bitset
-        // let mut decisions = BitSet::new();
-        // for v in decision_vars {
-        //     decisions.insert(v.value_usize());
-        // }
-
         // Initialize all the decision variables to be true, partially instantianted resp. to this
         let all_true: Vec<Literal> = decision_vars.iter().map(|x| Literal::new(*x, true)).collect();
         let cur_assgn = PartialModel::from_litvec(&all_true, num_vars);
