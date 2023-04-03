@@ -23,6 +23,7 @@ pub enum BddPtr {
 use bit_set::BitSet;
 use bumpalo::Bump;
 use BddPtr::*;
+use num::pow;
 
 /// The intermediate representation for a BddPtr that is being folded in a
 /// [`Fold`] computation.
@@ -582,7 +583,7 @@ impl BddPtr {
         // println!("Assigned decision variables: {:?}", partial_decisions);
 
         // accumulator for EU via bdd_fold
-        let mut v = self.bdd_fold(
+        let v = self.bdd_fold(
             &|varlabel, low : ExpectedUtility, high : ExpectedUtility| {
                 // get True and False weights for VarLabel
                 let (false_w, true_w) = wmc.get_var_weight(varlabel);
@@ -608,14 +609,14 @@ impl BddPtr {
             wmc.zero,
             wmc.one,
         );
-        for lit in partial_decisions.assignment_iter() {
-            let (l, h) = wmc.get_var_weight(lit.get_label());
-            if lit.get_polarity() {
-                v = v * (*h);
-            } else {
-                v = v * (*l);
-            }
-        }
+        // for lit in partial_decisions.assignment_iter() {
+        //     let (l, h) = wmc.get_var_weight(lit.get_label());
+        //     if lit.get_polarity() {
+        //         v = v * (*h);
+        //     } else {
+        //         v = v * (*l);
+        //     }
+        // }
         // println!("{}, {}",v.0, v.1 );
         v
     }
@@ -627,32 +628,39 @@ impl BddPtr {
         decision_vars: &[VarLabel],
         wmc: &WmcParams<ExpectedUtility>,
         cur_assgn: PartialModel,
-    ) -> (ExpectedUtility, PartialModel) {
+        mut prunes : u64
+    ) -> (ExpectedUtility, PartialModel, u64) {
         match decision_vars {
+            // If all decision variables are assigned,
             [] => {
+                // Run the eu ub
                 let decision_bitset = BitSet::new();
                 let possible_best = self.eu_ub(&cur_assgn, &decision_bitset, wmc);
+                // If it's a better lb, update.
                 if possible_best.1 > cur_lb.1 {
-                    (possible_best, cur_assgn)
+                    (possible_best, cur_assgn, prunes)
                 } else {
-                    (cur_lb, cur_best)
+                    (cur_lb, cur_best, prunes)
                 }
             }
+            // If there exists an unassigned decision variable,
             [x, end @ ..] => {
                 let mut best_model = cur_best;
                 let mut best_lb = cur_lb;
                 let margvar_bits = BitSet::from_iter(end.iter().map(|x| x.value_usize()));
-
+                // Consider the assignment of it to true...
                 let mut true_model = cur_assgn.clone();
                 true_model.set(*x, true);
+                // ... and false...
                 let mut false_model = cur_assgn.clone();
                 false_model.set(*x, false);
 
+                // and calculate their respective upper bounds.
                 let true_ub = self.eu_ub(&true_model, &margvar_bits, wmc);
                 let false_ub = self.eu_ub(&false_model, &margvar_bits, wmc);
 
                 // branch on the greater upper-bound first
-                let order = if true_ub.0 > false_ub.0 {
+                let order = if true_ub.1 > false_ub.1 {
                     [(true_ub, true_model), (false_ub, false_model)]
                 } else {
                     [(false_ub, false_model), (true_ub, true_model)]
@@ -660,16 +668,20 @@ impl BddPtr {
                 for (upper_bound, partialmodel) in order {
                     // branch + bound
                     if upper_bound.1 > best_lb.1 {
-                        (best_lb, best_model) = self.meu_h(
+                        (best_lb, best_model, prunes) = self.meu_h(
                             best_lb,
                             best_model,
                             end,
                             wmc,
                             partialmodel.clone(),
-                        );
+                            prunes
+                        )
+                    } else {
+                        let len = end.len();
+                        prunes = prunes + pow(2, len);
                     }
                 }
-                (best_lb, best_model)
+                (best_lb, best_model, prunes)
             }
         }
     }
@@ -680,7 +692,7 @@ impl BddPtr {
         decision_vars: &[VarLabel],
         num_vars: usize,
         wmc: &WmcParams<ExpectedUtility>,
-    ) -> (ExpectedUtility, PartialModel) {
+    ) -> (ExpectedUtility, PartialModel, u64) {
         // Initialize all the decision variables to be true, partially instantianted resp. to this
         let all_true: Vec<Literal> = decision_vars.iter().map(|x| Literal::new(*x, true)).collect();
         let cur_assgn = PartialModel::from_litvec(&all_true, num_vars);
@@ -692,6 +704,7 @@ impl BddPtr {
             decision_vars,
             wmc,
             PartialModel::from_litvec(&[], num_vars),
+            0,
         )
     }
 }

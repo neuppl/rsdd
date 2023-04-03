@@ -76,7 +76,7 @@ fn decisions(
     let top_ptrs_cl = top_ptrs.clone();
     for t in top_ptrs_cl {
         let x = t.var().value();
-        println!("Decision variable {} is joined to edges {} and {}", x, i, i+1);
+        // println!("Decision variable {} is joined to edges {} and {}", x, i, i+1);
         let left = man.var(VarLabel::new(i), false);
         let right = man.var(VarLabel::new(i+1), false);
         let ifguard = man.or(left, right);
@@ -91,7 +91,7 @@ fn decisions(
     let bot_ptrs_cl = bot_ptrs.clone();
     for b in bot_ptrs_cl {
         let y = b.var().value();
-        println!("Decision variable {} is joined to edges {} and {}", y, i, i+1);
+        // println!("Decision variable {} is joined to edges {} and {}", y, i, i+1);
         let left = man.var(VarLabel::new(i), false);
         let right = man.var(VarLabel::new(i+1), false);
         let ifguard = man.or(left, right);
@@ -123,10 +123,6 @@ fn decisions(
                     ret.push(neg);
                 }
             }
-            // let x = ret.clone();
-            // let pr : Vec<u64> = x.iter().map(|f| f.var().value()).collect();
-            // let y = u.var().value();
-            // println!{"Associating Var {} with Vec {:?}", y, pr};
             man.and_lst(&ret)
         };
         let neg_all_but_ptr = neg_all_but_one(ptr);
@@ -144,17 +140,18 @@ fn decisions(
 
 #[test]
 fn gen() {
-    let (_, man, edge_lbls) = network_gen(6);
-    let (decs, man2, dec_lbls, rw_lbls) = decisions(6, man);
+    let (network, man, edge_lbls) = network_gen(10);
+    let (decs, mut man2, dec_lbls, rw_lbls) = decisions(10, man);
     let mut eu_map : HashMap<VarLabel, (ExpectedUtility, ExpectedUtility)> 
         = HashMap::new();
     let vars = dec_lbls.clone();
 
-    let probs = [0.22, 0.78, 0.92, 0.04, 0.3, 0.62, 0.25, 0.51, 0.12, 0.21, 0.83, 0.62, 0.27, 0.76];
+    let probs = [0.44, 0.48, 0.32, 0.9, 0.26, 0.29, 0.1, 0.74, 0.52, 0.54, 0.5, 0.5,
+    0.44, 0.48, 0.32, 0.9, 0.26, 0.29, 0.1, 0.74, 0.52, 0.54, 0.5, 0.5];
     let mut i = 0;
     for e in edge_lbls {
         let x = probs[i];
-        println!("Assigning probability {} to variable {}", x, e.value());
+        // println!("Assigning probability {} to variable {}", x, e.value());
         eu_map.insert(e, (ExpectedUtility(1.0-x, 0.0), ExpectedUtility(x, 0.0)));
         i = i+1;
     }
@@ -163,11 +160,78 @@ fn gen() {
     }
     eu_map.insert(rw_lbls, 
                   (ExpectedUtility::one(), ExpectedUtility(1.0, 10.0)));
-    
-    // let network_fail = network.neg();
-    // let end = man2.and(decs, network_fail);
+    let network_fail = network.neg();
+    let end = man2.and(decs, network_fail);
     let wmc = WmcParams::new_with_default(ExpectedUtility::zero(), ExpectedUtility::one(), eu_map);
-    let (meu_num, pm) = decs.meu(&vars, man2.num_vars(), &wmc);   
-    // let (meu_dec, _) = network_fail.meu(&vars, man2.num_vars(), &wmc); 
-    println!("MEU: {} \n PM : {:?}", meu_num.1, pm);
+    let (meu_num, pm, p) = end.meu(&vars, man2.num_vars(), &wmc);   
+    println!("don't worry about afterwards");
+    let (meu_dec, _, _) = network_fail.meu(&vars, man2.num_vars(), &wmc); 
+    println!("MEU: {} \nPM : {:?}\nno. pruned nodes : {}", meu_num.1 / meu_dec.0 , pm, p);
 }
+
+// Uncomment and run test if you need a sanity check above code works.
+// #[test]
+// fn sanity_check() {
+//     let (_, man, _) = network_gen(3);
+//     let (decs, mut man2, _, _) = decisions(3, man);
+
+//     let st1 = man2.var(VarLabel::new(0), true);
+//     let t1t2 = man2.var(VarLabel::new(1), true);
+//     let t2t3 = man2.var(VarLabel::new(2), true);
+//     let t3e = man2.var(VarLabel::new(3), true);
+
+//     let sb1 = man2.var(VarLabel::new(4), true);
+//     let b1b2 = man2.var(VarLabel::new(5), true);
+//     let b2b3 = man2.var(VarLabel::new(6), true);
+//     let b3e = man2.var(VarLabel::new(7), true);
+
+//     let t1 = man2.var(VarLabel::new(8), true);
+//     let t2 = man2.var(VarLabel::new(9), true);
+//     let t3 = man2.var(VarLabel::new(10), true);
+
+//     let b1 = man2.var(VarLabel::new(11), true);
+//     let b2 = man2.var(VarLabel::new(12), true);
+//     let b3 = man2.var(VarLabel::new(13), true);
+
+//     let r = man2.var(VarLabel::new(14), true);
+
+//     let ig_t1 = man2.or(st1.neg(), t1t2.neg());
+//     let ig_t2 = man2.or(t1t2.neg(), t2t3.neg());
+//     let ig_t3 = man2.or(t2t3.neg(), t3e.neg());
+
+//     let ig_b1 = man2.or(sb1.neg(), b1b2.neg());
+//     let ig_b2 = man2.or(b1b2.neg(), b2b3.neg());
+//     let ig_b3 = man2.or(b2b3.neg(), b3e.neg());
+
+//     let t1_ite = man2.ite(ig_t1, r, r.neg());
+//     let t2_ite = man2.ite(ig_t2, r, r.neg());
+//     let t3_ite = man2.ite(ig_t3, r, r.neg());
+
+//     let b1_ite = man2.ite(ig_b1, r, r.neg());
+//     let b2_ite = man2.ite(ig_b2, r, r.neg());
+//     let b3_ite = man2.ite(ig_b3, r, r.neg());
+
+//     let t1_d = man2.and_lst(
+//                 &[t1_ite, t1, t2.neg(), t3.neg(), b1.neg(), b2.neg(), b3.neg()]
+//                );
+//     let t2_d = man2.and_lst(
+//                 &[t2_ite, t1.neg(), t2, t3.neg(), b1.neg(), b2.neg(), b3.neg()]
+//                );
+//     let t3_d = man2.and_lst(
+//                 &[t3_ite, t1.neg(), t2.neg(), t3, b1.neg(), b2.neg(), b3.neg()]
+//                );
+
+//     let b1_d = man2.and_lst(
+//                 &[b1_ite, t1.neg(), t2.neg(), t3.neg(), b1, b2.neg(), b3.neg()]
+//                );
+//     let b2_d = man2.and_lst(
+//                 &[b2_ite, t1.neg(), t2.neg(), t3.neg(), b1.neg(), b2, b3.neg()]
+//                );
+//     let b3_d = man2.and_lst(
+//                 &[b3_ite, t1.neg(), t2.neg(), t3.neg(), b1.neg(), b2.neg(), b3]
+//                );
+
+//     let dec = man2.or_lst(&[t1_d, t2_d, t3_d, b1_d, b2_d, b3_d]);
+
+//     assert!(man2.eq_bdd(dec, decs));
+// }
