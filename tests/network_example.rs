@@ -13,6 +13,7 @@ use rsdd::*;
 use std::collections::HashMap;
 extern crate rand;
 
+
 // Generates a network with top/bottom path lengths n+1
 // For example, network_gen(4) will generate a network with top path edges
 // st1, t1t2, t2t3, t3t4, t4e.
@@ -74,6 +75,8 @@ fn decisions(
     let mut i = 0;
     let top_ptrs_cl = top_ptrs.clone();
     for t in top_ptrs_cl {
+        let x = t.var().value();
+        println!("Decision variable {} is joined to edges {} and {}", x, i, i+1);
         let left = man.var(VarLabel::new(i), false);
         let right = man.var(VarLabel::new(i+1), false);
         let ifguard = man.or(left, right);
@@ -87,6 +90,8 @@ fn decisions(
     i = i+1;
     let bot_ptrs_cl = bot_ptrs.clone();
     for b in bot_ptrs_cl {
+        let y = b.var().value();
+        println!("Decision variable {} is joined to edges {} and {}", y, i, i+1);
         let left = man.var(VarLabel::new(i), false);
         let right = man.var(VarLabel::new(i+1), false);
         let ifguard = man.or(left, right);
@@ -118,6 +123,10 @@ fn decisions(
                     ret.push(neg);
                 }
             }
+            // let x = ret.clone();
+            // let pr : Vec<u64> = x.iter().map(|f| f.var().value()).collect();
+            // let y = u.var().value();
+            // println!{"Associating Var {} with Vec {:?}", y, pr};
             man.and_lst(&ret)
         };
         let neg_all_but_ptr = neg_all_but_one(ptr);
@@ -135,16 +144,17 @@ fn decisions(
 
 #[test]
 fn gen() {
-    let (_, man, edge_lbls) = network_gen(3);
-    let (decs, man2, dec_lbls, rw_lbls) = decisions(3, man);
+    let (_, man, edge_lbls) = network_gen(6);
+    let (decs, man2, dec_lbls, rw_lbls) = decisions(6, man);
     let mut eu_map : HashMap<VarLabel, (ExpectedUtility, ExpectedUtility)> 
         = HashMap::new();
     let vars = dec_lbls.clone();
 
-    let probs = [0.52, 0.45, 0.23, 0.69, 0.18, 0.05, 0.33, 0.31];
+    let probs = [0.22, 0.78, 0.92, 0.04, 0.3, 0.62, 0.25, 0.51, 0.12, 0.21, 0.83, 0.62, 0.27, 0.76];
     let mut i = 0;
     for e in edge_lbls {
         let x = probs[i];
+        println!("Assigning probability {} to variable {}", x, e.value());
         eu_map.insert(e, (ExpectedUtility(1.0-x, 0.0), ExpectedUtility(x, 0.0)));
         i = i+1;
     }
@@ -157,7 +167,6 @@ fn gen() {
     // let network_fail = network.neg();
     // let end = man2.and(decs, network_fail);
     let wmc = WmcParams::new_with_default(ExpectedUtility::zero(), ExpectedUtility::one(), eu_map);
-
     let (meu_num, pm) = decs.meu(&vars, man2.num_vars(), &wmc);   
     // let (meu_dec, _) = network_fail.meu(&vars, man2.num_vars(), &wmc); 
     println!("MEU: {} \n PM : {:?}", meu_num.1, pm);
