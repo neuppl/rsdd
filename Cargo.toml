@@ -11,7 +11,7 @@ rand = "0.8.5"
 dimacs = "0.2.0"
 primal = "0.3.0"
 pretty = "0.3.3"
-num = "0.1.41"
+num = "0.2"
 maplit = "1.0.1"
 libc = "0.2"
 quickcheck = "1.0.3"
@@ -30,11 +30,14 @@ bumpalo = "3.11.1"
 petgraph = "0.6.2"
 rsgm = { git = "https://github.com/pmall-neu/rsgm" }
 rand_chacha = "0.3.1"
+getrandom = { version = "0.2", features = ["js"] } # req for wasm
+wasm-bindgen = "0.2.84"
 
 
 [lib]
 name = "rsdd"
 path = "src/lib.rs"
+crate-type = ["cdylib"]
 
 
 [profile.release]

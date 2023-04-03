@@ -29,3 +29,4 @@ pub mod repr;
 pub mod sample;
 pub mod serialize;
 pub mod unique_table;
+pub mod wasm;
