@@ -392,8 +392,8 @@ fn test_meu() {
     //Setting up the MEU
     let vars = vec![VarLabel::new(4), VarLabel::new(5)];
     let wmc = WmcParams::new_with_default(ExpectedUtility::zero(), ExpectedUtility::one(), eu_map);
-    let (meu_num, pm, _) = end.meu(&vars, man.num_vars(), &wmc);   
-    let (meu_dec, _, _) = network_fail.meu(&vars, man.num_vars(), &wmc);   
+    let (meu_num, pm) = end.meu(&vars, man.num_vars(), &wmc);   
+    let (meu_dec, _) = network_fail.meu(&vars, man.num_vars(), &wmc);   
     println!("{:?}", pm);
     assert_eq!(meu_num.1 / meu_dec.0, 10.0);
     //
