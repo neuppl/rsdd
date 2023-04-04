@@ -140,14 +140,17 @@ fn decisions(
 
 #[test]
 fn gen() {
-    let (network, man, edge_lbls) = network_gen(10);
-    let (decs, mut man2, dec_lbls, rw_lbls) = decisions(10, man);
+    use std::time::Instant;
+    let now = Instant::now();
+
+    let (network, man, edge_lbls) = network_gen(11);
+    let (decs, mut man2, dec_lbls, rw_lbls) = decisions(11, man);
     let mut eu_map : HashMap<VarLabel, (ExpectedUtility, ExpectedUtility)> 
         = HashMap::new();
     let vars = dec_lbls.clone();
 
-    let probs = [0.44, 0.48, 0.32, 0.9, 0.26, 0.29, 0.1, 0.74, 0.52, 0.54, 0.5, 0.5,
-    0.44, 0.48, 0.32, 0.9, 0.26, 0.29, 0.1, 0.74, 0.52, 0.54, 0.5, 0.5];
+    let probs = [0.03, 0.78, 0.64, 0.53, 0.81, 0.72, 0.74, 0.36, 0.95, 0.65, 0.04,
+                 0.63, 0.4, 0.84, 0.41, 0.27, 0.13, 0.49, 0.22, 0.83, 0.75, 0.67, 0.74, 0.36];
     let mut i = 0;
     for e in edge_lbls {
         let x = probs[i];
@@ -163,10 +166,11 @@ fn gen() {
     let network_fail = network.neg();
     let end = man2.and(decs, network_fail);
     let wmc = WmcParams::new_with_default(ExpectedUtility::zero(), ExpectedUtility::one(), eu_map);
-    let (meu_num, pm, p) = end.meu(&vars, man2.num_vars(), &wmc);   
-    println!("don't worry about afterwards");
-    let (meu_dec, _, _) = network_fail.meu(&vars, man2.num_vars(), &wmc); 
-    println!("MEU: {} \nPM : {:?}\nno. pruned nodes : {}", meu_num.1 / meu_dec.0 , pm, p);
+    let (meu_num, pm) = end.meu(&vars, man2.num_vars(), &wmc);   
+    let (meu_dec, _) = network_fail.meu(&vars, man2.num_vars(), &wmc); 
+    println!("MEU: {} \nPM : {:?}\nno. pruned nodes : ", meu_num.1 / meu_dec.0 , pm);
+    let elapsed = now.elapsed();
+    println!("Elapsed: {:.2?}", elapsed);
 }
 
 // Uncomment and run test if you need a sanity check above code works.

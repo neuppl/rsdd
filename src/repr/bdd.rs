@@ -628,8 +628,7 @@ impl BddPtr {
         decision_vars: &[VarLabel],
         wmc: &WmcParams<ExpectedUtility>,
         cur_assgn: PartialModel,
-        mut prunes : u64
-    ) -> (ExpectedUtility, PartialModel, u64) {
+    ) -> (ExpectedUtility, PartialModel) {
         match decision_vars {
             // If all decision variables are assigned,
             [] => {
@@ -638,9 +637,9 @@ impl BddPtr {
                 let possible_best = self.eu_ub(&cur_assgn, &decision_bitset, wmc);
                 // If it's a better lb, update.
                 if possible_best.1 > cur_lb.1 {
-                    (possible_best, cur_assgn, prunes)
+                    (possible_best, cur_assgn)
                 } else {
-                    (cur_lb, cur_best, prunes)
+                    (cur_lb, cur_best)
                 }
             }
             // If there exists an unassigned decision variable,
@@ -668,20 +667,17 @@ impl BddPtr {
                 for (upper_bound, partialmodel) in order {
                     // branch + bound
                     if upper_bound.1 > best_lb.1 {
-                        (best_lb, best_model, prunes) = self.meu_h(
+                        (best_lb, best_model) = self.meu_h(
                             best_lb,
                             best_model,
                             end,
                             wmc,
                             partialmodel.clone(),
-                            prunes
                         )
                     } else {
-                        let len = end.len();
-                        prunes = prunes + pow(2, len);
                     }
                 }
-                (best_lb, best_model, prunes)
+                (best_lb, best_model)
             }
         }
     }
@@ -692,7 +688,7 @@ impl BddPtr {
         decision_vars: &[VarLabel],
         num_vars: usize,
         wmc: &WmcParams<ExpectedUtility>,
-    ) -> (ExpectedUtility, PartialModel, u64) {
+    ) -> (ExpectedUtility, PartialModel) {
         // Initialize all the decision variables to be true, partially instantianted resp. to this
         let all_true: Vec<Literal> = decision_vars.iter().map(|x| Literal::new(*x, true)).collect();
         let cur_assgn = PartialModel::from_litvec(&all_true, num_vars);
@@ -704,7 +700,6 @@ impl BddPtr {
             decision_vars,
             wmc,
             PartialModel::from_litvec(&[], num_vars),
-            0,
         )
     }
 }
