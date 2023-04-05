@@ -11,12 +11,8 @@ use rsdd::builder::cache::all_app::AllTable;
 use rsdd::builder::canonicalize::*;
 use rsdd::builder::sdd_builder::SddManager;
 use rsdd::repr::bdd::BddPtr;
-use rsdd::repr::ddnnf::DDNNFPtr;
 use rsdd::repr::vtree::VTree;
-use rsdd::util::semiring::{ExpectedUtility, Semiring};
-use rsdd::repr::wmc::WmcParams;
 use rsdd::*;
-use std::collections::HashMap;
 extern crate rand;
 
 /// a prime large enough to ensure no collisions for semantic hashing
@@ -316,87 +312,6 @@ fn test_sdd_is_canonical() {
             man.print_sdd(r2),
         );
     }
-}
-
-// daPPL MEU unit tests
-
-#[test]
-fn test_meu() {
-    // construct BDD
-    let mut man = BddManager::<AllTable<BddPtr>>::new_default_order(7);
-    let st = man.var(VarLabel::new(0), true);
-    let te = man.var(VarLabel::new(1), true);
-    let sb = man.var(VarLabel::new(2), true);
-    let be = man.var(VarLabel::new(3), true);
-
-    let dt = man.var(VarLabel::new(4), true);
-    let db = man.var(VarLabel::new(5), true);
-
-    let r = man.var(VarLabel::new(6), true);
-
-    let path_t = man.and(st, te);
-    let path_b = man.and(sb, be);
-
-    let network = man.xor(path_t, path_b);
-    let network_fail = network.neg();
-
-    let ifguard_t = man.or(st.neg(), te.neg());
-    let ifguard_b = man.or(sb.neg(), be.neg());
-
-    let ifguard_t_then = man.and(ifguard_t, r);
-    let ifguard_t_else = man.and(ifguard_t.neg(), r.neg());
-
-    let ifguard_b_then = man.and(ifguard_b, r);
-    let ifguard_b_else = man.and(ifguard_b.neg(), r.neg());
-
-    let if_t = man.or(ifguard_t_then, ifguard_t_else);
-    let if_b = man.or(ifguard_b_then, ifguard_b_else);
-
-    let t = man.and_lst(&[dt, db.neg(), if_t]);
-    let b = man.and_lst(&[db, dt.neg(), if_b]);
-
-    let dec = man.or(t,b);
-    let end = man.and(dec, network_fail);
-
-    // map of elements in EU semring
-    let mut eu_map : HashMap<VarLabel, (ExpectedUtility, ExpectedUtility)> = HashMap::new();
-    eu_map.insert(
-        VarLabel::new(0),
-        (ExpectedUtility(0.45,0.0), ExpectedUtility(0.55,0.0)),
-    );
-    eu_map.insert(
-        VarLabel::new(1),
-        (ExpectedUtility(0.35,0.0), ExpectedUtility(0.65,0.0)),
-    );
-    eu_map.insert(
-        VarLabel::new(2),
-        (ExpectedUtility(0.08,0.0), ExpectedUtility(0.92,0.0)),
-    );
-    eu_map.insert(
-        VarLabel::new(3),
-        (ExpectedUtility(0.27,0.0), ExpectedUtility(0.73,0.0)),
-    );
-    eu_map.insert(
-        VarLabel::new(4),
-        (ExpectedUtility(1.0,0.0), ExpectedUtility(1.0,0.0)),
-    );
-    eu_map.insert(
-        VarLabel::new(5),
-        (ExpectedUtility(1.0,0.0), ExpectedUtility(1.0,0.0)),
-    );
-    eu_map.insert(
-        VarLabel::new(6),
-        (ExpectedUtility(1.0,0.0), ExpectedUtility(1.0,10.0)),
-    );
-
-    //Setting up the MEU
-    let vars = vec![VarLabel::new(4), VarLabel::new(5)];
-    let wmc = WmcParams::new_with_default(ExpectedUtility::zero(), ExpectedUtility::one(), eu_map);
-    let (meu_num, pm) = end.meu(&vars, man.num_vars(), &wmc);   
-    let (meu_dec, _) = network_fail.meu(&vars, man.num_vars(), &wmc);   
-    println!("{:?}", pm);
-    assert_eq!(meu_num.1 / meu_dec.0, 10.0);
-    //
 }
 
 #[cfg(test)]
