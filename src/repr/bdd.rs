@@ -1,5 +1,7 @@
 //! Binary decision diagram representation
-use crate::{repr::var_label::VarSet, util::semiring::RealSemiring, util::semiring::ExpectedUtility};
+use crate::{
+    repr::var_label::VarSet, util::semiring::ExpectedUtility, util::semiring::RealSemiring,
+};
 
 pub use super::{
     ddnnf::*,
@@ -9,7 +11,7 @@ pub use super::{
     wmc::WmcParams,
 };
 use core::fmt::Debug;
-use std::{iter::FromIterator};
+use std::iter::FromIterator;
 
 /// Core BDD pointer datatype
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Copy, PartialOrd, Ord)]
@@ -23,7 +25,6 @@ pub enum BddPtr {
 use bit_set::BitSet;
 use bumpalo::Bump;
 use BddPtr::*;
-use num::pow;
 
 /// The intermediate representation for a BddPtr that is being folded in a
 /// [`Fold`] computation.
@@ -420,7 +421,7 @@ impl BddPtr {
                 Some((Some(v), _)) if self.is_neg() => *v,
                 // Same for not complemented
                 Some((_, Some(v))) if !self.is_neg() => *v,
-                // (None, None), 
+                // (None, None),
                 // (Some(v), None) but not a complemented node
                 // (None, Some(v)) but a complemented node
                 Some((prev_low, prev_high)) => {
@@ -584,18 +585,18 @@ impl BddPtr {
 
         // accumulator for EU via bdd_fold
         let v = self.bdd_fold(
-            &|varlabel, low : ExpectedUtility, high : ExpectedUtility| {
+            &|varlabel, low: ExpectedUtility, high: ExpectedUtility| {
                 // get True and False weights for VarLabel
                 let (false_w, true_w) = wmc.get_var_weight(varlabel);
                 // Check if our partial model has already assigned my variable.
                 match partial_decisions.get(varlabel) {
                     // If not...
                     None => {
-                        // If it's a decision variable, we do  
+                        // If it's a decision variable, we do
                         if decision_vars.contains(varlabel.value_usize()) {
                             let max_pr = f64::max(low.0, high.0);
                             let max_eu = f64::max(low.1, high.1);
-                            ExpectedUtility(max_pr,max_eu)
+                            ExpectedUtility(max_pr, max_eu)
                         // Otherwise it's just a probabilistic variable so you do
                         // the usual stuff...
                         } else {
@@ -667,13 +668,8 @@ impl BddPtr {
                 for (upper_bound, partialmodel) in order {
                     // branch + bound
                     if upper_bound.1 > best_lb.1 {
-                        (best_lb, best_model) = self.meu_h(
-                            best_lb,
-                            best_model,
-                            end,
-                            wmc,
-                            partialmodel.clone(),
-                        )
+                        (best_lb, best_model) =
+                            self.meu_h(best_lb, best_model, end, wmc, partialmodel.clone())
                     } else {
                     }
                 }
@@ -690,7 +686,10 @@ impl BddPtr {
         wmc: &WmcParams<ExpectedUtility>,
     ) -> (ExpectedUtility, PartialModel) {
         // Initialize all the decision variables to be true, partially instantianted resp. to this
-        let all_true: Vec<Literal> = decision_vars.iter().map(|x| Literal::new(*x, true)).collect();
+        let all_true: Vec<Literal> = decision_vars
+            .iter()
+            .map(|x| Literal::new(*x, true))
+            .collect();
         let cur_assgn = PartialModel::from_litvec(&all_true, num_vars);
         // Calculate bound wrt the partial instantiation.
         let lower_bound = self.eu_ub(&cur_assgn, &BitSet::new(), wmc);

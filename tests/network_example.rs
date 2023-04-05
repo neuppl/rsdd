@@ -7,38 +7,33 @@ use rsdd::builder::bdd_builder::BddManager;
 use rsdd::builder::cache::all_app::AllTable;
 use rsdd::repr::bdd::BddPtr;
 use rsdd::repr::ddnnf::DDNNFPtr;
-use rsdd::util::semiring::{ExpectedUtility, Semiring};
 use rsdd::repr::wmc::WmcParams;
+use rsdd::util::semiring::{ExpectedUtility, Semiring};
 use rsdd::*;
 use std::collections::HashMap;
 extern crate rand;
-
 
 // Generates a network with top/bottom path lengths n+1
 // For example, network_gen(4) will generate a network with top path edges
 // st1, t1t2, t2t3, t3t4, t4e.
 // Output is: BDDPtr to network, associated BDDManager, Vec of edge VarLabels
-fn network_gen(n : usize) 
-    -> (BddPtr, BddManager<AllTable<BddPtr>>, Vec<VarLabel>) {
+fn network_gen(n: usize) -> (BddPtr, BddManager<AllTable<BddPtr>>, Vec<VarLabel>) {
     // Initialize BDD
     let bdd_size = (2 * n) + 2;
     let mut man = BddManager::<AllTable<BddPtr>>::new_default_order(bdd_size);
 
     // Initialize variables in the BDD, sort into top or bottom edge
-    let v: Vec<VarLabel> = (0..bdd_size)
-            .map(|x| VarLabel::new(x as u64))
-            .collect();
+    let v: Vec<VarLabel> = (0..bdd_size).map(|x| VarLabel::new(x as u64)).collect();
     let w = v.clone();
-    let len = n+1;
+    let len = n + 1;
     let mut top_edges = Vec::<BddPtr>::with_capacity(len);
     let mut bot_edges = Vec::<BddPtr>::with_capacity(len);
-    for i in v { 
+    for i in v {
         let i_val = i.value_usize();
-        if i_val < n+1 { 
-            top_edges.insert(i_val % (n+1), man.var(i, true)); 
-        }
-        else {
-            bot_edges.insert(i_val % (n+1), man.var(i, true));
+        if i_val < n + 1 {
+            top_edges.insert(i_val % (n + 1), man.var(i, true));
+        } else {
+            bot_edges.insert(i_val % (n + 1), man.var(i, true));
         }
     }
 
@@ -55,64 +50,64 @@ fn network_gen(n : usize)
 // Output: decision tree BDDPtr, associated BDDManager,
 //         Vec of VarLabels of Decisions, VarLabel of Reward.
 fn decisions(
-    n : usize,
-    mut man : BddManager<AllTable<BddPtr>>
-) -> (BddPtr, BddManager<AllTable<BddPtr>>, Vec<VarLabel>, VarLabel) {
+    n: usize,
+    mut man: BddManager<AllTable<BddPtr>>,
+) -> (
+    BddPtr,
+    BddManager<AllTable<BddPtr>>,
+    Vec<VarLabel>,
+    VarLabel,
+) {
     // Initialize top and bottom decisions, reward
-    let top_dec: Vec<(VarLabel, BddPtr)> = (0..n)
-            .map(|_x| man.new_var(true))
-            .collect();
-    let bot_dec: Vec<(VarLabel, BddPtr)> = (0..n)
-            .map(|_x| man.new_var(true))
-            .collect();
+    let top_dec: Vec<(VarLabel, BddPtr)> = (0..n).map(|_x| man.new_var(true)).collect();
+    let bot_dec: Vec<(VarLabel, BddPtr)> = (0..n).map(|_x| man.new_var(true)).collect();
     let (mut top_labels, top_ptrs): (Vec<_>, Vec<_>) = top_dec.into_iter().unzip();
     let (mut bot_labels, bot_ptrs): (Vec<_>, Vec<_>) = bot_dec.into_iter().unzip();
     let (rew_label, rew_ptr) = man.new_var(true);
-    
+
     // A HashMap storing a decision label the related ITE BDDPtr that
     // encodes if adjacent edges were failed, we get reward
-    let mut adj_ite : HashMap<BddPtr, BddPtr> = HashMap::new();
+    let mut adj_ite: HashMap<BddPtr, BddPtr> = HashMap::new();
     let mut i = 0;
     let top_ptrs_cl = top_ptrs.clone();
     for t in top_ptrs_cl {
-        let x = t.var().value();
+        // let x = t.var().value();
         // println!("Decision variable {} is joined to edges {} and {}", x, i, i+1);
         let left = man.var(VarLabel::new(i), false);
-        let right = man.var(VarLabel::new(i+1), false);
+        let right = man.var(VarLabel::new(i + 1), false);
         let ifguard = man.or(left, right);
         let ite = man.ite(ifguard, rew_ptr, rew_ptr.neg());
         adj_ite.insert(t, ite);
-        i = i+1;
-        
+        i = i + 1;
     }
-    // We need this to not accidentally connect the last edge of 
+    // We need this to not accidentally connect the last edge of
     // top path and first edge of bot path.
-    i = i+1;
+    i = i + 1;
     let bot_ptrs_cl = bot_ptrs.clone();
     for b in bot_ptrs_cl {
-        let y = b.var().value();
+        // let y = b.var().value();
         // println!("Decision variable {} is joined to edges {} and {}", y, i, i+1);
         let left = man.var(VarLabel::new(i), false);
-        let right = man.var(VarLabel::new(i+1), false);
+        let right = man.var(VarLabel::new(i + 1), false);
         let ifguard = man.or(left, right);
         let ite = man.ite(ifguard, rew_ptr, rew_ptr.neg());
         adj_ite.insert(b, ite);
-        i = i+1;
+        i = i + 1;
     }
-    
+
     // All decisions aggregator
     let mut all_decs_cl = top_ptrs.clone();
     let mut bot_ptrs_cl = bot_ptrs.clone();
     all_decs_cl.append(&mut bot_ptrs_cl);
 
     // We get our list of decision branch clauses.
-    let mut list_of_branches : Vec<BddPtr> = Vec::new();
+    let mut list_of_branches: Vec<BddPtr> = Vec::new();
     let e = all_decs_cl.clone();
     for ptr in e {
         // Helper function that, given a BDDPtr to a decision, gives a
-        // BDDPtr to the conjunction of all the decisions negated except 
+        // BDDPtr to the conjunction of all the decisions negated except
         // for the specified input.
-        let mut neg_all_but_one = |u : BddPtr| {
+        let mut neg_all_but_one = |u: BddPtr| {
             let dec_ptrs_cl = all_decs_cl.clone();
             let mut ret = Vec::new();
             for ptr in dec_ptrs_cl {
@@ -129,8 +124,10 @@ fn decisions(
         let assoc_ite = adj_ite.get(&ptr);
         match assoc_ite {
             None => panic!(),
-            Some(v) => {let join = man.and(neg_all_but_ptr, *v);
-                        list_of_branches.push(join)},
+            Some(v) => {
+                let join = man.and(neg_all_but_ptr, *v);
+                list_of_branches.push(join)
+            }
         }
     }
 
@@ -143,32 +140,38 @@ fn gen() {
     use std::time::Instant;
     let now = Instant::now();
 
-    let (network, man, edge_lbls) = network_gen(11);
-    let (decs, mut man2, dec_lbls, rw_lbls) = decisions(11, man);
-    let mut eu_map : HashMap<VarLabel, (ExpectedUtility, ExpectedUtility)> 
-        = HashMap::new();
+    let (network, man, edge_lbls) = network_gen(5);
+    let (decs, mut man2, dec_lbls, rw_lbls) = decisions(5, man);
+    let mut eu_map: HashMap<VarLabel, (ExpectedUtility, ExpectedUtility)> = HashMap::new();
     let vars = dec_lbls.clone();
 
-    let probs = [0.03, 0.78, 0.64, 0.53, 0.81, 0.72, 0.74, 0.36, 0.95, 0.65, 0.04,
-                 0.63, 0.4, 0.84, 0.41, 0.27, 0.13, 0.49, 0.22, 0.83, 0.75, 0.67, 0.74, 0.36];
+    let probs = [
+        0.52, 0.95, 0.92, 0.87, 0.96, 0.58, 0.71, 0.78, 0.88, 0.23, 0.65, 0.89,
+    ];
     let mut i = 0;
     for e in edge_lbls {
         let x = probs[i];
         // println!("Assigning probability {} to variable {}", x, e.value());
-        eu_map.insert(e, (ExpectedUtility(1.0-x, 0.0), ExpectedUtility(x, 0.0)));
-        i = i+1;
+        eu_map.insert(e, (ExpectedUtility(1.0 - x, 0.0), ExpectedUtility(x, 0.0)));
+        i = i + 1;
     }
     for d in dec_lbls {
         eu_map.insert(d, (ExpectedUtility::one(), ExpectedUtility::one()));
     }
-    eu_map.insert(rw_lbls, 
-                  (ExpectedUtility::one(), ExpectedUtility(1.0, 10.0)));
+    eu_map.insert(
+        rw_lbls,
+        (ExpectedUtility::one(), ExpectedUtility(1.0, 10.0)),
+    );
     let network_fail = network.neg();
     let end = man2.and(decs, network_fail);
     let wmc = WmcParams::new_with_default(ExpectedUtility::zero(), ExpectedUtility::one(), eu_map);
-    let (meu_num, pm) = end.meu(&vars, man2.num_vars(), &wmc);   
-    let (meu_dec, _) = network_fail.meu(&vars, man2.num_vars(), &wmc); 
-    println!("MEU: {} \nPM : {:?}\nno. pruned nodes : ", meu_num.1 / meu_dec.0 , pm);
+    let (meu_num, pm) = end.meu(&vars, man2.num_vars(), &wmc);
+    let (meu_dec, _) = network_fail.meu(&vars, man2.num_vars(), &wmc);
+    println!(
+        "MEU: {} \nPM : {:?}\nno. pruned nodes : ",
+        meu_num.1 / meu_dec.0,
+        pm
+    );
     let elapsed = now.elapsed();
     println!("Elapsed: {:.2?}", elapsed);
 }
