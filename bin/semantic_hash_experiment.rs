@@ -19,6 +19,14 @@ struct Args {
     /// An input CNF
     #[clap(short, long, value_parser)]
     file: String,
+
+    /// use left linear vtree
+    #[clap(short, long, value_parser, default_value_t = false)]
+    left_linear: bool,
+
+    /// use even split
+    #[clap(short, long, value_parser, default_value_t = 0)]
+    even_split: u8,
 }
 
 fn run_canonicalizer_experiment(c: Cnf, vtree: VTree) {
@@ -84,6 +92,16 @@ fn main() {
 
     let cnf = Cnf::from_file(cnf_input);
     println!("num vars: {}", cnf.num_vars());
+    println!(
+        "vtree: {}",
+        if args.left_linear {
+            "left linear".to_string()
+        } else if args.even_split > 0 {
+            format!("even_split({0})", args.even_split)
+        } else {
+            "right linear".to_string()
+        }
+    );
 
     let range: Vec<usize> = (0..cnf.num_vars() + 1).collect();
     let binding = range
@@ -92,11 +110,13 @@ fn main() {
         .collect::<Vec<VarLabel>>();
     let vars = binding.as_slice();
 
-    let vtree = VTree::left_linear(vars);
-
-    // let dtree = DTree::from_cnf(&cnf, &VarOrder::linear_order(cnf.num_vars()));
-    // let vtree = VTree::from_dtree(&dtree).unwrap();
-    // let vtree = VTree::even_split(vars, 2);
+    let vtree = if args.left_linear {
+        VTree::left_linear(vars)
+    } else if args.even_split > 0 {
+        VTree::even_split(vars, args.even_split.into())
+    } else {
+        VTree::right_linear(vars)
+    };
 
     run_canonicalizer_experiment(cnf, vtree);
 }

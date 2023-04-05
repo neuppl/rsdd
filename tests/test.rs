@@ -323,7 +323,6 @@ mod test_bdd_manager {
     use quickcheck::TestResult;
     use rsdd::builder::cache::all_app::AllTable;
     use rsdd::builder::cache::lru_app::BddApplyTable;
-
     use rsdd::repr::bdd::BddPtr;
     use rsdd::repr::ddnnf::{create_semantic_hash_map, DDNNFPtr};
     use rsdd::repr::model::PartialModel;
