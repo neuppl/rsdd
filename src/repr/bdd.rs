@@ -1,5 +1,7 @@
 //! Binary decision diagram representation
-use crate::{repr::var_label::VarSet, util::semiring::RealSemiring};
+use crate::{
+    repr::var_label::VarSet, util::semiring::ExpectedUtility, util::semiring::RealSemiring,
+};
 
 pub use super::{
     ddnnf::*,
@@ -400,21 +402,35 @@ impl BddPtr {
         high_v: T,
         alloc: &mut Bump,
     ) -> T {
+        // If current node is true leaf, return accumulated high_v value
         if self.is_true() {
             high_v
+        // Else if current node is false leaf, return accumulated high_v value
         } else if self.is_false() {
             low_v
         } else {
+            // Every node has an associated cache (scratch)
+            // Scratch data is arbitrary (depends on use case)
+            // fst is negated, snd is non-negated accumulator
             if self.get_scratch::<(Option<T>, Option<T>)>().is_none() {
                 self.set_scratch::<(Option<T>, Option<T>)>(alloc, (None, None));
             }
+            // Actual case
             match self.get_scratch::<(Option<T>, Option<T>)>() {
+                // If complemented and accumulated, use the already memoized value
                 Some((Some(v), _)) if self.is_neg() => *v,
+                // Same for not complemented
                 Some((_, Some(v))) if !self.is_neg() => *v,
+                // (None, None),
+                // (Some(v), None) but not a complemented node
+                // (None, Some(v)) but a complemented node
                 Some((prev_low, prev_high)) => {
+                    // Standard fold stuff
                     let l = self.low().bdd_fold_h(f, low_v, high_v, alloc);
                     let h = self.high().bdd_fold_h(f, low_v, high_v, alloc);
                     let res = f(self.var(), l, h);
+                    // Set cache (accumulator)
+                    // Then corrects scratch so it traverses correctly in a recursive case downstream
                     if self.is_neg() {
                         self.set_scratch::<(Option<T>, Option<T>)>(alloc, (Some(res), *prev_high));
                     } else {
@@ -553,6 +569,134 @@ impl BddPtr {
             lower_bound.0,
             cur_assgn,
             vars,
+            wmc,
+            PartialModel::from_litvec(&[], num_vars),
+        )
+    }
+
+    /// upper-bounding the expected utility, for meu_h
+    fn eu_ub(
+        &self,
+        partial_decisions: &PartialModel,
+        decision_vars: &BitSet,
+        wmc: &WmcParams<ExpectedUtility>,
+    ) -> ExpectedUtility {
+        // println!("Assigned decision variables: {:?}", partial_decisions);
+
+        // accumulator for EU via bdd_fold
+        let v = self.bdd_fold(
+            &|varlabel, low: ExpectedUtility, high: ExpectedUtility| {
+                // get True and False weights for VarLabel
+                let (false_w, true_w) = wmc.get_var_weight(varlabel);
+                // Check if our partial model has already assigned my variable.
+                match partial_decisions.get(varlabel) {
+                    // If not...
+                    None => {
+                        // If it's a decision variable, we do
+                        if decision_vars.contains(varlabel.value_usize()) {
+                            let max_pr = f64::max(low.0, high.0);
+                            let max_eu = f64::max(low.1, high.1);
+                            ExpectedUtility(max_pr, max_eu)
+                        // Otherwise it's just a probabilistic variable so you do
+                        // the usual stuff...
+                        } else {
+                            (*false_w * low) + (*true_w * high)
+                        }
+                    }
+                    Some(true) => high,
+                    Some(false) => low,
+                }
+            },
+            wmc.zero,
+            wmc.one,
+        );
+        // for lit in partial_decisions.assignment_iter() {
+        //     let (l, h) = wmc.get_var_weight(lit.get_label());
+        //     if lit.get_polarity() {
+        //         v = v * (*h);
+        //     } else {
+        //         v = v * (*l);
+        //     }
+        // }
+        // println!("{}, {}",v.0, v.1 );
+        v
+    }
+
+    fn meu_h(
+        &self,
+        cur_lb: ExpectedUtility,
+        cur_best: PartialModel,
+        decision_vars: &[VarLabel],
+        wmc: &WmcParams<ExpectedUtility>,
+        cur_assgn: PartialModel,
+    ) -> (ExpectedUtility, PartialModel) {
+        match decision_vars {
+            // If all decision variables are assigned,
+            [] => {
+                // Run the eu ub
+                let decision_bitset = BitSet::new();
+                let possible_best = self.eu_ub(&cur_assgn, &decision_bitset, wmc);
+                // If it's a better lb, update.
+                if possible_best.1 > cur_lb.1 {
+                    (possible_best, cur_assgn)
+                } else {
+                    (cur_lb, cur_best)
+                }
+            }
+            // If there exists an unassigned decision variable,
+            [x, end @ ..] => {
+                let mut best_model = cur_best;
+                let mut best_lb = cur_lb;
+                let margvar_bits = BitSet::from_iter(end.iter().map(|x| x.value_usize()));
+                // Consider the assignment of it to true...
+                let mut true_model = cur_assgn.clone();
+                true_model.set(*x, true);
+                // ... and false...
+                let mut false_model = cur_assgn.clone();
+                false_model.set(*x, false);
+
+                // and calculate their respective upper bounds.
+                let true_ub = self.eu_ub(&true_model, &margvar_bits, wmc);
+                let false_ub = self.eu_ub(&false_model, &margvar_bits, wmc);
+
+                // branch on the greater upper-bound first
+                let order = if true_ub.1 > false_ub.1 {
+                    [(true_ub, true_model), (false_ub, false_model)]
+                } else {
+                    [(false_ub, false_model), (true_ub, true_model)]
+                };
+                for (upper_bound, partialmodel) in order {
+                    // branch + bound
+                    if upper_bound.1 > best_lb.1 {
+                        (best_lb, best_model) =
+                            self.meu_h(best_lb, best_model, end, wmc, partialmodel.clone())
+                    } else {
+                    }
+                }
+                (best_lb, best_model)
+            }
+        }
+    }
+
+    /// maximum expected utility calc
+    pub fn meu(
+        &self,
+        decision_vars: &[VarLabel],
+        num_vars: usize,
+        wmc: &WmcParams<ExpectedUtility>,
+    ) -> (ExpectedUtility, PartialModel) {
+        // Initialize all the decision variables to be true, partially instantianted resp. to this
+        let all_true: Vec<Literal> = decision_vars
+            .iter()
+            .map(|x| Literal::new(*x, true))
+            .collect();
+        let cur_assgn = PartialModel::from_litvec(&all_true, num_vars);
+        // Calculate bound wrt the partial instantiation.
+        let lower_bound = self.eu_ub(&cur_assgn, &BitSet::new(), wmc);
+        self.meu_h(
+            lower_bound,
+            cur_assgn,
+            decision_vars,
             wmc,
             PartialModel::from_litvec(&[], num_vars),
         )
