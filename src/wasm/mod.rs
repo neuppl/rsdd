@@ -6,27 +6,30 @@ use crate::repr::{cnf::Cnf, var_label::VarLabel, vtree::VTree};
 use crate::serialize::{ser_bdd, ser_sdd, ser_vtree};
 use wasm_bindgen::prelude::*;
 
-// used in: https://github.com/mattxwang/indecision
-#[wasm_bindgen]
-pub fn get_vtree(cnf_input: String) -> String {
-    let cnf = Cnf::from_file(cnf_input);
-
-    let range: Vec<usize> = (0..cnf.num_vars() + 1).collect();
-    let binding = range
-        .iter()
-        .map(|i| VarLabel::new(*i as u64))
-        .collect::<Vec<VarLabel>>();
-    let vars = binding.as_slice();
-
-    let vtree = VTree::right_linear(vars);
-
-    let json = ser_vtree::VTreeSerializer::from_vtree(&vtree);
-    serde_json::to_string(&json).unwrap()
+#[derive(Serialize, Deserialize)]
+pub enum VTreeType {
+    LeftLinear,
+    RightLinear,
+    EvenSplit(usize),
 }
 
 // used in: https://github.com/mattxwang/indecision
 #[wasm_bindgen]
-pub fn get_bdd(cnf_input: String) -> String {
+pub fn vtree(cnf_input: String, vtree_type_input: JsValue) -> Result<JsValue, JsValue> {
+    let cnf = Cnf::from_file(cnf_input);
+
+    let vtree_type: VTreeType = serde_wasm_bindgen::from_value(vtree_type_input)?;
+
+    let vtree = build_vtree(&cnf, vtree_type);
+
+    let serialized = ser_vtree::VTreeSerializer::from_vtree(&vtree);
+
+    Ok(serde_wasm_bindgen::to_value(&serialized)?)
+}
+
+// used in: https://github.com/mattxwang/indecision
+#[wasm_bindgen]
+pub fn bdd(cnf_input: String) -> String {
     let cnf = Cnf::from_file(cnf_input);
 
     let mut man = BddManager::<BddApplyTable<BddPtr>>::new_default_order_lru(cnf.num_vars());
@@ -39,9 +42,23 @@ pub fn get_bdd(cnf_input: String) -> String {
 
 // used in: https://github.com/mattxwang/indecision
 #[wasm_bindgen]
-pub fn get_sdd(cnf_input: String) -> String {
+pub fn sdd(cnf_input: String, vtree_type_input: JsValue) -> Result<JsValue, JsValue> {
     let cnf = Cnf::from_file(cnf_input);
 
+    let vtree_type: VTreeType = serde_wasm_bindgen::from_value(vtree_type_input)?;
+
+    let vtree = build_vtree(&cnf, vtree_type);
+
+    let mut compr_mgr = SddManager::<CompressionCanonicalizer>::new(vtree);
+    let sdd = compr_mgr.from_cnf(&cnf);
+
+    let serialized = ser_sdd::SDDSerializer::from_sdd(sdd);
+
+    Ok(serde_wasm_bindgen::to_value(&serialized)?)
+}
+
+// internal function -- no intermediate types needed
+fn build_vtree(cnf: &Cnf, vtree_type: VTreeType) -> VTree {
     let range: Vec<usize> = (0..cnf.num_vars() + 1).collect();
     let binding = range
         .iter()
@@ -49,12 +66,9 @@ pub fn get_sdd(cnf_input: String) -> String {
         .collect::<Vec<VarLabel>>();
     let vars = binding.as_slice();
 
-    let vtree = VTree::right_linear(vars);
-
-    let mut compr_mgr = SddManager::<CompressionCanonicalizer>::new(vtree);
-    let sdd = compr_mgr.from_cnf(&cnf);
-
-    let json = ser_sdd::SDDSerializer::from_sdd(sdd);
-
-    serde_json::to_string(&json).unwrap()
+    match vtree_type {
+        VTreeType::LeftLinear => VTree::left_linear(vars),
+        VTreeType::RightLinear => VTree::right_linear(vars),
+        VTreeType::EvenSplit(num) => VTree::even_split(vars, num),
+    }
 }
