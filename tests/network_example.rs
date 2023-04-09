@@ -78,11 +78,11 @@ fn decisions(
         let ifguard = man.or(left, right);
         let ite = man.ite(ifguard, rew_ptr, rew_ptr.neg());
         adj_ite.insert(t, ite);
-        i = i + 1;
+        i += 1;
     }
     // We need this to not accidentally connect the last edge of
     // top path and first edge of bot path.
-    i = i + 1;
+    i += 1;
     let bot_ptrs_cl = bot_ptrs.clone();
     for b in bot_ptrs_cl {
         // let y = b.var().value();
@@ -92,12 +92,12 @@ fn decisions(
         let ifguard = man.or(left, right);
         let ite = man.ite(ifguard, rew_ptr, rew_ptr.neg());
         adj_ite.insert(b, ite);
-        i = i + 1;
+        i += 1;
     }
 
     // All decisions aggregator
-    let mut all_decs_cl = top_ptrs.clone();
-    let mut bot_ptrs_cl = bot_ptrs.clone();
+    let mut all_decs_cl = top_ptrs;
+    let mut bot_ptrs_cl = bot_ptrs;
     all_decs_cl.append(&mut bot_ptrs_cl);
 
     // We get our list of decision branch clauses.
@@ -148,12 +148,10 @@ fn gen() {
     let probs = [
         0.52, 0.95, 0.92, 0.87, 0.96, 0.58, 0.71, 0.78, 0.88, 0.23, 0.65, 0.89,
     ];
-    let mut i = 0;
-    for e in edge_lbls {
+    for (i, e) in edge_lbls.into_iter().enumerate() {
         let x = probs[i];
         // println!("Assigning probability {} to variable {}", x, e.value());
         eu_map.insert(e, (ExpectedUtility(1.0 - x, 0.0), ExpectedUtility(x, 0.0)));
-        i = i + 1;
     }
     for d in dec_lbls {
         eu_map.insert(d, (ExpectedUtility::one(), ExpectedUtility::one()));
