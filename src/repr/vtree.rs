@@ -210,7 +210,6 @@ pub struct VTreeManager {
     bfs_to_dfs: Vec<usize>,
     /// maps an Sdd VarLabel into its vtree index in the depth-first order
     vtree_idx: Vec<usize>,
-    #[allow(clippy::vec_box)] // TODO: fix this, but requires some refactoring
     index_lookup: Vec<Box<VTree>>,
     lca: LeastCommonAncestor,
 }

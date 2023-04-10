@@ -174,7 +174,6 @@ impl BddPtr {
     ///
     /// Panics if not a node pointer
     #[inline]
-    #[allow(clippy::mut_from_ref)]
     pub fn mut_node_ref(&self) -> &mut BddNode {
         unsafe {
             match &self {
@@ -517,8 +516,7 @@ impl BddPtr {
 
                 let mut true_model = cur_assgn.clone();
                 true_model.set(*x, true);
-                #[allow(clippy::redundant_clone)]
-                // TODO: remove this, it seems like it's a reasonable lint
+
                 let mut false_model = cur_assgn.clone();
                 false_model.set(*x, false);
 
@@ -740,8 +738,6 @@ impl DDNNFPtr for BddPtr {
         }
     }
 
-    // TODO: we should be able to remove this; e.g. replace v.clone() with *v
-    #[allow(clippy::clone_on_copy)]
     fn fold<T: Clone + Copy + Debug, F: Fn(DDNNF<T>) -> T>(&self, _o: &VarOrder, f: F) -> T {
         debug_assert!(self.is_scratch_cleared());
         fn bottomup_pass_h<T: Clone + Copy + Debug, F: Fn(DDNNF<T>) -> T>(

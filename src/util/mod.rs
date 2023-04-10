@@ -43,7 +43,6 @@ pub fn zero_vec<T>(sz: usize) -> Vec<T> {
 }
 
 /// custom allocation of a non-initialized vector
-#[allow(clippy::uninit_vec)] // intentionally unsafe code
 pub fn malloc_vec<T>(sz: usize) -> Vec<T> {
     let mut v: Vec<T> = Vec::with_capacity(sz);
     unsafe {
