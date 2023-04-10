@@ -2,6 +2,8 @@ use crate::builder::bdd_builder::{BddManager, BddPtr};
 use crate::builder::cache::lru_app::BddApplyTable;
 use crate::builder::canonicalize::CompressionCanonicalizer;
 use crate::builder::sdd_builder::SddManager;
+use crate::repr::bdd::VarOrder;
+use crate::repr::dtree::DTree;
 use crate::repr::{cnf::Cnf, var_label::VarLabel, vtree::VTree};
 use crate::serialize::{ser_bdd, ser_sdd, ser_vtree};
 use wasm_bindgen::prelude::*;
@@ -11,6 +13,7 @@ pub enum VTreeType {
     LeftLinear,
     RightLinear,
     EvenSplit(usize),
+    FromDTree,
 }
 
 // used in: https://github.com/mattxwang/indecision
@@ -59,7 +62,7 @@ pub fn sdd(cnf_input: String, vtree_type_input: JsValue) -> Result<JsValue, JsVa
 
 // internal function -- no intermediate types needed
 fn build_vtree(cnf: &Cnf, vtree_type: VTreeType) -> VTree {
-    let range: Vec<usize> = (0..cnf.num_vars() + 1).collect();
+    let range: Vec<usize> = (0..cnf.num_vars()).collect();
     let binding = range
         .iter()
         .map(|i| VarLabel::new(*i as u64))
@@ -70,5 +73,9 @@ fn build_vtree(cnf: &Cnf, vtree_type: VTreeType) -> VTree {
         VTreeType::LeftLinear => VTree::left_linear(vars),
         VTreeType::RightLinear => VTree::right_linear(vars),
         VTreeType::EvenSplit(num) => VTree::even_split(vars, num),
+        VTreeType::FromDTree => {
+            let dtree = DTree::from_cnf(&cnf, &VarOrder::linear_order(cnf.num_vars()));
+            VTree::from_dtree(&dtree).unwrap()
+        }
     }
 }
