@@ -48,7 +48,7 @@ impl VTree {
                 let r_tree = BTree::Leaf(*cur);
                 BTree::Node((), Box::new(l_tree), Box::new(r_tree))
             }
-            [] => panic!("invalid right_linear on empty list"),
+            [] => panic!("invalid left_linear on empty list"),
         }
     }
 
