@@ -12,3 +12,5 @@ Cargo.lock
 bdd.json
 sdd.json
 vtree.json
+err.txt
+rand.cnf
