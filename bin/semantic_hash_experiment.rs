@@ -8,7 +8,7 @@ use rsdd::{
         },
         sdd_builder::SddManager,
     },
-    repr::{cnf::Cnf, var_label::VarLabel, vtree::VTree},
+    repr::{cnf::Cnf, dtree::DTree, var_label::VarLabel, var_order::VarOrder, vtree::VTree},
 };
 use std::fs;
 use std::time::Instant;
@@ -19,6 +19,10 @@ struct Args {
     /// An input CNF
     #[clap(short, long, value_parser)]
     file: String,
+
+    /// use dtree heuristic
+    #[clap(short, long, value_parser, default_value_t = false)]
+    dtree: bool,
 
     /// use left linear vtree
     #[clap(short, long, value_parser, default_value_t = false)]
@@ -98,6 +102,8 @@ fn main() {
             "left linear".to_string()
         } else if args.even_split > 0 {
             format!("even_split({0})", args.even_split)
+        } else if args.dtree {
+            "from_dtree".to_string()
         } else {
             "right linear".to_string()
         }
@@ -114,9 +120,14 @@ fn main() {
         VTree::left_linear(vars)
     } else if args.even_split > 0 {
         VTree::even_split(vars, args.even_split.into())
+    } else if args.dtree {
+        let dtree = DTree::from_cnf(&cnf, &VarOrder::linear_order(cnf.num_vars()));
+        VTree::from_dtree(&dtree).unwrap()
     } else {
         VTree::right_linear(vars)
     };
+
+    println!("vtree num vars: {}", vtree.num_vars());
 
     run_canonicalizer_experiment(cnf, vtree);
 }

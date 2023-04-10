@@ -172,7 +172,7 @@ impl<const P: u128> SddCanonicalizationScheme for SemanticCanonicalizer<P> {
     type SddOrHasher = SemanticUniqueTableHasher<P>;
 
     fn new(vtree: &VTreeManager) -> Self {
-        let map = create_semantic_hash_map(vtree.num_vars());
+        let map = create_semantic_hash_map(vtree.vtree_root().num_vars());
         let app_cache = SddApplySemantic::new(map.clone(), vtree.clone());
         SemanticCanonicalizer {
             app_cache,
