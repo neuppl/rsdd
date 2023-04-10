@@ -331,7 +331,6 @@ impl SddPtr {
     /// Get a mutable reference to the node that &self points to
     ///
     /// Panics if not a bdd pointer
-    #[allow(clippy::mut_from_ref)]
     pub fn mut_bdd_ref(&self) -> &mut BinarySDD {
         unsafe {
             match &self {
@@ -422,7 +421,6 @@ impl SddPtr {
     /// Get a mutable reference to the node that &self points to
     ///
     /// Panics if not a node pointer
-    #[allow(clippy::mut_from_ref)]
     pub fn node_ref_mut(&self) -> &mut SddOr {
         unsafe {
             match &self {
@@ -505,7 +503,6 @@ impl SddPtr {
             }
             ComplBDD(_) => self.neg().is_trimmed(),
             Reg(_) | Compl(_) => {
-                // TODO(mattxwang): significantly optimize this
                 // this next part is an O(n^2) (i.e., pairwise) comparison of each SDD
                 // and an arbitrary prime. we are looking for untrimmed decomposition pairs of the form (a, T) and (~a, F)
                 let mut visited_primes: HashSet<SddPtr> = HashSet::new();
@@ -542,8 +539,6 @@ type DDNNFCache<T> = (Option<T>, Option<T>);
 impl DDNNFPtr for SddPtr {
     type Order = VTreeManager;
 
-    // TODO: we should be able to remove this; e.g. replace v.clone() with *v
-    #[allow(clippy::clone_on_copy)]
     fn fold<T: Clone + Copy + std::fmt::Debug, F: Fn(super::ddnnf::DDNNF<T>) -> T>(
         &self,
         _v: &VTreeManager,
