@@ -44,11 +44,12 @@ fn run_canonicalizer_experiment(c: Cnf, vtree: VTree) {
 
     let stats = compr_mgr.get_stats();
     println!(
-        "c: {:05} nodes | {:06} uniq | {:07} rec | {} g/i | {}/{} compr/and",
+        "c: {:05} nodes | {:06} uniq | {:07} rec | {} g/i | {:.3}% app cache | {}/{} compr/and",
         compr_cnf.num_nodes(),
         compr_mgr.canonicalizer().bdd_num_uniq() + compr_mgr.canonicalizer().sdd_num_uniq(),
         stats.num_rec,
         stats.num_get_or_insert,
+        stats.num_app_cache_hits as f32 / stats.num_rec as f32 * 100.0,
         stats.num_compr,
         stats.num_compr_and,
     );
@@ -66,11 +67,12 @@ fn run_canonicalizer_experiment(c: Cnf, vtree: VTree) {
 
     let stats = sem_mgr.get_stats();
     println!(
-        "s: {:05} nodes | {:06} uniq | {:07} rec | {} g/i",
+        "s: {:05} nodes | {:06} uniq | {:07} rec | {} g/i | {:.3}% app cache",
         sem_cnf.num_nodes(),
         sem_mgr.canonicalizer().bdd_num_uniq() + sem_mgr.canonicalizer().sdd_num_uniq(),
         stats.num_rec,
         stats.num_get_or_insert,
+        stats.num_app_cache_hits as f32 / stats.num_rec as f32 * 100.0,
     );
 
     println!(" ");
