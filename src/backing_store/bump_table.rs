@@ -40,7 +40,6 @@ impl<T: Clone> HashTableElement<T> {
         HashTableElement { ptr, hash, psl }
     }
 
-    #[allow(clippy::cmp_null)] // TODO: fix. unsure why the suggestion (using is_null) doesn't work
     pub fn is_occupied(&self) -> bool {
         self.ptr != std::ptr::null_mut::<T>()
     }
@@ -111,11 +110,6 @@ where
     /// check if item at index `pos` is occupied
     fn is_occupied(&self, pos: usize) -> bool {
         self.tbl[pos].is_occupied()
-    }
-
-    #[allow(dead_code)]
-    fn get_pos(&self, pos: usize) -> *mut T {
-        self.tbl[pos].ptr
     }
 
     /// check the distance the element at index `pos` is from its desired location

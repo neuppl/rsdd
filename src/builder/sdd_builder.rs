@@ -199,7 +199,6 @@ impl<T: SddCanonicalizationScheme> SddManager<T> {
                 return Some(node[0].sub());
             }
 
-            // TODO: Why is this only included after compression?
             if self.is_false(node[0].sub()) {
                 return Some(SddPtr::false_ptr());
             }
@@ -605,7 +604,6 @@ impl<T: SddCanonicalizationScheme> SddManager<T> {
     fn print_sdd_internal(&self, ptr: SddPtr) -> String {
         self.canonicalizer.on_sdd_print_dump_state(ptr);
         use pretty::*;
-        // TODO: this lifetime might be wrong
         fn helper(ptr: SddPtr) -> Doc<'static, BoxDoc<'static>> {
             if ptr.is_true() {
                 return Doc::from("T");
@@ -1138,7 +1136,5 @@ fn prob_equiv_sdd_demorgan() {
     let sh1 = res.semantic_hash(man.get_vtree_manager(), &map);
     let sh2 = expected.semantic_hash(man.get_vtree_manager(), &map);
 
-    // TODO: need to express this as pointer eq, not semantic eq
-    // assert!(res != expected);
     assert!(sh1 == sh2, "Not eq:\nGot: {:?}\nExpected: {:?}", sh1, sh2);
 }
