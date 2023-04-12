@@ -16,19 +16,23 @@ use std::time::Instant;
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
 struct Args {
-    /// An input CNF
+    /// input CNF in DIMACS form
     #[clap(short, long, value_parser)]
     file: String,
 
-    /// use dtree heuristic
+    /// use dtree heuristic (min fill)
     #[clap(short, long, value_parser, default_value_t = false)]
     dtree: bool,
 
+    /// use dtree heuristic (linear order)
+    #[clap(long, value_parser, default_value_t = false)]
+    dtree_linear: bool,
+
     /// use left linear vtree
-    #[clap(short, long, value_parser, default_value_t = false)]
+    #[clap(long, value_parser, default_value_t = false)]
     left_linear: bool,
 
-    /// use even split
+    /// use even split; specify number of splits until right-linear
     #[clap(short, long, value_parser, default_value_t = 0)]
     even_split: u8,
 }
@@ -122,6 +126,9 @@ fn main() {
     } else if args.even_split > 0 {
         VTree::even_split(vars, args.even_split.into())
     } else if args.dtree {
+        let dtree = DTree::from_cnf(&cnf, &cnf.min_fill_order());
+        VTree::from_dtree(&dtree).unwrap()
+    } else if args.dtree_linear {
         let dtree = DTree::from_cnf(&cnf, &VarOrder::linear_order(cnf.num_vars()));
         VTree::from_dtree(&dtree).unwrap()
     } else {
