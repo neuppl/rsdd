@@ -25,6 +25,8 @@ pub struct SddStats {
     pub num_compr_and: usize,
     /// total number of gets/inserts generated in compress
     pub num_get_or_insert: usize,
+    /// app cache hits
+    pub num_app_cache_hits: usize,
 }
 
 impl SddStats {
@@ -34,6 +36,7 @@ impl SddStats {
             num_compr: 0,
             num_compr_and: 0,
             num_get_or_insert: 0,
+            num_app_cache_hits: 0,
         }
     }
 }
@@ -455,6 +458,7 @@ impl<T: SddCanonicalizationScheme> SddManager<T> {
 
         // check if we have this application cached
         if let Some(x) = self.canonicalizer.app_cache().get(SddAnd::new(a, b)) {
+            self.stats.num_app_cache_hits += 1;
             return x;
         }
 
