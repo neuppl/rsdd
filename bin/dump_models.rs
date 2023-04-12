@@ -56,7 +56,7 @@ fn main() {
 
     let cnf = Cnf::from_file(cnf_input);
 
-    let range: Vec<usize> = (0..cnf.num_vars() + 1).collect();
+    let range: Vec<usize> = (0..cnf.num_vars()).collect();
     let binding = range
         .iter()
         .map(|i| VarLabel::new(*i as u64))

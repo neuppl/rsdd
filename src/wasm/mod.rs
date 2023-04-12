@@ -13,7 +13,8 @@ pub enum VTreeType {
     LeftLinear,
     RightLinear,
     EvenSplit(usize),
-    FromDTree,
+    FromDTreeLinear,
+    FromDTreeMinFill,
 }
 
 // used in: https://github.com/mattxwang/indecision
@@ -73,8 +74,12 @@ fn build_vtree(cnf: &Cnf, vtree_type: VTreeType) -> VTree {
         VTreeType::LeftLinear => VTree::left_linear(vars),
         VTreeType::RightLinear => VTree::right_linear(vars),
         VTreeType::EvenSplit(num) => VTree::even_split(vars, num),
-        VTreeType::FromDTree => {
+        VTreeType::FromDTreeLinear => {
             let dtree = DTree::from_cnf(&cnf, &VarOrder::linear_order(cnf.num_vars()));
+            VTree::from_dtree(&dtree).unwrap()
+        }
+        VTreeType::FromDTreeMinFill => {
+            let dtree = DTree::from_cnf(&cnf, &cnf.min_fill_order());
             VTree::from_dtree(&dtree).unwrap()
         }
     }
