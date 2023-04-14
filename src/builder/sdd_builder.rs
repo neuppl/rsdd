@@ -660,15 +660,15 @@ impl<T: SddCanonicalizationScheme> SddManager<T> {
         self.canonicalizer.on_sdd_print_dump_state(ptr)
     }
 
-    pub fn sdd_eq(&self, a: SddPtr, b: SddPtr) -> bool {
+    pub fn sdd_eq(&mut self, a: SddPtr, b: SddPtr) -> bool {
         self.canonicalizer.sdd_eq(a, b)
     }
 
-    pub fn is_true(&self, a: SddPtr) -> bool {
+    pub fn is_true(&mut self, a: SddPtr) -> bool {
         self.sdd_eq(a, SddPtr::PtrTrue)
     }
 
-    pub fn is_false(&self, a: SddPtr) -> bool {
+    pub fn is_false(&mut self, a: SddPtr) -> bool {
         self.sdd_eq(a, SddPtr::PtrFalse)
     }
 

@@ -35,9 +35,13 @@ struct Args {
     /// use even split; specify number of splits until right-linear
     #[clap(short, long, value_parser, default_value_t = 0)]
     even_split: u8,
+
+    /// use left linear vtree
+    #[clap(short, long, value_parser, default_value_t = false)]
+    verbose: bool,
 }
 
-fn run_canonicalizer_experiment(c: Cnf, vtree: VTree) {
+fn run_canonicalizer_experiment(c: Cnf, vtree: VTree, verbose: bool) {
     let start = Instant::now();
 
     let mut compr_mgr = SddManager::<CompressionCanonicalizer>::new(vtree.clone());
@@ -48,9 +52,10 @@ fn run_canonicalizer_experiment(c: Cnf, vtree: VTree) {
 
     let stats = compr_mgr.get_stats();
     println!(
-        "c: {:05} nodes | {:06} uniq | {:07} rec | {} g/i | {:.3}% app cache | {}/{} compr/and",
+        "c: {:05} nodes | {:06} bdd / {:06} sdd uniq | {:07} rec | {} g/i | {:.3}% app cache | {}/{} compr/and",
         compr_cnf.num_nodes(),
-        compr_mgr.canonicalizer().bdd_num_uniq() + compr_mgr.canonicalizer().sdd_num_uniq(),
+        compr_mgr.canonicalizer().bdd_tbl().num_nodes(),
+        compr_mgr.canonicalizer().sdd_tbl().num_nodes(),
         stats.num_rec,
         stats.num_get_or_insert,
         stats.num_app_cache_hits as f32 / stats.num_rec as f32 * 100.0,
@@ -70,9 +75,10 @@ fn run_canonicalizer_experiment(c: Cnf, vtree: VTree) {
 
     let stats = sem_mgr.get_stats();
     println!(
-        "s: {:05} nodes | {:06} uniq | {:07} rec | {} g/i | {:.3}% app cache",
+        "s: {:05} nodes | {:06} bdd / {:06} sdd uniq | {:07} rec | {} g/i | {:.3}% app cache",
         sem_cnf.num_nodes(),
-        sem_mgr.canonicalizer().bdd_num_uniq() + sem_mgr.canonicalizer().sdd_num_uniq(),
+        sem_mgr.canonicalizer().bdd_tbl().num_nodes(),
+        sem_mgr.canonicalizer().sdd_tbl().num_nodes(),
         stats.num_rec,
         stats.num_get_or_insert,
         stats.num_app_cache_hits as f32 / stats.num_rec as f32 * 100.0,
@@ -87,10 +93,12 @@ fn run_canonicalizer_experiment(c: Cnf, vtree: VTree) {
     if !sem_mgr.sdd_eq(compr_cnf, sem_cnf) {
         println!(" ");
         println!("not equal! test is broken...");
-        eprintln!("=== COMPRESSED CNF ===");
-        eprintln!("{}", sem_mgr.print_sdd(compr_cnf));
-        eprintln!("=== SEMANTIC CNF ===");
-        eprintln!("{}", sem_mgr.print_sdd(sem_cnf));
+        if verbose {
+            eprintln!("=== COMPRESSED CNF ===");
+            eprintln!("{}", sem_mgr.print_sdd(compr_cnf));
+            eprintln!("=== SEMANTIC CNF ===");
+            eprintln!("{}", sem_mgr.print_sdd(sem_cnf));
+        }
     }
 }
 
@@ -137,5 +145,5 @@ fn main() {
 
     println!("vtree num vars: {}", vtree.num_vars());
 
-    run_canonicalizer_experiment(cnf, vtree);
+    run_canonicalizer_experiment(cnf, vtree, args.verbose);
 }
