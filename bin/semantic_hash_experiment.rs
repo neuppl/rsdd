@@ -36,7 +36,7 @@ struct Args {
     #[clap(short, long, value_parser, default_value_t = 0)]
     even_split: u8,
 
-    /// use left linear vtree
+    /// print SDD information to stderr (it's very large!)
     #[clap(short, long, value_parser, default_value_t = false)]
     verbose: bool,
 }
@@ -52,12 +52,13 @@ fn run_canonicalizer_experiment(c: Cnf, vtree: VTree, verbose: bool) {
 
     let stats = compr_mgr.get_stats();
     println!(
-        "c: {:05} nodes | {:06} bdd / {:06} sdd uniq | {:07} rec | {} g/i | {:.3}% app cache | {}/{} compr/and",
+        "c: {:05} nodes | {:06} bdd / {:06} sdd uniq | {:07} rec | {} g/i, {:.3}% brt cache | {:.3}% app cache | {}/{} compr/and",
         compr_cnf.num_nodes(),
         compr_mgr.canonicalizer().bdd_tbl().num_nodes(),
         compr_mgr.canonicalizer().sdd_tbl().num_nodes(),
         stats.num_rec,
         stats.num_get_or_insert,
+        (compr_mgr.canonicalizer().bdd_tbl().hits() + compr_mgr.canonicalizer().sdd_tbl().hits()) as f32 / (stats.num_get_or_insert as f32) * 100.0,
         stats.num_app_cache_hits as f32 / stats.num_rec as f32 * 100.0,
         stats.num_compr,
         stats.num_compr_and,
@@ -75,12 +76,13 @@ fn run_canonicalizer_experiment(c: Cnf, vtree: VTree, verbose: bool) {
 
     let stats = sem_mgr.get_stats();
     println!(
-        "s: {:05} nodes | {:06} bdd / {:06} sdd uniq | {:07} rec | {} g/i | {:.3}% app cache",
+        "s: {:05} nodes | {:06} bdd / {:06} sdd uniq | {:07} rec | {} g/i, {:.3}% brt cache | {:.3}% app cache",
         sem_cnf.num_nodes(),
         sem_mgr.canonicalizer().bdd_tbl().num_nodes(),
         sem_mgr.canonicalizer().sdd_tbl().num_nodes(),
         stats.num_rec,
         stats.num_get_or_insert,
+        (sem_mgr.canonicalizer().bdd_tbl().hits() + sem_mgr.canonicalizer().sdd_tbl().hits()) as f32 / (stats.num_get_or_insert as f32) * 100.0,
         stats.num_app_cache_hits as f32 / stats.num_rec as f32 * 100.0,
     );
 
@@ -142,8 +144,6 @@ fn main() {
     } else {
         VTree::right_linear(vars)
     };
-
-    println!("vtree num vars: {}", vtree.num_vars());
 
     run_canonicalizer_experiment(cnf, vtree, args.verbose);
 }

@@ -13,12 +13,14 @@ pub fn create_semantic_hash_map<const P: u128>(num_vars: usize) -> WmcParams<Fin
     let vars: Vec<VarLabel> = (0..num_vars).map(|x| VarLabel::new_usize(x)).collect();
 
     // theoretical guarantee from paper; need to verify more!
-    assert!((2 * vars.len() as u128) < P);
+    // in "theory", this should be a 0.1% fail rate in one-shot for a BDD.
+    // not sure how to extend to SDDs (and this does not happen in practice)
+    assert!(((vars.len() * 1000) as u128) < P);
 
     // seed the RNG deterministically for reproducible weights across
     // different calls to `create_semantic_hash_map`
-    // let mut rng = ChaCha8Rng::seed_from_u64(101249);
-    let mut rng = ChaCha8Rng::from_entropy();
+    let mut rng = ChaCha8Rng::seed_from_u64(101249);
+    // let mut rng = ChaCha8Rng::from_entropy();
 
     let value_range: Vec<(FiniteField<P>, FiniteField<P>)> = (0..vars.len() as u128)
         .map(|_| {

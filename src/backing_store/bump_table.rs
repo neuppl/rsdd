@@ -89,6 +89,8 @@ where
     cap: usize,
     /// the length of `tbl`
     len: usize,
+    /// # cache hits
+    hits: usize,
 }
 
 impl<T: Clone> BackedRobinhoodTable<T>
@@ -104,6 +106,7 @@ where
             alloc: Bump::new(),
             cap: DEFAULT_SIZE,
             len: 0,
+            hits: 0,
         }
     }
 
@@ -145,6 +148,10 @@ where
     pub fn num_nodes(&self) -> usize {
         self.len
     }
+
+    pub fn hits(&self) -> usize {
+        self.hits
+    }
 }
 
 impl<T: Eq + PartialEq + Hash + Clone, H: UniqueTableHasher<T>> UniqueTable<T, H>
@@ -171,6 +178,7 @@ impl<T: Eq + PartialEq + Hash + Clone, H: UniqueTableHasher<T>> UniqueTable<T, H
                 if elem_hash == cur_itm.hash {
                     let found: &T = unsafe { &*cur_itm.ptr };
                     if *found == elem {
+                        self.hits += 1;
                         return cur_itm.ptr;
                     }
                 }

@@ -179,6 +179,7 @@ impl<T: SddCanonicalizationScheme> SddManager<T> {
             return SddPtr::var(bdd.label(), true);
         }
 
+        self.stats.num_get_or_insert += 1;
         // uniqify BDD
         if bdd.high().is_neg() || self.is_false(bdd.high()) || bdd.high().is_neg_var() {
             let neg_bdd =
