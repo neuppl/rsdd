@@ -1114,7 +1114,7 @@ fn prob_equiv_sdd_demorgan() {
     use crate::repr::bdd::WmcParams;
     use crate::util::semiring::FiniteField;
 
-    let mut man = SddManager::<crate::builder::canonicalize::SemanticCanonicalizer<1223>>::new(
+    let mut man = SddManager::<crate::builder::canonicalize::SemanticCanonicalizer<100000049>>::new(
         VTree::even_split(
             &[
                 VarLabel::new(0),
@@ -1132,7 +1132,7 @@ fn prob_equiv_sdd_demorgan() {
     let res = man.or(x, y).neg();
     let expected = man.and(x.neg(), y.neg());
 
-    let map: WmcParams<FiniteField<1223>> = create_semantic_hash_map(man.num_vars());
+    let map: WmcParams<FiniteField<100000049>> = create_semantic_hash_map(man.num_vars());
 
     let sh1 = res.semantic_hash(man.get_vtree_manager(), &map);
     let sh2 = expected.semantic_hash(man.get_vtree_manager(), &map);
