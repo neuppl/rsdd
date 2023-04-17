@@ -179,6 +179,7 @@ impl<T: SddCanonicalizationScheme> SddManager<T> {
             return SddPtr::var(bdd.label(), true);
         }
 
+        self.stats.num_get_or_insert += 1;
         // uniqify BDD
         if bdd.high().is_neg() || self.is_false(bdd.high()) || bdd.high().is_neg_var() {
             let neg_bdd =
@@ -660,15 +661,15 @@ impl<T: SddCanonicalizationScheme> SddManager<T> {
         self.canonicalizer.on_sdd_print_dump_state(ptr)
     }
 
-    pub fn sdd_eq(&self, a: SddPtr, b: SddPtr) -> bool {
+    pub fn sdd_eq(&mut self, a: SddPtr, b: SddPtr) -> bool {
         self.canonicalizer.sdd_eq(a, b)
     }
 
-    pub fn is_true(&self, a: SddPtr) -> bool {
+    pub fn is_true(&mut self, a: SddPtr) -> bool {
         self.sdd_eq(a, SddPtr::PtrTrue)
     }
 
-    pub fn is_false(&self, a: SddPtr) -> bool {
+    pub fn is_false(&mut self, a: SddPtr) -> bool {
         self.sdd_eq(a, SddPtr::PtrFalse)
     }
 
@@ -1113,7 +1114,7 @@ fn prob_equiv_sdd_demorgan() {
     use crate::repr::bdd::WmcParams;
     use crate::util::semiring::FiniteField;
 
-    let mut man = SddManager::<crate::builder::canonicalize::SemanticCanonicalizer<1223>>::new(
+    let mut man = SddManager::<crate::builder::canonicalize::SemanticCanonicalizer<100000049>>::new(
         VTree::even_split(
             &[
                 VarLabel::new(0),
@@ -1131,7 +1132,7 @@ fn prob_equiv_sdd_demorgan() {
     let res = man.or(x, y).neg();
     let expected = man.and(x.neg(), y.neg());
 
-    let map: WmcParams<FiniteField<1223>> = create_semantic_hash_map(man.num_vars());
+    let map: WmcParams<FiniteField<100000049>> = create_semantic_hash_map(man.num_vars());
 
     let sh1 = res.semantic_hash(man.get_vtree_manager(), &map);
     let sh2 = expected.semantic_hash(man.get_vtree_manager(), &map);
