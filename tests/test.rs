@@ -702,7 +702,7 @@ mod test_sdd_manager {
             let mut mgr2 = super::SddManager::<SemanticCanonicalizer<{ crate::BIG_PRIME }>>::new(vtree);
             let c2 = mgr2.from_cnf(&c);
 
-            let map : WmcParams<FiniteField<1123>> = create_semantic_hash_map(mgr1.num_vars());
+            let map : WmcParams<FiniteField<100000049>> = create_semantic_hash_map(mgr1.num_vars());
 
             let h1 = c1.semantic_hash(mgr1.get_vtree_manager(), &map);
             let h2 = c2.semantic_hash(mgr2.get_vtree_manager(), &map);
@@ -721,7 +721,7 @@ mod test_sdd_manager {
             let uncompr_cnf = uncompr_mgr.from_cnf(&c);
 
 
-            let map : WmcParams<FiniteField<4391>> = create_semantic_hash_map(compr_mgr.num_vars());
+            let map : WmcParams<FiniteField<100000049>> = create_semantic_hash_map(compr_mgr.num_vars());
 
             let compr_h = compr_cnf.semantic_hash(compr_mgr.get_vtree_manager(), &map);
             let uncompr_h = uncompr_cnf.semantic_hash(uncompr_mgr.get_vtree_manager(), &map);
