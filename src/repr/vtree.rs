@@ -8,7 +8,8 @@ use crate::repr::dtree::DTree;
 use crate::util::btree::{BTree, LeastCommonAncestor};
 use rand::rngs::SmallRng;
 use rand::seq::SliceRandom;
-use rand::SeedableRng;
+use rand::{Rng, SeedableRng};
+use rand_chacha::ChaCha8Rng;
 
 pub type VTree = BTree<(), VarLabel>;
 
@@ -151,6 +152,27 @@ impl VTree {
             let l_tree = Self::even_split(l_s, num_splits - 1);
             let r_tree = Self::even_split(r_s, num_splits - 1);
             BTree::Node((), Box::new(l_tree), Box::new(r_tree))
+        }
+    }
+
+    pub fn rand_split(order: &[VarLabel]) -> VTree {
+        match order.len() {
+            0 => panic!("invalid label order passed; expects at least one VarLabel"),
+            1 => VTree::new_leaf(order[0]),
+            2 => VTree::new_node(
+                Box::new(VTree::new_leaf(order[0])),
+                Box::new(VTree::new_leaf(order[1])),
+            ),
+            len => {
+                // clamps so we're guaranteed at least one item in l_s, r_s
+                let mut rng = ChaCha8Rng::from_entropy();
+                let split_index = rng.gen_range(1..len);
+                let (l_s, r_s) = order.split_at(split_index);
+                VTree::new_node(
+                    Box::new(Self::rand_split(l_s)),
+                    Box::new(Self::rand_split(r_s)),
+                )
+            }
         }
     }
 }
