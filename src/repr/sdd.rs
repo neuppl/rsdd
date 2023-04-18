@@ -405,6 +405,24 @@ impl SddPtr {
         }
     }
 
+    /// gets the total number of nodes that are a child to this SDD
+    pub fn num_child_nodes(&self) -> usize {
+        match &self {
+            PtrTrue | PtrFalse | Var(_, _) => 1,
+            BDD(_) | ComplBDD(_) => {
+                1 + self.low().num_child_nodes() + self.high().num_child_nodes()
+            }
+            Compl(_) | Reg(_) => {
+                1 + self
+                    .node_ref()
+                    .nodes
+                    .iter()
+                    .map(|n| return 1 + n.prime.num_child_nodes() + n.sub.num_child_nodes())
+                    .sum::<usize>()
+            }
+        }
+    }
+
     /// Get an immutable reference to the node that &self points to
     ///
     /// Panics if not a node pointer

@@ -75,7 +75,7 @@ impl BenchStats {
         BenchStats {
             label,
             time,
-            num_nodes_cnf: sdd.num_nodes(),
+            num_nodes_cnf: sdd.num_child_nodes(),
             num_nodes_bdd: mgr.canonicalizer().bdd_tbl().num_nodes(),
             num_nodes_sdd: mgr.canonicalizer().sdd_tbl().num_nodes(),
             num_rec: stats.num_rec,
