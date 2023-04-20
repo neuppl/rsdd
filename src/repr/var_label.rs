@@ -167,6 +167,10 @@ impl VarSet {
     pub fn is_empty(&self) -> bool {
         self.b.is_empty()
     }
+
+    pub fn len(&self) -> usize {
+        self.b.len()
+    }
 }
 
 impl Default for VarSet {

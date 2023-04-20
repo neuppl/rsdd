@@ -827,4 +827,18 @@ mod test_sdd_manager {
             TestResult::from_bool(true)
         }
     }
+
+    quickcheck! {
+        fn vtree_validity_arbitrary(vtree: VTree) -> bool {
+            VTree::is_valid_vtree(&vtree)
+        }
+    }
+
+    quickcheck! {
+        fn vtree_validity_from_dtree(cnf: Cnf) -> bool {
+            let dtree = rsdd::repr::dtree::DTree::from_cnf(&cnf, &cnf.min_fill_order());
+            let vtree = VTree::from_dtree(&dtree).unwrap();
+            VTree::is_valid_vtree(&vtree)
+        }
+    }
 }

@@ -2,6 +2,7 @@
 
 use std::collections::HashSet;
 
+use super::var_label::VarSet;
 use super::{sdd::SddPtr, var_label::VarLabel};
 use crate::quickcheck::{Arbitrary, Gen};
 use crate::repr::dtree::DTree;
@@ -175,6 +176,22 @@ impl VTree {
             }
         }
     }
+
+    pub fn flatten_vtree(vtree: &VTree) -> Vec<&VarLabel> {
+        match vtree {
+            BTree::Leaf(v) => vec![v],
+            BTree::Node((), l, r) => [Self::flatten_vtree(l), Self::flatten_vtree(r)].concat(),
+        }
+    }
+
+    pub fn is_valid_vtree(vtree: &VTree) -> bool {
+        let flat = Self::flatten_vtree(vtree);
+        let mut varset = VarSet::new();
+        for var in flat.iter() {
+            varset.insert(**var);
+        }
+        flat.len() == varset.len()
+    }
 }
 
 impl Arbitrary for VTree {
@@ -313,4 +330,18 @@ impl VTreeManager {
     pub fn num_vars(&self) -> usize {
         self.vtree_root().get_all_vars().into_iter().max().unwrap()
     }
+}
+
+#[test]
+fn from_dtree_is_valid_vtree() {
+    let cnf_input = "p cnf 3 6
+    1 2 3 4 0
+    -2 -3 4 5 0
+    -4 -5 6 6 0"
+        .to_string();
+    let cnf = super::cnf::Cnf::from_file(cnf_input);
+    let dtree = DTree::from_cnf(&cnf, &cnf.min_fill_order());
+    let vtree = VTree::from_dtree(&dtree).unwrap();
+    println!("{:?}", VTree::flatten_vtree(&vtree));
+    assert!(VTree::is_valid_vtree(&vtree));
 }
