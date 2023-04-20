@@ -71,6 +71,11 @@ impl<const P: u128> FiniteField<P> {
     pub fn value(&self) -> u128 {
         self.v
     }
+
+    /// computes the additive inverse of self
+    pub fn negate(&self) -> FiniteField<P> {
+        return FiniteField::new(P - self.v + 1)
+    }
 }
 
 impl<const P: u128> Semiring for FiniteField<P> {

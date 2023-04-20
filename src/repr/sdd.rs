@@ -34,6 +34,7 @@ pub struct BinarySDD {
     low: SddPtr,
     high: SddPtr,
     scratch: usize,
+    semantic_hash: Option<u128>,
 }
 
 impl BinarySDD {
@@ -43,6 +44,7 @@ impl BinarySDD {
             low,
             high,
             vtree,
+            semantic_hash: None,
             scratch: 0,
         }
     }
@@ -90,7 +92,6 @@ struct SddNodeIter {
 
 impl SddNodeIter {
     pub fn new(sdd: SddPtr) -> SddNodeIter {
-        // println!("new iter, len: {}", if sdd.is_bdd() { 2 } else { sdd.num_nodes() });
         SddNodeIter { sdd, count: 0 }
     }
 }
@@ -150,7 +151,7 @@ impl SddAnd {
         vtree: &VTreeManager,
         map: &WmcParams<FiniteField<P>>,
     ) -> FiniteField<P> {
-        self.prime.semantic_hash(vtree, map) * self.sub.semantic_hash(vtree, map)
+        self.prime.cached_semantic_hash(vtree, map) * self.sub.cached_semantic_hash(vtree, map)
     }
 }
 
@@ -160,6 +161,7 @@ pub struct SddOr {
     index: VTreeIndex,
     pub nodes: Vec<SddAnd>,
     pub scratch: usize,
+    pub semantic_hash: Option<u128>,
 }
 
 impl SddOr {
@@ -168,6 +170,7 @@ impl SddOr {
             nodes,
             index,
             scratch: 0,
+            semantic_hash: None
         }
     }
 }
@@ -200,6 +203,61 @@ impl SddPtr {
 
     pub fn bdd(ptr: *mut BinarySDD) -> SddPtr {
         Self::BDD(ptr)
+    }
+
+    /// performs a semantic hash and caches the result on the node
+    pub fn cached_semantic_hash<const P: u128>(
+        &self,
+        vtree: &VTreeManager,
+        map: &WmcParams<FiniteField<P>>,
+    ) -> FiniteField<P> {
+        if self.is_true() { 
+            return FiniteField::new(1);
+        }
+        if self.is_false() {
+            return FiniteField::new(0);
+        }
+        if self.is_or() {
+            let r = self.node_ref_mut();
+            if r.semantic_hash.is_some() {
+                let v = FiniteField::new(r.semantic_hash.unwrap());
+                return if self.is_neg() { v.negate() } else { v };
+            }
+            // no cached value, compute it
+            let h = self.node_iter().fold(FiniteField::new(0), |acc, i| acc + i.prime().cached_semantic_hash(vtree, map) * i.sub().cached_semantic_hash(vtree, map));
+            self.node_ref_mut().semantic_hash = Some(h.value());
+            if self.is_neg() { 
+                return h.negate()
+            } else { 
+                return h 
+            };
+        } 
+        if self.is_var() {
+            let v = self.get_var();
+            let (h_w, l_w) = map.get_var_weight(v.get_label());
+            if v.get_polarity() {
+                return *h_w;
+            } else {
+                return *l_w;
+            }
+        }
+        if self.is_bdd() {
+            let b = self.mut_bdd_ref();
+            if b.semantic_hash.is_some() {
+                let h = FiniteField::new(b.semantic_hash.unwrap());
+                return if self.is_neg() { h.negate() } else { h };
+            }
+            let var = self.topvar();
+            let l_h = self.low_raw().cached_semantic_hash(vtree, map);
+            let h_h = self.high_raw().cached_semantic_hash(vtree, map);
+            let (h_w, l_w) = map.get_var_weight(var);
+            let h = (*l_w) * l_h + (*h_w) * h_h;
+            b.semantic_hash = Some(h.value());
+            return if self.is_neg() { h.negate() } else { h };
+        }
+        else {
+            panic!();
+        }
     }
 
     /// Gets the scratch value stored in `&self`

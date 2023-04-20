@@ -122,9 +122,9 @@ impl<const P: u128> UniqueTableHasher<BinarySDD> for SemanticUniqueTableHasher<P
 
         // TODO(matt): investigate if this works properly!
         FiniteField::<P>::new(
-            elem.low().semantic_hash(&self.vtree, &self.map).value() * low_w.value()
+            elem.low().cached_semantic_hash(&self.vtree, &self.map).value() * low_w.value()
             // (P - elem.low().semantic_hash(&self.vtree, &self.map).value() + 1) * low_w.value()
-                + elem.high().semantic_hash(&self.vtree, &self.map).value() * high_w.value(),
+                + elem.high().cached_semantic_hash(&self.vtree, &self.map).value() * high_w.value(),
         )
         .value()
         .hash(&mut hasher);
@@ -167,7 +167,7 @@ impl<const P: u128> SemanticCanonicalizer<P> {
             self.cache_hits += 1;
             *cached
         } else {
-            let hash = s.semantic_hash(&self.vtree, &self.map);
+            let hash = s.cached_semantic_hash(&self.vtree, &self.map);
             self.cached_hashes.insert(s, hash);
             hash
         }
