@@ -329,17 +329,14 @@ impl<T: SddCanonicalizationScheme> SddManager<T> {
             let s1 = a1.sub();
             let s1 = if r.is_neg() { s1.neg() } else { s1 };
             // no special case
-            // println!("b: {:?}", b);
             for a2 in b.iter() {
                 let p2 = a2.prime();
                 let s2 = a2.sub();
                 let p = self.and(p1, p2);
-                // println!("(PRIME) result of {} && {}: {}", self.print_sdd(p1), self.print_sdd(p2), self.print_sdd(p));
                 if self.is_false(p) {
                     continue;
                 }
                 let s = self.and(s1, s2);
-                // println!("(SUB) result of {} && {}: {}", self.print_sdd(s1), self.print_sdd(s2), self.print_sdd(s));
                 // check if one of the nodes is true; if it is, we can
                 // return a `true` SddPtr here, for trimming
                 if self.is_true(p) && self.is_true(s) {
@@ -823,7 +820,7 @@ impl<T: SddCanonicalizationScheme> SddManager<T> {
         let hasher = create_semantic_hash_map::<100000000063>(self.num_vars() + 1000); // TODO FIX THIS BADNESS
         let mut num_collisions = 0;
         for n in self.node_iter() {
-            let h = n.semantic_hash(self.get_vtree_manager(), &hasher);
+            let h = n.cached_semantic_hash(self.get_vtree_manager(), &hasher);
             if s.contains(&h.value()) {
                 num_collisions += 1;
             }
@@ -1134,8 +1131,8 @@ fn prob_equiv_sdd_demorgan() {
 
     let map: WmcParams<FiniteField<100000049>> = create_semantic_hash_map(man.num_vars());
 
-    let sh1 = res.semantic_hash(man.get_vtree_manager(), &map);
-    let sh2 = expected.semantic_hash(man.get_vtree_manager(), &map);
+    let sh1 = res.cached_semantic_hash(man.get_vtree_manager(), &map);
+    let sh2 = expected.cached_semantic_hash(man.get_vtree_manager(), &map);
 
     assert!(sh1 == sh2, "Not eq:\nGot: {:?}\nExpected: {:?}", sh1, sh2);
 }
