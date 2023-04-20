@@ -170,7 +170,7 @@ impl SddOr {
             nodes,
             index,
             scratch: 0,
-            semantic_hash: None
+            semantic_hash: None,
         }
     }
 }
@@ -211,7 +211,7 @@ impl SddPtr {
         vtree: &VTreeManager,
         map: &WmcParams<FiniteField<P>>,
     ) -> FiniteField<P> {
-        if self.is_true() { 
+        if self.is_true() {
             return FiniteField::new(1);
         }
         if self.is_false() {
@@ -224,14 +224,17 @@ impl SddPtr {
                 return if self.is_neg() { v.negate() } else { v };
             }
             // no cached value, compute it
-            let h = self.node_iter().fold(FiniteField::new(0), |acc, i| acc + i.prime().cached_semantic_hash(vtree, map) * i.sub().cached_semantic_hash(vtree, map));
+            let h = self.node_iter().fold(FiniteField::new(0), |acc, i| {
+                acc + i.prime().cached_semantic_hash(vtree, map)
+                    * i.sub().cached_semantic_hash(vtree, map)
+            });
             self.node_ref_mut().semantic_hash = Some(h.value());
-            if self.is_neg() { 
-                return h.negate()
-            } else { 
-                return h 
+            if self.is_neg() {
+                return h.negate();
+            } else {
+                return h;
             };
-        } 
+        }
         if self.is_var() {
             let v = self.get_var();
             let (h_w, l_w) = map.get_var_weight(v.get_label());
@@ -254,8 +257,7 @@ impl SddPtr {
             let h = (*l_w) * l_h + (*h_w) * h_h;
             b.semantic_hash = Some(h.value());
             return if self.is_neg() { h.negate() } else { h };
-        }
-        else {
+        } else {
             panic!();
         }
     }

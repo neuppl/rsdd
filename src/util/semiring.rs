@@ -74,7 +74,7 @@ impl<const P: u128> FiniteField<P> {
 
     /// computes the additive inverse of self
     pub fn negate(&self) -> FiniteField<P> {
-        return FiniteField::new(P - self.v + 1)
+        return FiniteField::new(P - self.v + 1);
     }
 }
 
