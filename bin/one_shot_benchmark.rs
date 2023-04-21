@@ -80,10 +80,10 @@ struct BenchResult {
 
 fn compile_topdown_nnf(str: String, _args: &Args) -> BenchResult {
     let cnf = Cnf::from_file(str);
-    let mut man = rsdd::builder::decision_nnf_builder::DecisionNNFBuilder::new();
     let order = VarOrder::linear_order(cnf.num_vars());
+    let mut man = rsdd::builder::decision_nnf_builder::DecisionNNFBuilder::new(order);
     // let order = cnf.force_order();
-    let ddnnf = man.from_cnf_topdown(&order, &cnf);
+    let ddnnf = man.from_cnf_topdown(&cnf);
     BenchResult {
         num_recursive: 0,
         size: ddnnf.count_nodes(),

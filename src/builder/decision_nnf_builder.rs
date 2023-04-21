@@ -1,14 +1,16 @@
 //! Top-down decision DNNF compiler and manipulator
 
+use std::hash::{Hasher, Hash};
+
 use crate::{
     backing_store::*,
     repr::{
         ddnnf::DDNNFPtr,
-        unit_prop::{DecisionResult, SATSolver},
-    },
+        unit_prop::{DecisionResult, SATSolver}, bdd::{WmcParams, create_semantic_hash_map},
+    }, util::semiring::FiniteField,
 };
 use bumpalo::Bump;
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHasher};
 
 use crate::{
     backing_store::bump_table::BackedRobinhoodTable,
@@ -20,14 +22,51 @@ use crate::{
     },
 };
 
+pub struct BddSemanticUniqueTableHasher<const P: u128> {
+    map: WmcParams<FiniteField<P>>,
+    order: VarOrder,
+}
+
+impl<const P: u128> BddSemanticUniqueTableHasher<P> {
+    pub fn new(order: VarOrder, map: WmcParams<FiniteField<P>>) -> Self {
+        Self { order, map }
+    }
+}
+
+impl<const P: u128> UniqueTableHasher<BddNode> for BddSemanticUniqueTableHasher<P> {
+    // TODO(matt): we should be able to de-duplicate this with fold/wmc
+    fn u64hash(&self, elem: &BddNode) -> u64 {
+        let mut hasher = FxHasher::default();
+
+        let (low_w, high_w) = self.map.get_var_weight(elem.var);
+
+        // TODO(matt): investigate if this works properly!
+        FiniteField::<P>::new(
+            elem.low.semantic_hash(&self.order, &self.map).value() * low_w.value()
+            // (P - elem.low().semantic_hash(&self.vtree, &self.map).value() + 1) * low_w.value()
+                + elem.high.semantic_hash(&self.order, &self.map).value() * high_w.value(),
+        )
+        .value()
+        .hash(&mut hasher);
+        hasher.finish()
+    }
+}
+
+
 pub struct DecisionNNFBuilder {
     compute_table: BackedRobinhoodTable<BddNode>,
+    hasher: BddSemanticUniqueTableHasher<100000000063>,
+    // hasher: DefaultUniqueTableHasher,
+    order: VarOrder
 }
 
 impl DecisionNNFBuilder {
-    pub fn new() -> DecisionNNFBuilder {
+    pub fn new(order: VarOrder) -> DecisionNNFBuilder {
         DecisionNNFBuilder {
+            order: order.clone(),
             compute_table: BackedRobinhoodTable::new(),
+            // hasher: DefaultUniqueTableHasher::default(),
+            hasher: BddSemanticUniqueTableHasher { map: create_semantic_hash_map(order.num_vars()), order: order }
         }
     }
 
@@ -37,13 +76,13 @@ impl DecisionNNFBuilder {
             let bdd = BddNode::new(bdd.var, bdd.low.neg(), bdd.high.neg());
             BddPtr::new_compl(
                 self.compute_table
-                    .get_or_insert(bdd, &DefaultUniqueTableHasher::default()),
+                    .get_or_insert(bdd, &self.hasher),
             )
         } else {
             let bdd = BddNode::new(bdd.var, bdd.low, bdd.high);
             BddPtr::new_reg(
                 self.compute_table
-                    .get_or_insert(bdd, &DefaultUniqueTableHasher::default()),
+                    .get_or_insert(bdd, &self.hasher),
             )
         }
     }
@@ -84,19 +123,18 @@ impl DecisionNNFBuilder {
         cnf: &Cnf,
         sat: &mut SATSolver,
         level: usize,
-        order: &VarOrder,
         cache: &mut FxHashMap<u128, BddPtr>,
     ) -> BddPtr {
         // check for base case
         if level >= cnf.num_vars() || sat.is_sat() {
             return BddPtr::true_ptr();
         }
-        let cur_v = order.var_at_level(level);
+        let cur_v = self.order.var_at_level(level);
 
         // check if this literal is currently set in unit propagation; if
         // it is, skip it
         if sat.is_set(cur_v) {
-            return self.topdown_h(cnf, sat, level + 1, order, cache);
+            return self.topdown_h(cnf, sat, level + 1, cache);
         }
 
         // check cache
@@ -118,7 +156,7 @@ impl DecisionNNFBuilder {
                 r
             }
             DecisionResult::Unknown => {
-                let sub = self.topdown_h(cnf, sat, level + 1, order, cache);
+                let sub = self.topdown_h(cnf, sat, level + 1, cache);
                 let new_assgn = sat.get_difference().filter(|x| x.get_label() != cur_v);
                 let r = self.conjoin_implied(new_assgn, sub);
                 sat.pop();
@@ -134,7 +172,7 @@ impl DecisionNNFBuilder {
                 r
             }
             DecisionResult::Unknown => {
-                let sub = self.topdown_h(cnf, sat, level + 1, order, cache);
+                let sub = self.topdown_h(cnf, sat, level + 1, cache);
                 let new_assgn = sat.get_difference().filter(|x| x.get_label() != cur_v);
                 let r = self.conjoin_implied(new_assgn, sub);
                 sat.pop();
@@ -154,13 +192,13 @@ impl DecisionNNFBuilder {
 
     /// compile a decision DNNF top-down from a CNF with the searching order
     /// specified by `order`
-    pub fn from_cnf_topdown(&mut self, order: &VarOrder, cnf: &Cnf) -> BddPtr {
+    pub fn from_cnf_topdown(&mut self, cnf: &Cnf) -> BddPtr {
         let mut sat = match SATSolver::new(cnf.clone()) {
             Some(v) => v,
             None => return BddPtr::false_ptr(),
         };
 
-        let mut r = self.topdown_h(cnf, &mut sat, 0, order, &mut FxHashMap::default());
+        let mut r = self.topdown_h(cnf, &mut sat, 0, &mut FxHashMap::default());
 
         // conjoin in any initially implied literals
         for l in sat.get_difference() {
