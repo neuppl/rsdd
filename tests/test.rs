@@ -438,10 +438,11 @@ mod test_bdd_manager {
             let mut mgr = super::BddManager::<AllTable<BddPtr>>::new_default_order(c1.num_vars());
             let weight_map : HashMap<VarLabel, (RealSemiring, RealSemiring)> = HashMap::from_iter(
                 (0..16).map(|x| (VarLabel::new(x as u64), (RealSemiring(0.3), RealSemiring(0.7)))));
+            let order = VarOrder::linear_order(c1.num_vars());
             let cnf1 = mgr.from_cnf(&c1);
 
-            let mut mgr2 = DecisionNNFBuilder::new();
-            let dnnf = mgr2.from_cnf_topdown(&VarOrder::linear_order(c1.num_vars()), &c1);
+            let mut mgr2 = DecisionNNFBuilder::new(order);
+            let dnnf = mgr2.from_cnf_topdown(&c1);
 
             let bddwmc = super::repr::wmc::WmcParams::new_with_default(RealSemiring::zero(), RealSemiring::one(), weight_map);
             let bddres = cnf1.wmc(mgr.get_order(),  &bddwmc);
@@ -801,14 +802,37 @@ mod test_sdd_manager {
     }
 
     quickcheck! {
-        /// verify that every node in the SDD has a unique semantic hash
+        /// verify that every node in the SDD compression canonicalizer has a unique semantic hash
         fn qc_sdd_canonicity(c1: Cnf, vtree:VTree) -> TestResult {
             let mut mgr = super::SddManager::<CompressionCanonicalizer>::new(vtree);
             let _ = mgr.from_cnf(&c1);
-            // take a large prime to make collisions impossible
-            // useful site: http://compoasso.free.fr/primelistweb/page/prime/liste_online_en.php
 
-            // running iteratively, taking majority
+            let map : WmcParams<FiniteField<{ crate::BIG_PRIME }>>= create_semantic_hash_map(mgr.num_vars());
+            let mut seen_hashes : HashMap<u128, SddPtr> = HashMap::new();
+            for sdd in mgr.node_iter() {
+                let hash = sdd.semantic_hash(mgr.get_vtree_manager(), &map);
+                if seen_hashes.contains_key(&hash.value()) {
+                    let c = seen_hashes.get(&hash.value()).unwrap();
+                    println!("cnf: {}", c1);
+                    println!("probmap: {:?}", map);
+                    println!("collision found for hash value {}", hash);
+                    println!("sdd a: {}\n", mgr.print_sdd(sdd));
+                    println!("sdd b: {}\n", mgr.print_sdd(*c));
+                    return TestResult::from_bool(false);
+                }
+                seen_hashes.insert(hash.value(), sdd);
+            }
+            TestResult::from_bool(true)
+        }
+    }
+
+
+    quickcheck! {
+        /// verify that every node in the SDD with the semantic canonicalizer a unique semantic hash
+        fn qc_semantic_sdd_canonicity(c1: Cnf, vtree:VTree) -> TestResult {
+            let mut mgr = super::SddManager::<SemanticCanonicalizer< {crate::BIG_PRIME} >>::new(vtree);
+            let _ = mgr.from_cnf(&c1);
+
             let map : WmcParams<FiniteField<{ crate::BIG_PRIME }>>= create_semantic_hash_map(mgr.num_vars());
             let mut seen_hashes : HashMap<u128, SddPtr> = HashMap::new();
             for sdd in mgr.node_iter() {

@@ -817,6 +817,7 @@ fn is_trimmed_simple_demorgan() {
     assert!(expected.is_trimmed());
     assert!(res.is_trimmed());
 }
+
 #[test]
 fn is_canonical_trivial() {
     assert!(PtrTrue.is_canonical());
