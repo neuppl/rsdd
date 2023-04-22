@@ -1,13 +1,15 @@
 //! Top-down decision DNNF compiler and manipulator
 
-use std::hash::{Hasher, Hash};
+use std::hash::{Hash, Hasher};
 
 use crate::{
     backing_store::*,
     repr::{
+        bdd::WmcParams,
         ddnnf::DDNNFPtr,
-        unit_prop::{DecisionResult, SATSolver}, bdd::{WmcParams, create_semantic_hash_map},
-    }, util::semiring::FiniteField,
+        unit_prop::{DecisionResult, SATSolver},
+    },
+    util::semiring::FiniteField,
 };
 use bumpalo::Bump;
 use rustc_hash::{FxHashMap, FxHasher};
@@ -40,10 +42,8 @@ impl<const P: u128> UniqueTableHasher<BddNode> for BddSemanticUniqueTableHasher<
 
         let (low_w, high_w) = self.map.get_var_weight(elem.var);
 
-        // TODO(matt): investigate if this works properly!
         FiniteField::<P>::new(
             elem.low.semantic_hash(&self.order, &self.map).value() * low_w.value()
-            // (P - elem.low().semantic_hash(&self.vtree, &self.map).value() + 1) * low_w.value()
                 + elem.high.semantic_hash(&self.order, &self.map).value() * high_w.value(),
         )
         .value()
@@ -52,12 +52,12 @@ impl<const P: u128> UniqueTableHasher<BddNode> for BddSemanticUniqueTableHasher<
     }
 }
 
-
 pub struct DecisionNNFBuilder {
     compute_table: BackedRobinhoodTable<BddNode>,
-    hasher: BddSemanticUniqueTableHasher<100000000063>,
-    // hasher: DefaultUniqueTableHasher,
-    order: VarOrder
+    // avoid hard-coding primes into impl
+    // hasher: BddSemanticUniqueTableHasher<100000049>,
+    hasher: DefaultUniqueTableHasher,
+    order: VarOrder,
 }
 
 impl DecisionNNFBuilder {
@@ -65,8 +65,11 @@ impl DecisionNNFBuilder {
         DecisionNNFBuilder {
             order: order.clone(),
             compute_table: BackedRobinhoodTable::new(),
-            // hasher: DefaultUniqueTableHasher::default(),
-            hasher: BddSemanticUniqueTableHasher { map: create_semantic_hash_map(order.num_vars()), order: order }
+            hasher: DefaultUniqueTableHasher::default(),
+            // hasher: BddSemanticUniqueTableHasher {
+            //     map: create_semantic_hash_map(order.num_vars()),
+            //     order,
+            // },
         }
     }
 
@@ -74,16 +77,10 @@ impl DecisionNNFBuilder {
     fn get_or_insert(&mut self, bdd: BddNode) -> BddPtr {
         if bdd.high.is_neg() {
             let bdd = BddNode::new(bdd.var, bdd.low.neg(), bdd.high.neg());
-            BddPtr::new_compl(
-                self.compute_table
-                    .get_or_insert(bdd, &self.hasher),
-            )
+            BddPtr::new_compl(self.compute_table.get_or_insert(bdd, &self.hasher))
         } else {
             let bdd = BddNode::new(bdd.var, bdd.low, bdd.high);
-            BddPtr::new_reg(
-                self.compute_table
-                    .get_or_insert(bdd, &self.hasher),
-            )
+            BddPtr::new_reg(self.compute_table.get_or_insert(bdd, &self.hasher))
         }
     }
 

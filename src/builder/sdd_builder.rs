@@ -2,14 +2,13 @@
 //! with SDDs.
 
 use std::cmp::Ordering;
-use std::collections::HashSet;
 
 use super::cache::all_app::AllTable;
 use super::cache::ite::Ite;
 use super::cache::sdd_apply_cache::SddApply;
 use super::cache::LruTable;
 use super::canonicalize::*;
-use crate::repr::bdd::create_semantic_hash_map;
+
 use crate::repr::ddnnf::DDNNFPtr;
 use crate::repr::sdd::{BinarySDD, SddAnd, SddOr, SddPtr};
 use crate::repr::vtree::{VTree, VTreeIndex, VTreeManager};
@@ -811,22 +810,6 @@ impl<T: SddCanonicalizationScheme> SddManager<T> {
     pub fn print_stats(&self) {
         println!("***************[ SDD Stats ]***************");
         println!("\tNumber of recursive calls: {}", self.stats.num_rec);
-    }
-
-    /// computes the number of logically redundant nodes allocated by the
-    /// manager (nodes that have the same semantic hash)
-    pub fn num_logically_redundant(&self) -> usize {
-        let mut s: HashSet<u128> = HashSet::new();
-        let hasher = create_semantic_hash_map::<100000000063>(self.num_vars() + 1000); // TODO FIX THIS BADNESS
-        let mut num_collisions = 0;
-        for n in self.node_iter() {
-            let h = n.cached_semantic_hash(self.get_vtree_manager(), &hasher);
-            if s.contains(&h.value()) {
-                num_collisions += 1;
-            }
-            s.insert(h.value());
-        }
-        return num_collisions;
     }
 }
 

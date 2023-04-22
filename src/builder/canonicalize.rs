@@ -120,13 +120,16 @@ impl<const P: u128> UniqueTableHasher<BinarySDD> for SemanticUniqueTableHasher<P
 
         let (low_w, high_w) = self.map.get_var_weight(elem.label());
 
-        // TODO(matt): investigate if this works properly!
-        FiniteField::<P>::new(
-            elem.low().cached_semantic_hash(&self.vtree, &self.map).value() * low_w.value()
-            // (P - elem.low().semantic_hash(&self.vtree, &self.map).value() + 1) * low_w.value()
-                + elem.high().cached_semantic_hash(&self.vtree, &self.map).value() * high_w.value(),
-        )
-        .value()
+        (elem
+            .low()
+            .cached_semantic_hash(&self.vtree, &self.map)
+            .value()
+            * low_w.value()
+            + elem
+                .high()
+                .cached_semantic_hash(&self.vtree, &self.map)
+                .value()
+                * high_w.value())
         .hash(&mut hasher);
         hasher.finish()
     }
@@ -136,14 +139,11 @@ impl<const P: u128> UniqueTableHasher<SddOr> for SemanticUniqueTableHasher<P> {
     // TODO(matt): we should be able to de-duplicate this with fold/wmc
     fn u64hash(&self, elem: &SddOr) -> u64 {
         let mut hasher = FxHasher::default();
-        FiniteField::<P>::new(
-            elem.nodes
-                .iter()
-                .map(|and| and.semantic_hash(&self.vtree, &self.map).value())
-                .fold(0, |accum, elem| accum + elem),
-        )
-        .value()
-        .hash(&mut hasher);
+        elem.nodes
+            .iter()
+            .map(|and| and.semantic_hash(&self.vtree, &self.map).value())
+            .fold(0, |accum, elem| accum + elem)
+            .hash(&mut hasher);
         hasher.finish()
     }
 }

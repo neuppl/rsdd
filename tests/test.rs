@@ -802,7 +802,7 @@ mod test_sdd_manager {
     }
 
     quickcheck! {
-        /// verify that every node in the SDD compression canonicalizer has a unique semantic hash
+        /// verify that every node in the SDD compression canonicalizer has a unique semantic hash, using CompressionCanonicalizer
         fn qc_sdd_canonicity(c1: Cnf, vtree:VTree) -> TestResult {
             let mut mgr = super::SddManager::<CompressionCanonicalizer>::new(vtree);
             let _ = mgr.from_cnf(&c1);
@@ -826,9 +826,8 @@ mod test_sdd_manager {
         }
     }
 
-
     quickcheck! {
-        /// verify that every node in the SDD with the semantic canonicalizer a unique semantic hash
+        /// verify that every node in the SDD with the semantic canonicalizer a unique semantic hash, using SemanticCanonicalizer
         fn qc_semantic_sdd_canonicity(c1: Cnf, vtree:VTree) -> TestResult {
             let mut mgr = super::SddManager::<SemanticCanonicalizer< {crate::BIG_PRIME} >>::new(vtree);
             let _ = mgr.from_cnf(&c1);
@@ -849,6 +848,28 @@ mod test_sdd_manager {
                 seen_hashes.insert(hash.value(), sdd);
             }
             TestResult::from_bool(true)
+        }
+    }
+
+    quickcheck! {
+        /// verify that the semantic hash of an SDDPtr + its compl is always equal to 1
+        fn semantic_reg_plus_compl_eq_one(c1: Cnf, vtree:VTree) -> bool {
+            let mut mgr = super::SddManager::<SemanticCanonicalizer<{ crate::BIG_PRIME }>>::new(vtree);
+            let map : WmcParams<FiniteField<{ crate::BIG_PRIME }>>= create_semantic_hash_map(mgr.num_vars());
+
+            let sdd = mgr.from_cnf(&c1);
+            let compl = sdd.neg();
+
+            let sdd_hash = sdd.semantic_hash(mgr.get_vtree_manager(), &map);
+            let compl_hash = compl.semantic_hash(mgr.get_vtree_manager(), &map);
+
+            let sum = (sdd_hash + compl_hash).value();
+
+            if sum != 1 {
+                println!("hashes do not sum to one; Reg: {}, Compl: {}", sdd_hash, compl_hash);
+            }
+
+            sum == 1
         }
     }
 }
