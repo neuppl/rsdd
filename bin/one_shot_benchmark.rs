@@ -84,6 +84,7 @@ fn compile_topdown_nnf(str: String, _args: &Args) -> BenchResult {
     let mut man = rsdd::builder::decision_nnf_builder::DecisionNNFBuilder::new(order);
     // let order = cnf.force_order();
     let ddnnf = man.from_cnf_topdown(&cnf);
+    println!("num redundant: {}", man.num_logically_redundant());
     BenchResult {
         num_recursive: 0,
         size: ddnnf.count_nodes(),
