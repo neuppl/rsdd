@@ -124,8 +124,9 @@ impl DTree {
                 // cutset of a node is defined (vars(l) ∩ vars(r)) \ ancestor cutset
                 let intersect = l.get_vars().intersect_varset(r.get_vars());
                 let my_cutset = intersect.minus(ancestor_cutset);
-                l.gen_cutset(&my_cutset);
-                r.gen_cutset(&my_cutset);
+                let new_ancestor_cutset = ancestor_cutset.union(&my_cutset);
+                l.gen_cutset(&new_ancestor_cutset);
+                r.gen_cutset(&new_ancestor_cutset);
                 *cutset = my_cutset;
             }
             DTree::Leaf {
