@@ -36,18 +36,15 @@ impl<const P: u128> BddSemanticUniqueTableHasher<P> {
 }
 
 impl<const P: u128> UniqueTableHasher<BddNode> for BddSemanticUniqueTableHasher<P> {
-    // TODO(matt): we should be able to de-duplicate this with fold/wmc
     fn u64hash(&self, elem: &BddNode) -> u64 {
         let mut hasher = FxHasher::default();
 
         let (low_w, high_w) = self.map.get_var_weight(elem.var);
 
-        FiniteField::<P>::new(
-            elem.low.semantic_hash(&self.order, &self.map).value() * low_w.value()
-                + elem.high.semantic_hash(&self.order, &self.map).value() * high_w.value(),
-        )
-        .value()
-        .hash(&mut hasher);
+        let raw = elem.low.semantic_hash(&self.order, &self.map).value() * low_w.value()
+            + elem.high.semantic_hash(&self.order, &self.map).value() * high_w.value();
+
+        raw.hash(&mut hasher);
         hasher.finish()
     }
 }

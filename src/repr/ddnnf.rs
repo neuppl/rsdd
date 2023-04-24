@@ -96,7 +96,6 @@ pub trait DDNNFPtr: Clone + Debug + PartialEq + Eq + Hash + Copy {
         order: &Self::Order,
         map: &WmcParams<FiniteField<P>>,
     ) -> FiniteField<P> {
-        // panic!();
         self.wmc(order, map)
     }
 

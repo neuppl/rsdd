@@ -836,6 +836,7 @@ mod test_sdd_manager {
             let mut seen_hashes : HashMap<u128, SddPtr> = HashMap::new();
             for sdd in mgr.node_iter() {
                 let hash = sdd.semantic_hash(mgr.get_vtree_manager(), &map);
+                println!("curr: {:?} | hash: {}", sdd, hash);
                 if seen_hashes.contains_key(&hash.value()) {
                     let c = seen_hashes.get(&hash.value()).unwrap();
                     println!("cnf: {}", c1);

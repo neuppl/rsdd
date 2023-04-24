@@ -145,7 +145,6 @@ impl SddAnd {
     pub fn new(prime: SddPtr, sub: SddPtr) -> SddAnd {
         SddAnd { prime, sub }
     }
-    // TODO(matt): we should be able to de-duplicate this with fold/wmc
     pub fn semantic_hash<const P: u128>(
         &self,
         vtree: &VTreeManager,
@@ -214,28 +213,27 @@ impl SddPtr {
         match self {
             PtrTrue => FiniteField::new(1),
             PtrFalse => FiniteField::new(0),
-            Var(v, b) => {
-                let (l_w, h_w) = map.get_var_weight(*v);
-                return if *b { *h_w } else { *l_w };
+            Var(label, polarity) => {
+                let (l_w, h_w) = map.get_var_weight(*label);
+                return if *polarity { *h_w } else { *l_w };
             }
             BDD(_) => {
-                let b = self.mut_bdd_ref();
-                if b.semantic_hash.is_some() {
-                    return FiniteField::new(b.semantic_hash.unwrap());
+                if let Some(h) = self.mut_bdd_ref().semantic_hash {
+                    return FiniteField::new(h);
                 }
 
                 // no cached value, compute it
                 let l_h = self.low().cached_semantic_hash(vtree, map);
                 let h_h = self.high().cached_semantic_hash(vtree, map);
                 let (l_w, h_w) = map.get_var_weight(self.topvar());
+
                 let h = (*l_w) * l_h + (*h_w) * h_h;
-                b.semantic_hash = Some(h.value());
+                self.mut_bdd_ref().semantic_hash = Some(h.value());
                 h
             }
             Reg(_) => {
-                let r = self.node_ref_mut();
-                if r.semantic_hash.is_some() {
-                    return FiniteField::new(r.semantic_hash.unwrap());
+                if let Some(h) = self.node_ref_mut().semantic_hash {
+                    return FiniteField::new(h);
                 }
 
                 // no cached value, compute it
@@ -243,6 +241,7 @@ impl SddPtr {
                     acc + i.prime().cached_semantic_hash(vtree, map)
                         * i.sub().cached_semantic_hash(vtree, map)
                 });
+
                 self.node_ref_mut().semantic_hash = Some(h.value());
                 h
             }

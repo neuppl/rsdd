@@ -149,7 +149,7 @@ where
     }
 }
 
-impl<T: Eq + PartialEq + Hash + Clone, H: UniqueTableHasher<T>> UniqueTable<T, H>
+impl<T: Eq + PartialEq + Hash + Clone + std::fmt::Debug, H: UniqueTableHasher<T>> UniqueTable<T, H>
     for BackedRobinhoodTable<T>
 {
     fn get_or_insert(&mut self, elem: T, hasher: &H) -> *mut T {
@@ -164,6 +164,7 @@ impl<T: Eq + PartialEq + Hash + Clone, H: UniqueTableHasher<T>> UniqueTable<T, H
         // the distance this item is from its desired location
         let mut psl = 0;
 
+        println!("(elem): {:?}", elem);
         loop {
             if self.is_occupied(pos) {
                 let cur_itm = self.tbl[pos].clone();
@@ -171,11 +172,13 @@ impl<T: Eq + PartialEq + Hash + Clone, H: UniqueTableHasher<T>> UniqueTable<T, H
                 // possibly be equal; if they are, check if the items are
                 // equal and return the found pointer if so
                 if elem_hash == cur_itm.hash {
-                    let found: &T = unsafe { &*cur_itm.ptr };
-                    if *found == elem {
-                        self.hits += 1;
-                        return cur_itm.ptr;
-                    }
+                    println!("hit (elem): {:?}", elem);
+                    println!("hit (cur): {:?}", unsafe { &*cur_itm.ptr });
+                    // let found: &T = unsafe { &*cur_itm.ptr };
+                    // if *found == elem {
+                    self.hits += 1;
+                    return cur_itm.ptr;
+                    // }
                 }
 
                 // not equal; begin probing

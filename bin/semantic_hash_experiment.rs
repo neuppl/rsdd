@@ -71,7 +71,7 @@ impl BenchStats {
         sdd: &SddPtr,
         mgr: &SddManager<T>,
     ) -> BenchStats {
-        let stats = mgr.get_stats();
+        let stats = mgr.stats();
         BenchStats {
             label,
             time,
