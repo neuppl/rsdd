@@ -1,6 +1,6 @@
 //! Top-down decision DNNF compiler and manipulator
 
-use std::hash::{Hasher, Hash};
+use std::{hash::{Hasher, Hash}, collections::HashSet};
 
 use crate::{
     backing_store::*,
@@ -55,7 +55,7 @@ impl<const P: u128> UniqueTableHasher<BddNode> for BddSemanticUniqueTableHasher<
 
 pub struct DecisionNNFBuilder {
     compute_table: BackedRobinhoodTable<BddNode>,
-    hasher: BddSemanticUniqueTableHasher<100000000063>,
+    hasher: BddSemanticUniqueTableHasher<10000000000063>,
     // hasher: DefaultUniqueTableHasher,
     order: VarOrder
 }
@@ -190,8 +190,7 @@ impl DecisionNNFBuilder {
         r
     }
 
-    /// compile a decision DNNF top-down from a CNF with the searching order
-    /// specified by `order`
+    /// compile a decision DNNF top-down from a CNF
     pub fn from_cnf_topdown(&mut self, cnf: &Cnf) -> BddPtr {
         let mut sat = match SATSolver::new(cnf.clone()) {
             Some(v) => v,
@@ -264,6 +263,21 @@ impl DecisionNNFBuilder {
             bdd.set_scratch(alloc, if bdd.is_neg() { res.neg() } else { res });
             res
         }
+    }
+
+    pub fn num_logically_redundant(&self) -> usize {
+        let mut num_collisions = 0;
+        let mut seen_hashes = HashSet::new();
+        let map = create_semantic_hash_map::<10000000049>(self.order.num_vars());
+        for bdd in self.compute_table.iter() {
+            let h = BddPtr::new_reg(bdd).semantic_hash(&self.order, &map);
+            if seen_hashes.contains(&(h.value())) {
+                num_collisions += 1;
+            } else {
+                seen_hashes.insert(h.value());
+            }
+        }
+        num_collisions
     }
 }
 
