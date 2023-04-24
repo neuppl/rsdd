@@ -44,16 +44,14 @@ impl VTree {
     /// panics if the vtree contains redundant variables; used for debug assertions
     fn check_redundant_vars(&self, s: &mut HashSet<usize>) -> bool {
         match self {
-            BTree::Leaf(v) => { 
+            BTree::Leaf(v) => {
                 if s.contains(&v.value_usize()) {
                     return true;
                 }
                 s.insert(v.value_usize());
                 return false;
             }
-            BTree::Node((), l, r) => {
-                l.check_redundant_vars(s) || r.check_redundant_vars(s)
-            }
+            BTree::Node((), l, r) => l.check_redundant_vars(s) || r.check_redundant_vars(s),
         }
     }
 
@@ -271,7 +269,11 @@ pub struct VTreeManager {
 
 impl VTreeManager {
     pub fn new(tree: VTree) -> VTreeManager {
-        debug_assert!(!tree.check_redundant_vars(&mut HashSet::new()), "VTree contains redundant variables: {:#?}", tree);
+        debug_assert!(
+            !tree.check_redundant_vars(&mut HashSet::new()),
+            "VTree contains redundant variables: {:#?}",
+            tree
+        );
         let mut vtree_lookup = vec![0; tree.num_vars()];
         let mut index_lookup = Vec::new();
         for (idx, v) in tree.inorder_dfs_iter().enumerate() {
