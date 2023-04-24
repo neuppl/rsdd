@@ -535,9 +535,8 @@ mod test_sdd_manager {
     use rsdd::repr::var_order::VarOrder;
     use rsdd::repr::vtree::VTree;
     use rsdd::repr::wmc::WmcParams;
-    use rsdd::util::semiring::{FiniteField, RealSemiring};
+    use rsdd::util::semiring::FiniteField;
     use std::collections::HashMap;
-    use std::iter::FromIterator;
 
     quickcheck! {
         fn test_cond_and(c: Cnf) -> bool {
