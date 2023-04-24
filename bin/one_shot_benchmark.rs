@@ -113,11 +113,8 @@ fn compile_sdd_dtree(str: String, _args: &Args) -> BenchResult {
         assert!(r.is_ok(), "Error writing file");
     }
 
-    // println!("num redundant: {}", man.num_logically_redundant());
-    // println!("num nodes: {}", man.node_iter().count());
-
     BenchResult {
-        num_recursive: man.get_stats().num_rec,
+        num_recursive: man.stats().num_rec,
         size: _sdd.count_nodes(),
     }
 }
@@ -147,7 +144,7 @@ fn compile_sdd_rightlinear(str: String, _args: &Args) -> BenchResult {
     }
 
     BenchResult {
-        num_recursive: man.get_stats().num_rec,
+        num_recursive: man.stats().num_rec,
         size: _sdd.count_nodes(),
     }
 }
