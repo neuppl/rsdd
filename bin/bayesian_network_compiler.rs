@@ -302,11 +302,12 @@ fn compile_sdd_cnf(network: BayesianNetwork) {
 fn compile_topdown(network: BayesianNetwork) {
     println!("############################\n\tCompiling topdown\n############################");
     let bn = BayesianNetworkCNF::new(&network);
-    let mut compiler = DecisionNNFBuilder::new();
+    let order = VarOrder::linear_order(bn.cnf.num_vars());
+    let mut compiler = DecisionNNFBuilder::new(order);
 
     println!("Compiling");
     let start = Instant::now();
-    let r = compiler.from_cnf_topdown(&VarOrder::linear_order(bn.cnf.num_vars()), &bn.cnf);
+    let r = compiler.from_cnf_topdown(&bn.cnf);
     let duration = start.elapsed();
     let sz = r.count_nodes();
     println!("Compiled\n\tCompile time: {:?}\n\tSize: {sz}", duration);

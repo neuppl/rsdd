@@ -808,24 +808,25 @@ impl DDNNFPtr for BddPtr {
 
     fn count_nodes(&self) -> usize {
         debug_assert!(self.is_scratch_cleared());
-        fn count_h(ptr: BddPtr, alloc: &mut Bump) -> usize {
+        fn count_h(ptr: BddPtr, count: &mut usize, alloc: &mut Bump) -> () {
             if ptr.is_const() {
-                return 0;
+                return ();
             }
             match ptr.get_scratch::<usize>() {
-                Some(_) => 0,
+                Some(_) => (),
                 None => {
                     // found a new node
+                    *count = *count + 1;
                     ptr.set_scratch::<usize>(alloc, 0);
-                    let sub_l = count_h(ptr.low_raw(), alloc);
-                    let sub_h = count_h(ptr.high_raw(), alloc);
-                    sub_l + sub_h + 1
+                    count_h(ptr.low_raw(), count, alloc);
+                    count_h(ptr.high_raw(), count, alloc);
                 }
             }
         }
-        let r = count_h(*self, &mut Bump::new());
+        let mut count = 0;
+        count_h(*self, &mut count, &mut Bump::new());
         self.clear_scratch();
-        return r;
+        return count;
     }
 
     fn neg(&self) -> Self {
