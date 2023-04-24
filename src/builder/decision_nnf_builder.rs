@@ -39,28 +39,24 @@ impl<const P: u128> BddSemanticUniqueTableHasher<P> {
 }
 
 impl<const P: u128> UniqueTableHasher<BddNode> for BddSemanticUniqueTableHasher<P> {
-    // TODO(matt): we should be able to de-duplicate this with fold/wmc
     fn u64hash(&self, elem: &BddNode) -> u64 {
         let mut hasher = FxHasher::default();
 
         let (low_w, high_w) = self.map.get_var_weight(elem.var);
 
-        // TODO(matt): investigate if this works properly!
-        FiniteField::<P>::new(
-            elem.low.semantic_hash(&self.order, &self.map).value() * low_w.value()
-            // (P - elem.low().semantic_hash(&self.vtree, &self.map).value() + 1) * low_w.value()
-                + elem.high.semantic_hash(&self.order, &self.map).value() * high_w.value(),
-        )
-        .value()
-        .hash(&mut hasher);
+        let raw = elem.low.semantic_hash(&self.order, &self.map).value() * low_w.value()
+            + elem.high.semantic_hash(&self.order, &self.map).value() * high_w.value();
+
+        raw.hash(&mut hasher);
         hasher.finish()
     }
 }
 
 pub struct DecisionNNFBuilder {
     compute_table: BackedRobinhoodTable<BddNode>,
-    hasher: BddSemanticUniqueTableHasher<10000000000063>,
-    // hasher: DefaultUniqueTableHasher,
+    // avoid hard-coding primes into impl
+    // hasher: BddSemanticUniqueTableHasher<100000049>,
+    hasher: DefaultUniqueTableHasher,
     order: VarOrder,
 }
 
@@ -69,11 +65,11 @@ impl DecisionNNFBuilder {
         DecisionNNFBuilder {
             order: order.clone(),
             compute_table: BackedRobinhoodTable::new(),
-            // hasher: DefaultUniqueTableHasher::default(),
-            hasher: BddSemanticUniqueTableHasher {
-                map: create_semantic_hash_map(order.num_vars()),
-                order: order,
-            },
+            hasher: DefaultUniqueTableHasher::default(),
+            // hasher: BddSemanticUniqueTableHasher {
+            //     map: create_semantic_hash_map(order.num_vars()),
+            //     order,
+            // },
         }
     }
 
