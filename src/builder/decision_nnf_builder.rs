@@ -1,13 +1,18 @@
 //! Top-down decision DNNF compiler and manipulator
 
-use std::{hash::{Hasher, Hash}, collections::HashSet};
+use std::{
+    collections::HashSet,
+    hash::{Hash, Hasher},
+};
 
 use crate::{
     backing_store::*,
     repr::{
+        bdd::{create_semantic_hash_map, WmcParams},
         ddnnf::DDNNFPtr,
-        unit_prop::{DecisionResult, SATSolver}, bdd::{WmcParams, create_semantic_hash_map},
-    }, util::semiring::FiniteField,
+        unit_prop::{DecisionResult, SATSolver},
+    },
+    util::semiring::FiniteField,
 };
 use bumpalo::Bump;
 use rustc_hash::{FxHashMap, FxHasher};
@@ -52,12 +57,11 @@ impl<const P: u128> UniqueTableHasher<BddNode> for BddSemanticUniqueTableHasher<
     }
 }
 
-
 pub struct DecisionNNFBuilder {
     compute_table: BackedRobinhoodTable<BddNode>,
     hasher: BddSemanticUniqueTableHasher<10000000000063>,
     // hasher: DefaultUniqueTableHasher,
-    order: VarOrder
+    order: VarOrder,
 }
 
 impl DecisionNNFBuilder {
@@ -66,7 +70,10 @@ impl DecisionNNFBuilder {
             order: order.clone(),
             compute_table: BackedRobinhoodTable::new(),
             // hasher: DefaultUniqueTableHasher::default(),
-            hasher: BddSemanticUniqueTableHasher { map: create_semantic_hash_map(order.num_vars()), order: order }
+            hasher: BddSemanticUniqueTableHasher {
+                map: create_semantic_hash_map(order.num_vars()),
+                order: order,
+            },
         }
     }
 
@@ -74,16 +81,10 @@ impl DecisionNNFBuilder {
     fn get_or_insert(&mut self, bdd: BddNode) -> BddPtr {
         if bdd.high.is_neg() {
             let bdd = BddNode::new(bdd.var, bdd.low.neg(), bdd.high.neg());
-            BddPtr::new_compl(
-                self.compute_table
-                    .get_or_insert(bdd, &self.hasher),
-            )
+            BddPtr::new_compl(self.compute_table.get_or_insert(bdd, &self.hasher))
         } else {
             let bdd = BddNode::new(bdd.var, bdd.low, bdd.high);
-            BddPtr::new_reg(
-                self.compute_table
-                    .get_or_insert(bdd, &self.hasher),
-            )
+            BddPtr::new_reg(self.compute_table.get_or_insert(bdd, &self.hasher))
         }
     }
 
