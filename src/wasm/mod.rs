@@ -46,6 +46,21 @@ pub fn bdd(cnf_input: String) -> String {
 
 // used in: https://github.com/mattxwang/indecision
 #[wasm_bindgen]
+pub fn bdd_with_var_order(cnf_input: String, order: &[u64]) -> String {
+    let cnf = Cnf::from_file(cnf_input);
+
+    let var_order = VarOrder::new(order.iter().map(|v| VarLabel::new(*v)).collect());
+
+    let mut man = BddManager::new(var_order, BddApplyTable::new(21));
+    let bdd = man.from_cnf(&cnf);
+
+    let json = ser_bdd::BDDSerializer::from_bdd(bdd);
+
+    serde_json::to_string(&json).unwrap()
+}
+
+// used in: https://github.com/mattxwang/indecision
+#[wasm_bindgen]
 pub fn sdd(cnf_input: String, vtree_type_input: JsValue) -> Result<JsValue, JsValue> {
     let cnf = Cnf::from_file(cnf_input);
 
