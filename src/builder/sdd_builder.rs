@@ -112,8 +112,7 @@ impl<T: SddCanonicalizationScheme> SddManager<T> {
     /// Normalizes and fetches a node from the store
     pub fn get_or_insert(&mut self, sdd: SddOr) -> SddPtr {
         self.stats.num_get_or_insert += 1;
-        let p = self.canonicalizer.sdd_get_or_insert(sdd);
-        SddPtr::or(p)
+        self.canonicalizer.sdd_get_or_insert(sdd)
     }
 
     pub fn get_vtree(&self, ptr: SddPtr) -> &VTree {
@@ -185,9 +184,9 @@ impl<T: SddCanonicalizationScheme> SddManager<T> {
         if bdd.high().is_neg() || self.is_false(bdd.high()) || bdd.high().is_neg_var() {
             let neg_bdd =
                 BinarySDD::new(bdd.label(), bdd.low().neg(), bdd.high().neg(), bdd.vtree());
-            SddPtr::bdd(self.canonicalizer.bdd_get_or_insert(neg_bdd)).neg()
+            self.canonicalizer.bdd_get_or_insert(neg_bdd).neg()
         } else {
-            SddPtr::bdd(self.canonicalizer.bdd_get_or_insert(bdd))
+            self.canonicalizer.bdd_get_or_insert(bdd)
         }
     }
 

@@ -64,6 +64,16 @@ impl BinarySDD {
     pub fn label(&self) -> VarLabel {
         self.label
     }
+
+    pub fn semantic_hash<const P: u128>(
+        &self,
+        vtree: &VTreeManager,
+        map: &WmcParams<FiniteField<P>>,
+    ) -> FiniteField<P> {
+        let (low_w, high_w) = map.get_var_weight(self.label());
+        self.low().cached_semantic_hash(vtree, map) * (*low_w)
+            + self.high().cached_semantic_hash(vtree, map) * (*high_w)
+    }
 }
 
 impl Hash for BinarySDD {
@@ -172,6 +182,19 @@ impl SddOr {
             semantic_hash: None,
         }
     }
+
+    pub fn semantic_hash<const P: u128>(
+        &self,
+        vtree: &VTreeManager,
+        map: &WmcParams<FiniteField<P>>,
+    ) -> FiniteField<P> {
+        FiniteField::new(
+            self.nodes
+                .iter()
+                .map(|and| and.semantic_hash(vtree, map).value())
+                .fold(0, |accum, elem| accum + elem),
+        )
+    }
 }
 
 impl PartialEq for SddOr {
@@ -222,12 +245,7 @@ impl SddPtr {
                     return FiniteField::new(h);
                 }
 
-                // no cached value, compute it
-                let l_h = self.low().cached_semantic_hash(vtree, map);
-                let h_h = self.high().cached_semantic_hash(vtree, map);
-                let (l_w, h_w) = map.get_var_weight(self.topvar());
-
-                let h = (*l_w) * l_h + (*h_w) * h_h;
+                let h = self.mut_bdd_ref().semantic_hash(vtree, map);
                 self.mut_bdd_ref().semantic_hash = Some(h.value());
                 h
             }
@@ -236,12 +254,7 @@ impl SddPtr {
                     return FiniteField::new(h);
                 }
 
-                // no cached value, compute it
-                let h = self.node_iter().fold(FiniteField::new(0), |acc, i| {
-                    acc + i.prime().cached_semantic_hash(vtree, map)
-                        * i.sub().cached_semantic_hash(vtree, map)
-                });
-
+                let h = self.node_ref_mut().semantic_hash(vtree, map);
                 self.node_ref_mut().semantic_hash = Some(h.value());
                 h
             }
