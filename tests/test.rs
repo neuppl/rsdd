@@ -319,12 +319,12 @@ mod test_bdd_manager {
     use crate::builder::decision_nnf_builder::DecisionNNFBuilder;
     use crate::repr::cnf::Cnf;
     use crate::repr::var_label::VarLabel;
-    use num::abs;
     use quickcheck::TestResult;
     use rsdd::builder::cache::all_app::AllTable;
     use rsdd::builder::cache::lru_app::BddApplyTable;
     use rsdd::repr::bdd::BddPtr;
     use rsdd::repr::ddnnf::{create_semantic_hash_map, DDNNFPtr};
+    use rsdd::repr::dtree::DTree;
     use rsdd::repr::model::PartialModel;
     use rsdd::repr::var_order::VarOrder;
     use rsdd::repr::vtree::VTree;
@@ -400,20 +400,18 @@ mod test_bdd_manager {
     }
 
     quickcheck! {
-        /// test that an SDD and BDD both compiled from the same CNF compute identical WMC
+        /// test that an BDD and CNF compute identical WMC
         fn wmc_eq(c1: Cnf) -> TestResult {
             // constrain the size
             if c1.num_vars() == 0 || c1.num_vars() > 8 { return TestResult::discard() }
             if c1.clauses().len() > 16 { return TestResult::discard() }
 
             let mut mgr = super::BddManager::<AllTable<BddPtr>>::new_default_order(c1.num_vars());
-            let weight_map : HashMap<VarLabel, (RealSemiring, RealSemiring)> = HashMap::from_iter(
-                (0..16).map(|x| (VarLabel::new(x as u64), (RealSemiring(0.2), RealSemiring(0.8)))));
+            let weight = create_semantic_hash_map::<{crate::BIG_PRIME}>(c1.num_vars());
             let cnf1 = mgr.from_cnf(&c1);
-            let bddwmc = super::repr::wmc::WmcParams::new_with_default(RealSemiring(0.0), RealSemiring(1.0), weight_map.clone());
-            let bddres = cnf1.wmc(mgr.get_order(), &bddwmc);
-            let cnfres = c1.wmc(&weight_map);
-            TestResult::from_bool(abs(bddres.0 - cnfres.0) < 0.00001)
+            let bddres = cnf1.wmc(mgr.get_order(), &weight);
+            let cnfres = c1.wmc(&weight);
+            TestResult::from_bool(bddres == cnfres)
         }
     }
 
@@ -421,6 +419,22 @@ mod test_bdd_manager {
         /// test that an SDD and BDD both have the same semantic hash
         fn sdd_semantic_eq_bdd(c1: Cnf, vtree: VTree) -> bool {
             let mut bdd_mgr = super::BddManager::<AllTable<BddPtr>>::new_default_order(c1.num_vars());
+            let mut sdd_mgr = super::SddManager::<rsdd::builder::canonicalize::CompressionCanonicalizer>::new(vtree);
+            let map : WmcParams<rsdd::util::semiring::FiniteField<{ crate::BIG_PRIME }>>= create_semantic_hash_map(c1.num_vars());
+            let bdd = bdd_mgr.from_cnf(&c1);
+            let sdd = sdd_mgr.from_cnf(&c1);
+            bdd.semantic_hash(bdd_mgr.get_order(), &map) == sdd.semantic_hash(sdd_mgr.get_vtree_manager(), &map)
+        }
+    }
+
+    quickcheck! {
+        /// test that an SDD and BDD both have the same semantic hash with min-fill order
+        fn sdd_semantic_eq_bdd_dtree(c1: Cnf) -> bool {
+            let mut bdd_mgr = super::BddManager::<AllTable<BddPtr>>::new_default_order(c1.num_vars());
+            let min_fill_order = c1.min_fill_order();
+            let dtree = DTree::from_cnf(&c1, &min_fill_order);
+            let vtree = VTree::from_dtree(&dtree).unwrap();
+
             let mut sdd_mgr = super::SddManager::<rsdd::builder::canonicalize::CompressionCanonicalizer>::new(vtree);
             let map : WmcParams<rsdd::util::semiring::FiniteField<{ crate::BIG_PRIME }>>= create_semantic_hash_map(c1.num_vars());
             let bdd = bdd_mgr.from_cnf(&c1);

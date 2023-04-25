@@ -8,12 +8,14 @@ use rand;
 use rand::rngs::ThreadRng;
 use rand::Rng;
 use std::cmp::{max, min};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::fmt;
 extern crate quickcheck;
 use self::quickcheck::{Arbitrary, Gen};
 use crate::repr::model::PartialModel;
 use petgraph::graph::NodeIndex;
+
+use super::bdd::WmcParams;
 
 // TODO: resolve unused
 #[allow(unused)]
@@ -460,12 +462,12 @@ impl Cnf {
     /// mostly for internal testing purposes
     pub fn wmc<T: Semiring + std::ops::Mul<Output = T> + std::ops::Add<Output = T>>(
         &self,
-        weights: &HashMap<VarLabel, (T, T)>,
+        weights: &WmcParams<T>,
     ) -> T {
         let mut total: T = T::zero();
         let mut weight_vec = Vec::new();
         for i in 0..self.num_vars() {
-            weight_vec.push(weights[&VarLabel::new(i as u64)]);
+            weight_vec.push(weights.get_var_weight(VarLabel::new(i as u64)));
         }
         for assgn in AssignmentIter::new(self.num_vars()) {
             if assgn.is_empty() {
@@ -477,7 +479,7 @@ impl Cnf {
                     .enumerate()
                     .fold(T::one(), |v, (idx, &polarity)| {
                         let (loww, highw) = weight_vec[idx];
-                        v.mul(if polarity { highw } else { loww })
+                        v.mul(if polarity { *highw } else { *loww })
                     });
                 total = total + assgn_w;
             }
@@ -615,6 +617,9 @@ impl Cnf {
             ord.push(ig[idx]);
             eliminate_node(&mut ig, idx);
         }
+        // assert that ord contains each variable exactly once.
+        debug_assert!((0..(self.num_vars())).all(|v| ord.contains(&VarLabel::new_usize(v))));
+        debug_assert!(ord.len() == self.num_vars);
         VarOrder::new(ord)
     }
 
@@ -707,9 +712,16 @@ fn test_cnf_wmc() {
         Literal::new(VarLabel::new(1), false),
     ]];
     let cnf = Cnf::new(v);
-    let weights: HashMap<VarLabel, (FiniteField<1000001>, FiniteField<1000001>)> = hashmap! {
+    let weights: std::collections::HashMap<VarLabel, (FiniteField<1000001>, FiniteField<1000001>)> = hashmap! {
         VarLabel::new(0) => (FiniteField::new(1), FiniteField::new(1)),
         VarLabel::new(1) => (FiniteField::new(1), FiniteField::new(1)),
     };
-    assert_eq!(cnf.wmc(&weights), FiniteField::new(3));
+    assert_eq!(
+        cnf.wmc(&WmcParams::new_with_default(
+            FiniteField::zero(),
+            FiniteField::one(),
+            weights
+        )),
+        FiniteField::new(3)
+    );
 }

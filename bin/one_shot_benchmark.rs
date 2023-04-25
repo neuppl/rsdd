@@ -94,7 +94,7 @@ fn compile_topdown_nnf(str: String, _args: &Args) -> BenchResult {
 fn compile_sdd_dtree(str: String, _args: &Args) -> BenchResult {
     use rsdd::builder::sdd_builder::*;
     let cnf = Cnf::from_file(str);
-    let dtree = DTree::from_cnf(&cnf, &VarOrder::linear_order(cnf.num_vars()));
+    let dtree = DTree::from_cnf(&cnf, &cnf.min_fill_order());
     let vtree = VTree::from_dtree(&dtree).unwrap();
     let mut man = SddManager::<CompressionCanonicalizer>::new(vtree.clone());
     let _sdd = man.from_cnf(&cnf);
@@ -171,12 +171,11 @@ fn compile_bdd(str: String, _args: &Args) -> BenchResult {
 fn compile_bdd_dtree(str: String, _args: &Args) -> BenchResult {
     use rsdd::builder::bdd_builder::*;
     let cnf = Cnf::from_file(str);
-    let order = VarOrder::linear_order(cnf.num_vars());
-    let rev = VarOrder::new((0..cnf.num_vars()).map(VarLabel::new_usize).rev().collect());
-    let mut man = BddManager::<BddApplyTable<BddPtr>>::new(rev, BddApplyTable::new(cnf.num_vars()));
+    let order = cnf.min_fill_order();
     let dtree = DTree::from_cnf(&cnf, &order);
+    let mut man =
+        BddManager::<BddApplyTable<BddPtr>>::new(order, BddApplyTable::new(cnf.num_vars()));
     let plan = BddPlan::from_dtree(&dtree);
-    // println!("cut width: {}", dtree.cutwidth());
     let _bdd = man.compile_plan(&plan);
 
     if let Some(path) = &_args.dump_bdd {
@@ -200,10 +199,10 @@ fn main() {
     let start = Instant::now();
     let res = match args.mode.as_str() {
         "bdd_topological" => compile_bdd(file, &args),
-        "bdd_dtree_topological" => compile_bdd_dtree(file, &args),
+        "bdd_dtree_minfill" => compile_bdd_dtree(file, &args),
         "dnnf_topdown" => compile_topdown_nnf(file, &args),
         "sdd_right_linear" => compile_sdd_rightlinear(file, &args),
-        "sdd_dtree_topological" => compile_sdd_dtree(file, &args),
+        "sdd_dtree_minfill" => compile_sdd_dtree(file, &args),
         x => panic!("Unknown mode option: {}", x),
     };
     let duration = start.elapsed();
