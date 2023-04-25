@@ -199,10 +199,10 @@ fn main() {
     let start = Instant::now();
     let res = match args.mode.as_str() {
         "bdd_topological" => compile_bdd(file, &args),
-        "bdd_dtree_topological" => compile_bdd_dtree(file, &args),
+        "bdd_dtree_minfill" => compile_bdd_dtree(file, &args),
         "dnnf_topdown" => compile_topdown_nnf(file, &args),
         "sdd_right_linear" => compile_sdd_rightlinear(file, &args),
-        "sdd_dtree_topological" => compile_sdd_dtree(file, &args),
+        "sdd_dtree_minfill" => compile_sdd_dtree(file, &args),
         x => panic!("Unknown mode option: {}", x),
     };
     let duration = start.elapsed();
