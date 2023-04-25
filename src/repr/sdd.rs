@@ -64,6 +64,16 @@ impl BinarySDD {
     pub fn label(&self) -> VarLabel {
         self.label
     }
+
+    pub fn semantic_hash<const P: u128>(
+        &self,
+        vtree: &VTreeManager,
+        map: &WmcParams<FiniteField<P>>,
+    ) -> FiniteField<P> {
+        let (low_w, high_w) = map.get_var_weight(self.label());
+        self.low().cached_semantic_hash(vtree, map) * (*low_w)
+            + self.high().cached_semantic_hash(vtree, map) * (*high_w)
+    }
 }
 
 impl Hash for BinarySDD {
@@ -171,6 +181,19 @@ impl SddOr {
             scratch: 0,
             semantic_hash: None,
         }
+    }
+
+    pub fn semantic_hash<const P: u128>(
+        &self,
+        vtree: &VTreeManager,
+        map: &WmcParams<FiniteField<P>>,
+    ) -> FiniteField<P> {
+        FiniteField::new(
+            self.nodes
+                .iter()
+                .map(|and| and.semantic_hash(vtree, map).value())
+                .fold(0, |accum, elem| accum + elem),
+        )
     }
 }
 

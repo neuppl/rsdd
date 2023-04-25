@@ -854,7 +854,6 @@ mod test_sdd_manager {
             let mut seen_hashes : HashMap<u128, SddPtr> = HashMap::new();
             for sdd in mgr.node_iter() {
                 let hash = sdd.semantic_hash(mgr.get_vtree_manager(), &map);
-                println!("curr: {:?} | hash: {}", sdd, hash);
                 if seen_hashes.contains_key(&hash.value()) {
                     let c = seen_hashes.get(&hash.value()).unwrap();
                     println!("cnf: {}", c1);
@@ -862,7 +861,7 @@ mod test_sdd_manager {
                     println!("collision found for hash value {}", hash);
                     println!("sdd a: {}\n", mgr.print_sdd(sdd));
                     println!("sdd b: {}\n", mgr.print_sdd(*c));
-                    // return TestResult::from_bool(false);
+                    return TestResult::from_bool(false);
                 }
                 seen_hashes.insert(hash.value(), sdd);
             }
