@@ -245,12 +245,7 @@ impl SddPtr {
                     return FiniteField::new(h);
                 }
 
-                // no cached value, compute it
-                let l_h = self.low().cached_semantic_hash(vtree, map);
-                let h_h = self.high().cached_semantic_hash(vtree, map);
-                let (l_w, h_w) = map.get_var_weight(self.topvar());
-
-                let h = (*l_w) * l_h + (*h_w) * h_h;
+                let h = self.mut_bdd_ref().semantic_hash(vtree, map);
                 self.mut_bdd_ref().semantic_hash = Some(h.value());
                 h
             }
@@ -259,12 +254,7 @@ impl SddPtr {
                     return FiniteField::new(h);
                 }
 
-                // no cached value, compute it
-                let h = self.node_iter().fold(FiniteField::new(0), |acc, i| {
-                    acc + i.prime().cached_semantic_hash(vtree, map)
-                        * i.sub().cached_semantic_hash(vtree, map)
-                });
-
+                let h = self.node_ref_mut().semantic_hash(vtree, map);
                 self.node_ref_mut().semantic_hash = Some(h.value());
                 h
             }
