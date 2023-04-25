@@ -29,6 +29,10 @@ struct Args {
     #[clap(short, long, value_parser, default_value_t = 0)]
     run_random_vtrees: usize,
 
+    /// how right-biased should random vtrees be? 1 is right-linear, 0 is even split
+    #[clap(long, value_parser, default_value_t = 0.75)]
+    right_bias: f64,
+
     /// use dtree heuristic (min fill)
     #[clap(short, long, value_parser, default_value_t = false)]
     dtree: bool,
@@ -134,7 +138,7 @@ fn vtree_rightness(vtree: &VTree) -> f32 {
     (helper(vtree) - 1) as f32 / (vtree.num_vars() - 2) as f32
 }
 
-fn run_random_comparisons(cnf: Cnf, order: &[VarLabel], num: usize) {
+fn run_random_comparisons(cnf: Cnf, order: &[VarLabel], num: usize, bias: f64) {
     println!("---");
 
     let mut avg_nodes_cnf_sem = 0;
@@ -144,7 +148,7 @@ fn run_random_comparisons(cnf: Cnf, order: &[VarLabel], num: usize) {
     let mut avg_rec_compr = 0;
 
     for _ in 0..num {
-        let vtree = VTree::rand_split(order);
+        let vtree = VTree::rand_split(order, bias);
 
         let (compr, sem) = run_compr_sem(&cnf, &vtree);
         println!(
@@ -227,7 +231,11 @@ fn main() {
     println!("num vars: {}", cnf.num_vars());
 
     if args.run_random_vtrees > 0 {
-        run_random_comparisons(cnf, vars, args.run_random_vtrees);
+        println!(
+            "random search (right-bias {}), n={}",
+            args.right_bias, args.run_random_vtrees
+        );
+        run_random_comparisons(cnf, vars, args.run_random_vtrees, args.right_bias);
         return;
     }
 
