@@ -170,7 +170,8 @@ impl VTree {
         }
     }
 
-    pub fn rand_split(order: &[VarLabel]) -> VTree {
+    /// rightness_bias 0 is a random even split; rightness
+    pub fn rand_split(order: &[VarLabel], rightness_bias: f64) -> VTree {
         match order.len() {
             0 => panic!("invalid label order passed; expects at least one VarLabel"),
             1 => VTree::new_leaf(order[0]),
@@ -181,11 +182,16 @@ impl VTree {
             len => {
                 // clamps so we're guaranteed at least one item in l_s, r_s
                 let mut rng = ChaCha8Rng::from_entropy();
-                let split_index = rng.gen_range(1..len);
+
+                // let mut split_index = rng.gen_range(1..(len/2+1));
+                let weighted_index =
+                    (rng.gen_range(0..len - 1) as f64 * (1.0 - rightness_bias)) as usize;
+                let split_index = weighted_index + 1;
+
                 let (l_s, r_s) = order.split_at(split_index);
                 VTree::new_node(
-                    Box::new(Self::rand_split(l_s)),
-                    Box::new(Self::rand_split(r_s)),
+                    Box::new(Self::rand_split(l_s, rightness_bias)),
+                    Box::new(Self::rand_split(r_s, rightness_bias)),
                 )
             }
         }
