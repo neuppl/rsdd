@@ -319,7 +319,6 @@ mod test_bdd_manager {
     use crate::builder::decision_nnf_builder::DecisionNNFBuilder;
     use crate::repr::cnf::Cnf;
     use crate::repr::var_label::VarLabel;
-    use num::abs;
     use quickcheck::TestResult;
     use rsdd::builder::cache::all_app::AllTable;
     use rsdd::builder::cache::lru_app::BddApplyTable;
@@ -881,6 +880,20 @@ mod test_sdd_manager {
                 seen_hashes.insert(hash.value(), sdd);
             }
             TestResult::from_bool(true)
+        }
+    }
+
+    quickcheck! {
+        fn vtree_validity_arbitrary(vtree: VTree) -> bool {
+            VTree::is_valid_vtree(&vtree)
+        }
+    }
+
+    quickcheck! {
+        fn vtree_validity_from_dtree(cnf: Cnf) -> bool {
+            let dtree = rsdd::repr::dtree::DTree::from_cnf(&cnf, &cnf.min_fill_order());
+            let vtree = VTree::from_dtree(&dtree).unwrap();
+            VTree::is_valid_vtree(&vtree)
         }
     }
 

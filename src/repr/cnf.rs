@@ -8,7 +8,7 @@ use rand;
 use rand::rngs::ThreadRng;
 use rand::Rng;
 use std::cmp::{max, min};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::fmt;
 extern crate quickcheck;
 use self::quickcheck::{Arbitrary, Gen};
@@ -712,7 +712,7 @@ fn test_cnf_wmc() {
         Literal::new(VarLabel::new(1), false),
     ]];
     let cnf = Cnf::new(v);
-    let weights: HashMap<VarLabel, (FiniteField<1000001>, FiniteField<1000001>)> = hashmap! {
+    let weights: std::collections::HashMap<VarLabel, (FiniteField<1000001>, FiniteField<1000001>)> = hashmap! {
         VarLabel::new(0) => (FiniteField::new(1), FiniteField::new(1)),
         VarLabel::new(1) => (FiniteField::new(1), FiniteField::new(1)),
     };
