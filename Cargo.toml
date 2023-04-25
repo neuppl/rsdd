@@ -3,7 +3,9 @@ name = "rsdd"
 version = "0.1.0"
 edition = "2018"
 authors = ["Steven Holtzen <sholtzen@gmail.com>"]
-
+license = "MIT"
+repository = "https://github.com/pmall-neu/rsdd"
+description = "Rust decision diagrams."
 
 [dependencies]
 fnv = "1.0.3"
