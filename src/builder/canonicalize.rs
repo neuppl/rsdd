@@ -204,6 +204,7 @@ impl<const P: u128> SddCanonicalizationScheme for SemanticCanonicalizer<P> {
     }
 
     fn bdd_get_or_insert(&mut self, item: BinarySDD) -> SddPtr {
+        // check regular hash
         let semantic_hash = item.semantic_hash(&self.vtree, &self.map);
         let mut hasher = FxHasher::default();
         semantic_hash.value().hash(&mut hasher);
@@ -211,10 +212,22 @@ impl<const P: u128> SddCanonicalizationScheme for SemanticCanonicalizer<P> {
         if let Some(sdd) = self.get_shared_sdd_ptr(semantic_hash, hash) {
             return sdd;
         }
+
+        // check negated hash
+        let semantic_hash = semantic_hash.negate();
+        let mut hasher = FxHasher::default();
+        semantic_hash.value().hash(&mut hasher);
+        let hash = hasher.finish();
+        if let Some(sdd) = self.get_shared_sdd_ptr(semantic_hash, hash) {
+            return sdd.neg();
+        }
+
+        // insert
         SddPtr::BDD(self.bdd_tbl.get_or_insert(item, &self.hasher))
     }
 
     fn sdd_get_or_insert(&mut self, item: SddOr) -> SddPtr {
+        // check regular hash
         let semantic_hash = item.semantic_hash(&self.vtree, &self.map);
         let mut hasher = FxHasher::default();
         semantic_hash.value().hash(&mut hasher);
@@ -222,6 +235,17 @@ impl<const P: u128> SddCanonicalizationScheme for SemanticCanonicalizer<P> {
         if let Some(sdd) = self.get_shared_sdd_ptr(semantic_hash, hash) {
             return sdd;
         }
+
+        // check negated hash
+        let semantic_hash = semantic_hash.negate();
+        let mut hasher = FxHasher::default();
+        semantic_hash.value().hash(&mut hasher);
+        let hash = hasher.finish();
+        if let Some(sdd) = self.get_shared_sdd_ptr(semantic_hash, hash) {
+            return sdd.neg();
+        }
+
+        // insert
         SddPtr::or(self.sdd_tbl.get_or_insert(item, &self.hasher))
     }
 
