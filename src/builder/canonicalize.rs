@@ -1,6 +1,6 @@
 use std::hash::{Hash, Hasher};
 
-use rustc_hash::{FxHashMap, FxHasher};
+use rustc_hash::FxHasher;
 
 use super::bdd_builder::DDNNFPtr;
 use super::cache::sdd_apply_cache::{SddApply, SddApplyCompression, SddApplySemantic};
@@ -21,16 +21,14 @@ pub trait SddCanonicalizationScheme {
     fn should_compress(&self) -> bool;
 
     /// this is mutable because we may update an internal cache
-    fn sdd_eq(&mut self, s1: SddPtr, s2: SddPtr) -> bool;
+    fn sdd_eq(&mut self, a: SddPtr, b: SddPtr) -> bool;
     fn app_cache(&mut self) -> &mut Self::ApplyCacheMethod;
 
     // BackedRobinhoodTable-related methods
     fn bdd_tbl(&self) -> &BackedRobinhoodTable<BinarySDD>;
     fn sdd_tbl(&self) -> &BackedRobinhoodTable<SddOr>;
-    fn bdd_hasher(&self) -> &Self::BddHasher;
-    fn sdd_hasher(&self) -> &Self::SddOrHasher;
-    fn bdd_get_or_insert(&mut self, item: BinarySDD) -> *mut BinarySDD;
-    fn sdd_get_or_insert(&mut self, item: SddOr) -> *mut SddOr;
+    fn bdd_get_or_insert(&mut self, item: BinarySDD) -> SddPtr;
+    fn sdd_get_or_insert(&mut self, item: SddOr) -> SddPtr;
 
     // debugging util
     fn on_sdd_print_dump_state(&self, ptr: SddPtr);
@@ -59,8 +57,8 @@ impl SddCanonicalizationScheme for CompressionCanonicalizer {
         }
     }
 
-    fn sdd_eq(&mut self, s1: SddPtr, s2: SddPtr) -> bool {
-        s1 == s2
+    fn sdd_eq(&mut self, a: SddPtr, b: SddPtr) -> bool {
+        a == b
     }
 
     fn set_compress(&mut self, b: bool) {
@@ -83,20 +81,12 @@ impl SddCanonicalizationScheme for CompressionCanonicalizer {
         &self.sdd_tbl
     }
 
-    fn bdd_hasher(&self) -> &Self::BddHasher {
-        &self.hasher
+    fn bdd_get_or_insert(&mut self, item: BinarySDD) -> SddPtr {
+        SddPtr::BDD(self.bdd_tbl.get_or_insert(item, &self.hasher))
     }
 
-    fn sdd_hasher(&self) -> &Self::SddOrHasher {
-        &self.hasher
-    }
-
-    fn bdd_get_or_insert(&mut self, item: BinarySDD) -> *mut BinarySDD {
-        self.bdd_tbl.get_or_insert(item, &self.hasher)
-    }
-
-    fn sdd_get_or_insert(&mut self, item: SddOr) -> *mut SddOr {
-        self.sdd_tbl.get_or_insert(item, &self.hasher)
+    fn sdd_get_or_insert(&mut self, item: SddOr) -> SddPtr {
+        SddPtr::or(self.sdd_tbl.get_or_insert(item, &self.hasher))
     }
 
     fn on_sdd_print_dump_state(&self, _ptr: SddPtr) {}
@@ -114,36 +104,21 @@ impl<const P: u128> SemanticUniqueTableHasher<P> {
 }
 
 impl<const P: u128> UniqueTableHasher<BinarySDD> for SemanticUniqueTableHasher<P> {
-    // TODO(matt): we should be able to de-duplicate this with fold/wmc
     fn u64hash(&self, elem: &BinarySDD) -> u64 {
         let mut hasher = FxHasher::default();
-
-        let (low_w, high_w) = self.map.get_var_weight(elem.label());
-
-        // TODO(matt): investigate if this works properly!
-        FiniteField::<P>::new(
-            elem.low().cached_semantic_hash(&self.vtree, &self.map).value() * low_w.value()
-            // (P - elem.low().semantic_hash(&self.vtree, &self.map).value() + 1) * low_w.value()
-                + elem.high().cached_semantic_hash(&self.vtree, &self.map).value() * high_w.value(),
-        )
-        .value()
-        .hash(&mut hasher);
+        elem.semantic_hash(&self.vtree, &self.map)
+            .value()
+            .hash(&mut hasher);
         hasher.finish()
     }
 }
 
 impl<const P: u128> UniqueTableHasher<SddOr> for SemanticUniqueTableHasher<P> {
-    // TODO(matt): we should be able to de-duplicate this with fold/wmc
     fn u64hash(&self, elem: &SddOr) -> u64 {
         let mut hasher = FxHasher::default();
-        FiniteField::<P>::new(
-            elem.nodes
-                .iter()
-                .map(|and| and.semantic_hash(&self.vtree, &self.map).value())
-                .fold(0, |accum, elem| accum + elem),
-        )
-        .value()
-        .hash(&mut hasher);
+        elem.semantic_hash(&self.vtree, &self.map)
+            .value()
+            .hash(&mut hasher);
         hasher.finish()
     }
 }
@@ -156,24 +131,33 @@ pub struct SemanticCanonicalizer<const P: u128> {
     bdd_tbl: BackedRobinhoodTable<BinarySDD>,
     sdd_tbl: BackedRobinhoodTable<SddOr>,
     hasher: SemanticUniqueTableHasher<P>,
-    cached_hashes: FxHashMap<SddPtr, FiniteField<P>>,
-    cache_hits: usize,
 }
 
 impl<const P: u128> SemanticCanonicalizer<P> {
-    fn get_or_insert_semantic_hash(&mut self, s: SddPtr) -> FiniteField<P> {
-        if let Some(cached) = self.cached_hashes.get(&s) {
-            // println!("cache hit");
-            self.cache_hits += 1;
-            *cached
-        } else {
-            let hash = s.cached_semantic_hash(&self.vtree, &self.map);
-            self.cached_hashes.insert(s, hash);
-            hash
+    fn get_shared_sdd_ptr(&mut self, semantic_hash: FiniteField<P>, hash: u64) -> Option<SddPtr> {
+        match semantic_hash.value() {
+            0 => Some(SddPtr::PtrFalse),
+            1 => Some(SddPtr::PtrTrue),
+            _ => {
+                if let Some(sdd) = <BackedRobinhoodTable<BinarySDD> as UniqueTable<
+                    BinarySDD,
+                    SemanticUniqueTableHasher<P>,
+                >>::get_by_hash(&mut self.bdd_tbl, hash)
+                {
+                    return Some(SddPtr::BDD(sdd));
+                }
+                if let Some(sdd) = <BackedRobinhoodTable<SddOr> as UniqueTable<
+                    SddOr,
+                    SemanticUniqueTableHasher<P>,
+                >>::get_by_hash(&mut self.sdd_tbl, hash)
+                {
+                    return Some(SddPtr::or(sdd));
+                }
+                None
+            }
         }
     }
 }
-
 impl<const P: u128> SddCanonicalizationScheme for SemanticCanonicalizer<P> {
     type ApplyCacheMethod = SddApplySemantic<P>;
     type BddHasher = SemanticUniqueTableHasher<P>;
@@ -190,14 +174,12 @@ impl<const P: u128> SddCanonicalizationScheme for SemanticCanonicalizer<P> {
             sdd_tbl: BackedRobinhoodTable::new(),
             hasher: SemanticUniqueTableHasher::new(vtree.clone(), map.clone()),
             map,
-            cached_hashes: FxHashMap::default(),
-            cache_hits: 0,
         }
     }
 
-    fn sdd_eq(&mut self, s1: SddPtr, s2: SddPtr) -> bool {
-        let h1 = self.get_or_insert_semantic_hash(s1);
-        let h2 = self.get_or_insert_semantic_hash(s2);
+    fn sdd_eq(&mut self, a: SddPtr, b: SddPtr) -> bool {
+        let h1 = a.cached_semantic_hash(&self.vtree, &self.map);
+        let h2 = b.cached_semantic_hash(&self.vtree, &self.map);
         h1 == h2
     }
 
@@ -221,24 +203,29 @@ impl<const P: u128> SddCanonicalizationScheme for SemanticCanonicalizer<P> {
         &self.sdd_tbl
     }
 
-    fn bdd_hasher(&self) -> &Self::BddHasher {
-        &self.hasher
+    fn bdd_get_or_insert(&mut self, item: BinarySDD) -> SddPtr {
+        let semantic_hash = item.semantic_hash(&self.vtree, &self.map);
+        let mut hasher = FxHasher::default();
+        semantic_hash.value().hash(&mut hasher);
+        let hash = hasher.finish();
+        if let Some(sdd) = self.get_shared_sdd_ptr(semantic_hash, hash) {
+            return sdd;
+        }
+        SddPtr::BDD(self.bdd_tbl.get_or_insert(item, &self.hasher))
     }
 
-    fn sdd_hasher(&self) -> &Self::SddOrHasher {
-        &self.hasher
-    }
-
-    fn bdd_get_or_insert(&mut self, item: BinarySDD) -> *mut BinarySDD {
-        self.bdd_tbl.get_or_insert(item, &self.hasher)
-    }
-
-    fn sdd_get_or_insert(&mut self, item: SddOr) -> *mut SddOr {
-        self.sdd_tbl.get_or_insert(item, &self.hasher)
+    fn sdd_get_or_insert(&mut self, item: SddOr) -> SddPtr {
+        let semantic_hash = item.semantic_hash(&self.vtree, &self.map);
+        let mut hasher = FxHasher::default();
+        semantic_hash.value().hash(&mut hasher);
+        let hash = hasher.finish();
+        if let Some(sdd) = self.get_shared_sdd_ptr(semantic_hash, hash) {
+            return sdd;
+        }
+        SddPtr::or(self.sdd_tbl.get_or_insert(item, &self.hasher))
     }
 
     fn on_sdd_print_dump_state(&self, ptr: SddPtr) {
         println!("h: {}", ptr.semantic_hash(&self.vtree, &self.map));
-        println!("sdd eq cache hits: {}", self.cache_hits)
     }
 }

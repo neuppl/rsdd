@@ -535,9 +535,8 @@ mod test_sdd_manager {
     use rsdd::repr::var_order::VarOrder;
     use rsdd::repr::vtree::VTree;
     use rsdd::repr::wmc::WmcParams;
-    use rsdd::util::semiring::{FiniteField, RealSemiring};
+    use rsdd::util::semiring::FiniteField;
     use std::collections::HashMap;
-    use std::iter::FromIterator;
 
     quickcheck! {
         fn test_cond_and(c: Cnf) -> bool {
@@ -821,7 +820,7 @@ mod test_sdd_manager {
     }
 
     quickcheck! {
-        /// verify that every node in the SDD compression canonicalizer has a unique semantic hash
+        /// verify that every node in the SDD compression canonicalizer has a unique semantic hash, using CompressionCanonicalizer
         fn qc_sdd_canonicity(c1: Cnf, vtree:VTree) -> TestResult {
             let mut mgr = super::SddManager::<CompressionCanonicalizer>::new(vtree);
             let _ = mgr.from_cnf(&c1);
@@ -846,7 +845,7 @@ mod test_sdd_manager {
     }
 
     quickcheck! {
-        /// verify that every node in the SDD with the semantic canonicalizer a unique semantic hash
+        /// verify that every node in the SDD with the semantic canonicalizer a unique semantic hash, using SemanticCanonicalizer
         fn qc_semantic_sdd_canonicity(c1: Cnf, vtree:VTree) -> TestResult {
             let mut mgr = super::SddManager::<SemanticCanonicalizer< {crate::BIG_PRIME} >>::new(vtree);
             let _ = mgr.from_cnf(&c1);
@@ -862,7 +861,7 @@ mod test_sdd_manager {
                     println!("collision found for hash value {}", hash);
                     println!("sdd a: {}\n", mgr.print_sdd(sdd));
                     println!("sdd b: {}\n", mgr.print_sdd(*c));
-                    // return TestResult::from_bool(false);
+                    return TestResult::from_bool(false);
                 }
                 seen_hashes.insert(hash.value(), sdd);
             }
@@ -881,6 +880,28 @@ mod test_sdd_manager {
             let dtree = rsdd::repr::dtree::DTree::from_cnf(&cnf, &cnf.min_fill_order());
             let vtree = VTree::from_dtree(&dtree).unwrap();
             VTree::is_valid_vtree(&vtree)
+        }
+    }
+
+    quickcheck! {
+        /// verify that the semantic hash of an SDDPtr + its compl is always equal to 1
+        fn semantic_reg_plus_compl_eq_one(c1: Cnf, vtree:VTree) -> bool {
+            let mut mgr = super::SddManager::<SemanticCanonicalizer<{ crate::BIG_PRIME }>>::new(vtree);
+            let map : WmcParams<FiniteField<{ crate::BIG_PRIME }>>= create_semantic_hash_map(mgr.num_vars());
+
+            let sdd = mgr.from_cnf(&c1);
+            let compl = sdd.neg();
+
+            let sdd_hash = sdd.semantic_hash(mgr.get_vtree_manager(), &map);
+            let compl_hash = compl.semantic_hash(mgr.get_vtree_manager(), &map);
+
+            let sum = (sdd_hash + compl_hash).value();
+
+            if sum != 1 {
+                println!("hashes do not sum to one; Reg: {}, Compl: {}", sdd_hash, compl_hash);
+            }
+
+            sum == 1
         }
     }
 }

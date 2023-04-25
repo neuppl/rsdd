@@ -7,6 +7,8 @@ use std::hash::Hasher;
 use rustc_hash::FxHasher;
 
 pub trait UniqueTable<T: Eq + PartialEq + Hash, H: UniqueTableHasher<T>> {
+    fn get_by_hash(&mut self, hash: u64) -> Option<*mut T>;
+    fn get_or_insert_by_hash(&mut self, item: T, hash: u64) -> *mut T;
     fn get_or_insert(&mut self, item: T, hasher: &H) -> *mut T;
 }
 

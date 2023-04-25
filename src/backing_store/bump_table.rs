@@ -149,15 +149,41 @@ where
     }
 }
 
-impl<T: Eq + PartialEq + Hash + Clone, H: UniqueTableHasher<T>> UniqueTable<T, H>
+impl<T: Eq + PartialEq + Hash + Clone + std::fmt::Debug, H: UniqueTableHasher<T>> UniqueTable<T, H>
     for BackedRobinhoodTable<T>
 {
-    fn get_or_insert(&mut self, elem: T, hasher: &H) -> *mut T {
+    /// assumption: the hash *is* an accurate identifier for equality
+    fn get_by_hash(&mut self, elem_hash: u64) -> Option<*mut T> {
         if (self.len + 1) as f64 > (self.cap as f64 * LOAD_FACTOR) {
             self.grow();
         }
 
-        let elem_hash = hasher.u64hash(&elem);
+        let mut pos: usize = (elem_hash as usize) % self.cap;
+        let mut psl = 0;
+
+        loop {
+            if self.is_occupied(pos) {
+                let cur_itm = self.tbl[pos].clone();
+                if elem_hash == cur_itm.hash {
+                    self.hits += 1;
+                    return Some(cur_itm.ptr);
+                }
+
+                if cur_itm.psl < psl {
+                    return None;
+                }
+                psl += 1;
+                pos = (pos + 1) % self.cap;
+            } else {
+                return None;
+            }
+        }
+    }
+
+    fn get_or_insert_by_hash(&mut self, elem: T, elem_hash: u64) -> *mut T {
+        if (self.len + 1) as f64 > (self.cap as f64 * LOAD_FACTOR) {
+            self.grow();
+        }
 
         // the current index into the array
         let mut pos: usize = (elem_hash as usize) % self.cap;
@@ -200,5 +226,12 @@ impl<T: Eq + PartialEq + Hash + Clone, H: UniqueTableHasher<T>> UniqueTable<T, H
                 return ptr;
             }
         }
+    }
+
+    fn get_or_insert(&mut self, item: T, hasher: &H) -> *mut T {
+        let hash = hasher.u64hash(&item);
+        let ret =
+            <BackedRobinhoodTable<T> as UniqueTable<T, H>>::get_or_insert_by_hash(self, item, hash);
+        return ret;
     }
 }

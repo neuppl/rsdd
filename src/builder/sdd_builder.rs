@@ -9,6 +9,7 @@ use super::cache::ite::Ite;
 use super::cache::sdd_apply_cache::SddApply;
 use super::cache::LruTable;
 use super::canonicalize::*;
+
 use crate::repr::bdd::create_semantic_hash_map;
 use crate::repr::ddnnf::DDNNFPtr;
 use crate::repr::sdd::{BinarySDD, SddAnd, SddOr, SddPtr};
@@ -111,8 +112,7 @@ impl<T: SddCanonicalizationScheme> SddManager<T> {
     /// Normalizes and fetches a node from the store
     pub fn get_or_insert(&mut self, sdd: SddOr) -> SddPtr {
         self.stats.num_get_or_insert += 1;
-        let p = self.canonicalizer.sdd_get_or_insert(sdd);
-        SddPtr::or(p)
+        self.canonicalizer.sdd_get_or_insert(sdd)
     }
 
     pub fn get_vtree(&self, ptr: SddPtr) -> &VTree {
@@ -184,9 +184,9 @@ impl<T: SddCanonicalizationScheme> SddManager<T> {
         if bdd.high().is_neg() || self.is_false(bdd.high()) || bdd.high().is_neg_var() {
             let neg_bdd =
                 BinarySDD::new(bdd.label(), bdd.low().neg(), bdd.high().neg(), bdd.vtree());
-            SddPtr::bdd(self.canonicalizer.bdd_get_or_insert(neg_bdd)).neg()
+            self.canonicalizer.bdd_get_or_insert(neg_bdd).neg()
         } else {
-            SddPtr::bdd(self.canonicalizer.bdd_get_or_insert(bdd))
+            self.canonicalizer.bdd_get_or_insert(bdd)
         }
     }
 
@@ -788,29 +788,18 @@ impl<T: SddCanonicalizationScheme> SddManager<T> {
         // }
     }
 
-    /// get an iterator over all allocated or-nodes
-    fn or_iter(&self) -> impl Iterator<Item = *mut SddOr> + '_ {
-        self.canonicalizer.sdd_tbl().iter()
-    }
-
-    /// get an iterator over all allocated bdd nodes
-    fn bdd_iter(&self) -> impl Iterator<Item = *mut BinarySDD> + '_ {
-        self.canonicalizer.bdd_tbl().iter()
-    }
-
     /// get an iterator over all unique allocated nodes by the manager
     pub fn node_iter(&self) -> impl Iterator<Item = SddPtr> + '_ {
-        let bdditer = self.bdd_iter().map(|x| SddPtr::bdd(x));
-        self.or_iter().map(|x| SddPtr::Reg(x)).chain(bdditer)
+        let bdditer = self.canonicalizer.bdd_tbl().iter().map(|x| SddPtr::bdd(x));
+        self.canonicalizer
+            .sdd_tbl()
+            .iter()
+            .map(|x| SddPtr::Reg(x))
+            .chain(bdditer)
     }
 
-    pub fn get_stats(&self) -> &SddStats {
+    pub fn stats(&self) -> &SddStats {
         &self.stats
-    }
-
-    pub fn print_stats(&self) {
-        println!("***************[ SDD Stats ]***************");
-        println!("\tNumber of recursive calls: {}", self.stats.num_rec);
     }
 
     /// computes the number of logically redundant nodes allocated by the

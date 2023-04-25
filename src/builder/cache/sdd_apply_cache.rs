@@ -66,6 +66,7 @@ impl<const P: u128> SddApply for SddApplySemantic<P> {
             _ => self.table.get(&h.value()).copied(),
         }
     }
+    /// assumption: we've already checked if element is in cache
     fn insert(&mut self, and: SddAnd, ptr: SddPtr) {
         let h = and.semantic_hash(&self.vtree, &self.map);
         if h.value() > 1 {

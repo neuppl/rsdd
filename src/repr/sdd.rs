@@ -64,6 +64,16 @@ impl BinarySDD {
     pub fn label(&self) -> VarLabel {
         self.label
     }
+
+    pub fn semantic_hash<const P: u128>(
+        &self,
+        vtree: &VTreeManager,
+        map: &WmcParams<FiniteField<P>>,
+    ) -> FiniteField<P> {
+        let (low_w, high_w) = map.get_var_weight(self.label());
+        self.low().cached_semantic_hash(vtree, map) * (*low_w)
+            + self.high().cached_semantic_hash(vtree, map) * (*high_w)
+    }
 }
 
 impl Hash for BinarySDD {
@@ -145,7 +155,6 @@ impl SddAnd {
     pub fn new(prime: SddPtr, sub: SddPtr) -> SddAnd {
         SddAnd { prime, sub }
     }
-    // TODO(matt): we should be able to de-duplicate this with fold/wmc
     pub fn semantic_hash<const P: u128>(
         &self,
         vtree: &VTreeManager,
@@ -172,6 +181,19 @@ impl SddOr {
             scratch: 0,
             semantic_hash: None,
         }
+    }
+
+    pub fn semantic_hash<const P: u128>(
+        &self,
+        vtree: &VTreeManager,
+        map: &WmcParams<FiniteField<P>>,
+    ) -> FiniteField<P> {
+        FiniteField::new(
+            self.nodes
+                .iter()
+                .map(|and| and.semantic_hash(vtree, map).value())
+                .fold(0, |accum, elem| accum + elem),
+        )
     }
 }
 
@@ -211,54 +233,32 @@ impl SddPtr {
         vtree: &VTreeManager,
         map: &WmcParams<FiniteField<P>>,
     ) -> FiniteField<P> {
-        if self.is_true() {
-            return FiniteField::new(1);
-        }
-        if self.is_false() {
-            return FiniteField::new(0);
-        }
-        if self.is_or() {
-            let r = self.node_ref_mut();
-            if r.semantic_hash.is_some() {
-                let v = FiniteField::new(r.semantic_hash.unwrap());
-                return if self.is_neg() { v.negate() } else { v };
+        match self {
+            PtrTrue => FiniteField::new(1),
+            PtrFalse => FiniteField::new(0),
+            Var(label, polarity) => {
+                let (l_w, h_w) = map.get_var_weight(*label);
+                return if *polarity { *h_w } else { *l_w };
             }
-            // no cached value, compute it
-            let h = self.node_iter().fold(FiniteField::new(0), |acc, i| {
-                acc + i.prime().cached_semantic_hash(vtree, map)
-                    * i.sub().cached_semantic_hash(vtree, map)
-            });
-            self.node_ref_mut().semantic_hash = Some(h.value());
-            if self.is_neg() {
-                return h.negate();
-            } else {
-                return h;
-            };
-        }
-        if self.is_var() {
-            let v = self.get_var();
-            let (h_w, l_w) = map.get_var_weight(v.get_label());
-            if v.get_polarity() {
-                return *h_w;
-            } else {
-                return *l_w;
+            BDD(_) => {
+                if let Some(h) = self.mut_bdd_ref().semantic_hash {
+                    return FiniteField::new(h);
+                }
+
+                let h = self.mut_bdd_ref().semantic_hash(vtree, map);
+                self.mut_bdd_ref().semantic_hash = Some(h.value());
+                h
             }
-        }
-        if self.is_bdd() {
-            let b = self.mut_bdd_ref();
-            if b.semantic_hash.is_some() {
-                let h = FiniteField::new(b.semantic_hash.unwrap());
-                return if self.is_neg() { h.negate() } else { h };
+            Reg(_) => {
+                if let Some(h) = self.node_ref_mut().semantic_hash {
+                    return FiniteField::new(h);
+                }
+
+                let h = self.node_ref_mut().semantic_hash(vtree, map);
+                self.node_ref_mut().semantic_hash = Some(h.value());
+                h
             }
-            let var = self.topvar();
-            let l_h = self.low_raw().cached_semantic_hash(vtree, map);
-            let h_h = self.high_raw().cached_semantic_hash(vtree, map);
-            let (h_w, l_w) = map.get_var_weight(var);
-            let h = (*l_w) * l_h + (*h_w) * h_h;
-            b.semantic_hash = Some(h.value());
-            return if self.is_neg() { h.negate() } else { h };
-        } else {
-            panic!();
+            ComplBDD(_) | Compl(_) => self.neg().cached_semantic_hash(vtree, map).negate(),
         }
     }
 
@@ -520,22 +520,14 @@ impl SddPtr {
         }
     }
 
-    fn is_canonical_h(&self) -> bool {
-        self.is_compressed() && self.is_trimmed()
-    }
-
     pub fn is_canonical(&self) -> bool {
-        self.is_canonical_h()
+        self.is_compressed() && self.is_trimmed()
     }
 
     // predicate that returns if an SDD is compressed;
     // see https://www.ijcai.org/Proceedings/11/Papers/143.pdf
     // definition 8
     pub fn is_compressed(&self) -> bool {
-        self.is_compressed_h()
-    }
-
-    fn is_compressed_h(&self) -> bool {
         match &self {
             PtrTrue => true,
             PtrFalse => true,
@@ -561,10 +553,6 @@ impl SddPtr {
     }
 
     pub fn is_trimmed(&self) -> bool {
-        self.is_trimmed_h()
-    }
-
-    fn is_trimmed_h(&self) -> bool {
         match &self {
             PtrTrue => true,
             PtrFalse => true,
