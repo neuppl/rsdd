@@ -196,9 +196,8 @@ impl DTree {
             new_t.init_vars();
             subtrees.push(new_t);
         }
-        // invariant: subtrees now contains only a single element, return that
-        assert!(subtrees.len() == 1);
-        let mut res = subtrees[0].clone();
+        // `subtrees` are independent, so compose them
+        let mut res = DTree::balanced(&subtrees);
         res.gen_cutset(&VarSet::new());
         res
     }
