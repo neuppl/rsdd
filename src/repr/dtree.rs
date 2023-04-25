@@ -196,6 +196,9 @@ impl DTree {
             new_t.init_vars();
             subtrees.push(new_t);
         }
+        // TODO: is this true?
+        // invariant: subtrees now contains only a single element, return that
+        assert!(subtrees.len() == 1);
         let mut res = subtrees[0].clone();
         res.gen_cutset(&VarSet::new());
         res
