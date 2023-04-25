@@ -859,7 +859,8 @@ mod test_sdd_manager {
     }
 
     quickcheck! {
-        /// verify that every node in the SDD with the semantic canonicalizer a unique semantic hash, using SemanticCanonicalizer
+        /// verify that every node in the SDD with the semantic canonicalizer a unique semantic hash w.r.t negations
+        /// using SemanticCanonicalizer
         fn qc_semantic_sdd_canonicity(c1: Cnf, vtree:VTree) -> TestResult {
             let mut mgr = super::SddManager::<SemanticCanonicalizer< {crate::BIG_PRIME} >>::new(vtree);
             let _ = mgr.from_cnf(&c1);
@@ -868,11 +869,24 @@ mod test_sdd_manager {
             let mut seen_hashes : HashMap<u128, SddPtr> = HashMap::new();
             for sdd in mgr.node_iter() {
                 let hash = sdd.semantic_hash(mgr.get_vtree_manager(), &map);
+
+                // see the hash itself
                 if seen_hashes.contains_key(&hash.value()) {
                     let c = seen_hashes.get(&hash.value()).unwrap();
                     println!("cnf: {}", c1);
                     println!("probmap: {:?}", map);
                     println!("collision found for hash value {}", hash);
+                    println!("sdd a: {}\n", mgr.print_sdd(sdd));
+                    println!("sdd b: {}\n", mgr.print_sdd(*c));
+                    return TestResult::from_bool(false);
+                }
+
+                // see the hash's negation
+                if seen_hashes.contains_key(&hash.negate().value()) {
+                    let c = seen_hashes.get(&hash.negate().value()).unwrap();
+                    println!("cnf: {}", c1);
+                    println!("probmap: {:?}", map);
+                    println!("collision found for negated hash value {}", hash.negate());
                     println!("sdd a: {}\n", mgr.print_sdd(sdd));
                     println!("sdd b: {}\n", mgr.print_sdd(*c));
                     return TestResult::from_bool(false);
