@@ -157,6 +157,26 @@ impl<const P: u128> SemanticCanonicalizer<P> {
             }
         }
     }
+
+    fn check_cached_hash_and_neg(&mut self, semantic_hash: FiniteField<P>) -> Option<SddPtr> {
+        // check regular hash
+        let mut hasher = FxHasher::default();
+        semantic_hash.value().hash(&mut hasher);
+        let hash = hasher.finish();
+        if let Some(sdd) = self.get_shared_sdd_ptr(semantic_hash, hash) {
+            return Some(sdd);
+        }
+
+        // check negated hash
+        let semantic_hash = semantic_hash.negate();
+        let mut hasher = FxHasher::default();
+        semantic_hash.value().hash(&mut hasher);
+        let hash = hasher.finish();
+        if let Some(sdd) = self.get_shared_sdd_ptr(semantic_hash, hash) {
+            return Some(sdd.neg());
+        }
+        None
+    }
 }
 impl<const P: u128> SddCanonicalizationScheme for SemanticCanonicalizer<P> {
     type ApplyCacheMethod = SddApplySemantic<P>;
@@ -205,23 +225,19 @@ impl<const P: u128> SddCanonicalizationScheme for SemanticCanonicalizer<P> {
 
     fn bdd_get_or_insert(&mut self, item: BinarySDD) -> SddPtr {
         let semantic_hash = item.semantic_hash(&self.vtree, &self.map);
-        let mut hasher = FxHasher::default();
-        semantic_hash.value().hash(&mut hasher);
-        let hash = hasher.finish();
-        if let Some(sdd) = self.get_shared_sdd_ptr(semantic_hash, hash) {
+        if let Some(sdd) = self.check_cached_hash_and_neg(semantic_hash) {
             return sdd;
         }
+
         SddPtr::BDD(self.bdd_tbl.get_or_insert(item, &self.hasher))
     }
 
     fn sdd_get_or_insert(&mut self, item: SddOr) -> SddPtr {
         let semantic_hash = item.semantic_hash(&self.vtree, &self.map);
-        let mut hasher = FxHasher::default();
-        semantic_hash.value().hash(&mut hasher);
-        let hash = hasher.finish();
-        if let Some(sdd) = self.get_shared_sdd_ptr(semantic_hash, hash) {
+        if let Some(sdd) = self.check_cached_hash_and_neg(semantic_hash) {
             return sdd;
         }
+
         SddPtr::or(self.sdd_tbl.get_or_insert(item, &self.hasher))
     }
 
