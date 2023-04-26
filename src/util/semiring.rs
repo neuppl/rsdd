@@ -6,6 +6,7 @@
 //! 4. Multiplication by 0 annihilates R
 //! Compared with a ring, a semiring omits an inverse for addition
 
+use std::cmp::Ordering;
 use std::fmt::{Debug, Display};
 use std::ops;
 
@@ -15,7 +16,7 @@ pub trait Semiring: Debug + Clone + Copy + ops::Add + ops::Mul {
 }
 
 /// Simple real-number semiring abstraction (all operations standard for reals, abstracted as f64)
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub struct RealSemiring(pub f64);
 
 impl Display for RealSemiring {
@@ -118,7 +119,7 @@ pub trait TropicalSemiring: Debug + Clone + Copy + ops::Add + ops::Mul {
 }
 
 // Expected Utility Semiring.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ExpectedUtility(pub f64, pub f64);
 
 impl ops::Add<ExpectedUtility> for ExpectedUtility {
@@ -147,3 +148,37 @@ impl Semiring for ExpectedUtility {
         ExpectedUtility(0.0, 0.0)
     }
 }
+pub trait JoinSemilattice : PartialOrd {
+    fn join(&self, arg : &Self) -> Self;
+}
+
+impl JoinSemilattice for RealSemiring {
+    fn join(&self, arg : &Self) -> Self {
+        RealSemiring(f64::max(self.0, arg.0))
+    }
+}
+
+impl PartialOrd for ExpectedUtility {
+    fn partial_cmp(&self, other: &ExpectedUtility) -> Option<Ordering> {
+        if self.0 < other.0 && self.1 < other.1 {
+            Some(Ordering::Greater)
+        }
+        else if self.0 > other.0 && self.1 > other.1 {
+            Some(Ordering::Less)
+        }
+        else {None}
+    }
+}
+
+impl JoinSemilattice for ExpectedUtility {
+    fn join(&self, arg : &Self) -> Self {
+        ExpectedUtility(f64::max(self.0, arg.0), f64::max(self.1, arg.1))
+    }
+}
+
+pub trait BBAlgebra : Semiring + JoinSemilattice {}
+
+impl BBAlgebra for RealSemiring {}
+
+impl BBAlgebra for ExpectedUtility {}
+
