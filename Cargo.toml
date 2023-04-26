@@ -66,5 +66,9 @@ name = "semantic_hash_experiment"
 path = "bin/semantic_hash_experiment.rs"
 
 [[bin]]
+name = "marginal_map_experiment"
+path = "bin/marginal_map_experiment.rs"
+
+[[bin]]
 name = "dump_models"
 path = "bin/dump_models.rs"
