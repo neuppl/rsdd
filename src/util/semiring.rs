@@ -166,7 +166,7 @@ impl PartialOrd for ExpectedUtility {
         else if self.0 > other.0 && self.1 > other.1 {
             Some(Ordering::Less)
         }
-        else {None}
+        else { None}
     }
 }
 
@@ -176,9 +176,20 @@ impl JoinSemilattice for ExpectedUtility {
     }
 }
 
-pub trait BBAlgebra : Semiring + JoinSemilattice {}
+pub trait BBAlgebra : Semiring + JoinSemilattice {
+    fn choose(&self, arg :&Self) -> Self;
+}
 
-impl BBAlgebra for RealSemiring {}
+impl BBAlgebra for RealSemiring {
+    fn choose(&self, arg : &RealSemiring) -> RealSemiring {
+        RealSemiring(f64::max(self.0, arg.0))
+    }
+}
 
-impl BBAlgebra for ExpectedUtility {}
-
+impl BBAlgebra for ExpectedUtility {
+    fn choose(&self, arg : &ExpectedUtility) -> ExpectedUtility {
+        if self.1 > arg.1 {
+            *self
+        } else { *arg }
+    }
+}
