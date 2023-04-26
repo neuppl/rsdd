@@ -623,37 +623,46 @@ impl DDNNFPtr for SddPtr {
                 Compl(_) | Reg(_) | ComplBDD(_) | BDD(_) => {
                     // inside the cache, store a (compl, non_compl) pair corresponding to the
                     // complemented and uncomplemented pass over this node
-                    if ptr.get_scratch::<DDNNFCache<T>>().is_none() {
-                        ptr.set_scratch::<DDNNFCache<T>>(alloc, (None, None));
-                    }
-                    match ptr.get_scratch::<DDNNFCache<T>>() {
-                        Some((Some(v), _)) if ptr.is_neg() => v.clone(),
-                        Some((_, Some(v))) if !ptr.is_neg() => v.clone(),
-                        Some((None, cached)) | Some((cached, None)) => {
-                            // no cached value found, compute it
-                            let mut or_v = f(DDNNF::False);
-                            for and in ptr.node_iter() {
-                                let s = if ptr.is_neg() {
-                                    and.sub().neg()
-                                } else {
-                                    and.sub()
-                                };
-                                let p_sub = bottomup_pass_h(and.prime(), f, alloc);
-                                let s_sub = bottomup_pass_h(s, f, alloc);
-                                let a = f(DDNNF::And(p_sub, s_sub));
-                                let v = VarSet::new();
-                                or_v = f(DDNNF::Or(or_v, a, v));
-                            }
 
-                            // cache and return or_v
-                            if ptr.is_neg() {
-                                ptr.set_scratch::<DDNNFCache<T>>(alloc, (Some(or_v), *cached));
+                    // helper performs actual fold-and-cache work
+                    let mut bottomup_helper = |cached| {
+                        let mut or_v = f(DDNNF::False);
+                        for and in ptr.node_iter() {
+                            let s = if ptr.is_neg() {
+                                and.sub().neg()
                             } else {
-                                ptr.set_scratch::<DDNNFCache<T>>(alloc, (*cached, Some(or_v)));
-                            }
-                            or_v
+                                and.sub()
+                            };
+                            let p_sub = bottomup_pass_h(and.prime(), f, alloc);
+                            let s_sub = bottomup_pass_h(s, f, alloc);
+                            let a = f(DDNNF::And(p_sub, s_sub));
+                            let v = VarSet::new();
+                            or_v = f(DDNNF::Or(or_v, a, v));
                         }
-                        _ => panic!("unreachable"),
+
+                        // cache and return or_v
+                        if ptr.is_neg() {
+                            ptr.set_scratch::<DDNNFCache<T>>(alloc, (Some(or_v), cached));
+                        } else {
+                            ptr.set_scratch::<DDNNFCache<T>>(alloc, (cached, Some(or_v)));
+                        }
+                        or_v
+                    };
+
+                    match ptr.get_scratch::<DDNNFCache<T>>() {
+                        // first, check if cached; explicit arms here for clarity
+                        Some((Some(l), Some(h))) => {
+                            if ptr.is_neg() {
+                                *l
+                            } else {
+                                *h
+                            }
+                        }
+                        Some((Some(v), None)) if ptr.is_neg() => *v,
+                        Some((None, Some(v))) if !ptr.is_neg() => *v,
+                        // no cached value found, compute it
+                        Some((None, cached)) | Some((cached, None)) => bottomup_helper(*cached),
+                        None => bottomup_helper(None),
                     }
                 }
             }

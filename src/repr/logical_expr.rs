@@ -32,10 +32,13 @@ impl LogicalExpr {
     /// ...
     /// Where negative indicates a false variable, 0 is line end
     pub fn from_dimacs(input: String) -> LogicalExpr {
-        let r = parse_dimacs(&input).unwrap();
-        let (_, cvec) = match r {
+        let (_, cvec) = match parse_dimacs(&input).unwrap() {
             Instance::Cnf { num_vars, clauses } => (num_vars, clauses),
-            _ => panic!(),
+            Instance::Sat {
+                num_vars: _,
+                extensions: _,
+                formula: _,
+            } => panic!("Received (valid) SAT input, not CNF"),
         };
         let mut clause_vec: Vec<LogicalExpr> = Vec::new();
         for itm in cvec.iter() {
