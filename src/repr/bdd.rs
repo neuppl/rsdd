@@ -404,40 +404,38 @@ impl BddPtr {
         // If current node is true leaf, return accumulated high_v value
         if self.is_true() {
             high_v
-        // Else if current node is false leaf, return accumulated high_v value
+        // Else if current node is false leaf, return accumulated low_v value
         } else if self.is_false() {
             low_v
         } else {
             // Every node has an associated cache (scratch)
             // Scratch data is arbitrary (depends on use case)
             // fst is negated, snd is non-negated accumulator
-            if self.get_scratch::<(Option<T>, Option<T>)>().is_none() {
-                self.set_scratch::<(Option<T>, Option<T>)>(alloc, (None, None));
-            }
-            // Actual case
+
+            let mut fold_helper = |prev_low, prev_high| {
+                // Standard fold stuff
+                let l = self.low().bdd_fold_h(f, low_v, high_v, alloc);
+                let h = self.high().bdd_fold_h(f, low_v, high_v, alloc);
+                let res = f(self.var(), l, h);
+                // Set cache (accumulator)
+                // Then corrects scratch so it traverses correctly in a recursive case downstream
+                if self.is_neg() {
+                    self.set_scratch::<(Option<T>, Option<T>)>(alloc, (Some(res), prev_high));
+                } else {
+                    self.set_scratch::<(Option<T>, Option<T>)>(alloc, (prev_low, Some(res)));
+                }
+                res
+            };
+
             match self.get_scratch::<(Option<T>, Option<T>)>() {
                 // If complemented and accumulated, use the already memoized value
                 Some((Some(v), _)) if self.is_neg() => *v,
                 // Same for not complemented
                 Some((_, Some(v))) if !self.is_neg() => *v,
-                // (None, None),
                 // (Some(v), None) but not a complemented node
                 // (None, Some(v)) but a complemented node
-                Some((prev_low, prev_high)) => {
-                    // Standard fold stuff
-                    let l = self.low().bdd_fold_h(f, low_v, high_v, alloc);
-                    let h = self.high().bdd_fold_h(f, low_v, high_v, alloc);
-                    let res = f(self.var(), l, h);
-                    // Set cache (accumulator)
-                    // Then corrects scratch so it traverses correctly in a recursive case downstream
-                    if self.is_neg() {
-                        self.set_scratch::<(Option<T>, Option<T>)>(alloc, (Some(res), *prev_high));
-                    } else {
-                        self.set_scratch::<(Option<T>, Option<T>)>(alloc, (*prev_low, Some(res)));
-                    }
-                    res
-                }
-                _ => panic!("unreachable"),
+                Some((prev_low, prev_high)) => fold_helper(*prev_low, *prev_high),
+                None => fold_helper(None, None),
             }
         }
     }
@@ -751,50 +749,54 @@ impl DDNNFPtr for BddPtr {
                 Compl(_) | Reg(_) => {
                     // inside the cache, store a (compl, non_compl) pair corresponding to the
                     // complemented and uncomplemented pass over this node
-                    if ptr.get_scratch::<DDNNFCache<T>>().is_none() {
-                        ptr.set_scratch::<DDNNFCache<T>>(alloc, (None, None));
-                    }
-                    match ptr.get_scratch::<DDNNFCache<T>>() {
-                        Some((Some(v), _)) if ptr.is_neg() => v.clone(),
-                        Some((_, Some(v))) if !ptr.is_neg() => v.clone(),
-                        Some((None, cached)) | Some((cached, None)) => {
-                            // no cached value found, compute it
-                            let l = if ptr.is_neg() {
-                                ptr.low_raw().neg()
-                            } else {
-                                ptr.low_raw()
-                            };
-                            let h = if ptr.is_neg() {
-                                ptr.high_raw().neg()
-                            } else {
-                                ptr.high_raw()
-                            };
 
-                            let low_v = bottomup_pass_h(l, f, alloc);
-                            let high_v = bottomup_pass_h(h, f, alloc);
-                            let top = ptr.var();
+                    // helper performs actual fold-and-cache work
+                    let mut bottomup_helper = |cached| {
+                        let (l, h) = if ptr.is_neg() {
+                            (ptr.low_raw().neg(), ptr.high_raw().neg())
+                        } else {
+                            (ptr.low_raw(), ptr.high_raw())
+                        };
 
-                            let lit_high = f(DDNNF::Lit(top, true));
-                            let lit_low = f(DDNNF::Lit(top, false));
+                        let low_v = bottomup_pass_h(l, f, alloc);
+                        let high_v = bottomup_pass_h(h, f, alloc);
+                        let top = ptr.var();
 
-                            let and_low = f(DDNNF::And(lit_low, low_v));
-                            let and_high = f(DDNNF::And(lit_high, high_v));
+                        let lit_high = f(DDNNF::Lit(top, true));
+                        let lit_low = f(DDNNF::Lit(top, false));
 
-                            // in a BDD, each decision only depends on the topvar
-                            let mut varset = VarSet::new();
-                            varset.insert(top);
+                        let and_low = f(DDNNF::And(lit_low, low_v));
+                        let and_high = f(DDNNF::And(lit_high, high_v));
 
-                            let or_v = f(DDNNF::Or(and_low, and_high, varset));
+                        // in a BDD, each decision only depends on the topvar
+                        let mut varset = VarSet::new();
+                        varset.insert(top);
 
-                            // cache and return or_v
-                            if ptr.is_neg() {
-                                ptr.set_scratch::<DDNNFCache<T>>(alloc, (Some(or_v), *cached));
-                            } else {
-                                ptr.set_scratch::<DDNNFCache<T>>(alloc, (*cached, Some(or_v)));
-                            }
-                            or_v
+                        let or_v = f(DDNNF::Or(and_low, and_high, varset));
+
+                        // cache and return or_v
+                        if ptr.is_neg() {
+                            ptr.set_scratch::<DDNNFCache<T>>(alloc, (Some(or_v), cached));
+                        } else {
+                            ptr.set_scratch::<DDNNFCache<T>>(alloc, (cached, Some(or_v)));
                         }
-                        _ => panic!("unreachable"),
+                        or_v
+                    };
+
+                    match ptr.get_scratch::<DDNNFCache<T>>() {
+                        // first, check if cached; explicit arms here for clarity
+                        Some((Some(l), Some(h))) => {
+                            if ptr.is_neg() {
+                                *l
+                            } else {
+                                *h
+                            }
+                        }
+                        Some((Some(v), None)) if ptr.is_neg() => *v,
+                        Some((None, Some(v))) if !ptr.is_neg() => *v,
+                        // no cached value found, compute it
+                        Some((None, cached)) | Some((cached, None)) => bottomup_helper(*cached),
+                        None => bottomup_helper(None),
                     }
                 }
             }

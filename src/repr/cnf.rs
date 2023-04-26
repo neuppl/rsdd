@@ -68,10 +68,9 @@ pub struct CnfHasher {
 }
 
 impl CnfHasher {
-    pub fn new(cnf: &Cnf) -> CnfHasher {
+    pub fn new(clauses: &Vec<Vec<Literal>>, num_vars: usize) -> CnfHasher {
         let mut primes = primal::Primes::all();
-        let weighted_cnf = cnf
-            .clauses
+        let weighted_cnf = clauses
             .iter()
             .map({
                 |clause| {
@@ -83,8 +82,7 @@ impl CnfHasher {
             })
             .collect();
 
-        let sat_clauses: HashSet<usize> = cnf
-            .clauses
+        let sat_clauses: HashSet<usize> = clauses
             .iter()
             .enumerate()
             .filter_map({
@@ -98,9 +96,9 @@ impl CnfHasher {
             })
             .collect();
 
-        let pos_lits: Vec<Vec<usize>> = (0..cnf.num_vars())
+        let pos_lits: Vec<Vec<usize>> = (0..num_vars)
             .map(|lit_idx| {
-                cnf.clauses
+                clauses
                     .iter()
                     .enumerate()
                     .filter_map(|(clause_idx, clause)| {
@@ -114,9 +112,9 @@ impl CnfHasher {
             })
             .collect();
 
-        let neg_lits: Vec<Vec<usize>> = (0..cnf.num_vars())
+        let neg_lits: Vec<Vec<usize>> = (0..num_vars)
             .map(|lit_idx| {
-                cnf.clauses
+                clauses
                     .iter()
                     .enumerate()
                     .filter_map(|(clause_idx, clause)| {
@@ -224,7 +222,7 @@ fn num_fill(g: &UnGraph<VarLabel, ()>, v: NodeIndex) -> usize {
 pub struct Cnf {
     clauses: Vec<Vec<Literal>>,
     num_vars: usize,
-    hasher: Option<CnfHasher>,
+    hasher: CnfHasher,
 }
 
 pub struct AssignmentIter {
@@ -271,34 +269,46 @@ impl Iterator for AssignmentIter {
 }
 
 impl Cnf {
-    pub fn new(mut clauses: Vec<Vec<Literal>>) -> Cnf {
-        let mut m = 0;
-        // filter out empty clauses
-        clauses.retain(|x| !x.is_empty());
-        for clause in clauses.iter_mut() {
-            for lit in clause.iter() {
-                m = max(lit.get_label().value() + 1, m);
-            }
-            // remove duplicate literals
-            clause.sort_by_key(|a| a.get_label().value());
-            clause.dedup();
-        }
+    pub fn new(clauses: Vec<Vec<Literal>>) -> Cnf {
+        let clauses: Vec<Vec<Literal>> = clauses
+            .iter()
+            .filter(|clause| !clause.is_empty())
+            .map(|clause| {
+                let mut clause = clause.clone();
+                clause.sort_by_key(|a| a.get_label().value());
+                clause.dedup();
+                return clause;
+            })
+            .collect();
 
-        let mut r = Cnf {
-            clauses: clauses.clone(),
-            num_vars: m as usize,
-            hasher: None,
-        };
-        r.hasher = Some(CnfHasher::new(&r));
-        r
+        let num_vars = clauses
+            .iter()
+            .map(|clause| {
+                clause
+                    .iter()
+                    .map(|lit| lit.get_label().value() + 1)
+                    .max()
+                    .unwrap_or(0)
+            })
+            .max()
+            .unwrap_or(0) as usize;
+
+        Cnf {
+            hasher: CnfHasher::new(&clauses, num_vars),
+            clauses,
+            num_vars,
+        }
     }
 
-    pub fn from_file(v: String) -> Cnf {
+    pub fn from_file(input: String) -> Cnf {
         use dimacs::*;
-        let r = parse_dimacs(&v).unwrap();
-        let (_, cvec) = match r {
+        let (_, cvec) = match parse_dimacs(&input).unwrap() {
             Instance::Cnf { num_vars, clauses } => (num_vars, clauses),
-            _ => panic!(),
+            Instance::Sat {
+                num_vars: _,
+                extensions: _,
+                formula: _,
+            } => panic!("Received (valid) SAT input, not CNF"),
         };
         let mut clause_vec: Vec<Vec<Literal>> = Vec::new();
         let mut m = 0;
@@ -647,10 +657,7 @@ impl Cnf {
     /// get a hasher for this CNF
     /// may be expensive on first call; future calls are amortized
     pub fn get_hasher(&self) -> &CnfHasher {
-        match self.hasher {
-            Some(ref v) => v,
-            None => panic!(),
-        }
+        &self.hasher
     }
 }
 
