@@ -89,9 +89,6 @@ impl<T: SddCanonicalizationScheme> SddManager<T> {
     /// Canonicalizes the list of (prime, sub) terms in-place
     /// `node`: a list of (prime, sub) pairs
     fn compress(&mut self, node: &mut Vec<SddAnd>) {
-        if !self.canonicalizer.should_compress() {
-            panic!("compress called when disabled")
-        }
         self.stats.num_compr += 1;
         for i in 0..node.len() {
             // see if we can compress i
@@ -116,23 +113,21 @@ impl<T: SddCanonicalizationScheme> SddManager<T> {
     }
 
     pub fn get_vtree(&self, ptr: SddPtr) -> &VTree {
-        if ptr.is_var() {
-            let idx = self.vtree.get_varlabel_idx(ptr.get_var().get_label());
-            self.vtree.get_idx(idx)
-        } else if ptr.is_or() {
-            self.vtree.get_idx(ptr.vtree())
-        } else {
-            panic!("called vtree on constant")
+        match ptr {
+            SddPtr::Var(lbl, _) => {
+                let idx = self.vtree.get_varlabel_idx(lbl);
+                self.vtree.get_idx(idx)
+            }
+            SddPtr::Compl(_) | SddPtr::Reg(_) => self.vtree.get_idx(ptr.vtree()),
+            _ => panic!("called vtree on constant"),
         }
     }
 
     pub fn get_vtree_idx(&self, ptr: SddPtr) -> VTreeIndex {
-        if ptr.is_var() {
-            self.vtree.get_varlabel_idx(ptr.get_var().get_label())
-        } else if ptr.is_or() || ptr.is_bdd() {
-            ptr.vtree()
-        } else {
-            panic!("called vtree on constant")
+        match ptr {
+            SddPtr::Var(lbl, _) => self.vtree.get_varlabel_idx(lbl),
+            SddPtr::BDD(_) | SddPtr::ComplBDD(_) | SddPtr::Compl(_) | SddPtr::Reg(_) => ptr.vtree(),
+            _ => panic!("called vtree on constant"),
         }
     }
 

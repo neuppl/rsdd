@@ -121,7 +121,7 @@ fn decisions(
             man.and_lst(&ret)
         };
         let neg_all_but_ptr = neg_all_but_one(ptr);
-        let assoc_ite = adj_ite.get(&ptr);
+        let assoc_ite: Option<&BddPtr> = adj_ite.get(&ptr);
         match assoc_ite {
             None => panic!(),
             Some(v) => {
