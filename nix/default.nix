@@ -14,7 +14,7 @@ rustPlatform.buildRustPackage rec {
 
   meta = with lib; {
     description = "Rust decision diagrams";
-    homepage = "https://github.com/pmall-neu/rsdd";
+    homepage = "https://github.com/neuppl/rsdd";
     license = licenses.mit;
     maintainers = with maintainers; [];
   };

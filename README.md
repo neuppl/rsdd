@@ -1,4 +1,4 @@
-[![CI](https://github.com/pmall-neu/rsdd/actions/workflows/ci.yml/badge.svg)](https://github.com/pmall-neu/rsdd/actions/workflows/ci.yml)
+[![CI](https://github.com/neuppl/rsdd/actions/workflows/ci.yml/badge.svg)](https://github.com/neuppl/rsdd/actions/workflows/ci.yml)
 
 # RSDD
 
@@ -15,7 +15,7 @@ To add this in your rust project, use:
 
 ```toml
 [dependencies]
-rsdd = { git = "https://github.com/pmall-neu/rsdd" }
+rsdd = { git = "https://github.com/neuppl/rsdd" }
 ```
 
 This project is under active research development; if you are interested in

@@ -836,7 +836,7 @@ index 0000000..a9f47d6
 +[[package]]
 +name = "rsgm"
 +version = "0.1.0"
-+source = "git+https://github.com/pmall-neu/rsgm#9edf93ef996a1e57d65c3b3701df1a2ba5a34af0"
++source = "git+https://github.com/neuppl/rsgm#9edf93ef996a1e57d65c3b3701df1a2ba5a34af0"
 +dependencies = [
 + "clap 3.2.14",
 + "serde",
@@ -1171,6 +1171,5 @@ index 0000000..a9f47d6
 +version = "0.4.0"
 +source = "registry+https://github.com/rust-lang/crates.io-index"
 +checksum = "712e227841d057c1ee1cd2fb22fa7e5a5461ae8e48fa2ca79ec42cfc1931183f"
--- 
+--
 2.39.1
-

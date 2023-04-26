@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2018"
 authors = ["Steven Holtzen <sholtzen@gmail.com>"]
 license = "MIT"
-repository = "https://github.com/pmall-neu/rsdd"
+repository = "https://github.com/neuppl/rsdd"
 description = "Rust decision diagrams."
 
 [dependencies]
@@ -30,7 +30,7 @@ dot = "0.1.4"
 tinyvec = { version = "1.6.0", features = ["alloc"] }
 bumpalo = "3.11.1"
 petgraph = "0.6.2"
-rsgm = { git = "https://github.com/pmall-neu/rsgm" }
+rsgm = { git = "https://github.com/neuppl/rsgm" }
 rand_chacha = "0.3.1"
 getrandom = { version = "0.2", features = ["js"] } # req for wasm
 wasm-bindgen = "0.2.84"
