@@ -1,6 +1,6 @@
 extern crate rsdd;
 
-use std::{collections::HashMap, fs, iter::FromIterator};
+use std::{collections::HashMap, fs};
 
 use clap::Parser;
 use rand::Rng;
@@ -20,6 +20,35 @@ struct Args {
     /// vars to include in marginal map
     #[arg(short, long, value_parser, action=clap::ArgAction::Append)]
     vars: Vec<usize>,
+
+    /// weights to include in marginal map, in order;
+    /// the rest of the weights will be randomly generated
+    #[arg(short, long, value_parser, action=clap::ArgAction::Append)]
+    weights: Vec<f64>,
+}
+
+fn gen_all_weights(
+    prev_weights: &[f64],
+    num_vars: usize,
+) -> HashMap<VarLabel, (RealSemiring, RealSemiring)> {
+    let mut var_to_val = HashMap::default();
+    for (index, weight) in prev_weights.iter().enumerate() {
+        var_to_val.insert(
+            VarLabel::new(index as u64),
+            (RealSemiring(*weight), RealSemiring(1.0 - weight)),
+        );
+    }
+
+    let mut rng = rand::thread_rng();
+
+    for index in prev_weights.len()..num_vars {
+        let weight = rng.gen_range(0.0..1.0);
+        var_to_val.insert(
+            VarLabel::new(index as u64),
+            (RealSemiring(weight), RealSemiring(1.0 - weight)),
+        );
+    }
+    var_to_val
 }
 
 fn main() {
@@ -45,22 +74,12 @@ fn main() {
         .map(|v| VarLabel::new(*v as u64))
         .collect::<Vec<VarLabel>>();
 
-    let mut rng = rand::thread_rng();
-
-    // TODO: allow user-specified weights or randomized configuration
-    let var_to_val: HashMap<VarLabel, (RealSemiring, RealSemiring)> =
-        HashMap::from_iter((0..cnf.num_vars()).map(|var| {
-            let weight = rng.gen_range(0.0..1.0);
-            (
-                VarLabel::new(var as u64),
-                (RealSemiring(weight), RealSemiring(1.0 - weight)),
-            )
-        }));
+    let var_to_val = gen_all_weights(&args.weights, mgr.num_vars());
 
     let wmc = WmcParams::new_with_default(RealSemiring::zero(), RealSemiring::one(), var_to_val);
 
     let (probability, partial) = bdd.marginal_map(&vars, mgr.num_vars(), &wmc);
 
-    println!("MAP: {:.2}%", probability);
+    println!("MAP: {:.2}%", probability * 100.0);
     println!("{}", partial);
 }
