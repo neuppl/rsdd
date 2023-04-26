@@ -269,25 +269,34 @@ impl Iterator for AssignmentIter {
 }
 
 impl Cnf {
-    pub fn new(mut clauses: Vec<Vec<Literal>>) -> Cnf {
-        let mut m = 0;
-        // filter out empty clauses
-        clauses.retain(|x| !x.is_empty());
-        for clause in clauses.iter_mut() {
-            for lit in clause.iter() {
-                m = max(lit.get_label().value() + 1, m);
-            }
-            // remove duplicate literals
-            clause.sort_by_key(|a| a.get_label().value());
-            clause.dedup();
-        }
+    pub fn new(clauses: Vec<Vec<Literal>>) -> Cnf {
+        let clauses: Vec<Vec<Literal>> = clauses
+            .iter()
+            .filter(|clause| !clause.is_empty())
+            .map(|clause| {
+                let mut clause = clause.clone();
+                clause.sort_by_key(|a| a.get_label().value());
+                clause.dedup();
+                return clause;
+            })
+            .collect();
 
-        let num_vars = m as usize;
+        let num_vars = clauses
+            .iter()
+            .map(|clause| {
+                clause
+                    .iter()
+                    .map(|lit| lit.get_label().value() + 1)
+                    .max()
+                    .unwrap_or(0)
+            })
+            .max()
+            .unwrap_or(0) as usize;
 
         Cnf {
-            clauses: clauses.clone(),
-            num_vars,
             hasher: CnfHasher::new(&clauses, num_vars),
+            clauses,
+            num_vars,
         }
     }
 
