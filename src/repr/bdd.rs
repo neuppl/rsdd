@@ -694,8 +694,17 @@ impl BddPtr {
         join_vars: &BitSet,
         wmc: &WmcParams<T>,
     ) -> T {
+        let mut partial_join_acc = T::one();
+        for lit in partial_join_assgn.assignment_iter() {
+            let (l, h) = wmc.get_var_weight(lit.get_label());
+            if lit.get_polarity() {
+                partial_join_acc = partial_join_acc * (*h);
+            } else {
+                partial_join_acc = partial_join_acc * (*l);
+            }
+        }
         // top-down UB calculation via bdd_fold
-        let mut v = self.bdd_fold(
+        let v = self.bdd_fold(
             &|varlabel, low: T, high: T| {
                 // get True and False weights for node VarLabel
                 let (w_l, w_h) = wmc.get_var_weight(varlabel);
@@ -722,15 +731,7 @@ impl BddPtr {
             wmc.zero,
             wmc.one,
         );
-        for lit in partial_join_assgn.assignment_iter() {
-            let (l, h) = wmc.get_var_weight(lit.get_label());
-            if lit.get_polarity() {
-                v = v * (*h);
-            } else {
-                v = v * (*l);
-            }
-        }
-        v
+        partial_join_acc * v
     }
 
     fn bb_h<T: BBAlgebra>(
