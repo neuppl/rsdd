@@ -10,7 +10,11 @@ use std::cmp::Ordering;
 use std::fmt::{Debug, Display};
 use std::ops;
 
-pub trait Semiring: Debug + Clone + Copy + ops::Add + ops::Mul {
+pub trait Semiring:
+    Debug + Clone + Copy
+    + ops::Add<Self, Output = Self> 
+    + ops::Mul<Self, Output = Self>
+{
     fn one() -> Self;
     fn zero() -> Self;
 }
@@ -148,12 +152,12 @@ impl Semiring for ExpectedUtility {
         ExpectedUtility(0.0, 0.0)
     }
 }
-pub trait JoinSemilattice : PartialOrd {
-    fn join(&self, arg : &Self) -> Self;
+pub trait JoinSemilattice: PartialOrd {
+    fn join(&self, arg: &Self) -> Self;
 }
 
 impl JoinSemilattice for RealSemiring {
-    fn join(&self, arg : &Self) -> Self {
+    fn join(&self, arg: &Self) -> Self {
         RealSemiring(f64::max(self.0, arg.0))
     }
 }
@@ -162,34 +166,36 @@ impl PartialOrd for ExpectedUtility {
     fn partial_cmp(&self, other: &ExpectedUtility) -> Option<Ordering> {
         if self.0 < other.0 && self.1 < other.1 {
             Some(Ordering::Greater)
-        }
-        else if self.0 > other.0 && self.1 > other.1 {
+        } else if self.0 > other.0 && self.1 > other.1 {
             Some(Ordering::Less)
+        } else {
+            None
         }
-        else { None}
     }
 }
 
 impl JoinSemilattice for ExpectedUtility {
-    fn join(&self, arg : &Self) -> Self {
+    fn join(&self, arg: &Self) -> Self {
         ExpectedUtility(f64::max(self.0, arg.0), f64::max(self.1, arg.1))
     }
 }
 
-pub trait BBAlgebra : Semiring + JoinSemilattice {
-    fn choose(&self, arg :&Self) -> Self;
+pub trait BBAlgebra: Semiring + JoinSemilattice {
+    fn choose(&self, arg: &Self) -> Self;
 }
 
 impl BBAlgebra for RealSemiring {
-    fn choose(&self, arg : &RealSemiring) -> RealSemiring {
+    fn choose(&self, arg: &RealSemiring) -> RealSemiring {
         RealSemiring(f64::max(self.0, arg.0))
     }
 }
 
 impl BBAlgebra for ExpectedUtility {
-    fn choose(&self, arg : &ExpectedUtility) -> ExpectedUtility {
+    fn choose(&self, arg: &ExpectedUtility) -> ExpectedUtility {
         if self.1 > arg.1 {
             *self
-        } else { *arg }
+        } else {
+            *arg
+        }
     }
 }
