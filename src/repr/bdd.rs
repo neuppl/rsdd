@@ -554,11 +554,6 @@ impl BddPtr {
         num_vars: usize,
         wmc: &WmcParams<RealSemiring>,
     ) -> (f64, PartialModel) {
-        let mut marg_vars = BitSet::new();
-        for v in vars {
-            marg_vars.insert(v.value_usize());
-        }
-
         let all_true: Vec<Literal> = vars.iter().map(|x| Literal::new(*x, true)).collect();
         let cur_assgn = PartialModel::from_litvec(&all_true, num_vars);
         let lower_bound = self.marginal_map_eval(&cur_assgn, &BitSet::new(), wmc);
@@ -700,7 +695,7 @@ impl BddPtr {
         wmc: &WmcParams<T>,
     ) -> T {
         // top-down UB calculation via bdd_fold
-        let v = self.bdd_fold(
+        let mut v = self.bdd_fold(
             &|varlabel, low: T, high: T| {
                 // get True and False weights for node VarLabel
                 let (w_l, w_h) = wmc.get_var_weight(varlabel);
@@ -720,13 +715,21 @@ impl BddPtr {
                     }
                     // If our node has already been assigned, then we
                     // reached a base case. We return the accumulated value.
-                    Some(true) => *w_h * high,
-                    Some(false) => *w_l * low,
+                    Some(true) => high,
+                    Some(false) => low,
                 }
             },
             wmc.zero,
             wmc.one,
         );
+        for lit in partial_join_assgn.assignment_iter() {
+            let (l, h) = wmc.get_var_weight(lit.get_label());
+            if lit.get_polarity() {
+                v = v * (*h);
+            } else {
+                v = v * (*l);
+            }
+        }
         v
     }
 
@@ -754,7 +757,7 @@ impl BddPtr {
             }
             // If there exists an unassigned decision variable,
             [x, end @ ..] => {
-                let mut best_model = cur_best;
+                let mut best_model = cur_best.clone();
                 let mut best_lb = cur_lb;
                 let join_vars_bits = BitSet::from_iter(end.iter().map(|x| x.value_usize()));
                 // Consider the assignment of it to true...
@@ -779,9 +782,14 @@ impl BddPtr {
                     // if upper_bound == BBAlgebra::choose(&upper_bound, &best_lb) {
                     if !PartialOrd::le(&upper_bound, &cur_lb) {
                         let (rec, rec_pm) =
-                            self.bb_h(best_lb, best_model, end, wmc, partialmodel.clone());
-                        let new_lb = JoinSemilattice::join(&cur_lb, &rec);
-                        (best_lb, best_model) = (new_lb, rec_pm)
+                            self.bb_h(best_lb, best_model.clone(), end, wmc, partialmodel.clone());
+                        let new_lb = BBAlgebra::choose(&cur_lb, &rec);
+                        if new_lb == rec {
+                            (best_lb, best_model) = (rec, rec_pm);
+                        } else {
+                            (best_lb, best_model) = (cur_lb, cur_best.clone());
+                        }
+                        // (best_lb, best_model) = self.bb_h(best_lb, best_model, end, wmc, partialmodel.clone());
                     }
                 }
                 (best_lb, best_model)

@@ -502,6 +502,7 @@ mod test_bdd_manager {
             let vars = vec![VarLabel::new(0), VarLabel::new(2), VarLabel::new(4)];
             let wmc = WmcParams::new_with_default(RealSemiring::zero(), RealSemiring::one(), weight_map);
             let (marg_prob, _marg_assgn) = cnf.marginal_map(&vars, mgr.num_vars(), &wmc);
+            let (marg_prob_bb, _marg_assgn_bb) = cnf.bb(&vars, mgr.num_vars(), &wmc);
             let assignments = vec![(true, true, true), (true, true, false), (true, false, true), (true, false, false),
                                    (false, true, true), (false, true, false), (false, false, true), (false, false, false)];
 
@@ -526,7 +527,11 @@ mod test_bdd_manager {
                 println!("cnf: {}", c1);
                 println!("true map probability: {max}\nGot map probability: {marg_prob} with assignment {:?}", _marg_assgn);
             }
-            TestResult::from_bool(f64::abs(max - marg_prob) < 0.00001)
+            if f64::abs(marg_prob_bb.0 - marg_prob) > 0.00001 {
+                println!("cnf: {}", c1);
+                println!("true map probability: {}\nGot map probability: {marg_prob} ", marg_prob_bb.0);
+            }
+            TestResult::from_bool(f64::abs(max - marg_prob) < 0.00001 &&f64::abs(marg_prob_bb.0 - marg_prob) < 0.00001)
         }
     }
 }

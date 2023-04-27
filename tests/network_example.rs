@@ -149,8 +149,8 @@ fn decisions(
 fn gen() {
     use std::time::Instant;
 
-    let (network, man, edge_lbls) = network_gen(1);
-    let (decs, mut man2, dec_lbls, rw_lbls) = decisions(1, man);
+    let (network, man, edge_lbls) = network_gen(2);
+    let (decs, mut man2, dec_lbls, rw_lbls) = decisions(2, man);
     let mut eu_map: HashMap<VarLabel, (ExpectedUtility, ExpectedUtility)> = HashMap::new();
     let vars = dec_lbls.clone();
 
