@@ -1,6 +1,6 @@
 //! A generic data structure for tracking variable labels throughout the library
 use serde::Serialize;
-use std::fmt;
+use std::fmt::{self, Display};
 
 extern crate quickcheck;
 use bit_set::BitSet;
@@ -100,6 +100,15 @@ impl Serialize for VarSet {
         S: serde::Serializer,
     {
         todo!()
+    }
+}
+
+impl Display for VarSet {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_fmt(format_args!(
+            "{:?}",
+            self.b.iter().map(|v| v).collect::<Vec<usize>>()
+        ))
     }
 }
 

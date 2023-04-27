@@ -1,5 +1,7 @@
 //! Models and partial models of logical sentences
 
+use std::fmt::Display;
+
 use super::var_label::{Literal, VarLabel, VarSet};
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -112,5 +114,14 @@ impl PartialModel {
             .difference(&other.false_assignments)
             .map(|x| Literal::new(x, false));
         false_diff.chain(true_diff)
+    }
+}
+
+impl Display for PartialModel {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_fmt(format_args!(
+            "T: {}\nF: {}",
+            self.true_assignments, self.false_assignments
+        ))
     }
 }
