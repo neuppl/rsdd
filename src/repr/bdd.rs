@@ -715,13 +715,13 @@ impl BddPtr {
                             JoinSemilattice::join(&lhs, &rhs)
                         // Otherwise it is a sum variables, so
                         } else {
-                            (*w_l * low) + (*w_l * high)
+                            (*w_l * low) + (*w_h * high)
                         }
                     }
                     // If our node has already been assigned, then we
                     // reached a base case. We return the accumulated value.
-                    Some(true) => high,
-                    Some(false) => low,
+                    Some(true) => *w_h * high,
+                    Some(false) => *w_l * low,
                 }
             },
             wmc.zero,
@@ -776,9 +776,12 @@ impl BddPtr {
                 };
                 // the actual branching and bounding
                 for (upper_bound, partialmodel) in order {
+                    // if upper_bound == BBAlgebra::choose(&upper_bound, &best_lb) {
                     if !PartialOrd::le(&upper_bound, &cur_lb) {
-                        (best_lb, best_model) =
-                            self.bb_h(best_lb, best_model, end, wmc, partialmodel.clone())
+                        let (rec, rec_pm) =
+                            self.bb_h(best_lb, best_model, end, wmc, partialmodel.clone());
+                        let new_lb = JoinSemilattice::join(&cur_lb, &rec);
+                        (best_lb, best_model) = (new_lb, rec_pm)
                     }
                 }
                 (best_lb, best_model)
@@ -786,7 +789,7 @@ impl BddPtr {
         }
     }
 
-    /// maximum expected utility calc
+    /// branch and bound generic over T a BBAlgebra.
     pub fn bb<T: BBAlgebra>(
         &self,
         join_vars: &[VarLabel],

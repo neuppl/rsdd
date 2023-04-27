@@ -71,8 +71,13 @@ fn decisions(
     let mut i = 0;
     let top_ptrs_cl = top_ptrs.clone();
     for t in top_ptrs_cl {
-        // let x = t.var().value();
-        // println!("Decision variable {} is joined to edges {} and {}", x, i, i+1);
+        let x = t.var().value();
+        println!(
+            "Top Decision variable {} is joined to edges {} and {}",
+            x,
+            i,
+            i + 1
+        );
         let left = man.var(VarLabel::new(i), false);
         let right = man.var(VarLabel::new(i + 1), false);
         let ifguard = man.or(left, right);
@@ -85,8 +90,13 @@ fn decisions(
     i += 1;
     let bot_ptrs_cl = bot_ptrs.clone();
     for b in bot_ptrs_cl {
-        // let y = b.var().value();
-        // println!("Decision variable {} is joined to edges {} and {}", y, i, i+1);
+        let y = b.var().value();
+        println!(
+            "Bot Decision variable {} is joined to edges {} and {}",
+            y,
+            i,
+            i + 1
+        );
         let left = man.var(VarLabel::new(i), false);
         let right = man.var(VarLabel::new(i + 1), false);
         let ifguard = man.or(left, right);
@@ -138,16 +148,13 @@ fn decisions(
 #[test]
 fn gen() {
     use std::time::Instant;
-    let now = Instant::now();
 
-    let (network, man, edge_lbls) = network_gen(5);
-    let (decs, mut man2, dec_lbls, rw_lbls) = decisions(5, man);
+    let (network, man, edge_lbls) = network_gen(1);
+    let (decs, mut man2, dec_lbls, rw_lbls) = decisions(1, man);
     let mut eu_map: HashMap<VarLabel, (ExpectedUtility, ExpectedUtility)> = HashMap::new();
     let vars = dec_lbls.clone();
 
-    let probs = [
-        0.52, 0.95, 0.92, 0.87, 0.96, 0.58, 0.71, 0.78, 0.88, 0.23, 0.65, 0.89,
-    ];
+    let probs = [0.35, 0.13, 0.71, 0.79, 0.08, 0.86, 0.31, 0.12, 0.75, 0.26];
     for (i, e) in edge_lbls.into_iter().enumerate() {
         let x = probs[i];
         // println!("Assigning probability {} to variable {}", x, e.value());
@@ -160,18 +167,32 @@ fn gen() {
         rw_lbls,
         (ExpectedUtility::one(), ExpectedUtility(1.0, 10.0)),
     );
+
     let network_fail = network.neg();
     let end = man2.and(decs, network_fail);
     let wmc = WmcParams::new_with_default(ExpectedUtility::zero(), ExpectedUtility::one(), eu_map);
+
+    let now = Instant::now();
     let (meu_num, pm) = end.meu(&vars, man2.num_vars(), &wmc);
     let (meu_dec, _) = network_fail.meu(&vars, man2.num_vars(), &wmc);
     println!(
-        "MEU: {} \nPM : {:?}\nno. pruned nodes : ",
+        "Regular MEU: {} \nPM : {:?}",
         meu_num.1 / meu_dec.0,
-        pm
+        pm.true_assignments
     );
     let elapsed = now.elapsed();
     println!("Elapsed: {:.2?}", elapsed);
+    let now2 = Instant::now();
+    let (meu_num_bb, pm_bb) = end.bb(&vars, man2.num_vars(), &wmc);
+    let (meu_dec_bb, _) = network_fail.bb(&vars, man2.num_vars(), &wmc);
+
+    println!(
+        "BB MEU: {} \nPM : {:?}",
+        meu_num_bb.1 / meu_dec_bb.0,
+        pm_bb.true_assignments
+    );
+    let elapsed2 = now2.elapsed();
+    println!("BB Elapsed: {:.2?}", elapsed2);
 }
 
 // Uncomment and run test if you need a sanity check above code works.

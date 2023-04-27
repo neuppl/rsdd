@@ -11,9 +11,7 @@ use std::fmt::{Debug, Display};
 use std::ops;
 
 pub trait Semiring:
-    Debug + Clone + Copy
-    + ops::Add<Self, Output = Self> 
-    + ops::Mul<Self, Output = Self>
+    Debug + Clone + Copy + Display + ops::Add<Self, Output = Self> + ops::Mul<Self, Output = Self>
 {
     fn one() -> Self;
     fn zero() -> Self;
@@ -143,6 +141,12 @@ impl ops::Mul<ExpectedUtility> for ExpectedUtility {
     }
 }
 
+impl Display for ExpectedUtility {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Prob: {}, EU: {}", self.0, self.1)
+    }
+}
+
 impl Semiring for ExpectedUtility {
     fn one() -> Self {
         ExpectedUtility(1.0, 0.0)
@@ -165,9 +169,11 @@ impl JoinSemilattice for RealSemiring {
 impl PartialOrd for ExpectedUtility {
     fn partial_cmp(&self, other: &ExpectedUtility) -> Option<Ordering> {
         if self.0 < other.0 && self.1 < other.1 {
-            Some(Ordering::Greater)
-        } else if self.0 > other.0 && self.1 > other.1 {
             Some(Ordering::Less)
+        } else if self.0 > other.0 && self.1 > other.1 {
+            Some(Ordering::Greater)
+        } else if self.0 == other.0 && self.1 == other.1 {
+            Some(Ordering::Equal)
         } else {
             None
         }
@@ -186,7 +192,7 @@ pub trait BBAlgebra: Semiring + JoinSemilattice {
 
 impl BBAlgebra for RealSemiring {
     fn choose(&self, arg: &RealSemiring) -> RealSemiring {
-        RealSemiring(f64::max(self.0, arg.0))
+        JoinSemilattice::join(&self, arg)
     }
 }
 
