@@ -1,6 +1,8 @@
 //! Binary decision diagram representation
 use crate::{
-    repr::var_label::VarSet, util::semiring::ExpectedUtility, util::semiring::RealSemiring,
+    repr::var_label::VarSet,
+    util::semiring::RealSemiring,
+    util::semiring::{BBAlgebra, ExpectedUtility, JoinSemilattice},
 };
 
 pub use super::{
@@ -552,11 +554,6 @@ impl BddPtr {
         num_vars: usize,
         wmc: &WmcParams<RealSemiring>,
     ) -> (f64, PartialModel) {
-        let mut marg_vars = BitSet::new();
-        for v in vars {
-            marg_vars.insert(v.value_usize());
-        }
-
         let all_true: Vec<Literal> = vars.iter().map(|x| Literal::new(*x, true)).collect();
         let cur_assgn = PartialModel::from_litvec(&all_true, num_vars);
         let lower_bound = self.marginal_map_eval(&cur_assgn, &BitSet::new(), wmc);
@@ -606,15 +603,6 @@ impl BddPtr {
             wmc.zero,
             wmc.one,
         );
-        // for lit in partial_decisions.assignment_iter() {
-        //     let (l, h) = wmc.get_var_weight(lit.get_label());
-        //     if lit.get_polarity() {
-        //         v = v * (*h);
-        //     } else {
-        //         v = v * (*l);
-        //     }
-        // }
-        // println!("{}, {}",v.0, v.1 );
         v
     }
 
@@ -693,6 +681,139 @@ impl BddPtr {
             lower_bound,
             cur_assgn,
             decision_vars,
+            wmc,
+            PartialModel::from_litvec(&[], num_vars),
+        )
+    }
+
+    /// Below is experimental code with a generic branch and bound for T a BBAlgebra.
+    /// upper-bounding the expected utility, for meu_h
+    fn bb_ub<T: BBAlgebra>(
+        &self,
+        partial_join_assgn: &PartialModel,
+        join_vars: &BitSet,
+        wmc: &WmcParams<T>,
+    ) -> T {
+        let mut partial_join_acc = T::one();
+        for lit in partial_join_assgn.assignment_iter() {
+            let (l, h) = wmc.get_var_weight(lit.get_label());
+            if lit.get_polarity() {
+                partial_join_acc = partial_join_acc * (*h);
+            } else {
+                partial_join_acc = partial_join_acc * (*l);
+            }
+        }
+        // top-down UB calculation via bdd_fold
+        let v = self.bdd_fold(
+            &|varlabel, low: T, high: T| {
+                // get True and False weights for node VarLabel
+                let (w_l, w_h) = wmc.get_var_weight(varlabel);
+                // Check if our partial model has already assigned the node.
+                match partial_join_assgn.get(varlabel) {
+                    // If not...
+                    None => {
+                        // If it's a join variable, (w_l * low) ∨ (w_h * high)
+                        if join_vars.contains(varlabel.value_usize()) {
+                            let lhs = *w_l * low;
+                            let rhs = *w_h * high;
+                            JoinSemilattice::join(&lhs, &rhs)
+                        // Otherwise it is a sum variables, so
+                        } else {
+                            (*w_l * low) + (*w_h * high)
+                        }
+                    }
+                    // If our node has already been assigned, then we
+                    // reached a base case. We return the accumulated value.
+                    Some(true) => high,
+                    Some(false) => low,
+                }
+            },
+            wmc.zero,
+            wmc.one,
+        );
+        partial_join_acc * v
+    }
+
+    fn bb_h<T: BBAlgebra>(
+        &self,
+        cur_lb: T,
+        cur_best: PartialModel,
+        join_vars: &[VarLabel],
+        wmc: &WmcParams<T>,
+        cur_assgn: PartialModel,
+    ) -> (T, PartialModel) {
+        match join_vars {
+            // If all join variables are assigned,
+            [] => {
+                // Run the bb_ub
+                let empty_join_vars = BitSet::new();
+                let possible_best = self.bb_ub(&cur_assgn, &empty_join_vars, wmc);
+                // If it's a better lb, update.
+                let best = BBAlgebra::choose(&cur_lb, &possible_best);
+                if cur_lb == best {
+                    (cur_lb, cur_best)
+                } else {
+                    (possible_best, cur_assgn)
+                }
+            }
+            // If there exists an unassigned decision variable,
+            [x, end @ ..] => {
+                let mut best_model = cur_best.clone();
+                let mut best_lb = cur_lb;
+                let join_vars_bits = BitSet::from_iter(end.iter().map(|x| x.value_usize()));
+                // Consider the assignment of it to true...
+                let mut true_model = cur_assgn.clone();
+                true_model.set(*x, true);
+                // ... and false...
+                let mut false_model = cur_assgn.clone();
+                false_model.set(*x, false);
+
+                // and calculate their respective upper bounds.
+                let true_ub = self.bb_ub(&true_model, &join_vars_bits, wmc);
+                let false_ub = self.bb_ub(&false_model, &join_vars_bits, wmc);
+
+                // arbitrarily order the T/F bounds
+                let order = if true_ub == BBAlgebra::choose(&true_ub, &false_ub) {
+                    [(true_ub, true_model), (false_ub, false_model)]
+                } else {
+                    [(false_ub, false_model), (true_ub, true_model)]
+                };
+                // the actual branching and bounding
+                for (upper_bound, partialmodel) in order {
+                    // if upper_bound == BBAlgebra::choose(&upper_bound, &best_lb) {
+                    if !PartialOrd::le(&upper_bound, &cur_lb) {
+                        let (rec, rec_pm) =
+                            self.bb_h(best_lb, best_model.clone(), end, wmc, partialmodel.clone());
+                        let new_lb = BBAlgebra::choose(&cur_lb, &rec);
+                        if new_lb == rec {
+                            (best_lb, best_model) = (rec, rec_pm);
+                        } else {
+                            (best_lb, best_model) = (cur_lb, cur_best.clone());
+                        }
+                        // (best_lb, best_model) = self.bb_h(best_lb, best_model, end, wmc, partialmodel.clone());
+                    }
+                }
+                (best_lb, best_model)
+            }
+        }
+    }
+
+    /// branch and bound generic over T a BBAlgebra.
+    pub fn bb<T: BBAlgebra>(
+        &self,
+        join_vars: &[VarLabel],
+        num_vars: usize,
+        wmc: &WmcParams<T>,
+    ) -> (T, PartialModel) {
+        // Initialize all the decision variables to be true, partially instantianted resp. to this
+        let all_true: Vec<Literal> = join_vars.iter().map(|x| Literal::new(*x, true)).collect();
+        let cur_assgn = PartialModel::from_litvec(&all_true, num_vars);
+        // Calculate bound wrt the partial instantiation.
+        let lower_bound = self.bb_ub(&cur_assgn, &BitSet::new(), wmc);
+        self.bb_h(
+            lower_bound,
+            cur_assgn,
+            join_vars,
             wmc,
             PartialModel::from_litvec(&[], num_vars),
         )

@@ -6,16 +6,19 @@
 //! 4. Multiplication by 0 annihilates R
 //! Compared with a ring, a semiring omits an inverse for addition
 
+use std::cmp::Ordering;
 use std::fmt::{Debug, Display};
 use std::ops;
 
-pub trait Semiring: Debug + Clone + Copy + ops::Add + ops::Mul {
+pub trait Semiring:
+    Debug + Clone + Copy + Display + ops::Add<Self, Output = Self> + ops::Mul<Self, Output = Self>
+{
     fn one() -> Self;
     fn zero() -> Self;
 }
 
 /// Simple real-number semiring abstraction (all operations standard for reals, abstracted as f64)
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub struct RealSemiring(pub f64);
 
 impl Display for RealSemiring {
@@ -118,7 +121,7 @@ pub trait TropicalSemiring: Debug + Clone + Copy + ops::Add + ops::Mul {
 }
 
 // Expected Utility Semiring.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ExpectedUtility(pub f64, pub f64);
 
 impl ops::Add<ExpectedUtility> for ExpectedUtility {
@@ -138,6 +141,12 @@ impl ops::Mul<ExpectedUtility> for ExpectedUtility {
     }
 }
 
+impl Display for ExpectedUtility {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Prob: {}, EU: {}", self.0, self.1)
+    }
+}
+
 impl Semiring for ExpectedUtility {
     fn one() -> Self {
         ExpectedUtility(1.0, 0.0)
@@ -145,5 +154,54 @@ impl Semiring for ExpectedUtility {
 
     fn zero() -> Self {
         ExpectedUtility(0.0, 0.0)
+    }
+}
+pub trait JoinSemilattice: PartialOrd {
+    fn join(&self, arg: &Self) -> Self;
+}
+
+impl JoinSemilattice for RealSemiring {
+    fn join(&self, arg: &Self) -> Self {
+        RealSemiring(f64::max(self.0, arg.0))
+    }
+}
+
+impl PartialOrd for ExpectedUtility {
+    fn partial_cmp(&self, other: &ExpectedUtility) -> Option<Ordering> {
+        if self.0 < other.0 && self.1 < other.1 {
+            Some(Ordering::Less)
+        } else if self.0 > other.0 && self.1 > other.1 {
+            Some(Ordering::Greater)
+        } else if self.0 == other.0 && self.1 == other.1 {
+            Some(Ordering::Equal)
+        } else {
+            None
+        }
+    }
+}
+
+impl JoinSemilattice for ExpectedUtility {
+    fn join(&self, arg: &Self) -> Self {
+        ExpectedUtility(f64::max(self.0, arg.0), f64::max(self.1, arg.1))
+    }
+}
+
+pub trait BBAlgebra: Semiring + JoinSemilattice {
+    fn choose(&self, arg: &Self) -> Self;
+}
+
+impl BBAlgebra for RealSemiring {
+    fn choose(&self, arg: &RealSemiring) -> RealSemiring {
+        JoinSemilattice::join(&self, arg)
+    }
+}
+
+impl BBAlgebra for ExpectedUtility {
+    fn choose(&self, arg: &ExpectedUtility) -> ExpectedUtility {
+        if self.1 > arg.1 {
+            *self
+        } else {
+            *arg
+        }
     }
 }

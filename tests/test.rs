@@ -320,6 +320,7 @@ mod test_bdd_manager {
     use crate::repr::cnf::Cnf;
     use crate::repr::var_label::VarLabel;
     use quickcheck::TestResult;
+    use rand::Rng;
     use rsdd::builder::cache::all_app::AllTable;
     use rsdd::builder::cache::lru_app::BddApplyTable;
     use rsdd::repr::bdd::BddPtr;
@@ -329,7 +330,8 @@ mod test_bdd_manager {
     use rsdd::repr::var_order::VarOrder;
     use rsdd::repr::vtree::VTree;
     use rsdd::repr::wmc::WmcParams;
-    use rsdd::util::semiring::{RealSemiring, Semiring};
+    use rsdd::util::semiring::{ExpectedUtility, RealSemiring, Semiring};
+    use serde::de::Expected;
     use std::collections::HashMap;
     use std::iter::FromIterator;
 
@@ -501,7 +503,9 @@ mod test_bdd_manager {
             let cnf = mgr.from_cnf(&c1);
             let vars = vec![VarLabel::new(0), VarLabel::new(2), VarLabel::new(4)];
             let wmc = WmcParams::new_with_default(RealSemiring::zero(), RealSemiring::one(), weight_map);
+
             let (marg_prob, _marg_assgn) = cnf.marginal_map(&vars, mgr.num_vars(), &wmc);
+            let (marg_prob_bb, _marg_assgn_bb) = cnf.bb(&vars, mgr.num_vars(), &wmc);
             let assignments = vec![(true, true, true), (true, true, false), (true, false, true), (true, false, false),
                                    (false, true, true), (false, true, false), (false, false, true), (false, false, false)];
 
@@ -526,7 +530,88 @@ mod test_bdd_manager {
                 println!("cnf: {}", c1);
                 println!("true map probability: {max}\nGot map probability: {marg_prob} with assignment {:?}", _marg_assgn);
             }
-            TestResult::from_bool(f64::abs(max - marg_prob) < 0.00001)
+            if f64::abs(marg_prob_bb.0 - marg_prob) > 0.00001 {
+                println!("cnf: {}", c1);
+                println!("true map probability: {}\nGot map probability: {marg_prob} ", marg_prob_bb.0);
+            }
+            TestResult::from_bool(f64::abs(max - marg_prob) < 0.00001
+                                  && f64::abs(marg_prob_bb.0 - marg_prob) < 0.00001)
+        }
+    }
+
+    quickcheck! {
+        fn meu(c1: Cnf) -> TestResult {
+            use rsdd::repr::model::PartialModel;
+            let n = c1.num_vars();
+            // constrain the size, make BDD
+            if n < 5 || n > 8 { return TestResult::discard() }
+            if c1.clauses().len() > 14 { return TestResult::discard() }
+            let mut mgr = super::BddManager::<AllTable<BddPtr>>::new_default_order(n);
+            let cnf = mgr.from_cnf(&c1);
+
+            // randomizing the decisions
+            let mut rng = rand::thread_rng();
+            let decisions : Vec<usize> = (0..3).map(|_| rng.gen_range(0..(n-2))).collect();
+            if decisions[0] == decisions[1] || decisions[1] == decisions[2] || decisions[0] == decisions[2] {
+                return TestResult::discard()
+            }
+
+            // weight function and weight map
+            let mut weight_fn = |x : usize| -> (VarLabel, (ExpectedUtility, ExpectedUtility)) {
+                if x == decisions[0] || x == decisions[1] || x == decisions[2] {
+                    return (VarLabel::new(x as u64),
+                    (ExpectedUtility::one(), ExpectedUtility::one()))
+                }
+                if x == n-1 || x == n-2 {
+                    return (VarLabel::new(x as u64),
+                    (ExpectedUtility::one(), ExpectedUtility(1.0, 10.0)))
+                }
+                (VarLabel::new(x as u64),
+                    (ExpectedUtility(0.3, 0.0), ExpectedUtility(0.7, 0.0)))
+            };
+            let weight_map : HashMap<VarLabel, (ExpectedUtility, ExpectedUtility)> = HashMap::from_iter(
+                (0..n).map(&weight_fn));
+
+            // set up wmc, run meu
+            let vars = vec![VarLabel::new(decisions[0] as u64),
+                            VarLabel::new(decisions[1] as u64),
+                            VarLabel::new(decisions[2] as u64)];
+            let wmc = WmcParams::new_with_default(ExpectedUtility::zero(), ExpectedUtility::one(), weight_map);
+
+            let (meu , _meu_assgn) = cnf.meu(&vars, mgr.num_vars(), &wmc);
+            let (meu_bb, _meu_assgn_bb) = cnf.bb(&vars, mgr.num_vars(), &wmc);
+
+            // brute-force meu
+            let assignments = vec![(true, true, true), (true, true, false), (true, false, true), (true, false, false),
+                                   (false, true, true), (false, true, false), (false, false, true), (false, false, false)];
+            let mut max : f64 = -10000.0;
+            let mut max_assgn : PartialModel = PartialModel::from_litvec(&[], c1.num_vars());
+            for (v1, v2, v3) in assignments.iter() {
+                let x = mgr.var(VarLabel::new(decisions[0] as u64), *v1);
+                let y = mgr.var(VarLabel::new(decisions[1] as u64), *v2);
+                let z = mgr.var(VarLabel::new(decisions[2] as u64), *v3);
+                let mut conj = mgr.and(x, y);
+                conj = mgr.and(conj, z);
+                conj = mgr.and(conj, cnf);
+                let poss_max = conj.wmc(mgr.get_order(), &wmc);
+                if poss_max.1 > max {
+                    max = poss_max.1;
+                    max_assgn.set(VarLabel::new(decisions[0] as u64), *v1);
+                    max_assgn.set(VarLabel::new(decisions[1] as u64), *v2);
+                    max_assgn.set(VarLabel::new(decisions[2] as u64), *v3);
+                }
+            }
+
+            // and the actual check
+            if f64::abs(max - meu.1) > 0.00001 {
+                println!("cnf: {}", c1);
+                println!("true meu: {max}\\nGot meu (no BB): {} with assignment {:?}", meu.1, _meu_assgn);
+            }
+            if f64::abs(meu.1 - meu_bb.1) > 0.00001 {
+                println!("cnf: {}", c1);
+                println!("true meu: {}\\nGot BB meu: {} with assignment {:?}", meu.1, meu_bb.1, _meu_assgn_bb);
+            }
+            TestResult::from_bool(f64::abs(meu.1 - meu_bb.1) < 0.00001 && f64::abs(max - meu.1)< 0.00001)
         }
     }
 }

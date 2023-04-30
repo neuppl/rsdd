@@ -7,7 +7,7 @@ use super::var_label::{Literal, VarLabel, VarSet};
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct PartialModel {
     /// None if variable is unset
-    true_assignments: VarSet,
+    pub true_assignments: VarSet,
     false_assignments: VarSet, // assignments: Vec<Option<bool>>,
 }
 
