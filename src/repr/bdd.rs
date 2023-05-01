@@ -790,7 +790,6 @@ impl BddPtr {
                         } else {
                             (best_lb, best_model) = (cur_lb, cur_best.clone());
                         }
-                        // (best_lb, best_model) = self.bb_h(best_lb, best_model, end, wmc, partialmodel.clone());
                     }
                 }
                 (best_lb, best_model)

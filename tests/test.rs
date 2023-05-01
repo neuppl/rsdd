@@ -331,7 +331,6 @@ mod test_bdd_manager {
     use rsdd::repr::vtree::VTree;
     use rsdd::repr::wmc::WmcParams;
     use rsdd::util::semiring::{ExpectedUtility, RealSemiring, Semiring};
-    use serde::de::Expected;
     use std::collections::HashMap;
     use std::iter::FromIterator;
 
@@ -502,10 +501,15 @@ mod test_bdd_manager {
                 (0..16).map(|x| (VarLabel::new(x as u64), (RealSemiring(0.3), RealSemiring(0.7)))));
             let cnf = mgr.from_cnf(&c1);
             let vars = vec![VarLabel::new(0), VarLabel::new(2), VarLabel::new(4)];
+            if !c1.var_in_cnf(VarLabel::new(0))
+               || !c1.var_in_cnf(VarLabel::new(2))
+               || !c1.var_in_cnf(VarLabel::new(4)) { 
+                return TestResult::discard()
+            }
             let wmc = WmcParams::new_with_default(RealSemiring::zero(), RealSemiring::one(), weight_map);
 
-            let (marg_prob, _marg_assgn) = cnf.marginal_map(&vars, mgr.num_vars(), &wmc);
-            let (marg_prob_bb, _marg_assgn_bb) = cnf.bb(&vars, mgr.num_vars(), &wmc);
+            let (marg_prob, marg_assgn) = cnf.marginal_map(&vars, mgr.num_vars(), &wmc);
+            let (marg_prob_bb, marg_assgn_bb) = cnf.bb(&vars, mgr.num_vars(), &wmc);
             let assignments = vec![(true, true, true), (true, true, false), (true, false, true), (true, false, false),
                                    (false, true, true), (false, true, false), (false, false, true), (false, false, false)];
 
@@ -526,16 +530,46 @@ mod test_bdd_manager {
                     max_assgn.set(VarLabel::new(4), *v3);
                 }
             }
-            if f64::abs(max - marg_prob) > 0.00001 {
-                println!("cnf: {}", c1);
-                println!("true map probability: {max}\nGot map probability: {marg_prob} with assignment {:?}", _marg_assgn);
+
+            // the below tests (specifically, the bool pm_check)
+            // check that the partial models evaluate to the correct margmap.
+            // these pms can be different b/c of symmetries/dead literals in the CNF.
+            let mut pm_check = true;
+            let extract = |ob : Option<bool>| -> bool {
+                match ob {
+                    Some(b) => b,
+                    None => panic!("none encountered")
+                }
+            };
+            let v : Vec<bool> = (0..3).map(|x| extract(marg_assgn.get(vars[x]))).collect();
+            let w : Vec<bool> = (0..3).map(|x| extract(marg_assgn_bb.get(vars[x]))).collect();
+            // if v != w {
+            //     println!("{:?},{:?}",v,w);
+            // }
+            let v0 = mgr.var(vars[0], v[0]);
+            let v1 = mgr.var(vars[1], v[1]);
+            let v2 = mgr.var(vars[2], v[2]);
+            let mut conj = mgr.and(v0, v1);
+            conj = mgr.and(conj, v2);
+            conj = mgr.and(conj, cnf);
+            let poss_max = conj.wmc(mgr.get_order(), &wmc);
+            if f64::abs(poss_max.0 - max) > 0.0001 {
+                pm_check = false;
             }
-            if f64::abs(marg_prob_bb.0 - marg_prob) > 0.00001 {
-                println!("cnf: {}", c1);
-                println!("true map probability: {}\nGot map probability: {marg_prob} ", marg_prob_bb.0);
+            let w0 = mgr.var(vars[0], w[0]);
+            let w1 = mgr.var(vars[1], w[1]);
+            let w2 = mgr.var(vars[2], w[2]);
+            let mut conj2 = mgr.and(w0, w1);
+            conj2 = mgr.and(conj2, w2);
+            conj2 = mgr.and(conj2, cnf);
+            let poss_max2 = conj.wmc(mgr.get_order(), &wmc);
+            if f64::abs(poss_max2.0 - max) > 0.0001 {
+                pm_check = false;
             }
+            
             TestResult::from_bool(f64::abs(max - marg_prob) < 0.00001
-                                  && f64::abs(marg_prob_bb.0 - marg_prob) < 0.00001)
+                                  && f64::abs(marg_prob_bb.0 - marg_prob) < 0.00001
+                                  && pm_check)
         }
     }
 
@@ -551,14 +585,21 @@ mod test_bdd_manager {
 
             // randomizing the decisions
             let mut rng = rand::thread_rng();
-            let decisions : Vec<usize> = (0..3).map(|_| rng.gen_range(0..(n-2))).collect();
+            let decisions : Vec<VarLabel> = (0..3).map(|_| VarLabel::new(rng.gen_range(0..(n-2)) as u64)).collect();
             if decisions[0] == decisions[1] || decisions[1] == decisions[2] || decisions[0] == decisions[2] {
+                return TestResult::discard()
+            }
+            if !c1.var_in_cnf(decisions[0])
+               || !c1.var_in_cnf(decisions[1])
+               || !c1.var_in_cnf(decisions[2]) { 
                 return TestResult::discard()
             }
 
             // weight function and weight map
-            let mut weight_fn = |x : usize| -> (VarLabel, (ExpectedUtility, ExpectedUtility)) {
-                if x == decisions[0] || x == decisions[1] || x == decisions[2] {
+            let probs : Vec<f64> = (0..n).map(|_| rng.gen_range(0.0..1.0)).collect();
+            let weight_fn = |x : usize| -> (VarLabel, (ExpectedUtility, ExpectedUtility)) {
+                let vx = VarLabel::new(x as u64);
+                if vx == decisions[0] || vx == decisions[1] || vx == decisions[2] {
                     return (VarLabel::new(x as u64),
                     (ExpectedUtility::one(), ExpectedUtility::one()))
                 }
@@ -566,20 +607,18 @@ mod test_bdd_manager {
                     return (VarLabel::new(x as u64),
                     (ExpectedUtility::one(), ExpectedUtility(1.0, 10.0)))
                 }
-                (VarLabel::new(x as u64),
-                    (ExpectedUtility(0.3, 0.0), ExpectedUtility(0.7, 0.0)))
+                let pr = probs[x];
+                (vx, (ExpectedUtility(pr, 0.0), ExpectedUtility(1.0-pr, 0.0)))
             };
             let weight_map : HashMap<VarLabel, (ExpectedUtility, ExpectedUtility)> = HashMap::from_iter(
                 (0..n).map(&weight_fn));
 
             // set up wmc, run meu
-            let vars = vec![VarLabel::new(decisions[0] as u64),
-                            VarLabel::new(decisions[1] as u64),
-                            VarLabel::new(decisions[2] as u64)];
+            let vars = decisions.clone();
             let wmc = WmcParams::new_with_default(ExpectedUtility::zero(), ExpectedUtility::one(), weight_map);
 
-            let (meu , _meu_assgn) = cnf.meu(&vars, mgr.num_vars(), &wmc);
-            let (meu_bb, _meu_assgn_bb) = cnf.bb(&vars, mgr.num_vars(), &wmc);
+            let (meu , meu_assgn) = cnf.meu(&vars, mgr.num_vars(), &wmc);
+            let (meu_bb, meu_assgn_bb) = cnf.bb(&vars, mgr.num_vars(), &wmc);
 
             // brute-force meu
             let assignments = vec![(true, true, true), (true, true, false), (true, false, true), (true, false, false),
@@ -587,31 +626,63 @@ mod test_bdd_manager {
             let mut max : f64 = -10000.0;
             let mut max_assgn : PartialModel = PartialModel::from_litvec(&[], c1.num_vars());
             for (v1, v2, v3) in assignments.iter() {
-                let x = mgr.var(VarLabel::new(decisions[0] as u64), *v1);
-                let y = mgr.var(VarLabel::new(decisions[1] as u64), *v2);
-                let z = mgr.var(VarLabel::new(decisions[2] as u64), *v3);
+                let x = mgr.var(decisions[0], *v1);
+                let y = mgr.var(decisions[1], *v2);
+                let z = mgr.var(decisions[2], *v3);
                 let mut conj = mgr.and(x, y);
                 conj = mgr.and(conj, z);
                 conj = mgr.and(conj, cnf);
                 let poss_max = conj.wmc(mgr.get_order(), &wmc);
                 if poss_max.1 > max {
                     max = poss_max.1;
-                    max_assgn.set(VarLabel::new(decisions[0] as u64), *v1);
-                    max_assgn.set(VarLabel::new(decisions[1] as u64), *v2);
-                    max_assgn.set(VarLabel::new(decisions[2] as u64), *v3);
+                    max_assgn.set(decisions[0], *v1);
+                    max_assgn.set(decisions[1], *v2);
+                    max_assgn.set(decisions[2], *v3);
                 }
             }
 
-            // and the actual check
-            if f64::abs(max - meu.1) > 0.00001 {
-                println!("cnf: {}", c1);
-                println!("true meu: {max}\\nGot meu (no BB): {} with assignment {:?}", meu.1, _meu_assgn);
+            // and the actual checks.
+            // these checks test that the meus coincide.
+            let pr_check1 = f64::abs(meu.1 - meu_bb.1) < 0.00001;
+            let pr_check2 = f64::abs(max - meu.1)< 0.00001;
+
+            // the below tests (specifically, the bool pm_check)
+            // check that the partial models evaluate to the correct meu.
+            // these pms can be different b/c of symmetries/dead literals in the CNF.
+            let mut pm_check = true;
+            let extract = |ob : Option<bool>| -> bool {
+                match ob {
+                    Some(b) => b,
+                    None => panic!("none encountered")
+                }
+            };
+            let v : Vec<bool> = (0..3).map(|x| extract(meu_assgn.get(decisions[x]))).collect();
+            let w : Vec<bool> = (0..3).map(|x| extract(meu_assgn_bb.get(decisions[x]))).collect();
+            // if v != w {
+            //     println!("{:?},{:?}",v,w);
+            // }
+            let v0 = mgr.var(decisions[0], v[0]);
+            let v1 = mgr.var(decisions[1], v[1]);
+            let v2 = mgr.var(decisions[2], v[2]);
+            let mut conj = mgr.and(v0, v1);
+            conj = mgr.and(conj, v2);
+            conj = mgr.and(conj, cnf);
+            let poss_max = conj.wmc(mgr.get_order(), &wmc);
+            if f64::abs(poss_max.1 - max) > 0.0001 {
+                pm_check = false;
             }
-            if f64::abs(meu.1 - meu_bb.1) > 0.00001 {
-                println!("cnf: {}", c1);
-                println!("true meu: {}\\nGot BB meu: {} with assignment {:?}", meu.1, meu_bb.1, _meu_assgn_bb);
+            let w0 = mgr.var(decisions[0], w[0]);
+            let w1 = mgr.var(decisions[1], w[1]);
+            let w2 = mgr.var(decisions[2], w[2]);
+            let mut conj2 = mgr.and(w0, w1);
+            conj2 = mgr.and(conj2, w2);
+            conj2 = mgr.and(conj2, cnf);
+            let poss_max2 = conj.wmc(mgr.get_order(), &wmc);
+            if f64::abs(poss_max2.1 - max) > 0.0001 {
+                pm_check = false;
             }
-            TestResult::from_bool(f64::abs(meu.1 - meu_bb.1) < 0.00001 && f64::abs(max - meu.1)< 0.00001)
+
+            TestResult::from_bool(pr_check1 && pr_check2 && pm_check)
         }
     }
 }
