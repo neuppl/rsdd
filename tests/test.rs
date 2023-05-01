@@ -503,7 +503,7 @@ mod test_bdd_manager {
             let vars = vec![VarLabel::new(0), VarLabel::new(2), VarLabel::new(4)];
             if !c1.var_in_cnf(VarLabel::new(0))
                || !c1.var_in_cnf(VarLabel::new(2))
-               || !c1.var_in_cnf(VarLabel::new(4)) { 
+               || !c1.var_in_cnf(VarLabel::new(4)) {
                 return TestResult::discard()
             }
             let wmc = WmcParams::new_with_default(RealSemiring::zero(), RealSemiring::one(), weight_map);
@@ -566,7 +566,7 @@ mod test_bdd_manager {
             if f64::abs(poss_max2.0 - max) > 0.0001 {
                 pm_check = false;
             }
-            
+
             TestResult::from_bool(f64::abs(max - marg_prob) < 0.00001
                                   && f64::abs(marg_prob_bb.0 - marg_prob) < 0.00001
                                   && pm_check)
@@ -591,7 +591,7 @@ mod test_bdd_manager {
             }
             if !c1.var_in_cnf(decisions[0])
                || !c1.var_in_cnf(decisions[1])
-               || !c1.var_in_cnf(decisions[2]) { 
+               || !c1.var_in_cnf(decisions[2]) {
                 return TestResult::discard()
             }
 

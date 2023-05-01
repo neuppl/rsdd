@@ -661,10 +661,12 @@ impl Cnf {
     }
 
     // Checks if v a variable is in the CNF
-    pub fn var_in_cnf(&self, v : VarLabel) -> bool {
-        let list_of_lits : Vec<Literal> = self.clauses.clone().into_iter().flatten().collect();
+    pub fn var_in_cnf(&self, v: VarLabel) -> bool {
+        let list_of_lits: Vec<Literal> = self.clauses.clone().into_iter().flatten().collect();
         for l in &list_of_lits {
-            if l.get_label() == v { return true }
+            if l.get_label() == v {
+                return true;
+            }
         }
         false
     }
