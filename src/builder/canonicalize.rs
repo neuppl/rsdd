@@ -6,7 +6,7 @@ use super::bdd_builder::DDNNFPtr;
 use super::cache::sdd_apply_cache::{SddApply, SddApplyCompression, SddApplySemantic};
 use crate::backing_store::bump_table::BackedRobinhoodTable;
 use crate::backing_store::{DefaultUniqueTableHasher, UniqueTable, UniqueTableHasher};
-use crate::repr::bdd::{create_semantic_hash_map, WmcParams};
+use crate::repr::bdd::{create_random_semantic_hash_map, WmcParams};
 use crate::repr::sdd::{BinarySDD, SddOr, SddPtr};
 use crate::repr::vtree::VTreeManager;
 use crate::util::semiring::FiniteField;
@@ -134,6 +134,19 @@ pub struct SemanticCanonicalizer<const P: u128> {
 }
 
 impl<const P: u128> SemanticCanonicalizer<P> {
+    pub fn new_with_map(vtree: &VTreeManager, map: WmcParams<FiniteField<P>>) -> Self {
+        let app_cache = SddApplySemantic::new(map.clone(), vtree.clone());
+        SemanticCanonicalizer {
+            app_cache,
+            use_compression: false,
+            vtree: vtree.clone(),
+            bdd_tbl: BackedRobinhoodTable::new(),
+            sdd_tbl: BackedRobinhoodTable::new(),
+            hasher: SemanticUniqueTableHasher::new(vtree.clone(), map.clone()),
+            map,
+        }
+    }
+
     fn get_shared_sdd_ptr(&mut self, semantic_hash: FiniteField<P>, hash: u64) -> Option<SddPtr> {
         match semantic_hash.value() {
             0 => Some(SddPtr::PtrFalse),
@@ -184,7 +197,7 @@ impl<const P: u128> SddCanonicalizationScheme for SemanticCanonicalizer<P> {
     type SddOrHasher = SemanticUniqueTableHasher<P>;
 
     fn new(vtree: &VTreeManager) -> Self {
-        let map = create_semantic_hash_map(vtree.vtree_root().num_vars());
+        let map = create_random_semantic_hash_map(vtree.vtree_root().num_vars());
         let app_cache = SddApplySemantic::new(map.clone(), vtree.clone());
         SemanticCanonicalizer {
             app_cache,

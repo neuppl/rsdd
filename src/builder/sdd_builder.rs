@@ -10,7 +10,7 @@ use super::cache::sdd_apply_cache::SddApply;
 use super::cache::LruTable;
 use super::canonicalize::*;
 
-use crate::repr::bdd::create_semantic_hash_map;
+use crate::repr::bdd::create_random_semantic_hash_map;
 use crate::repr::ddnnf::DDNNFPtr;
 use crate::repr::sdd::{BinarySDD, SddAnd, SddOr, SddPtr};
 use crate::repr::vtree::{VTree, VTreeIndex, VTreeManager};
@@ -62,6 +62,16 @@ impl<T: SddCanonicalizationScheme> SddManager<T> {
             stats: SddStats::new(),
             ite_cache: AllTable::new(),
             canonicalizer: T::new(&vtree_man),
+            vtree: vtree_man,
+        }
+    }
+
+    pub fn new_with_canonicalizer(vtree: VTree, canonicalizer: T) -> SddManager<T> {
+        let vtree_man = VTreeManager::new(vtree);
+        SddManager {
+            stats: SddStats::new(),
+            ite_cache: AllTable::new(),
+            canonicalizer,
             vtree: vtree_man,
         }
     }
@@ -801,7 +811,7 @@ impl<T: SddCanonicalizationScheme> SddManager<T> {
     /// manager (nodes that have the same semantic hash)
     pub fn num_logically_redundant(&self) -> usize {
         let mut s: HashSet<u128> = HashSet::new();
-        let hasher = create_semantic_hash_map::<100000000063>(self.num_vars() + 1000); // TODO FIX THIS BADNESS
+        let hasher = create_random_semantic_hash_map::<100000000063>(self.num_vars() + 1000); // TODO FIX THIS BADNESS
         let mut num_collisions = 0;
         for n in self.node_iter() {
             let h = n.cached_semantic_hash(self.get_vtree_manager(), &hasher);
@@ -1091,7 +1101,6 @@ fn sdd_wmc1() {
 
 #[test]
 fn prob_equiv_sdd_demorgan() {
-    use crate::repr::bdd::create_semantic_hash_map;
     use crate::repr::bdd::WmcParams;
     use crate::util::semiring::FiniteField;
 
@@ -1113,7 +1122,7 @@ fn prob_equiv_sdd_demorgan() {
     let res = man.or(x, y).neg();
     let expected = man.and(x.neg(), y.neg());
 
-    let map: WmcParams<FiniteField<100000049>> = create_semantic_hash_map(man.num_vars());
+    let map: WmcParams<FiniteField<100000049>> = create_random_semantic_hash_map(man.num_vars());
 
     let sh1 = res.cached_semantic_hash(man.get_vtree_manager(), &map);
     let sh2 = expected.cached_semantic_hash(man.get_vtree_manager(), &map);

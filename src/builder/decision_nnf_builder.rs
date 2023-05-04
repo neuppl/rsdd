@@ -8,7 +8,7 @@ use std::{
 use crate::{
     backing_store::*,
     repr::{
-        bdd::{create_semantic_hash_map, WmcParams},
+        bdd::{create_random_semantic_hash_map, WmcParams},
         ddnnf::DDNNFPtr,
         unit_prop::{DecisionResult, SATSolver},
     },
@@ -67,7 +67,7 @@ impl DecisionNNFBuilder {
             compute_table: BackedRobinhoodTable::new(),
             hasher: DefaultUniqueTableHasher::default(),
             // hasher: BddSemanticUniqueTableHasher {
-            //     map: create_semantic_hash_map(order.num_vars()),
+            //     map: create_random_semantic_hash_map(order.num_vars()),
             //     order,
             // },
         }
@@ -265,7 +265,7 @@ impl DecisionNNFBuilder {
     pub fn num_logically_redundant(&self) -> usize {
         let mut num_collisions = 0;
         let mut seen_hashes = HashSet::new();
-        let map = create_semantic_hash_map::<10000000049>(self.order.num_vars());
+        let map = create_random_semantic_hash_map::<10000000049>(self.order.num_vars());
         for bdd in self.compute_table.iter() {
             let h = BddPtr::new_reg(bdd).semantic_hash(&self.order, &map);
             if seen_hashes.contains(&(h.value())) {

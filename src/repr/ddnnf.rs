@@ -9,7 +9,9 @@ use rand_chacha::ChaCha8Rng;
 /// creates a weighting that can be used for semantically hashing a DDNNF node
 /// the constant `P` denotes the size of the field over which the semantic hash will
 /// be computed. For more info, see <https://tr.inf.unibe.ch/pdf/iam-06-001.pdf>
-pub fn create_semantic_hash_map<const P: u128>(num_vars: usize) -> WmcParams<FiniteField<P>> {
+pub fn create_random_semantic_hash_map<const P: u128>(
+    num_vars: usize,
+) -> WmcParams<FiniteField<P>> {
     let vars: Vec<VarLabel> = (0..num_vars).map(|x| VarLabel::new_usize(x)).collect();
 
     // theoretical guarantee from paper; need to verify more!
@@ -22,7 +24,7 @@ pub fn create_semantic_hash_map<const P: u128>(num_vars: usize) -> WmcParams<Fin
     let mut rng = ChaCha8Rng::seed_from_u64(101249);
     // let mut rng = ChaCha8Rng::from_entropy();
 
-    let value_range: Vec<(FiniteField<P>, FiniteField<P>)> = (0..vars.len() as u128)
+    let values: Vec<(FiniteField<P>, FiniteField<P>)> = (0..vars.len() as u128)
         .map(|_| {
             let h = FiniteField::new(rng.gen_range(2..P));
             let l = FiniteField::new(P - h.value() + 1);
@@ -30,9 +32,31 @@ pub fn create_semantic_hash_map<const P: u128>(num_vars: usize) -> WmcParams<Fin
         })
         .collect();
 
+    create_semantic_hash_map(vars, values)
+}
+
+pub fn create_semantic_hash_map_with_linear_order_and_weights<const P: u128>(
+    num_vars: usize,
+) -> WmcParams<FiniteField<P>> {
+    let vars: Vec<VarLabel> = (0..num_vars).map(|x| VarLabel::new_usize(x)).collect();
+    let values = (0..num_vars as u128)
+        .map(|v| {
+            let h = FiniteField::new(v + 2);
+            let l = FiniteField::new(P - (v + 2) + 1);
+            (l, h)
+        })
+        .collect();
+
+    create_semantic_hash_map(vars, values)
+}
+
+pub fn create_semantic_hash_map<const P: u128>(
+    vars: Vec<VarLabel>,
+    values: Vec<(FiniteField<P>, FiniteField<P>)>,
+) -> WmcParams<FiniteField<P>> {
     let mut map = HashMap::new();
 
-    for (&var, &value) in vars.iter().zip(value_range.iter()) {
+    for (&var, &value) in vars.iter().zip(values.iter()) {
         map.insert(var, value);
     }
 

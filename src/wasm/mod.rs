@@ -1,9 +1,10 @@
 use crate::builder::bdd_builder::{BddManager, BddPtr};
 use crate::builder::cache::lru_app::BddApplyTable;
-use crate::builder::canonicalize::CompressionCanonicalizer;
+use crate::builder::canonicalize::{CompressionCanonicalizer, SemanticCanonicalizer};
 use crate::builder::sdd_builder::SddManager;
-use crate::repr::bdd::VarOrder;
+use crate::repr::bdd::{create_semantic_hash_map_with_linear_order_and_weights, VarOrder};
 use crate::repr::dtree::DTree;
+use crate::repr::vtree::VTreeManager;
 use crate::repr::{cnf::Cnf, var_label::VarLabel, vtree::VTree};
 use crate::serialize::{ser_bdd, ser_sdd, ser_vtree};
 use wasm_bindgen::prelude::*;
@@ -16,6 +17,8 @@ pub enum VTreeType {
     FromDTreeLinear,
     FromDTreeMinFill,
 }
+
+const MEDIUM_PRIME: u128 = 100000049;
 
 // used in: https://github.com/mattxwang/indecision
 #[wasm_bindgen]
@@ -70,6 +73,38 @@ pub fn sdd(cnf_input: String, vtree_type_input: JsValue) -> Result<JsValue, JsVa
 
     let mut compr_mgr = SddManager::<CompressionCanonicalizer>::new(vtree);
     let sdd = compr_mgr.from_cnf(&cnf);
+
+    let serialized = ser_sdd::SDDSerializer::from_sdd(sdd);
+
+    Ok(serde_wasm_bindgen::to_value(&serialized)?)
+}
+
+// used in: https://github.com/mattxwang/indecision
+#[wasm_bindgen]
+pub fn sdd_semantic_with_map_linear(
+    cnf_input: String,
+    vtree_type_input: JsValue,
+) -> Result<JsValue, JsValue> {
+    let cnf = Cnf::from_file(cnf_input);
+
+    let vtree_type: VTreeType = serde_wasm_bindgen::from_value(vtree_type_input)?;
+
+    let vtree = build_vtree(&cnf, vtree_type);
+
+    let map = create_semantic_hash_map_with_linear_order_and_weights(cnf.num_vars());
+
+    let vtree_man = VTreeManager::new(vtree.clone());
+
+    let canonicalizer = SemanticCanonicalizer::new_with_map(&vtree_man, map.clone());
+
+    let mut mgr = SddManager::<SemanticCanonicalizer<MEDIUM_PRIME>>::new_with_canonicalizer(
+        vtree,
+        canonicalizer,
+    );
+    let sdd = mgr.from_cnf(&cnf);
+
+    // forces all semantic hashes to be calculated
+    let _ = sdd.cached_semantic_hash(&vtree_man, &map);
 
     let serialized = ser_sdd::SDDSerializer::from_sdd(sdd);
 

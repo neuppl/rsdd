@@ -324,7 +324,7 @@ mod test_bdd_manager {
     use rsdd::builder::cache::all_app::AllTable;
     use rsdd::builder::cache::lru_app::BddApplyTable;
     use rsdd::repr::bdd::BddPtr;
-    use rsdd::repr::ddnnf::{create_semantic_hash_map, DDNNFPtr};
+    use rsdd::repr::ddnnf::{create_random_semantic_hash_map, DDNNFPtr};
     use rsdd::repr::dtree::DTree;
     use rsdd::repr::model::PartialModel;
     use rsdd::repr::var_order::VarOrder;
@@ -408,7 +408,7 @@ mod test_bdd_manager {
             if c1.clauses().len() > 16 { return TestResult::discard() }
 
             let mut mgr = super::BddManager::<AllTable<BddPtr>>::new_default_order(c1.num_vars());
-            let weight = create_semantic_hash_map::<{crate::BIG_PRIME}>(c1.num_vars());
+            let weight = create_random_semantic_hash_map::<{crate::BIG_PRIME}>(c1.num_vars());
             let cnf1 = mgr.from_cnf(&c1);
             let bddres = cnf1.wmc(mgr.get_order(), &weight);
             let cnfres = c1.wmc(&weight);
@@ -421,7 +421,7 @@ mod test_bdd_manager {
         fn sdd_semantic_eq_bdd(c1: Cnf, vtree: VTree) -> bool {
             let mut bdd_mgr = super::BddManager::<AllTable<BddPtr>>::new_default_order(c1.num_vars());
             let mut sdd_mgr = super::SddManager::<rsdd::builder::canonicalize::CompressionCanonicalizer>::new(vtree);
-            let map : WmcParams<rsdd::util::semiring::FiniteField<{ crate::BIG_PRIME }>>= create_semantic_hash_map(c1.num_vars());
+            let map : WmcParams<rsdd::util::semiring::FiniteField<{ crate::BIG_PRIME }>>= create_random_semantic_hash_map(c1.num_vars());
             let bdd = bdd_mgr.from_cnf(&c1);
             let sdd = sdd_mgr.from_cnf(&c1);
             bdd.semantic_hash(bdd_mgr.get_order(), &map) == sdd.semantic_hash(sdd_mgr.get_vtree_manager(), &map)
@@ -437,7 +437,7 @@ mod test_bdd_manager {
             let vtree = VTree::from_dtree(&dtree).unwrap();
 
             let mut sdd_mgr = super::SddManager::<rsdd::builder::canonicalize::CompressionCanonicalizer>::new(vtree);
-            let map : WmcParams<rsdd::util::semiring::FiniteField<{ crate::BIG_PRIME }>>= create_semantic_hash_map(c1.num_vars());
+            let map : WmcParams<rsdd::util::semiring::FiniteField<{ crate::BIG_PRIME }>>= create_random_semantic_hash_map(c1.num_vars());
             let bdd = bdd_mgr.from_cnf(&c1);
             let sdd = sdd_mgr.from_cnf(&c1);
             bdd.semantic_hash(bdd_mgr.get_order(), &map) == sdd.semantic_hash(sdd_mgr.get_vtree_manager(), &map)
@@ -561,7 +561,7 @@ mod test_bdd_manager {
             let w2 = mgr.var(vars[2], w[2]);
             let mut conj2 = mgr.and(w0, w1);
             conj2 = mgr.and(conj2, w2);
-            conj2 = mgr.and(conj2, cnf);
+            mgr.and(conj2, cnf);
             let poss_max2 = conj.wmc(mgr.get_order(), &wmc);
             if f64::abs(poss_max2.0 - max) > 0.0001 {
                 pm_check = false;
@@ -578,7 +578,7 @@ mod test_bdd_manager {
             use rsdd::repr::model::PartialModel;
             let n = c1.num_vars();
             // constrain the size, make BDD
-            if n < 5 || n > 8 { return TestResult::discard() }
+            if !(5..=8).contains(&n) { return TestResult::discard() }
             if c1.clauses().len() > 14 { return TestResult::discard() }
             let mut mgr = super::BddManager::<AllTable<BddPtr>>::new_default_order(n);
             let cnf = mgr.from_cnf(&c1);
@@ -676,7 +676,7 @@ mod test_bdd_manager {
             let w2 = mgr.var(decisions[2], w[2]);
             let mut conj2 = mgr.and(w0, w1);
             conj2 = mgr.and(conj2, w2);
-            conj2 = mgr.and(conj2, cnf);
+            mgr.and(conj2, cnf);
             let poss_max2 = conj.wmc(mgr.get_order(), &wmc);
             if f64::abs(poss_max2.1 - max) > 0.0001 {
                 pm_check = false;
@@ -699,7 +699,7 @@ mod test_sdd_manager {
     use rsdd::builder::cache::all_app::AllTable;
     use rsdd::builder::canonicalize::*;
     use rsdd::repr::bdd::BddPtr;
-    use rsdd::repr::ddnnf::{create_semantic_hash_map, DDNNFPtr};
+    use rsdd::repr::ddnnf::{create_random_semantic_hash_map, DDNNFPtr};
     use rsdd::repr::dtree::DTree;
     use rsdd::repr::sdd::SddPtr;
     use rsdd::repr::var_order::VarOrder;
@@ -775,7 +775,7 @@ mod test_sdd_manager {
             if cnf.num_vars() < 8 || cnf.num_vars() > 16 { return TestResult::discard() }
             if cnf.clauses().len() > 16 { return TestResult::discard() }
 
-           let weight_map = create_semantic_hash_map::< {crate::BIG_PRIME} >(cnf.num_vars());
+           let weight_map = create_random_semantic_hash_map::< {crate::BIG_PRIME} >(cnf.num_vars());
            let order : Vec<VarLabel> = (0..cnf.num_vars()).map(|x| VarLabel::new(x as u64)).collect();
            let mut mgr = super::SddManager::<CompressionCanonicalizer>::new(VTree::even_split(&order, 3));
            let cnf_sdd = mgr.from_cnf(&cnf);
@@ -801,7 +801,7 @@ mod test_sdd_manager {
             let dtree = DTree::from_cnf(&cnf, &VarOrder::linear_order(cnf.num_vars()));
             let vtree = VTree::from_dtree(&dtree).unwrap();
 
-            let weight_map = create_semantic_hash_map::< {crate::BIG_PRIME} >(cnf.num_vars());
+            let weight_map = create_random_semantic_hash_map::< {crate::BIG_PRIME} >(cnf.num_vars());
             let mut mgr = super::SddManager::<CompressionCanonicalizer>::new(vtree);
             let cnf_sdd = mgr.from_cnf(&cnf);
             let sdd_res = cnf_sdd.semantic_hash(mgr.get_vtree_manager(), &weight_map);
@@ -891,7 +891,7 @@ mod test_sdd_manager {
             let mut mgr2 = super::SddManager::<SemanticCanonicalizer<{ crate::BIG_PRIME }>>::new(vtree);
             let c2 = mgr2.from_cnf(&c);
 
-            let map : WmcParams<FiniteField<100000049>> = create_semantic_hash_map(mgr1.num_vars());
+            let map : WmcParams<FiniteField<100000049>> = create_random_semantic_hash_map(mgr1.num_vars());
 
             let h1 = c1.semantic_hash(mgr1.get_vtree_manager(), &map);
             let h2 = c2.semantic_hash(mgr2.get_vtree_manager(), &map);
@@ -910,7 +910,7 @@ mod test_sdd_manager {
             let uncompr_cnf = uncompr_mgr.from_cnf(&c);
 
 
-            let map : WmcParams<FiniteField<100000049>> = create_semantic_hash_map(compr_mgr.num_vars());
+            let map : WmcParams<FiniteField<100000049>> = create_random_semantic_hash_map(compr_mgr.num_vars());
 
             let compr_h = compr_cnf.semantic_hash(compr_mgr.get_vtree_manager(), &map);
             let uncompr_h = uncompr_cnf.semantic_hash(uncompr_mgr.get_vtree_manager(), &map);
@@ -995,7 +995,7 @@ mod test_sdd_manager {
             let mut mgr = super::SddManager::<CompressionCanonicalizer>::new(vtree);
             let _ = mgr.from_cnf(&c1);
 
-            let map : WmcParams<FiniteField<{ crate::BIG_PRIME }>>= create_semantic_hash_map(mgr.num_vars());
+            let map : WmcParams<FiniteField<{ crate::BIG_PRIME }>>= create_random_semantic_hash_map(mgr.num_vars());
             let mut seen_hashes : HashMap<u128, SddPtr> = HashMap::new();
             for sdd in mgr.node_iter() {
                 let hash = sdd.semantic_hash(mgr.get_vtree_manager(), &map);
@@ -1021,7 +1021,7 @@ mod test_sdd_manager {
             let mut mgr = super::SddManager::<SemanticCanonicalizer< {crate::BIG_PRIME} >>::new(vtree);
             let _ = mgr.from_cnf(&c1);
 
-            let map : WmcParams<FiniteField<{ crate::BIG_PRIME }>>= create_semantic_hash_map(mgr.num_vars());
+            let map : WmcParams<FiniteField<{ crate::BIG_PRIME }>>= create_random_semantic_hash_map(mgr.num_vars());
             let mut seen_hashes : HashMap<u128, SddPtr> = HashMap::new();
             for sdd in mgr.node_iter() {
                 let hash = sdd.semantic_hash(mgr.get_vtree_manager(), &map);
@@ -1071,7 +1071,7 @@ mod test_sdd_manager {
         /// verify that the semantic hash of an SDDPtr + its compl is always equal to 1
         fn semantic_reg_plus_compl_eq_one(c1: Cnf, vtree:VTree) -> bool {
             let mut mgr = super::SddManager::<SemanticCanonicalizer<{ crate::BIG_PRIME }>>::new(vtree);
-            let map : WmcParams<FiniteField<{ crate::BIG_PRIME }>>= create_semantic_hash_map(mgr.num_vars());
+            let map : WmcParams<FiniteField<{ crate::BIG_PRIME }>>= create_random_semantic_hash_map(mgr.num_vars());
 
             let sdd = mgr.from_cnf(&c1);
             let compl = sdd.neg();
