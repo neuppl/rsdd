@@ -647,7 +647,6 @@ mod tests {
     use crate::util::semiring::{RealSemiring, Semiring};
     use crate::{builder::cache::all_app::AllTable, repr::ddnnf::DDNNFPtr};
     use maplit::*;
-    use num::abs;
 
     use crate::{
         builder::bdd_builder::BddManager,
@@ -713,7 +712,7 @@ mod tests {
         let params =
             WmcParams::new_with_default(RealSemiring::zero(), RealSemiring::one(), weights);
         let wmc = r1.wmc(man.get_order(), &params);
-        assert!(abs(wmc.0 - (1.0 - 0.2 * 0.1)) < 0.000001);
+        assert!((wmc.0 - (1.0 - 0.2 * 0.1)).abs() < 0.000001);
     }
 
     #[test]

@@ -14,14 +14,10 @@ rand = "0.8.5"
 dimacs = "0.2.0"
 primal = "0.3.0"
 pretty = "0.3.3"
-num = "0.4.0"
 maplit = "1.0.1"
-libc = "0.2"
 quickcheck = "1.0.3"
 serde = { version = "1.0", features = ["derive"] }
-clap = { version = "4.2.1", features = ["derive"] }
 rustc-hash = "1.1.0"
-serde_json = "1.0.81"
 bit-set = "0.5.3"
 segment-tree = "2.0.0"
 dot = "0.1.4"
@@ -30,14 +26,23 @@ bumpalo = "3.11.1"
 petgraph = "0.6.2"
 rsgm = { git = "https://github.com/neuppl/rsgm" }
 rand_chacha = "0.3.1"
-getrandom = { version = "0.2", features = ["js"] } # req for wasm
+getrandom = { version = "0.2", features = ["js"] }
 
+# binary-only features can be optional
+clap = { version = "4.2.1", features = ["derive"], optional = true }
+serde_json = {version = "1.0.81", optional = true}
+
+# WASM-only
 [target.'cfg(target_arch = "wasm32-unknown-unknown")'.dependencies]
 wasm-bindgen = { version = "0.2.84" }
 serde-wasm-bindgen = { version = "0.4" }
 
+# test-only
 [dev-dependencies]
 time-test = "0.2.2"
+
+[features]
+build-binary = ["clap", "serde_json"]
 
 
 [lib]
@@ -59,19 +64,24 @@ rpath = false
 [[bin]]
 name = "one_shot_benchmark"
 path = "bin/one_shot_benchmark.rs"
+required-features = ["build-binary"]
 
 [[bin]]
 name = "bayesian_network_compiler"
 path = "bin/bayesian_network_compiler.rs"
+required-features = ["build-binary"]
 
 [[bin]]
 name = "semantic_hash_experiment"
 path = "bin/semantic_hash_experiment.rs"
+required-features = ["build-binary"]
 
 [[bin]]
 name = "marginal_map_experiment"
 path = "bin/marginal_map_experiment.rs"
+required-features = ["build-binary"]
 
 [[bin]]
 name = "dump_models"
 path = "bin/dump_models.rs"
+required-features = ["build-binary"]
