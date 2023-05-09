@@ -561,7 +561,7 @@ mod test_bdd_manager {
             let w2 = mgr.var(vars[2], w[2]);
             let mut conj2 = mgr.and(w0, w1);
             conj2 = mgr.and(conj2, w2);
-            conj2 = mgr.and(conj2, cnf);
+            mgr.and(conj2, cnf);
             let poss_max2 = conj.wmc(mgr.get_order(), &wmc);
             if f64::abs(poss_max2.0 - max) > 0.0001 {
                 pm_check = false;
@@ -578,7 +578,7 @@ mod test_bdd_manager {
             use rsdd::repr::model::PartialModel;
             let n = c1.num_vars();
             // constrain the size, make BDD
-            if n < 5 || n > 8 { return TestResult::discard() }
+            if !(5..=8).contains(&n) { return TestResult::discard() }
             if c1.clauses().len() > 14 { return TestResult::discard() }
             let mut mgr = super::BddManager::<AllTable<BddPtr>>::new_default_order(n);
             let cnf = mgr.from_cnf(&c1);
@@ -676,7 +676,7 @@ mod test_bdd_manager {
             let w2 = mgr.var(decisions[2], w[2]);
             let mut conj2 = mgr.and(w0, w1);
             conj2 = mgr.and(conj2, w2);
-            conj2 = mgr.and(conj2, cnf);
+            mgr.and(conj2, cnf);
             let poss_max2 = conj.wmc(mgr.get_order(), &wmc);
             if f64::abs(poss_max2.1 - max) > 0.0001 {
                 pm_check = false;
