@@ -19,7 +19,6 @@ serde = { version = "1.0", features = ["derive"] }
 rustc-hash = "1.1.0"
 bit-set = "0.5.3"
 segment-tree = "2.0.0"
-dot = "0.1.4"
 tinyvec = { version = "1.6.0", features = ["alloc"] }
 bumpalo = "3.11.1"
 petgraph = "0.6.2"
