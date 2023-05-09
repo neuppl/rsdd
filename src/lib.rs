@@ -1,11 +1,7 @@
 //! Defines exports and the C api
 #![allow(clippy::all)]
 extern crate dimacs;
-extern crate dot;
-extern crate fnv;
-extern crate libc;
 extern crate maplit;
-extern crate num;
 extern crate pretty;
 extern crate primal;
 extern crate rand;
@@ -18,8 +14,6 @@ extern crate quickcheck;
 extern crate rand_chacha;
 extern crate rustc_hash;
 extern crate segment_tree;
-extern crate time_test;
-extern crate tinyvec;
 
 #[macro_use]
 pub mod util;
@@ -29,4 +23,6 @@ pub mod repr;
 pub mod sample;
 pub mod serialize;
 pub mod unique_table;
+
+#[cfg(target_arch = "wasm32")]
 pub mod wasm;

@@ -1,7 +1,4 @@
-extern crate criterion;
-extern crate rayon;
 extern crate rsdd;
-extern crate serde_json;
 
 use clap::Parser;
 use rsdd::builder::bdd_plan::BddPlan;
