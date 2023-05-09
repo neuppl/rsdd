@@ -1,5 +1,4 @@
 extern crate criterion;
-extern crate rayon;
 extern crate rsdd;
 extern crate serde_json;
 
