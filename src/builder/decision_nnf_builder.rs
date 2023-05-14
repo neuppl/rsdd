@@ -8,7 +8,7 @@ use std::{
 use crate::{
     backing_store::*,
     repr::{
-        bdd::{create_semantic_hash_map, WmcParams},
+        robdd::{create_semantic_hash_map, WmcParams},
         ddnnf::DDNNFPtr,
         unit_prop::{DecisionResult, SATSolver},
     },
@@ -20,7 +20,7 @@ use rustc_hash::{FxHashMap, FxHasher};
 use crate::{
     backing_store::bump_table::BackedRobinhoodTable,
     repr::{
-        bdd::{BddNode, BddPtr},
+        robdd::{BddNode, BddPtr},
         cnf::*,
         var_label::{Literal, VarLabel},
         var_order::VarOrder,

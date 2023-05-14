@@ -10,7 +10,7 @@ use rsdd::builder::bdd_builder::BddManager;
 use rsdd::builder::cache::all_app::AllTable;
 use rsdd::builder::canonicalize::*;
 use rsdd::builder::sdd_builder::SddManager;
-use rsdd::repr::bdd::BddPtr;
+use rsdd::repr::robdd::BddPtr;
 use rsdd::repr::vtree::VTree;
 use rsdd::*;
 extern crate rand;
@@ -323,7 +323,7 @@ mod test_bdd_manager {
     use rand::Rng;
     use rsdd::builder::cache::all_app::AllTable;
     use rsdd::builder::cache::lru_app::BddApplyTable;
-    use rsdd::repr::bdd::BddPtr;
+    use rsdd::repr::robdd::BddPtr;
     use rsdd::repr::ddnnf::{create_semantic_hash_map, DDNNFPtr};
     use rsdd::repr::dtree::DTree;
     use rsdd::repr::model::PartialModel;
@@ -698,7 +698,7 @@ mod test_sdd_manager {
     use rand::SeedableRng;
     use rsdd::builder::cache::all_app::AllTable;
     use rsdd::builder::canonicalize::*;
-    use rsdd::repr::bdd::BddPtr;
+    use rsdd::repr::robdd::BddPtr;
     use rsdd::repr::ddnnf::{create_semantic_hash_map, DDNNFPtr};
     use rsdd::repr::dtree::DTree;
     use rsdd::repr::sdd::SddPtr;

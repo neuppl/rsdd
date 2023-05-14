@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 
 use crate::repr::{
-    bdd::{BddNode, BddPtr},
+    robdd::{BddNode, BddPtr},
     ddnnf::DDNNFPtr,
 };
 

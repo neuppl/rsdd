@@ -3,7 +3,7 @@ extern crate rsdd;
 use clap::Parser;
 use rsdd::builder::bdd_builder::BddManager;
 use rsdd::builder::cache::lru_app::BddApplyTable;
-use rsdd::repr::bdd::BddPtr;
+use rsdd::repr::robdd::BddPtr;
 use rsdd::serialize::{ser_bdd, ser_sdd, ser_vtree};
 use rsdd::{
     builder::{canonicalize::CompressionCanonicalizer, sdd_builder::SddManager},

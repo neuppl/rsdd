@@ -4,7 +4,7 @@
 //!
 //! (i.e., conjunctive normal forms, arbitrary logical formulae, etc.)
 
-pub mod bdd;
+pub mod robdd;
 pub mod cnf;
 pub mod ddnnf;
 pub mod dtree;
@@ -16,3 +16,4 @@ pub mod var_label;
 pub mod var_order;
 pub mod vtree;
 pub mod wmc;
+pub mod bdd;

@@ -206,7 +206,7 @@ impl PartialEq for SddOr {
 use std::hash::{Hash, Hasher};
 
 use super::{
-    bdd::WmcParams,
+    robdd::WmcParams,
     ddnnf::DDNNFPtr,
     var_label::Literal,
     vtree::{VTreeIndex, VTreeManager},

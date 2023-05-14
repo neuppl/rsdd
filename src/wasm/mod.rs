@@ -2,7 +2,7 @@ use crate::builder::bdd_builder::{BddManager, BddPtr};
 use crate::builder::cache::lru_app::BddApplyTable;
 use crate::builder::canonicalize::CompressionCanonicalizer;
 use crate::builder::sdd_builder::SddManager;
-use crate::repr::bdd::VarOrder;
+use crate::repr::robdd::VarOrder;
 use crate::repr::dtree::DTree;
 use crate::repr::{cnf::Cnf, var_label::VarLabel, vtree::VTree};
 use crate::serialize::{ser_bdd, ser_sdd, ser_vtree};

@@ -5,7 +5,7 @@ extern crate rsdd;
 use crate::repr::var_label::VarLabel;
 use rsdd::builder::bdd_builder::BddManager;
 use rsdd::builder::cache::all_app::AllTable;
-use rsdd::repr::bdd::BddPtr;
+use rsdd::repr::robdd::BddPtr;
 use rsdd::repr::ddnnf::DDNNFPtr;
 use rsdd::repr::wmc::WmcParams;
 use rsdd::util::semiring::{ExpectedUtility, Semiring};

@@ -4,7 +4,7 @@
 
 use bumpalo::Bump;
 
-use crate::repr::bdd::BddNode;
+use crate::repr::robdd::BddNode;
 use crate::repr::model::PartialModel;
 use crate::repr::var_order::VarOrder;
 use crate::{
@@ -23,7 +23,7 @@ use std::fmt::Debug;
 use super::bdd_plan::BddPlan;
 
 pub use crate::builder::cache::LruTable;
-pub use crate::repr::bdd::BddPtr;
+pub use crate::repr::robdd::BddPtr;
 pub use crate::repr::ddnnf::DDNNFPtr;
 pub use crate::repr::var_label::VarLabel;
 
@@ -650,7 +650,7 @@ mod tests {
 
     use crate::{
         builder::bdd_builder::BddManager,
-        repr::{bdd::BddPtr, cnf::Cnf, var_label::VarLabel},
+        repr::{robdd::BddPtr, cnf::Cnf, var_label::VarLabel},
     };
 
     // check that (a \/ b) /\ a === a

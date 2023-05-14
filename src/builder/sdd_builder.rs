@@ -10,7 +10,7 @@ use super::cache::sdd_apply_cache::SddApply;
 use super::cache::LruTable;
 use super::canonicalize::*;
 
-use crate::repr::bdd::create_semantic_hash_map;
+use crate::repr::robdd::create_semantic_hash_map;
 use crate::repr::ddnnf::DDNNFPtr;
 use crate::repr::sdd::{BinarySDD, SddAnd, SddOr, SddPtr};
 use crate::repr::vtree::{VTree, VTreeIndex, VTreeManager};
@@ -52,7 +52,7 @@ pub struct SddManager<T: SddCanonicalizationScheme> {
     canonicalizer: T,
     vtree: VTreeManager,
     stats: SddStats,
-    ite_cache: AllTable<SddPtr>,
+   ite_cache: AllTable<SddPtr>,
 }
 
 impl<T: SddCanonicalizationScheme> SddManager<T> {
@@ -1091,8 +1091,8 @@ fn sdd_wmc1() {
 
 #[test]
 fn prob_equiv_sdd_demorgan() {
-    use crate::repr::bdd::create_semantic_hash_map;
-    use crate::repr::bdd::WmcParams;
+    use crate::repr::robdd::create_semantic_hash_map;
+    use crate::repr::robdd::WmcParams;
     use crate::util::semiring::FiniteField;
 
     let mut man = SddManager::<crate::builder::canonicalize::SemanticCanonicalizer<100000049>>::new(

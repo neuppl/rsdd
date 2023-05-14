@@ -2,7 +2,7 @@ use rustc_hash::FxHashMap;
 
 use crate::{
     repr::{
-        bdd::WmcParams,
+        robdd::WmcParams,
         sdd::{SddAnd, SddPtr},
         vtree::VTreeManager,
     },

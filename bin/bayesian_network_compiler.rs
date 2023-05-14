@@ -7,7 +7,7 @@ use rsdd::builder::cache::all_app::AllTable;
 use rsdd::builder::canonicalize::*;
 use rsdd::builder::decision_nnf_builder::DecisionNNFBuilder;
 use rsdd::builder::sdd_builder;
-use rsdd::repr::bdd::BddPtr;
+use rsdd::repr::robdd::BddPtr;
 use rsdd::repr::ddnnf::DDNNFPtr;
 use rsdd::repr::dtree::DTree;
 use rsdd::repr::var_order::VarOrder;
