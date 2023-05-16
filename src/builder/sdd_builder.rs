@@ -110,7 +110,11 @@ impl<'a, T: SddCanonicalizationScheme<'a>> SddManager<'a, T> {
     /// Normalizes and fetches a node from the store
     pub fn get_or_insert(&'a self, sdd: SddOr<'a>) -> SddPtr<'a> {
         // self.stats.num_get_or_insert += 1;
-        self.canonicalizer.borrow_mut().sdd_get_or_insert(sdd)
+        // TODO make this safe
+        unsafe {
+            let c = &mut *self.canonicalizer.as_ptr();
+            c.sdd_get_or_insert(sdd)
+        }
     }
 
     pub fn get_vtree(&self, ptr: SddPtr) -> &VTree {
@@ -175,19 +179,23 @@ impl<'a, T: SddCanonicalizationScheme<'a>> SddManager<'a, T> {
             return SddPtr::var(bdd.label(), true);
         }
 
-        // self.stats.num_get_or_insert += 1;
-        // uniqify BDD
-        if bdd.high().is_neg() || self.is_false(bdd.high()) || bdd.high().is_neg_var() {
-            let neg_bdd =
-                BinarySDD::new(bdd.label(), bdd.low().neg(), bdd.high().neg(), bdd.vtree());
-            self.canonicalizer.borrow_mut().bdd_get_or_insert(neg_bdd).neg()
-        } else {
-            self.canonicalizer.borrow_mut().bdd_get_or_insert(bdd)
+
+        unsafe {
+            // self.stats.num_get_or_insert += 1;
+            // uniqify BDD
+            let c = &mut *self.canonicalizer.as_ptr();
+            if bdd.high().is_neg() || self.is_false(bdd.high()) || bdd.high().is_neg_var() {
+                let neg_bdd =
+                    BinarySDD::new(bdd.label(), bdd.low().neg(), bdd.high().neg(), bdd.vtree());
+                c.bdd_get_or_insert(neg_bdd).neg()
+            } else {
+                c.bdd_get_or_insert(bdd)
+            }
         }
     }
 
     #[inline]
-    fn canonicalize_base_case(&mut self, node: &Vec<SddAnd>) -> Option<SddPtr> {
+    fn canonicalize_base_case(&'a self, node: &Vec<SddAnd<'a>>) -> Option<SddPtr<'a>> {
         if node.is_empty() {
             return Some(SddPtr::true_ptr());
         }
@@ -211,7 +219,7 @@ impl<'a, T: SddCanonicalizationScheme<'a>> SddManager<'a, T> {
     }
 
     /// Returns a canonicalized SDD pointer from a list of (prime, sub) pairs
-    fn canonicalize(&mut self, mut node: Vec<SddAnd>, table: VTreeIndex) -> SddPtr {
+    fn canonicalize(&'a self, mut node: Vec<SddAnd<'a>>, table: VTreeIndex) -> SddPtr<'a> {
         // check for base cases before compression
         if let Some(sdd) = self.canonicalize_base_case(&node) {
             return sdd;
@@ -232,7 +240,7 @@ impl<'a, T: SddCanonicalizationScheme<'a>> SddManager<'a, T> {
 
     /// conjoin two SDDs that are in independent vtrees
     /// a is prime to b
-    fn and_indep(&mut self, a: SddPtr, b: SddPtr, lca: VTreeIndex) -> SddPtr {
+    fn and_indep(&'a self, a: SddPtr<'a>, b: SddPtr<'a>, lca: VTreeIndex) -> SddPtr<'a> {
         // check if this is a right-linear fragment and construct the relevant SDD type
         if self.vtree.get_idx(lca).is_right_linear() {
             // a is a right-linear decision for b; construct a binary decision
@@ -255,7 +263,7 @@ impl<'a, T: SddCanonicalizationScheme<'a>> SddManager<'a, T> {
     ///    1       5
     ///  0  2    4   6
     /// r might be wrt. node 3, and d wrt. node 5
-    fn and_sub_desc(&mut self, r: SddPtr, d: SddPtr) -> SddPtr {
+    fn and_sub_desc(&'a self, r: SddPtr<'a>, d: SddPtr<'a>) -> SddPtr<'a> {
         // check if `r` is a bdd and handle that case
         if r.is_bdd() {
             let l = self.and(r.low(), d);
@@ -280,7 +288,7 @@ impl<'a, T: SddCanonicalizationScheme<'a>> SddManager<'a, T> {
     ///    1       5
     ///  0  2    4   6
     /// r might be wrt. node 3, and d wrt. node 1
-    fn and_prime_desc(&mut self, r: SddPtr, d: SddPtr) -> SddPtr {
+    fn and_prime_desc(&'a self, r: SddPtr<'a>, d: SddPtr<'a>) -> SddPtr<'a> {
         // first handle the BDD case
         // if r.is_bdd() {
         //     // d is the topvar of r
@@ -358,7 +366,7 @@ impl<'a, T: SddCanonicalizationScheme<'a>> SddManager<'a, T> {
     }
 
     /// conjoin SDDs where `a` and `b` are wrt. the same vtree node
-    fn and_cartesian(&mut self, a: SddPtr, b: SddPtr, lca: VTreeIndex) -> SddPtr {
+    fn and_cartesian(&'a self, a: SddPtr<'a>, b: SddPtr<'a>, lca: VTreeIndex) -> SddPtr<'a> {
         // check if a and b are both binary SDDs; if so, we apply BDD conjunction here
         if a.is_bdd() && self.vtree.get_idx(lca).is_right_linear() {
             let l = self.and(a.low(), b.low());
@@ -450,40 +458,44 @@ impl<'a, T: SddCanonicalizationScheme<'a>> SddManager<'a, T> {
         };
 
         // check if we have this application cached
-        if let Some(x) = self.canonicalizer.borrow().app_cache().get(SddAnd::new(a, b)) {
-            // self.stats.num_app_cache_hits += 1;
-            return x;
+        // TODO make this safe
+        unsafe {
+            let c = &mut *self.canonicalizer.as_ptr();
+            if let Some(x) = c.app_cache().get(SddAnd::new(a, b)) {
+                // self.stats.num_app_cache_hits += 1;
+                return x;
+            }
+
+            let av = self.get_vtree_idx(a);
+            let bv = self.get_vtree_idx(b);
+            let lca = self.vtree.lca(av, bv);
+
+            // now we determine the current iterator for primes and subs
+            // consider the following example vtree:
+            //       3
+            //    1       5
+            //  0  2    4   6
+            // 4 cases:
+            //   1. `a` and `b` have the same vtree
+            //   2. The lca is `a`
+            //   3. The lca is `b`
+            //   4. The lca is a shared parent equal to neither
+            // we can only conjoin two SDD nodes if they are normalized with respect
+            // to the same vtree; the following code does this for each of the
+            // above cases.
+            let r = if av == bv {
+                self.and_cartesian(a, b, lca)
+            } else if lca == av {
+                self.and_sub_desc(a, b)
+            } else if lca == bv {
+                self.and_prime_desc(b, a)
+            } else {
+                self.and_indep(a, b, lca)
+            };
+            // cache and return
+            c.app_cache().insert(SddAnd::new(a, b), r);
+            r
         }
-
-        let av = self.get_vtree_idx(a);
-        let bv = self.get_vtree_idx(b);
-        let lca = self.vtree.lca(av, bv);
-
-        // now we determine the current iterator for primes and subs
-        // consider the following example vtree:
-        //       3
-        //    1       5
-        //  0  2    4   6
-        // 4 cases:
-        //   1. `a` and `b` have the same vtree
-        //   2. The lca is `a`
-        //   3. The lca is `b`
-        //   4. The lca is a shared parent equal to neither
-        // we can only conjoin two SDD nodes if they are normalized with respect
-        // to the same vtree; the following code does this for each of the
-        // above cases.
-        let r = if av == bv {
-            self.and_cartesian(a, b, lca)
-        } else if lca == av {
-            self.and_sub_desc(a, b)
-        } else if lca == bv {
-            self.and_prime_desc(b, a)
-        } else {
-            self.and_indep(a, b, lca)
-        };
-        // cache and return
-        self.canonicalizer.borrow_mut().app_cache().insert(SddAnd::new(a, b), r);
-        r
     }
 
     pub fn or(&'a self, a: SddPtr<'a>, b: SddPtr<'a>) -> SddPtr<'a> {
@@ -492,8 +504,8 @@ impl<'a, T: SddCanonicalizationScheme<'a>> SddManager<'a, T> {
 
     /// Computes `f | var = value`
     /// TODO: This is highly inefficient, will re-traverse nodes, needs a cache
-    pub fn condition(&mut self, f: SddPtr, lbl: VarLabel, value: bool) -> SddPtr {
-        self.stats.num_rec += 1;
+    pub fn condition(&'a self, f: SddPtr<'a>, lbl: VarLabel, value: bool) -> SddPtr<'a> {
+        // self.stats.num_rec += 1;
         // TODO : this can bail out early by checking the vtree
         // check base case
         if f.is_const() {
@@ -546,7 +558,7 @@ impl<'a, T: SddCanonicalizationScheme<'a>> SddManager<'a, T> {
     }
 
     /// Computes the SDD representing the logical function `if f then g else h`
-    pub fn ite(&mut self, f: SddPtr, g: SddPtr, h: SddPtr) -> SddPtr {
+    pub fn ite(&'a self, f: SddPtr<'a>, g: SddPtr<'a>, h: SddPtr<'a>) -> SddPtr<'a> {
         let ite = Ite::new(|a, b| self.vtree.is_prime(a, b), f, g, h);
         if let Ite::IteConst(f) = ite {
             return f;
@@ -566,17 +578,17 @@ impl<'a, T: SddCanonicalizationScheme<'a>> SddManager<'a, T> {
     }
 
     /// Computes the SDD representing the logical function `f <=> g`
-    pub fn iff(&mut self, f: SddPtr, g: SddPtr) -> SddPtr {
+    pub fn iff(&'a self, f: SddPtr<'a>, g: SddPtr<'a>) -> SddPtr<'a> {
         self.ite(f, g, g.neg())
     }
 
     /// Computes the SDD representing the logical function `f xor g`
-    pub fn xor(&mut self, f: SddPtr, g: SddPtr) -> SddPtr {
+    pub fn xor(&'a self, f: SddPtr<'a>, g: SddPtr<'a>) -> SddPtr<'a> {
         self.ite(f, g.neg(), g)
     }
 
     /// Existentially quantifies out the variable `lbl` from `f`
-    pub fn exists(&mut self, sdd: SddPtr, lbl: VarLabel) -> SddPtr {
+    pub fn exists(&'a self, sdd: SddPtr<'a>, lbl: VarLabel) -> SddPtr<'a> {
         // TODO this can be optimized by specializing it
         let v1 = self.condition(sdd, lbl, true);
         let v2 = self.condition(sdd, lbl, false);
@@ -584,7 +596,7 @@ impl<'a, T: SddCanonicalizationScheme<'a>> SddManager<'a, T> {
     }
 
     /// Compose `g` into `f` by substituting for `lbl`
-    pub fn compose(&mut self, _f: SddPtr, _lbl: VarLabel, _g: SddPtr) -> SddPtr {
+    pub fn compose(&'a self, _f: SddPtr<'a>, _lbl: VarLabel, _g: SddPtr<'a>) -> SddPtr<'a> {
         panic!("not impl")
         // TODO this can be optimized with a specialized implementation to make
         // it a single traversal
@@ -594,8 +606,8 @@ impl<'a, T: SddCanonicalizationScheme<'a>> SddManager<'a, T> {
         // self.exists(a, lbl)
     }
 
-    fn print_sdd_internal(&self, ptr: SddPtr) -> String {
-        self.canonicalizer.borrow().on_sdd_print_dump_state(ptr);
+    fn print_sdd_internal(&'a self, ptr: SddPtr<'a>) -> String {
+        // self.canonicalizer.borrow().on_sdd_print_dump_state(ptr);
         use pretty::*;
         fn helper(ptr: SddPtr) -> Doc<'static, BoxDoc<'static>> {
             if ptr.is_true() {
@@ -645,15 +657,17 @@ impl<'a, T: SddCanonicalizationScheme<'a>> SddManager<'a, T> {
         String::from_utf8(w).unwrap()
     }
 
-    pub fn print_sdd(&self, ptr: SddPtr) -> String {
+    pub fn print_sdd(&'a self, ptr: SddPtr<'a>) -> String {
         self.print_sdd_internal(ptr)
     }
 
     pub fn dump_sdd_state(&'a self, ptr: SddPtr<'a>) {
-        self.canonicalizer.borrow().on_sdd_print_dump_state(ptr)
+        todo!()
+        // self.canonicalizer.borrow().on_sdd_print_dump_state(ptr)
     }
 
     pub fn sdd_eq(&'a self, a: SddPtr<'a>, b: SddPtr<'a>) -> bool {
+        todo!();
         self.canonicalizer.borrow().sdd_eq(a, b)
     }
 

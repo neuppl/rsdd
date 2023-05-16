@@ -152,8 +152,11 @@ impl<'a, T: LruTable<'a, BddPtr<'a>>> BddManager<'a, T> {
 
     /// Get the current variable order
     #[inline]
-    pub fn get_order(&self) -> Ref<VarOrder> {
-        self.order.borrow()
+    pub fn get_order(&self) -> &VarOrder {
+        // TODO fix this, it doesn't need to be unsafe
+        unsafe {
+            &*self.order.as_ptr()
+        }
     }
 
     /// Get a pointer to the variable with label `lbl` and polarity `polarity`

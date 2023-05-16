@@ -414,7 +414,7 @@ impl<'a> SddPtr<'a> {
     /// negates the returned pointer if the root is negated
     ///
     /// panics if not a bdd pointer
-    pub fn low(&self) -> SddPtr {
+    pub fn low(&self) -> SddPtr<'a> {
         if self.is_neg() {
             self.bdd_ref().low.neg()
         } else {
@@ -433,7 +433,7 @@ impl<'a> SddPtr<'a> {
     /// negates the returned pointer if the root is negated
     ///
     /// panics if not a bdd pointer
-    pub fn high(&self) -> SddPtr {
+    pub fn high(&self) -> SddPtr<'a> {
         if self.is_neg() {
             self.bdd_ref().high.neg()
         } else {
@@ -450,7 +450,7 @@ impl<'a> SddPtr<'a> {
 
     /// get an iterator to all the (prime, sub) pairs this node points to
     /// panics if not an or-node
-    pub fn node_iter(&self) -> impl Iterator<Item = SddAnd> {
+    pub fn node_iter(&self) -> impl Iterator<Item = SddAnd<'a>> {
         SddNodeIter::new(*self)
     }
 
