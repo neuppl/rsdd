@@ -31,9 +31,9 @@ pub struct BDDSerializer {
 }
 
 impl BDDSerializer {
-    fn serialize_helper(
-        bdd: BddPtr,
-        table: &mut HashMap<*mut BddNode, usize>,
+    fn serialize_helper<'a>(
+        bdd: BddPtr<'a>,
+        table: &mut HashMap<&'a BddNode<'a>, usize>,
         nodes: &mut Vec<SerBDD>,
     ) -> SerBDDPtr {
         if bdd.is_true() {
@@ -42,8 +42,8 @@ impl BDDSerializer {
         if bdd.is_false() {
             return SerBDDPtr::False;
         }
-        if table.contains_key(&bdd.ptr_raw()) {
-            let index = table.get(&bdd.ptr_raw()).unwrap().clone();
+        if table.contains_key(&bdd.bdd_node_ref()) {
+            let index = table.get(&bdd.bdd_node_ref()).unwrap().clone();
             return SerBDDPtr::Ptr {
                 index: index,
                 compl: bdd.is_neg(),
@@ -64,7 +64,7 @@ impl BDDSerializer {
             index: index,
             compl: bdd.is_neg(),
         };
-        table.insert(bdd.ptr_raw(), index);
+        table.insert(bdd.bdd_node_ref(), index);
         new_ptr
     }
 

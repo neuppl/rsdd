@@ -1,6 +1,7 @@
 //! The main implementation of the SDD manager, the primary way of interacting
 //! with SDDs.
 
+use std::cell::{RefCell, Ref};
 use std::cmp::Ordering;
 use std::collections::HashSet;
 
@@ -48,30 +49,30 @@ impl Default for SddStats {
     }
 }
 
-pub struct SddManager<T: SddCanonicalizationScheme> {
-    canonicalizer: T,
+pub struct SddManager<'a, T: SddCanonicalizationScheme<'a>> {
+    canonicalizer: RefCell<T>,
     vtree: VTreeManager,
     stats: SddStats,
-   ite_cache: AllTable<SddPtr>,
+   ite_cache: RefCell<AllTable<SddPtr<'a>>>,
 }
 
-impl<T: SddCanonicalizationScheme> SddManager<T> {
-    pub fn new(vtree: VTree) -> SddManager<T> {
+impl<'a, T: SddCanonicalizationScheme<'a>> SddManager<'a, T> {
+    pub fn new(vtree: VTree) -> SddManager<'a, T> {
         let vtree_man = VTreeManager::new(vtree);
         SddManager {
             stats: SddStats::new(),
-            ite_cache: AllTable::new(),
-            canonicalizer: T::new(&vtree_man),
+            ite_cache: RefCell::new(AllTable::new()),
+            canonicalizer: RefCell::new(T::new(&vtree_man)),
             vtree: vtree_man,
         }
     }
 
-    pub fn canonicalizer(&self) -> &T {
-        &self.canonicalizer
+    pub fn canonicalizer(&self) -> Ref<T> {
+        self.canonicalizer.borrow()
     }
 
     pub fn set_compression(&mut self, b: bool) {
-        self.canonicalizer.set_compress(b)
+        self.canonicalizer.borrow_mut().set_compress(b)
     }
 
     pub fn get_vtree_root(&self) -> &VTree {
@@ -88,14 +89,14 @@ impl<T: SddCanonicalizationScheme> SddManager<T> {
 
     /// Canonicalizes the list of (prime, sub) terms in-place
     /// `node`: a list of (prime, sub) pairs
-    fn compress(&mut self, node: &mut Vec<SddAnd>) {
-        self.stats.num_compr += 1;
+    fn compress(&'a self, node: &mut Vec<SddAnd<'a>>) {
+        // self.stats.num_compr += 1;
         for i in 0..node.len() {
             // see if we can compress i
             let mut j = i + 1;
             while j < node.len() {
                 if self.sdd_eq(node[i].sub(), node[j].sub()) {
-                    self.stats.num_compr_and += 1;
+                    // self.stats.num_compr_and += 1;
                     // compress j into i and remove j from the node list
                     node[i] = SddAnd::new(self.or(node[i].prime(), node[j].prime()), node[i].sub());
                     node.swap_remove(j);
@@ -107,9 +108,9 @@ impl<T: SddCanonicalizationScheme> SddManager<T> {
     }
 
     /// Normalizes and fetches a node from the store
-    pub fn get_or_insert(&mut self, sdd: SddOr) -> SddPtr {
-        self.stats.num_get_or_insert += 1;
-        self.canonicalizer.sdd_get_or_insert(sdd)
+    pub fn get_or_insert(&'a self, sdd: SddOr<'a>) -> SddPtr<'a> {
+        // self.stats.num_get_or_insert += 1;
+        self.canonicalizer.borrow_mut().sdd_get_or_insert(sdd)
     }
 
     pub fn get_vtree(&self, ptr: SddPtr) -> &VTree {
@@ -131,7 +132,7 @@ impl<T: SddCanonicalizationScheme> SddManager<T> {
         }
     }
 
-    fn unique_or(&mut self, mut node: Vec<SddAnd>, table: VTreeIndex) -> SddPtr {
+    fn unique_or(&'a self, mut node: Vec<SddAnd<'a>>, table: VTreeIndex) -> SddPtr<'a> {
         // check if it is a BDD; if it is, return that
         if node.len() == 2 && node[0].prime().is_var() && node[1].prime().is_var() {
             // this is a BDD
@@ -163,7 +164,7 @@ impl<T: SddCanonicalizationScheme> SddManager<T> {
         }
     }
 
-    fn unique_bdd(&mut self, bdd: BinarySDD) -> SddPtr {
+    fn unique_bdd(&'a self, bdd: BinarySDD<'a>) -> SddPtr<'a> {
         if bdd.high() == bdd.low() {
             return bdd.high();
         }
@@ -174,14 +175,14 @@ impl<T: SddCanonicalizationScheme> SddManager<T> {
             return SddPtr::var(bdd.label(), true);
         }
 
-        self.stats.num_get_or_insert += 1;
+        // self.stats.num_get_or_insert += 1;
         // uniqify BDD
         if bdd.high().is_neg() || self.is_false(bdd.high()) || bdd.high().is_neg_var() {
             let neg_bdd =
                 BinarySDD::new(bdd.label(), bdd.low().neg(), bdd.high().neg(), bdd.vtree());
-            self.canonicalizer.bdd_get_or_insert(neg_bdd).neg()
+            self.canonicalizer.borrow_mut().bdd_get_or_insert(neg_bdd).neg()
         } else {
-            self.canonicalizer.bdd_get_or_insert(bdd)
+            self.canonicalizer.borrow_mut().bdd_get_or_insert(bdd)
         }
     }
 
@@ -216,7 +217,7 @@ impl<T: SddCanonicalizationScheme> SddManager<T> {
             return sdd;
         }
 
-        if self.canonicalizer.should_compress() {
+        if self.canonicalizer.borrow().should_compress() {
             self.compress(&mut node);
 
             // check for a base case after compression (compression can sometimes
@@ -424,9 +425,8 @@ impl<T: SddCanonicalizationScheme> SddManager<T> {
         self.canonicalize(r, lca)
     }
 
-    pub fn and(&mut self, a: SddPtr, b: SddPtr) -> SddPtr {
+    pub fn and(&'a self, a: SddPtr<'a>, b: SddPtr<'a>) -> SddPtr<'a> {
         // println!("and a: {}\nb: {}", self.print_sdd(a), self.print_sdd(b));
-        self.stats.num_rec += 1;
         // first, check for a base case
         match (a, b) {
             (a, b) if self.is_true(a) => return b,
@@ -450,8 +450,8 @@ impl<T: SddCanonicalizationScheme> SddManager<T> {
         };
 
         // check if we have this application cached
-        if let Some(x) = self.canonicalizer.app_cache().get(SddAnd::new(a, b)) {
-            self.stats.num_app_cache_hits += 1;
+        if let Some(x) = self.canonicalizer.borrow().app_cache().get(SddAnd::new(a, b)) {
+            // self.stats.num_app_cache_hits += 1;
             return x;
         }
 
@@ -482,11 +482,11 @@ impl<T: SddCanonicalizationScheme> SddManager<T> {
             self.and_indep(a, b, lca)
         };
         // cache and return
-        self.canonicalizer.app_cache().insert(SddAnd::new(a, b), r);
+        self.canonicalizer.borrow_mut().app_cache().insert(SddAnd::new(a, b), r);
         r
     }
 
-    pub fn or(&mut self, a: SddPtr, b: SddPtr) -> SddPtr {
+    pub fn or(&'a self, a: SddPtr<'a>, b: SddPtr<'a>) -> SddPtr<'a> {
         self.and(a.neg(), b.neg()).neg()
     }
 
@@ -552,8 +552,8 @@ impl<T: SddCanonicalizationScheme> SddManager<T> {
             return f;
         }
 
-        let hash = self.ite_cache.hash(&ite);
-        if let Some(v) = self.ite_cache.get(ite, hash) {
+        let hash = self.ite_cache.borrow().hash(&ite);
+        if let Some(v) = self.ite_cache.borrow().get(ite, hash) {
             return v;
         }
 
@@ -561,7 +561,7 @@ impl<T: SddCanonicalizationScheme> SddManager<T> {
         let fg = self.and(f, g);
         let negfh = self.and(f.neg(), h);
         let r = self.or(fg, negfh);
-        self.ite_cache.insert(ite, r, hash);
+        self.ite_cache.borrow_mut().insert(ite, r, hash);
         r
     }
 
@@ -595,7 +595,7 @@ impl<T: SddCanonicalizationScheme> SddManager<T> {
     }
 
     fn print_sdd_internal(&self, ptr: SddPtr) -> String {
-        self.canonicalizer.on_sdd_print_dump_state(ptr);
+        self.canonicalizer.borrow().on_sdd_print_dump_state(ptr);
         use pretty::*;
         fn helper(ptr: SddPtr) -> Doc<'static, BoxDoc<'static>> {
             if ptr.is_true() {
@@ -649,24 +649,24 @@ impl<T: SddCanonicalizationScheme> SddManager<T> {
         self.print_sdd_internal(ptr)
     }
 
-    pub fn dump_sdd_state(&self, ptr: SddPtr) {
-        self.canonicalizer.on_sdd_print_dump_state(ptr)
+    pub fn dump_sdd_state(&'a self, ptr: SddPtr<'a>) {
+        self.canonicalizer.borrow().on_sdd_print_dump_state(ptr)
     }
 
-    pub fn sdd_eq(&mut self, a: SddPtr, b: SddPtr) -> bool {
-        self.canonicalizer.sdd_eq(a, b)
+    pub fn sdd_eq(&'a self, a: SddPtr<'a>, b: SddPtr<'a>) -> bool {
+        self.canonicalizer.borrow().sdd_eq(a, b)
     }
 
-    pub fn is_true(&mut self, a: SddPtr) -> bool {
+    pub fn is_true(&'a self, a: SddPtr<'a>) -> bool {
         self.sdd_eq(a, SddPtr::PtrTrue)
     }
 
-    pub fn is_false(&mut self, a: SddPtr) -> bool {
+    pub fn is_false(&'a self, a: SddPtr<'a>) -> bool {
         self.sdd_eq(a, SddPtr::PtrFalse)
     }
 
     /// compile an SDD from an input CNF
-    pub fn from_cnf(&mut self, cnf: &Cnf) -> SddPtr {
+    pub fn from_cnf(&'a self, cnf: &Cnf) -> SddPtr<'a> {
         let mut cvec: Vec<SddPtr> = Vec::with_capacity(cnf.clauses().len());
         if cnf.clauses().is_empty() {
             return SddPtr::true_ptr();
@@ -725,7 +725,7 @@ impl<T: SddCanonicalizationScheme> SddManager<T> {
         }
     }
 
-    fn from_cnf_helper(&mut self, vec: &[SddPtr]) -> Option<SddPtr> {
+    fn from_cnf_helper(&'a self, vec: &[SddPtr<'a>]) -> Option<SddPtr<'a>> {
         if vec.is_empty() {
             None
         } else if vec.len() == 1 {
@@ -785,8 +785,10 @@ impl<T: SddCanonicalizationScheme> SddManager<T> {
 
     /// get an iterator over all unique allocated nodes by the manager
     pub fn node_iter(&self) -> impl Iterator<Item = SddPtr> + '_ {
-        let bdditer = self.canonicalizer.bdd_tbl().iter().map(|x| SddPtr::bdd(x));
+        todo!();
+        let bdditer = self.canonicalizer.borrow().bdd_tbl().iter().map(|x| SddPtr::bdd(x));
         self.canonicalizer
+            .borrow()
             .sdd_tbl()
             .iter()
             .map(|x| SddPtr::Reg(x))

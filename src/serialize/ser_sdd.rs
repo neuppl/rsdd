@@ -30,9 +30,9 @@ pub struct SDDSerializer {
 }
 
 impl SDDSerializer {
-    fn serialize_helper(
-        sdd: SddPtr,
-        table: &mut HashMap<SddPtr, usize>,
+    fn serialize_helper<'a>(
+        sdd: SddPtr<'a>,
+        table: &mut HashMap<&'a SddPtr<'a>, usize>,
         nodes: &mut Vec<SDDOr>,
     ) -> SerSDDPtr {
         if let Some(index) = table.get(&sdd.to_reg()) {
@@ -76,7 +76,7 @@ impl SDDSerializer {
                     index,
                     compl: sdd.is_neg(),
                 };
-                table.insert(sdd.to_reg(), index);
+                table.insert(&sdd.to_reg(), index);
                 r
             }
             SddPtr::Compl(_) | SddPtr::Reg(_) => {
@@ -94,7 +94,7 @@ impl SDDSerializer {
                     index,
                     compl: sdd.is_neg(),
                 };
-                table.insert(sdd.to_reg(), index);
+                table.insert(&sdd.to_reg(), index);
                 r
             }
         }

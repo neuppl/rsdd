@@ -2,7 +2,7 @@
 
 use std::{
     collections::HashSet,
-    hash::{Hash, Hasher},
+    hash::{Hash, Hasher}, cell::RefCell,
 };
 
 use crate::{
@@ -38,7 +38,7 @@ impl<const P: u128> BddSemanticUniqueTableHasher<P> {
     }
 }
 
-impl<const P: u128> UniqueTableHasher<BddNode> for BddSemanticUniqueTableHasher<P> {
+impl<'a, const P: u128> UniqueTableHasher<BddNode<'a>> for BddSemanticUniqueTableHasher<P> {
     fn u64hash(&self, elem: &BddNode) -> u64 {
         let mut hasher = FxHasher::default();
 
@@ -52,19 +52,19 @@ impl<const P: u128> UniqueTableHasher<BddNode> for BddSemanticUniqueTableHasher<
     }
 }
 
-pub struct DecisionNNFBuilder {
-    compute_table: BackedRobinhoodTable<BddNode>,
+pub struct DecisionNNFBuilder<'a> {
+    compute_table: RefCell<BackedRobinhoodTable<'a, BddNode<'a>>>,
     // avoid hard-coding primes into impl
     // hasher: BddSemanticUniqueTableHasher<100000049>,
     hasher: DefaultUniqueTableHasher,
     order: VarOrder,
 }
 
-impl DecisionNNFBuilder {
-    pub fn new(order: VarOrder) -> DecisionNNFBuilder {
+impl<'a> DecisionNNFBuilder<'a> {
+    pub fn new(order: VarOrder) -> DecisionNNFBuilder<'a> {
         DecisionNNFBuilder {
             order: order.clone(),
-            compute_table: BackedRobinhoodTable::new(),
+            compute_table: RefCell::new(BackedRobinhoodTable::new()),
             hasher: DefaultUniqueTableHasher::default(),
             // hasher: BddSemanticUniqueTableHasher {
             //     map: create_semantic_hash_map(order.num_vars()),
@@ -74,18 +74,22 @@ impl DecisionNNFBuilder {
     }
 
     /// Normalizes and fetches a node from the store
-    fn get_or_insert(&mut self, bdd: BddNode) -> BddPtr {
-        if bdd.high.is_neg() {
-            let bdd = BddNode::new(bdd.var, bdd.low.neg(), bdd.high.neg());
-            BddPtr::new_compl(self.compute_table.get_or_insert(bdd, &self.hasher))
-        } else {
-            let bdd = BddNode::new(bdd.var, bdd.low, bdd.high);
-            BddPtr::new_reg(self.compute_table.get_or_insert(bdd, &self.hasher))
+    fn get_or_insert(&'a self, bdd: BddNode<'a>) -> BddPtr<'a> {
+        // TODO make this safe
+        unsafe {
+            let tbl = &mut *self.compute_table.as_ptr();
+            if bdd.high.is_neg() {
+                let bdd = BddNode::new(bdd.var, bdd.low.neg(), bdd.high.neg());
+                BddPtr::new_compl(tbl.get_or_insert(bdd, &self.hasher))
+            } else {
+                let bdd = BddNode::new(bdd.var, bdd.low, bdd.high);
+                BddPtr::new_reg(tbl.get_or_insert(bdd, &self.hasher))
+            }
         }
     }
 
     /// Get a pointer to the variable with label `lbl` and polarity `polarity`
-    pub fn var(&mut self, lbl: VarLabel, polarity: bool) -> BddPtr {
+    pub fn var(&'a self, lbl: VarLabel, polarity: bool) -> BddPtr<'a> {
         let bdd = BddNode::new(lbl, BddPtr::false_ptr(), BddPtr::true_ptr());
         let r = self.get_or_insert(bdd);
         if polarity {
@@ -95,7 +99,7 @@ impl DecisionNNFBuilder {
         }
     }
 
-    fn conjoin_implied(&mut self, literals: impl Iterator<Item = Literal>, nnf: BddPtr) -> BddPtr {
+    fn conjoin_implied(&'a self, literals: impl Iterator<Item = Literal>, nnf: BddPtr<'a>) -> BddPtr<'a> {
         if nnf.is_false() {
             return BddPtr::false_ptr();
         }
@@ -116,12 +120,12 @@ impl DecisionNNFBuilder {
     /// We need both of these BDDs for sound CNF caching
     /// `cache`: a map from hashed CNFs to their compiled BDDs
     fn topdown_h(
-        &mut self,
+        &'a self,
         cnf: &Cnf,
         sat: &mut SATSolver,
         level: usize,
-        cache: &mut FxHashMap<u128, BddPtr>,
-    ) -> BddPtr {
+        cache: &mut FxHashMap<u128, BddPtr<'a>>,
+    ) -> BddPtr<'a> {
         // check for base case
         if level >= cnf.num_vars() || sat.is_sat() {
             return BddPtr::true_ptr();
@@ -188,7 +192,7 @@ impl DecisionNNFBuilder {
     }
 
     /// compile a decision DNNF top-down from a CNF
-    pub fn from_cnf_topdown(&mut self, cnf: &Cnf) -> BddPtr {
+    pub fn from_cnf_topdown(&'a self, cnf: &Cnf) -> BddPtr<'a> {
         let mut sat = match SATSolver::new(cnf.clone()) {
             Some(v) => v,
             None => return BddPtr::false_ptr(),
@@ -209,18 +213,17 @@ impl DecisionNNFBuilder {
     }
 
     /// Compute the Boolean function `f | var = value`
-    pub fn condition(&mut self, bdd: BddPtr, lbl: VarLabel, value: bool) -> BddPtr {
+    pub fn condition(&'a self, bdd: BddPtr<'a>, lbl: VarLabel, value: bool) -> BddPtr<'a> {
         let r = self.cond_helper(bdd, lbl, value, &mut Bump::new());
         bdd.clear_scratch();
         r
     }
 
-    fn cond_helper(&mut self, bdd: BddPtr, lbl: VarLabel, value: bool, alloc: &mut Bump) -> BddPtr {
+    fn cond_helper(&'a self, bdd: BddPtr<'a>, lbl: VarLabel, value: bool, alloc: &mut Bump) -> BddPtr<'a> {
         if bdd.is_const() {
             bdd
         } else if bdd.var() == lbl {
-            let node = bdd.into_node();
-            let r = if value { node.high } else { node.low };
+            let r = if value { bdd.high() } else { bdd.low() };
             if bdd.is_neg() {
                 r.neg()
             } else {
@@ -234,9 +237,8 @@ impl DecisionNNFBuilder {
             };
 
             // recurse on the children
-            let n = bdd.into_node();
-            let l = self.cond_helper(n.low, lbl, value, alloc);
-            let h = self.cond_helper(n.high, lbl, value, alloc);
+            let l = self.cond_helper(bdd.low(), lbl, value, alloc);
+            let h = self.cond_helper(bdd.high(), lbl, value, alloc);
             if l == h {
                 if bdd.is_neg() {
                     return l.neg();
@@ -244,7 +246,7 @@ impl DecisionNNFBuilder {
                     return l;
                 };
             };
-            let res = if l != n.low || h != n.high {
+            let res = if l != bdd.low() || h != bdd.high() {
                 // cache and return the new BDD
                 let new_bdd = BddNode::new(bdd.var(), l, h);
                 let r = self.get_or_insert(new_bdd);
@@ -266,7 +268,7 @@ impl DecisionNNFBuilder {
         let mut num_collisions = 0;
         let mut seen_hashes = HashSet::new();
         let map = create_semantic_hash_map::<10000000049>(self.order.num_vars());
-        for bdd in self.compute_table.iter() {
+        for bdd in self.compute_table.borrow().iter() {
             let h = BddPtr::new_reg(bdd).semantic_hash(&self.order, &map);
             if seen_hashes.contains(&(h.value())) {
                 num_collisions += 1;

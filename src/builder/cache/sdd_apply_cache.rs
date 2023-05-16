@@ -9,46 +9,46 @@ use crate::{
     util::semiring::FiniteField,
 };
 
-pub trait SddApply {
-    fn get(&self, and: SddAnd) -> Option<SddPtr>;
-    fn insert(&mut self, and: SddAnd, ptr: SddPtr);
+pub trait SddApply<'a> {
+    fn get(&'a self, and: SddAnd<'a>) -> Option<SddPtr<'a>>;
+    fn insert(&'a mut self, and: SddAnd<'a>, ptr: SddPtr<'a>);
 }
 
-pub struct SddApplyCompression {
-    table: FxHashMap<SddAnd, SddPtr>,
+pub struct SddApplyCompression<'a> {
+    table: FxHashMap<SddAnd<'a>, SddPtr<'a>>,
 }
 
-impl SddApplyCompression {
-    pub fn new() -> SddApplyCompression {
+impl<'a> SddApplyCompression<'a> {
+    pub fn new() -> SddApplyCompression<'a> {
         SddApplyCompression {
             table: FxHashMap::default(),
         }
     }
 }
 
-impl SddApply for SddApplyCompression {
-    fn get(&self, and: SddAnd) -> Option<SddPtr> {
+impl<'a> SddApply<'a> for SddApplyCompression<'a> {
+    fn get(&'a self, and: SddAnd) -> Option<SddPtr> {
         self.table.get(&and).cloned()
     }
-    fn insert(&mut self, and: SddAnd, ptr: SddPtr) {
+    fn insert(&mut self, and: SddAnd<'a>, ptr: SddPtr<'a>) {
         self.table.insert(and, ptr);
     }
 }
 
-impl Default for SddApplyCompression {
+impl<'a> Default for SddApplyCompression<'a> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-pub struct SddApplySemantic<const P: u128> {
-    table: FxHashMap<u128, SddPtr>,
+pub struct SddApplySemantic<'a, const P: u128> {
+    table: FxHashMap<u128, SddPtr<'a>>,
     map: WmcParams<FiniteField<P>>,
     vtree: VTreeManager,
 }
 
-impl<const P: u128> SddApplySemantic<P> {
-    pub fn new<'a>(map: WmcParams<FiniteField<P>>, vtree: VTreeManager) -> SddApplySemantic<P> {
+impl<'a, const P: u128> SddApplySemantic<'a, P> {
+    pub fn new(map: WmcParams<FiniteField<P>>, vtree: VTreeManager) -> SddApplySemantic<'a, P> {
         SddApplySemantic {
             table: FxHashMap::default(),
             map,
@@ -57,7 +57,7 @@ impl<const P: u128> SddApplySemantic<P> {
     }
 }
 
-impl<const P: u128> SddApply for SddApplySemantic<P> {
+impl<'a, const P: u128> SddApply<'a> for SddApplySemantic<'a, P> {
     fn get(&self, and: SddAnd) -> Option<SddPtr> {
         let h = and.semantic_hash(&self.vtree, &self.map);
         match h.value() {
@@ -67,7 +67,7 @@ impl<const P: u128> SddApply for SddApplySemantic<P> {
         }
     }
     /// assumption: we've already checked if element is in cache
-    fn insert(&mut self, and: SddAnd, ptr: SddPtr) {
+    fn insert(&'a mut self, and: SddAnd<'a>, ptr: SddPtr<'a>) {
         let h = and.semantic_hash(&self.vtree, &self.map);
         if h.value() > 1 {
             self.table.insert(h.value(), ptr);

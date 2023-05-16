@@ -107,14 +107,14 @@ where
         self.tbl[pos] = Some(e);
     }
 
-    pub fn get(&mut self, key: K, hash_v: u64) -> Option<V> {
-        self.stat.lookup_count += 1;
+    pub fn get(&self, key: K, hash_v: u64) -> Option<V> {
+        // self.stat.lookup_count += 1;
         let pos = pow_cap(hash_v as usize, self.cap);
         let v = &self.tbl[pos];
         match v {
             Some(ref v) if v.key == key => Some(v.val.clone()),
             _ => {
-                self.stat.miss_count += 1;
+                // self.stat.miss_count += 1;
                 None
             }
         }

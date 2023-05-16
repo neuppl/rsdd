@@ -5,13 +5,11 @@ use bumpalo::Bump;
 use super::var_label::VarLabel;
 
 pub trait BddPtr<'a> : Clone + Copy + Debug + Eq + PartialEq + Hash {
-    fn deref_node(&'a self) -> Bdd<Self>;
-}
-
-pub enum Bdd<Ptr> {
-    True,
-    False,
-    Node { low: Ptr, high: Ptr, topvar: VarLabel }
+    fn is_true(&self) -> bool;
+    fn is_false(&self) -> bool;
+    fn is_node(&self) -> bool;
+    fn low(&self) -> Option<Self>;
+    fn high(&self) -> Option<Self>;
 }
 
 #[derive(Debug, Eq, PartialEq, Clone)]
@@ -31,12 +29,28 @@ enum ROBDDPtr<'a> {
 }
 
 impl<'a> BddPtr<'a> for ROBDDPtr<'a> {
-    fn deref_node(&'a self) -> Bdd<Self> {
+    fn is_true(&self) -> bool {
+        todo!()
+    }
+
+    fn is_false(&self) -> bool {
+        todo!()
+    }
+
+    fn is_node(&self) -> bool {
+        todo!()
+    }
+
+    fn low(&self) -> Option<Self> {
+        todo!()
+    }
+
+    fn high(&self) -> Option<Self> {
         match self {
-            ROBDDPtr::True => Bdd::True,
-            ROBDDPtr::False => Bdd::False,
-            ROBDDPtr::Node(n) => Bdd::Node { low: n.low, high: n.high, topvar: n.topvar },
-            ROBDDPtr::NegatedNode(n) => Bdd::Node { low: n.low.negate(), high: n.high.negate(), topvar: n.topvar },
+            ROBDDPtr::True => None,
+            ROBDDPtr::False => None,
+            ROBDDPtr::Node(n) => Some(n.high),
+            ROBDDPtr::NegatedNode(n) => Some(n.high),
         }
     }
 }
@@ -105,6 +119,17 @@ impl<'a> BddBuilder<'a, ROBDDPtr<'a>> for ROBDDBuilder<'a> {
     }
 
     fn ite(&'a self, f: ROBDDPtr<'a>, g: ROBDDPtr<'a>, h: ROBDDPtr<'a>) -> ROBDDPtr<'a> {
-        todo!()
+        let v = g.high();
+        return v.unwrap()
+        // let n : Bdd<ROBDDPtr<'a>> = g.();
+        // match n {
+        //     Bdd::True => todo!(),
+        //     Bdd::False => todo!(),
+        //     Bdd::Node { low, high, topvar } => high,
+        // }
+    }
+
+    fn and(&'a self, a: ROBDDPtr<'a>, b: ROBDDPtr<'a>) -> ROBDDPtr<'a> {
+        self.ite(a, b, self.const_false())
     }
 }

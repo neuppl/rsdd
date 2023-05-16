@@ -11,39 +11,39 @@ use crate::repr::sdd::{BinarySDD, SddOr, SddPtr};
 use crate::repr::vtree::VTreeManager;
 use crate::util::semiring::FiniteField;
 
-pub trait SddCanonicalizationScheme {
-    type ApplyCacheMethod: SddApply;
-    type BddHasher: UniqueTableHasher<BinarySDD>;
-    type SddOrHasher: UniqueTableHasher<SddOr>;
+pub trait SddCanonicalizationScheme<'a> {
+    type ApplyCacheMethod: SddApply<'a>;
+    type BddHasher: UniqueTableHasher<BinarySDD<'a>>;
+    type SddOrHasher: UniqueTableHasher<SddOr<'a>>;
 
     fn new(vtree: &VTreeManager) -> Self;
     fn set_compress(&mut self, b: bool);
     fn should_compress(&self) -> bool;
 
     /// this is mutable because we may update an internal cache
-    fn sdd_eq(&mut self, a: SddPtr, b: SddPtr) -> bool;
-    fn app_cache(&mut self) -> &mut Self::ApplyCacheMethod;
+    fn sdd_eq(&'a self, a: SddPtr<'a>, b: SddPtr<'a>) -> bool;
+    fn app_cache(& self) -> &mut Self::ApplyCacheMethod;
 
     // BackedRobinhoodTable-related methods
     fn bdd_tbl(&self) -> &BackedRobinhoodTable<BinarySDD>;
     fn sdd_tbl(&self) -> &BackedRobinhoodTable<SddOr>;
-    fn bdd_get_or_insert(&mut self, item: BinarySDD) -> SddPtr;
-    fn sdd_get_or_insert(&mut self, item: SddOr) -> SddPtr;
+    fn bdd_get_or_insert(&'a mut self, item: BinarySDD<'a>) -> SddPtr<'a>;
+    fn sdd_get_or_insert(&'a mut self, item: SddOr<'a>) -> SddPtr<'a>;
 
     // debugging util
-    fn on_sdd_print_dump_state(&self, ptr: SddPtr);
+    fn on_sdd_print_dump_state(&'a self, ptr: SddPtr<'a>);
 }
 
-pub struct CompressionCanonicalizer {
+pub struct CompressionCanonicalizer<'a> {
     use_compression: bool,
-    app_cache: SddApplyCompression,
-    bdd_tbl: BackedRobinhoodTable<BinarySDD>,
-    sdd_tbl: BackedRobinhoodTable<SddOr>,
+    app_cache: SddApplyCompression<'a>,
+    bdd_tbl: BackedRobinhoodTable<'a, BinarySDD<'a>>,
+    sdd_tbl: BackedRobinhoodTable<'a, SddOr<'a>>,
     hasher: DefaultUniqueTableHasher,
 }
 
-impl SddCanonicalizationScheme for CompressionCanonicalizer {
-    type ApplyCacheMethod = SddApplyCompression;
+impl<'a> SddCanonicalizationScheme<'a> for CompressionCanonicalizer<'a> {
+    type ApplyCacheMethod = SddApplyCompression<'a>;
     type BddHasher = DefaultUniqueTableHasher;
     type SddOrHasher = DefaultUniqueTableHasher;
 
@@ -57,7 +57,7 @@ impl SddCanonicalizationScheme for CompressionCanonicalizer {
         }
     }
 
-    fn sdd_eq(&mut self, a: SddPtr, b: SddPtr) -> bool {
+    fn sdd_eq(&self, a: SddPtr, b: SddPtr) -> bool {
         a == b
     }
 
@@ -69,7 +69,8 @@ impl SddCanonicalizationScheme for CompressionCanonicalizer {
         self.use_compression
     }
 
-    fn app_cache(&mut self) -> &mut Self::ApplyCacheMethod {
+    fn app_cache(& self) -> &mut Self::ApplyCacheMethod {
+        todo!("make this typecheck with interior mutability");
         &mut self.app_cache
     }
 
@@ -81,11 +82,11 @@ impl SddCanonicalizationScheme for CompressionCanonicalizer {
         &self.sdd_tbl
     }
 
-    fn bdd_get_or_insert(&mut self, item: BinarySDD) -> SddPtr {
+    fn bdd_get_or_insert(&'a mut self, item: BinarySDD<'a>) -> SddPtr<'a> {
         SddPtr::BDD(self.bdd_tbl.get_or_insert(item, &self.hasher))
     }
 
-    fn sdd_get_or_insert(&mut self, item: SddOr) -> SddPtr {
+    fn sdd_get_or_insert(&'a mut self, item: SddOr<'a>) -> SddPtr<'a> {
         SddPtr::or(self.sdd_tbl.get_or_insert(item, &self.hasher))
     }
 
@@ -103,7 +104,7 @@ impl<const P: u128> SemanticUniqueTableHasher<P> {
     }
 }
 
-impl<const P: u128> UniqueTableHasher<BinarySDD> for SemanticUniqueTableHasher<P> {
+impl<'a, const P: u128> UniqueTableHasher<BinarySDD<'a>> for SemanticUniqueTableHasher<P> {
     fn u64hash(&self, elem: &BinarySDD) -> u64 {
         let mut hasher = FxHasher::default();
         elem.semantic_hash(&self.vtree, &self.map)
@@ -113,7 +114,7 @@ impl<const P: u128> UniqueTableHasher<BinarySDD> for SemanticUniqueTableHasher<P
     }
 }
 
-impl<const P: u128> UniqueTableHasher<SddOr> for SemanticUniqueTableHasher<P> {
+impl<'a, const P: u128> UniqueTableHasher<SddOr<'a>> for SemanticUniqueTableHasher<P> {
     fn u64hash(&self, elem: &SddOr) -> u64 {
         let mut hasher = FxHasher::default();
         elem.semantic_hash(&self.vtree, &self.map)
@@ -123,18 +124,18 @@ impl<const P: u128> UniqueTableHasher<SddOr> for SemanticUniqueTableHasher<P> {
     }
 }
 
-pub struct SemanticCanonicalizer<const P: u128> {
+pub struct SemanticCanonicalizer<'a, const P: u128> {
     map: WmcParams<FiniteField<P>>,
-    app_cache: SddApplySemantic<P>,
+    app_cache: SddApplySemantic<'a, P>,
     use_compression: bool,
     vtree: VTreeManager,
-    bdd_tbl: BackedRobinhoodTable<BinarySDD>,
-    sdd_tbl: BackedRobinhoodTable<SddOr>,
+    bdd_tbl: BackedRobinhoodTable<'a, BinarySDD<'a>>,
+    sdd_tbl: BackedRobinhoodTable<'a, SddOr<'a>>,
     hasher: SemanticUniqueTableHasher<P>,
 }
 
-impl<const P: u128> SemanticCanonicalizer<P> {
-    fn get_shared_sdd_ptr(&mut self, semantic_hash: FiniteField<P>, hash: u64) -> Option<SddPtr> {
+impl<'a, const P: u128> SemanticCanonicalizer<'a, P> {
+    fn get_shared_sdd_ptr(&'a self, semantic_hash: FiniteField<P>, hash: u64) -> Option<SddPtr<'a>> {
         match semantic_hash.value() {
             0 => Some(SddPtr::PtrFalse),
             1 => Some(SddPtr::PtrTrue),
@@ -142,14 +143,14 @@ impl<const P: u128> SemanticCanonicalizer<P> {
                 if let Some(sdd) = <BackedRobinhoodTable<BinarySDD> as UniqueTable<
                     BinarySDD,
                     SemanticUniqueTableHasher<P>,
-                >>::get_by_hash(&mut self.bdd_tbl, hash)
+                >>::get_by_hash(&self.bdd_tbl, hash)
                 {
                     return Some(SddPtr::BDD(sdd));
                 }
                 if let Some(sdd) = <BackedRobinhoodTable<SddOr> as UniqueTable<
                     SddOr,
                     SemanticUniqueTableHasher<P>,
-                >>::get_by_hash(&mut self.sdd_tbl, hash)
+                >>::get_by_hash(&self.sdd_tbl, hash)
                 {
                     return Some(SddPtr::or(sdd));
                 }
@@ -158,7 +159,7 @@ impl<const P: u128> SemanticCanonicalizer<P> {
         }
     }
 
-    fn check_cached_hash_and_neg(&mut self, semantic_hash: FiniteField<P>) -> Option<SddPtr> {
+    fn check_cached_hash_and_neg(&'a self, semantic_hash: FiniteField<P>) -> Option<SddPtr<'a>> {
         // check regular hash
         let mut hasher = FxHasher::default();
         semantic_hash.value().hash(&mut hasher);
@@ -178,8 +179,8 @@ impl<const P: u128> SemanticCanonicalizer<P> {
         None
     }
 }
-impl<const P: u128> SddCanonicalizationScheme for SemanticCanonicalizer<P> {
-    type ApplyCacheMethod = SddApplySemantic<P>;
+impl<'a, const P: u128> SddCanonicalizationScheme<'a> for SemanticCanonicalizer<'a, P> {
+    type ApplyCacheMethod = SddApplySemantic<'a, P>;
     type BddHasher = SemanticUniqueTableHasher<P>;
     type SddOrHasher = SemanticUniqueTableHasher<P>;
 
@@ -197,7 +198,7 @@ impl<const P: u128> SddCanonicalizationScheme for SemanticCanonicalizer<P> {
         }
     }
 
-    fn sdd_eq(&mut self, a: SddPtr, b: SddPtr) -> bool {
+    fn sdd_eq(&self, a: SddPtr, b: SddPtr) -> bool {
         let h1 = a.cached_semantic_hash(&self.vtree, &self.map);
         let h2 = b.cached_semantic_hash(&self.vtree, &self.map);
         h1 == h2
@@ -211,7 +212,8 @@ impl<const P: u128> SddCanonicalizationScheme for SemanticCanonicalizer<P> {
         self.use_compression
     }
 
-    fn app_cache(&mut self) -> &mut Self::ApplyCacheMethod {
+    fn app_cache(&self) -> &mut Self::ApplyCacheMethod {
+        todo!("make this typecheck with interior mutability");
         &mut self.app_cache
     }
 
@@ -223,7 +225,8 @@ impl<const P: u128> SddCanonicalizationScheme for SemanticCanonicalizer<P> {
         &self.sdd_tbl
     }
 
-    fn bdd_get_or_insert(&mut self, item: BinarySDD) -> SddPtr {
+    fn bdd_get_or_insert(&'a mut self, item: BinarySDD<'a>) -> SddPtr<'a> {
+        todo!(); // make this typecheck with interior mutability 
         let semantic_hash = item.semantic_hash(&self.vtree, &self.map);
         if let Some(sdd) = self.check_cached_hash_and_neg(semantic_hash) {
             return sdd;
@@ -232,7 +235,8 @@ impl<const P: u128> SddCanonicalizationScheme for SemanticCanonicalizer<P> {
         SddPtr::BDD(self.bdd_tbl.get_or_insert(item, &self.hasher))
     }
 
-    fn sdd_get_or_insert(&mut self, item: SddOr) -> SddPtr {
+    fn sdd_get_or_insert(&'a mut self, item: SddOr<'a>) -> SddPtr<'a> {
+        todo!(); // make this typecheck with interior mutability 
         let semantic_hash = item.semantic_hash(&self.vtree, &self.map);
         if let Some(sdd) = self.check_cached_hash_and_neg(semantic_hash) {
             return sdd;

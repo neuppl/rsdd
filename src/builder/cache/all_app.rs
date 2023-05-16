@@ -8,12 +8,12 @@ use super::{ite::Ite, LruTable};
 
 /// An Ite structure, assumed to be in standard form.
 /// The top-level data structure that caches applications
-pub struct AllTable<T: DDNNFPtr> {
+pub struct AllTable<T> {
     /// a vector of applications, indexed by the top label of the first pointer.
     table: FxHashMap<(T, T, T), T>,
 }
 
-impl<T: DDNNFPtr> LruTable<T> for AllTable<T> {
+impl<'a, T: DDNNFPtr<'a>> LruTable<'a, T> for AllTable<T> {
     fn hash(&self, _ite: &Ite<T>) -> u64 {
         // do nothing; the all-cache uses a hashbrown table that caches all applies
         0
@@ -32,7 +32,7 @@ impl<T: DDNNFPtr> LruTable<T> for AllTable<T> {
         }
     }
 
-    fn get(&mut self, ite: Ite<T>, _hash: u64) -> Option<T> {
+    fn get(&self, ite: Ite<T>, _hash: u64) -> Option<T> {
         match ite {
             Ite::IteChoice { f, g, h } | Ite::IteComplChoice { f, g, h } => {
                 let r = self.table.get(&(f, g, h));
@@ -48,7 +48,7 @@ impl<T: DDNNFPtr> LruTable<T> for AllTable<T> {
     }
 }
 
-impl<T: DDNNFPtr> AllTable<T> {
+impl<'a, T: DDNNFPtr<'a>> AllTable<T> {
     pub fn new() -> AllTable<T> {
         AllTable {
             table: FxHashMap::default(),
@@ -56,7 +56,7 @@ impl<T: DDNNFPtr> AllTable<T> {
     }
 }
 
-impl<T: DDNNFPtr> Default for AllTable<T> {
+impl<'a, T: DDNNFPtr<'a>> Default for AllTable<T> {
     fn default() -> AllTable<T> {
         Self::new()
     }

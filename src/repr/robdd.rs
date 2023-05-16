@@ -4,7 +4,6 @@ use crate::{
     util::semiring::RealSemiring,
     util::semiring::{BBAlgebra, ExpectedUtility, JoinSemilattice},
 };
-
 pub use super::{
     ddnnf::*,
     model::PartialModel,
@@ -14,19 +13,19 @@ pub use super::{
 };
 use core::fmt::Debug;
 use std::iter::FromIterator;
-
-/// Core BDD pointer datatype
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Copy, PartialOrd, Ord)]
-pub enum BddPtr {
-    Compl(*mut BddNode),
-    Reg(*mut BddNode),
-    PtrTrue,
-    PtrFalse,
-}
-
 use bit_set::BitSet;
 use bumpalo::Bump;
 use BddPtr::*;
+
+
+/// Core BDD pointer datatype
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Copy, PartialOrd, Ord)]
+pub enum BddPtr<'a> {
+    Compl(&'a BddNode<'a>),
+    Reg(&'a BddNode<'a>),
+    PtrTrue,
+    PtrFalse,
+}
 
 /// The intermediate representation for a BddPtr that is being folded in a
 /// [`Fold`] computation.
@@ -34,13 +33,13 @@ use BddPtr::*;
 /// - [`FoldNode::parent_is_compl`]: tells you if the parent node was a [`BddPtr::Compl`].
 /// - [`FoldNode::node`]: gives you the pointer to the current node.
 /// - [`FoldNode::var`]: gives you the [`VarLabel`] if the node is a [`BddPtr::Reg`].
-pub struct FoldNode {
+pub struct FoldNode<'a> {
     pub parent_is_compl: bool,
-    pub node: BddPtr,
+    pub node: BddPtr<'a>,
     pub var: Option<VarLabel>,
 }
-impl FoldNode {
-    fn new(node: BddPtr, parent_is_compl: bool, var: Option<VarLabel>) -> Self {
+impl<'a> FoldNode<'a> {
+    fn new(node: BddPtr<'a>, parent_is_compl: bool, var: Option<VarLabel>) -> Self {
         Self {
             parent_is_compl,
             node,
@@ -93,7 +92,7 @@ impl<'a, T: Clone, U> Fold<'a, T, U> {
                 (self.extract)(t, None)
             }
             BddPtr::Compl(n) => self.mut_fold_h(&BddPtr::Reg(*n), true, r),
-            BddPtr::Reg(n) => unsafe {
+            BddPtr::Reg(n) => {
                 let l_p = (*(*n)).low;
                 let r_p = (*(*n)).high;
 
@@ -140,14 +139,14 @@ impl<'a, T: Clone, U> Fold<'a, T, U> {
     }
 }
 
-impl BddPtr {
+impl<'a> BddPtr<'a> {
     #[inline]
-    pub fn new_reg(n: *mut BddNode) -> BddPtr {
+    pub fn new_reg(n: &'a BddNode) -> BddPtr<'a> {
         Reg(n)
     }
 
     #[inline]
-    pub fn from_bool(b: bool) -> BddPtr {
+    pub fn from_bool(b: bool) -> BddPtr<'a> {
         if b {
             PtrTrue
         } else {
@@ -155,8 +154,17 @@ impl BddPtr {
         }
     }
 
+    /// get a pointer to the node that this BDD points to
+    /// panics if not a node
+    pub fn bdd_node_ref(&self) -> &'a BddNode<'a> {
+        match self {
+            Compl(x) | Reg(x) => x,
+            _ => panic!("Attempting to deref non-node BDD pointer")
+        }
+    }
+
     #[inline]
-    pub fn new_compl(n: *mut BddNode) -> BddPtr {
+    pub fn new_compl(n: &'a BddNode) -> BddPtr<'a> {
         Compl(n)
     }
 
@@ -172,27 +180,13 @@ impl BddPtr {
         self.into_node_safe().and_then(|x| Some(x.var))
     }
 
-    /// Get a mutable reference to the node that &self points to
-    ///
-    /// Panics if not a node pointer
-    #[inline]
-    pub fn mut_node_ref(&self) -> &mut BddNode {
-        unsafe {
-            match &self {
-                Reg(x) => &mut (**x),
-                Compl(x) => &mut (**x),
-                _ => panic!("Dereferencing constant in deref_or_panic"),
-            }
-        }
-    }
-
     /// Dereferences the BddPtr into a BddNode
     /// The pointer is returned in regular-form (i.e., if &self is complemented, then
     /// the returned BddNode incorporates this information)
     ///
     /// Panics if the pointer is constant (i.e., true or false)
     #[inline]
-    pub fn into_node(&self) -> BddNode {
+    pub fn into_node(&'a self) -> BddNode<'a> {
         match self.into_node_safe() {
             None => panic!("Dereferencing constant in deref_or_panic"),
             Some(n) => n,
@@ -202,7 +196,7 @@ impl BddPtr {
     /// Dereferences the BddPtr into a BddNode
     /// The pointer is returned in regular-form (i.e., if &self is complemented, then
     /// the returned BddNode incorporates this information)
-    pub fn into_node_safe(&self) -> Option<BddNode> {
+    pub fn into_node_safe(&'a self) -> Option<BddNode<'a>> {
         unsafe {
             match &self {
                 Reg(x) => Some((**x).clone()),
@@ -235,66 +229,41 @@ impl BddPtr {
         }
     }
 
-    pub fn low(&self) -> BddPtr {
-        unsafe {
-            match &self {
-                Compl(x) => (**x).low.neg(),
-                Reg(x) => (**x).low,
-                PtrTrue | PtrFalse => panic!("deref constant BDD"),
-            }
-        }
-    }
-
-    pub fn low_raw(&self) -> BddPtr {
-        unsafe {
-            match &self {
-                Compl(x) => (**x).low,
-                Reg(x) => (**x).low,
-                PtrTrue | PtrFalse => panic!("deref constant BDD"),
-            }
-        }
-    }
-
-    pub fn high_raw(&self) -> BddPtr {
-        unsafe {
-            match &self {
-                Compl(x) => (**x).high,
-                Reg(x) => (**x).high,
-                PtrTrue | PtrFalse => panic!("deref constant BDD"),
-            }
-        }
-    }
-
-    pub fn high(&self) -> BddPtr {
-        unsafe {
-            match &self {
-                Compl(x) => (**x).high.neg(),
-                Reg(x) => (**x).high,
-                PtrTrue | PtrFalse => panic!("deref constant BDD"),
-            }
-        }
-    }
-
-    /// gets the raw pointer that this BDD points to
-    /// panics if not a ptr
-    pub fn ptr_raw(&self) -> *mut BddNode {
+    pub fn low(&self) -> BddPtr<'a> {
         match &self {
-            Compl(x) => *x,
-            Reg(x) => *x,
+            Compl(x) => x.low.neg(),
+            Reg(x) => x.low,
+            PtrTrue | PtrFalse => panic!("deref constant BDD"),
+        }
+    }
+
+    pub fn low_raw(&self) -> BddPtr<'a> {
+        match &self {
+            Compl(x) => x.low,
+            Reg(x) => x.low,
+            PtrTrue | PtrFalse => panic!("deref constant BDD"),
+        }
+    }
+
+    pub fn high_raw(&self) -> BddPtr<'a> {
+        match &self {
+            Compl(x) => x.high,
+            Reg(x) => x.high,
+            PtrTrue | PtrFalse => panic!("deref constant BDD"),
+        }
+    }
+
+    pub fn high(&self) -> BddPtr<'a> {
+        match &self {
+            Compl(x) => x.high.neg(),
+            Reg(x) => x.high,
             PtrTrue | PtrFalse => panic!("deref constant BDD"),
         }
     }
 
     /// Traverses the BDD and clears all scratch memory (sets it equal to 0)
     pub fn clear_scratch(&self) {
-        if !self.is_const() {
-            let n = self.mut_node_ref();
-            if n.data != 0 {
-                n.data = 0;
-                n.low.clear_scratch();
-                n.high.clear_scratch();
-            }
-        }
+        todo!()
     }
 
     /// true if the BddPtr points to a constant (i.e., True or False)
@@ -311,14 +280,7 @@ impl BddPtr {
     ///
     /// Panics if not node.
     pub fn get_scratch<T>(&self) -> Option<&T> {
-        unsafe {
-            let ptr = self.mut_node_ref().data;
-            if ptr == 0 {
-                None
-            } else {
-                Some(&*(self.into_node().data as *const T))
-            }
-        }
+        todo!()
     }
 
     /// Set the scratch in this node to the value `v`.
@@ -329,16 +291,12 @@ impl BddPtr {
     /// the provided allocator `alloc` (i.e., calling `get_scratch`
     /// involves dereferencing a pointer stored in `alloc`)
     pub fn set_scratch<T>(&self, alloc: &mut Bump, v: T) {
-        self.mut_node_ref().data = (alloc.alloc(v) as *const T) as usize;
+        todo!()
     }
 
     /// true if the scratch is current cleared
     pub fn is_scratch_cleared(&self) -> bool {
-        if !self.is_const() {
-            self.mut_node_ref().data == 0
-        } else {
-            true
-        }
+        todo!()
     }
 
     pub fn to_string_debug(&self) -> String {
@@ -821,14 +779,14 @@ impl BddPtr {
 
 type DDNNFCache<T> = (Option<T>, Option<T>);
 
-impl DDNNFPtr for BddPtr {
+impl<'a> DDNNFPtr<'a> for BddPtr<'a> {
     type Order = VarOrder;
 
-    fn true_ptr() -> BddPtr {
+    fn true_ptr() -> BddPtr<'a> {
         PtrTrue
     }
 
-    fn false_ptr() -> BddPtr {
+    fn false_ptr() -> BddPtr<'a> {
         PtrFalse
     }
 
@@ -962,18 +920,18 @@ impl DDNNFPtr for BddPtr {
 }
 
 /// Core BDD node storage
-#[derive(Debug, Clone, Eq)]
-pub struct BddNode {
+#[derive(Debug, Clone, Eq, PartialOrd, Ord)]
+pub struct BddNode<'a> {
     pub var: VarLabel,
-    pub low: BddPtr,
-    pub high: BddPtr,
+    pub low: BddPtr<'a>,
+    pub high: BddPtr<'a>,
     /// scratch space used for caching data during traversals; ignored during
     /// equality checking and hashing
     data: usize,
 }
 
-impl BddNode {
-    pub fn new(var: VarLabel, low: BddPtr, high: BddPtr) -> BddNode {
+impl<'a> BddNode<'a> {
+    pub fn new(var: VarLabel, low: BddPtr<'a>, high: BddPtr<'a>) -> BddNode<'a> {
         BddNode {
             var,
             low,
@@ -983,7 +941,7 @@ impl BddNode {
     }
 }
 
-impl PartialEq for BddNode {
+impl<'a> PartialEq for BddNode<'a> {
     fn eq(&self, other: &Self) -> bool {
         self.var == other.var && self.low == other.low && self.high == other.high
     }
@@ -993,7 +951,7 @@ use std::{
     collections::HashMap,
     hash::{Hash, Hasher},
 };
-impl Hash for BddNode {
+impl<'a> Hash for BddNode<'a> {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.var.hash(state);
         self.low.hash(state);

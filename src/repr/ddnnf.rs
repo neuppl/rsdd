@@ -55,7 +55,7 @@ pub enum DDNNF<T> {
     False,
 }
 
-pub trait DDNNFPtr: Clone + Debug + PartialEq + Eq + Hash + Copy {
+pub trait DDNNFPtr<'a>: Clone + Debug + PartialEq + Eq + Hash + Copy {
     /// A generic Ordering type
     /// For BDDs, this is a VarOrder
     /// For SDDs, this is a VTree

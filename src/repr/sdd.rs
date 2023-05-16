@@ -15,30 +15,30 @@ use SddPtr::*;
 
 // This type is used a lot. Make sure it doesn't unintentionally get bigger.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Ord, PartialOrd, Copy)]
-pub enum SddPtr {
+pub enum SddPtr<'a> {
     PtrTrue,
     PtrFalse,
-    BDD(*mut BinarySDD),
-    ComplBDD(*mut BinarySDD),
+    BDD(&'a BinarySDD<'a>),
+    ComplBDD(&'a BinarySDD<'a>),
     Var(VarLabel, bool),
-    Compl(*mut SddOr),
-    Reg(*mut SddOr),
+    Compl(&'a SddOr<'a>),
+    Reg(&'a SddOr<'a>),
 }
 
 /// Specialized SDD node for a right-linear sub-vtree
 /// SDDs for these fragments are binary decisions
 #[derive(Debug, Clone, Eq, Ord, PartialOrd, Copy)]
-pub struct BinarySDD {
+pub struct BinarySDD<'a> {
     label: VarLabel,
     vtree: VTreeIndex,
-    low: SddPtr,
-    high: SddPtr,
+    low: SddPtr<'a>,
+    high: SddPtr<'a>,
     scratch: usize,
     semantic_hash: Option<u128>,
 }
 
-impl BinarySDD {
-    pub fn new(label: VarLabel, low: SddPtr, high: SddPtr, vtree: VTreeIndex) -> BinarySDD {
+impl<'a> BinarySDD<'a> {
+    pub fn new(label: VarLabel, low: SddPtr<'a>, high: SddPtr<'a>, vtree: VTreeIndex) -> BinarySDD<'a> {
         BinarySDD {
             label,
             low,
@@ -53,11 +53,11 @@ impl BinarySDD {
         self.vtree
     }
 
-    pub fn low(&self) -> SddPtr {
+    pub fn low(&self) -> SddPtr<'a> {
         self.low
     }
 
-    pub fn high(&self) -> SddPtr {
+    pub fn high(&self) -> SddPtr<'a> {
         self.high
     }
 
@@ -76,7 +76,7 @@ impl BinarySDD {
     }
 }
 
-impl Hash for BinarySDD {
+impl<'a> Hash for BinarySDD<'a> {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.vtree.hash(state);
         self.label.hash(state);
@@ -85,7 +85,7 @@ impl Hash for BinarySDD {
     }
 }
 
-impl PartialEq for BinarySDD {
+impl<'a> PartialEq for BinarySDD<'a> {
     fn eq(&self, other: &Self) -> bool {
         self.vtree == other.vtree
             && self.low == other.low
@@ -95,64 +95,65 @@ impl PartialEq for BinarySDD {
 }
 
 /// Produces a node iterator for SDD or-nodes from an SDD pointer
-struct SddNodeIter {
-    sdd: SddPtr,
+struct SddNodeIter<'a> {
+    sdd: SddPtr<'a>,
     count: usize,
 }
 
-impl SddNodeIter {
-    pub fn new(sdd: SddPtr) -> SddNodeIter {
+impl<'a> SddNodeIter<'a> {
+    pub fn new(sdd: SddPtr<'a>) -> SddNodeIter<'a> {
         SddNodeIter { sdd, count: 0 }
     }
 }
 
-impl Iterator for SddNodeIter {
-    type Item = SddAnd;
+impl<'a> Iterator for SddNodeIter<'a> {
+    type Item = SddAnd<'a> where Self: 'a;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.sdd.is_bdd() {
-            // if this is a binary SDD, produce the appropriate nodes
-            if self.count == 0 {
-                self.count += 1;
-                Some(SddAnd::new(
-                    SddPtr::var(self.sdd.topvar(), true),
-                    self.sdd.high_raw(),
-                ))
-            } else if self.count == 1 {
-                self.count += 1;
-                Some(SddAnd::new(
-                    SddPtr::var(self.sdd.topvar(), false),
-                    self.sdd.low_raw(),
-                ))
-            } else {
-                None
-            }
-        } else {
-            let sdd = self.sdd.node_ref();
-            if self.count >= sdd.nodes.len() {
-                None
-            } else {
-                self.count += 1;
-                Some(sdd.nodes[self.count - 1])
-            }
-        }
+        todo!("redesign this iterator to not have ownership");
+    //     if self.sdd.is_bdd() {
+    //         // if this is a binary SDD, produce the appropriate nodes
+    //         if self.count == 0 {
+    //             self.count += 1;
+    //             Some(SddAnd::new(
+    //                 SddPtr::var(self.sdd.topvar(), true),
+    //                 self.sdd.high_raw(),
+    //             ))
+    //         } else if self.count == 1 {
+    //             self.count += 1;
+    //             Some(SddAnd::new(
+    //                 SddPtr::var(self.sdd.topvar(), false),
+    //                 self.sdd.low_raw(),
+    //             ))
+    //         } else {
+    //             None
+    //         }
+    //     } else {
+    //         let sdd = self.sdd.node_ref();
+    //         if self.count >= sdd.nodes.len() {
+    //             None
+    //         } else {
+    //             self.count += 1;
+    //             Some(sdd.nodes[self.count - 1])
+    //         }
+    //     }
     }
 }
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq, Ord, PartialOrd, Copy)]
-pub struct SddAnd {
-    prime: SddPtr,
-    sub: SddPtr,
+pub struct SddAnd<'a> {
+    prime: SddPtr<'a>,
+    sub: SddPtr<'a>,
 }
 
-impl SddAnd {
-    pub fn prime(&self) -> SddPtr {
+impl<'a> SddAnd<'a> {
+    pub fn prime(&self) -> SddPtr<'a> {
         self.prime
     }
-    pub fn sub(&self) -> SddPtr {
+    pub fn sub(&self) -> SddPtr<'a> {
         self.sub
     }
-    pub fn new(prime: SddPtr, sub: SddPtr) -> SddAnd {
+    pub fn new(prime: SddPtr<'a>, sub: SddPtr<'a>) -> SddAnd<'a> {
         SddAnd { prime, sub }
     }
     pub fn semantic_hash<const P: u128>(
@@ -166,14 +167,14 @@ impl SddAnd {
 
 /// An SddOr node is a vector of (prime, sub) pairs.
 #[derive(Debug, Clone, Eq, Ord, PartialOrd)]
-pub struct SddOr {
+pub struct SddOr<'a> {
     index: VTreeIndex,
-    pub nodes: Vec<SddAnd>,
+    pub nodes: Vec<SddAnd<'a>>,
     pub scratch: usize,
     pub semantic_hash: Option<u128>,
 }
 
-impl SddOr {
+impl<'a> SddOr<'a> {
     pub fn new(nodes: Vec<SddAnd>, index: VTreeIndex) -> SddOr {
         SddOr {
             nodes,
@@ -197,7 +198,7 @@ impl SddOr {
     }
 }
 
-impl PartialEq for SddOr {
+impl<'a> PartialEq for SddOr<'a> {
     fn eq(&self, other: &Self) -> bool {
         self.index == other.index && self.nodes == other.nodes
     }
@@ -211,19 +212,19 @@ use super::{
     var_label::Literal,
     vtree::{VTreeIndex, VTreeManager},
 };
-impl Hash for SddOr {
+impl<'a> Hash for SddOr<'a> {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.index.hash(state);
         self.nodes.hash(state);
     }
 }
 
-impl SddPtr {
-    pub fn or(ptr: *mut SddOr) -> SddPtr {
+impl<'a> SddPtr<'a> {
+    pub fn or(ptr: &'a SddOr) -> SddPtr<'a> {
         Reg(ptr)
     }
 
-    pub fn bdd(ptr: *mut BinarySDD) -> SddPtr {
+    pub fn bdd(ptr: &'a BinarySDD) -> SddPtr<'a> {
         Self::BDD(ptr)
     }
 
@@ -233,6 +234,7 @@ impl SddPtr {
         vtree: &VTreeManager,
         map: &WmcParams<FiniteField<P>>,
     ) -> FiniteField<P> {
+        todo!(); // make this typecheck with interior mutability for semantic hash
         match self {
             PtrTrue => FiniteField::new(1),
             PtrFalse => FiniteField::new(0),
@@ -241,21 +243,21 @@ impl SddPtr {
                 return if *polarity { *h_w } else { *l_w };
             }
             BDD(_) => {
-                if let Some(h) = self.mut_bdd_ref().semantic_hash {
+                if let Some(h) = self.bdd_ref().semantic_hash {
                     return FiniteField::new(h);
                 }
 
-                let h = self.mut_bdd_ref().semantic_hash(vtree, map);
-                self.mut_bdd_ref().semantic_hash = Some(h.value());
+                let h = self.bdd_ref().semantic_hash(vtree, map);
+                self.bdd_ref().semantic_hash = Some(h.value());
                 h
             }
             Reg(_) => {
-                if let Some(h) = self.node_ref_mut().semantic_hash {
+                if let Some(h) = self.node_ref().semantic_hash {
                     return FiniteField::new(h);
                 }
 
-                let h = self.node_ref_mut().semantic_hash(vtree, map);
-                self.node_ref_mut().semantic_hash = Some(h.value());
+                let h = self.node_ref().semantic_hash(vtree, map);
+                self.node_ref().semantic_hash = Some(h.value());
                 h
             }
             ComplBDD(_) | Compl(_) => self.neg().cached_semantic_hash(vtree, map).negate(),
@@ -268,7 +270,7 @@ impl SddPtr {
     pub fn get_scratch<T>(&self) -> Option<&T> {
         unsafe {
             let ptr = if self.is_bdd() {
-                self.mut_bdd_ref().scratch
+                self.bdd_ref().scratch
             } else {
                 self.node_ref().scratch
             };
@@ -288,18 +290,19 @@ impl SddPtr {
     /// the provided allocator `alloc` (i.e., calling `get_scratch`
     /// involves dereferencing a pointer stored in `alloc`)
     pub fn set_scratch<T>(&self, alloc: &mut Bump, v: T) {
+        todo!("make this typecheck with interior mutability");
         if self.is_bdd() {
-            self.mut_bdd_ref().scratch = (alloc.alloc(v) as *const T) as usize;
+            self.bdd_ref().scratch = (alloc.alloc(v) as *const T) as usize;
         } else {
-            self.node_ref_mut().scratch = (alloc.alloc(v) as *const T) as usize;
+            self.node_ref().scratch = (alloc.alloc(v) as *const T) as usize;
         }
     }
 
     pub fn is_scratch_cleared(&self) -> bool {
         if self.is_bdd() {
-            self.mut_bdd_ref().scratch == 0
+            self.bdd_ref().scratch == 0
         } else if self.is_node() {
-            self.node_ref_mut().scratch == 0
+            self.node_ref().scratch == 0
         } else {
             true
         }
@@ -307,15 +310,16 @@ impl SddPtr {
 
     /// recursively traverses the SDD and clears all scratch
     pub fn clear_scratch(&self) {
+        todo!("make this typecheck with interior mutability");
         if self.is_const() || self.is_var() {
             return;
         }
         if self.is_bdd() {
-            if self.mut_bdd_ref().scratch == 0 {
+            if self.bdd_ref().scratch == 0 {
                 return;
             } else {
                 // clear children and return
-                self.mut_bdd_ref().scratch = 0;
+                self.bdd_ref().scratch = 0;
                 self.high().clear_scratch();
                 self.low().clear_scratch();
                 return;
@@ -323,7 +327,7 @@ impl SddPtr {
         }
 
         // node is an sdd
-        let n = self.node_ref_mut();
+        let n = self.node_ref();
         if n.scratch != 0 {
             n.scratch = 0;
             for a in &n.nodes {
@@ -337,7 +341,7 @@ impl SddPtr {
         matches!(self, Compl(_) | Reg(_))
     }
 
-    pub fn var(lbl: VarLabel, polarity: bool) -> SddPtr {
+    pub fn var(lbl: VarLabel, polarity: bool) -> SddPtr<'a> {
         Var(lbl, polarity)
     }
 
@@ -388,16 +392,14 @@ impl SddPtr {
         matches!(self, Compl(_) | Reg(_))
     }
 
-    /// Get a mutable reference to the node that &self points to
-    ///
-    /// Panics if not a bdd pointer
-    pub fn mut_bdd_ref(&self) -> &mut BinarySDD {
-        unsafe {
-            match &self {
-                BDD(x) => &mut (**x),
-                ComplBDD(x) => &mut (**x),
-                _ => panic!("Dereferencing constant in deref_or_panic"),
-            }
+    /// get a reference to a binary SDD node
+    /// 
+    /// panics if not a binary SDD
+    pub fn bdd_ref(&self) -> &'a BinarySDD<'a> {
+        match self {
+            BDD(n) => n,
+            ComplBDD(n) => n,
+            _ => panic!()
         }
     }
 
@@ -405,7 +407,7 @@ impl SddPtr {
     ///
     /// panics if not a bdd pointer
     pub fn topvar(&self) -> VarLabel {
-        self.mut_bdd_ref().label
+        self.bdd_ref().label
     }
 
     /// gets the low pointer of a BDD
@@ -414,17 +416,17 @@ impl SddPtr {
     /// panics if not a bdd pointer
     pub fn low(&self) -> SddPtr {
         if self.is_neg() {
-            self.mut_bdd_ref().low.neg()
+            self.bdd_ref().low.neg()
         } else {
-            self.mut_bdd_ref().low
+            self.bdd_ref().low
         }
     }
 
     /// gets the low pointer of a BDD
     ///
     /// panics if not a bdd pointer
-    pub fn low_raw(&self) -> SddPtr {
-        self.mut_bdd_ref().low
+    pub fn low_raw(&self) -> SddPtr<'a> {
+        self.bdd_ref().low
     }
 
     /// gets the high pointer of a BDD
@@ -433,17 +435,17 @@ impl SddPtr {
     /// panics if not a bdd pointer
     pub fn high(&self) -> SddPtr {
         if self.is_neg() {
-            self.mut_bdd_ref().high.neg()
+            self.bdd_ref().high.neg()
         } else {
-            self.mut_bdd_ref().high
+            self.bdd_ref().high
         }
     }
 
     /// gets the high pointer of a BDD
     ///
     /// panics if not a bdd pointer
-    pub fn high_raw(&self) -> SddPtr {
-        self.mut_bdd_ref().high
+    pub fn high_raw(&self) -> SddPtr<'a> {
+        self.bdd_ref().high
     }
 
     /// get an iterator to all the (prime, sub) pairs this node points to
@@ -487,25 +489,10 @@ impl SddPtr {
     ///
     /// Panics if not a node pointer
     pub fn node_ref(&self) -> &SddOr {
-        unsafe {
-            match &self {
-                Reg(x) => &(**x),
-                Compl(x) => &(**x),
-                _ => panic!("Called node_ref on non-node {:?}", self),
-            }
-        }
-    }
-
-    /// Get a mutable reference to the node that &self points to
-    ///
-    /// Panics if not a node pointer
-    pub fn node_ref_mut(&self) -> &mut SddOr {
-        unsafe {
-            match &self {
-                Reg(x) => &mut (**x),
-                Compl(x) => &mut (**x),
-                _ => panic!("Called node_ref on non-node {:?}", self),
-            }
+        match &self {
+            Reg(x) => x,
+            Compl(x) => x,
+            _ => panic!("Called node_ref on non-node {:?}", self),
         }
     }
 
@@ -514,7 +501,7 @@ impl SddPtr {
     /// panics if this is not a node
     pub fn vtree(&self) -> VTreeIndex {
         if self.is_bdd() {
-            self.mut_bdd_ref().vtree()
+            self.bdd_ref().vtree()
         } else {
             self.node_ref().index
         }
@@ -602,7 +589,7 @@ impl SddPtr {
 
 type DDNNFCache<T> = (Option<T>, Option<T>);
 
-impl DDNNFPtr for SddPtr {
+impl<'a> DDNNFPtr<'a> for SddPtr<'a> {
     type Order = VTreeManager;
 
     fn fold<T: Clone + Copy + std::fmt::Debug, F: Fn(super::ddnnf::DDNNF<T>) -> T>(
@@ -700,11 +687,11 @@ impl DDNNFPtr for SddPtr {
         return r;
     }
 
-    fn false_ptr() -> SddPtr {
+    fn false_ptr() -> SddPtr<'a> {
         PtrFalse
     }
 
-    fn true_ptr() -> SddPtr {
+    fn true_ptr() -> SddPtr<'a> {
         PtrTrue
     }
 
