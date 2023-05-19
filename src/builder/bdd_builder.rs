@@ -313,7 +313,7 @@ impl<'a, T: LruTable<'a, BddPtr<'a>>> BddManager<'a, T> {
         self.ite(f, g.neg(), g)
     }
 
-    fn cond_helper(&'a self, bdd: BddPtr<'a>, lbl: VarLabel, value: bool, alloc: &mut Bump) -> BddPtr<'a> {
+    fn cond_helper(&'a self, bdd: BddPtr<'a>, lbl: VarLabel, value: bool, alloc: &mut Vec<BddPtr<'a>>) -> BddPtr<'a> {
         self.stats.borrow_mut().num_recursive_calls += 1;
         if bdd.is_const() || self.get_order().lt(lbl, bdd.var()) {
             // we passed the variable in the order, we will never find it
@@ -327,9 +327,9 @@ impl<'a, T: LruTable<'a, BddPtr<'a>>> BddManager<'a, T> {
             }
         } else {
             // check cache
-            match bdd.get_scratch::<BddPtr>() {
+            match bdd.get_scratch::<usize>() {
                 None => (),
-                Some(v) => return if bdd.is_neg() { v.neg() } else { v },
+                Some(v) => return if bdd.is_neg() { alloc[v].neg() } else { alloc[v] },
             };
 
             // recurse on the children
@@ -357,15 +357,22 @@ impl<'a, T: LruTable<'a, BddPtr<'a>>> BddManager<'a, T> {
                 // nothing changed
                 bdd
             };
-            todo!();
-            bdd.set_scratch(if bdd.is_neg() { res.neg() } else { res });
+            
+            let idx = if bdd.is_neg() { 
+                alloc.push(res.neg());
+                alloc.len() - 1
+            } else { 
+                alloc.push(res);
+                alloc.len() - 1
+            };
+            bdd.set_scratch(idx);
             res
         }
     }
 
     /// Compute the Boolean function `f | var = value`
     pub fn condition(&'a self, bdd: BddPtr<'a>, lbl: VarLabel, value: bool) -> BddPtr<'a> {
-        let r = self.cond_helper(bdd, lbl, value, &mut Bump::new());
+        let r = self.cond_helper(bdd, lbl, value, &mut Vec::new());
         bdd.clear_scratch();
         r
     }
