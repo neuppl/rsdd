@@ -377,59 +377,13 @@ impl<'a, T: LruTable<'a, BddPtr<'a>>> BddManager<'a, T> {
         r
     }
 
-    fn cond_model_h(&'a self, bdd: BddPtr<'a>, m: &PartialModel, alloc: &mut Bump) -> BddPtr<'a> {
-        self.stats.borrow_mut().num_recursive_calls += 1;
-        if bdd.is_const() {
-            return bdd;
+    fn cond_model_h(&'a self, bdd: BddPtr<'a>, m: &PartialModel) -> BddPtr<'a> {
+        // TODO: optimize this
+        let mut bdd = bdd;
+        for m in m.assignment_iter() {
+            bdd = self.condition(bdd, m.get_label(), m.get_polarity());
         }
-        match m.get(bdd.var()) {
-            Some(value) => {
-                let r = if value {
-                    self.cond_model_h(bdd.high(), m, alloc)
-                } else {
-                    self.cond_model_h(bdd.low(), m, alloc)
-                };
-                if bdd.is_neg() {
-                    r.neg()
-                } else {
-                    r
-                }
-            }
-            None => {
-                // check cache
-                match bdd.get_scratch::<BddPtr>() {
-                    None => (),
-                    Some(v) => return if bdd.is_neg() { v.neg() } else { v },
-                };
-
-                // recurse on the children
-                let l = self.cond_model_h(bdd.low(), m, alloc);
-                let h = self.cond_model_h(bdd.high(), m, alloc);
-                if l == h {
-                    if bdd.is_neg() {
-                        return l.neg();
-                    } else {
-                        return l;
-                    };
-                };
-                let res = if l != bdd.low() || h != bdd.high() {
-                    // cache and return the new BDD
-                    let new_bdd = BddNode::new(bdd.var(), l, h);
-                    let r = self.get_or_insert(new_bdd);
-                    if bdd.is_neg() {
-                        r.neg()
-                    } else {
-                        r
-                    }
-                } else {
-                    // nothing changed
-                    bdd
-                };
-                todo!();
-                bdd.set_scratch(if bdd.is_neg() { res.neg() } else { res });
-                res
-            }
-        }
+        bdd
     }
 
     /// Compute the Boolean function `f | var = value` for every set value in
@@ -438,8 +392,7 @@ impl<'a, T: LruTable<'a, BddPtr<'a>>> BddManager<'a, T> {
     /// Pre-condition: scratch cleared
     pub fn condition_model(&'a self, bdd: BddPtr<'a>, m: &PartialModel) -> BddPtr<'a> {
         debug_assert!(bdd.is_scratch_cleared());
-        let mut alloc = Bump::new();
-        let r = self.cond_model_h(bdd, m, &mut alloc);
+        let r = self.cond_model_h(bdd, m);
         bdd.clear_scratch();
         r
     }
