@@ -13,20 +13,41 @@ pub use super::{
     wmc::WmcParams,
 };
 use core::fmt::Debug;
-use std::{iter::FromIterator, cell::RefCell, any::Any};
+use std::{iter::FromIterator, cell::RefCell, any::Any, ptr};
 use bit_set::BitSet;
 use bumpalo::Bump;
 use BddPtr::*;
 
 
 /// Core BDD pointer datatype
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Copy, PartialOrd, Ord)]
+#[derive(Debug, Clone, Eq, Copy, PartialOrd, Ord)]
 pub enum BddPtr<'a> {
     Compl(&'a BddNode<'a>),
     Reg(&'a BddNode<'a>),
     PtrTrue,
     PtrFalse,
 }
+
+impl<'a> PartialEq for BddPtr<'a> {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Compl(l0), Self::Compl(r0)) => std::ptr::eq(*l0, *r0),
+            (Self::Reg(l0), Self::Reg(r0)) => std::ptr::eq(*l0, *r0),
+            _ => core::mem::discriminant(self) == core::mem::discriminant(other),
+        }
+    }
+}
+
+impl<'a> Hash for BddPtr<'a> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        core::mem::discriminant(self).hash(state);
+        match self {
+            Compl(n) | Reg(n) => ptr::hash(*n, state),
+            _ => ()
+        }
+    }
+}
+
 
 /// The intermediate representation for a BddPtr that is being folded in a
 /// [`Fold`] computation.
@@ -178,6 +199,7 @@ impl<'a> BddPtr<'a> {
             _ => panic!("attempting to dereference non-node")
         }
     }
+
     /// Gets the varlabel of &self
     #[inline]
     pub fn var_safe(&self) -> Option<VarLabel> {
