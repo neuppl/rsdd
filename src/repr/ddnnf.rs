@@ -63,14 +63,14 @@ pub trait DDNNFPtr<'a>: Clone + Debug + PartialEq + Eq + Hash + Copy {
     type Order;
 
     /// performs a memoized bottom-up pass with aggregating function `f` calls
-    fn fold<T: Semiring, F: Fn(DDNNF<T>) -> T>(&self, o: &Self::Order, f: F) -> T;
+    fn fold<T: Semiring, F: Fn(DDNNF<T>) -> T>(&self, o: &Self::Order, f: F) -> T where T: 'static;
 
     /// Weighted-model count
     fn wmc<T: Semiring + std::ops::Add<Output = T> + std::ops::Mul<Output = T>>(
         &self,
         o: &Self::Order,
         params: &WmcParams<T>,
-    ) -> T {
+    ) -> T where T: 'static {
         self.fold(o, |ddnnf| {
             use DDNNF::*;
             match ddnnf {

@@ -1,4 +1,5 @@
 //! Binary decision diagram representation
+
 use crate::{
     repr::var_label::VarSet,
     util::semiring::RealSemiring,
@@ -12,7 +13,7 @@ pub use super::{
     wmc::WmcParams,
 };
 use core::fmt::Debug;
-use std::iter::FromIterator;
+use std::{iter::FromIterator, cell::RefCell, any::Any};
 use bit_set::BitSet;
 use bumpalo::Bump;
 use BddPtr::*;
@@ -172,50 +173,17 @@ impl<'a> BddPtr<'a> {
     /// Panics if not a node
     #[inline]
     pub fn var(&self) -> VarLabel {
-        self.into_node().var
+        match self {
+            Compl(n) | Reg(n) => n.var,
+            _ => panic!("attempting to dereference non-node")
+        }
     }
     /// Gets the varlabel of &self
     #[inline]
     pub fn var_safe(&self) -> Option<VarLabel> {
-        self.into_node_safe().and_then(|x| Some(x.var))
-    }
-
-    /// Dereferences the BddPtr into a BddNode
-    /// The pointer is returned in regular-form (i.e., if &self is complemented, then
-    /// the returned BddNode incorporates this information)
-    ///
-    /// Panics if the pointer is constant (i.e., true or false)
-    #[inline]
-    pub fn into_node(&'a self) -> BddNode<'a> {
-        match self.into_node_safe() {
-            None => panic!("Dereferencing constant in deref_or_panic"),
-            Some(n) => n,
-        }
-    }
-
-    /// Dereferences the BddPtr into a BddNode
-    /// The pointer is returned in regular-form (i.e., if &self is complemented, then
-    /// the returned BddNode incorporates this information)
-    pub fn into_node_safe(&'a self) -> Option<BddNode<'a>> {
-        unsafe {
-            match &self {
-                Reg(x) => Some((**x).clone()),
-                Compl(x) => {
-                    let BddNode {
-                        var,
-                        low,
-                        high,
-                        data,
-                    } = **x;
-                    Some(BddNode {
-                        var,
-                        low: low.neg(),
-                        high: high.neg(),
-                        data,
-                    })
-                }
-                _ => None,
-            }
+        match self {
+            Compl(n) | Reg(n) => Some(n.var),
+            _ => None
         }
     }
 
@@ -263,7 +231,16 @@ impl<'a> BddPtr<'a> {
 
     /// Traverses the BDD and clears all scratch memory (sets it equal to 0)
     pub fn clear_scratch(&self) {
-        todo!()
+        match &self {
+            Compl(x) | Reg(x) => { 
+                if x.data.borrow().is_some() {
+                    x.data.replace(None);
+                    x.low.clear_scratch();
+                    x.high.clear_scratch();
+                }
+            },
+            PtrTrue | PtrFalse => (),
+        }
     }
 
     /// true if the BddPtr points to a constant (i.e., True or False)
@@ -279,8 +256,18 @@ impl<'a> BddPtr<'a> {
     /// Gets the scratch value stored in `&self`
     ///
     /// Panics if not node.
-    pub fn get_scratch<T>(&self) -> Option<&T> {
-        todo!()
+    pub fn get_scratch<T: ?Sized + Clone + 'static>(&self) -> Option<T> {
+        match self {
+             Compl(n) | Reg(n) => { 
+                if self.is_scratch_cleared() {
+                    return None;
+                }
+                // println!("dereferencing {:?}", n.data.as_ptr());
+                n.data.borrow().as_ref().unwrap().as_ref().downcast_ref::<T>().map(|x| x.clone())
+             },
+             PtrTrue => None,
+             PtrFalse => None,
+        }
     }
 
     /// Set the scratch in this node to the value `v`.
@@ -290,13 +277,25 @@ impl<'a> BddPtr<'a> {
     /// Invariant: values stored in `set_scratch` must not outlive
     /// the provided allocator `alloc` (i.e., calling `get_scratch`
     /// involves dereferencing a pointer stored in `alloc`)
-    pub fn set_scratch<T>(&self, alloc: &mut Bump, v: T) {
-        todo!()
+    pub fn set_scratch<T: 'static>(&self, v: T) {
+        match self {
+            Compl(n) | Reg(n) => { 
+                n.data.replace(Some(Box::new(v)));
+            }
+            _ => panic!("attempting to store scratch on constant")
+        }
     }
 
     /// true if the scratch is current cleared
     pub fn is_scratch_cleared(&self) -> bool {
-        todo!()
+        // return true;
+        match self {
+             Compl(n) | Reg(n) => {
+                n.data.borrow().is_none()
+             },
+             PtrTrue => true,
+             PtrFalse => true,
+         } 
     }
 
     pub fn to_string_debug(&self) -> String {
@@ -359,8 +358,7 @@ impl<'a> BddPtr<'a> {
         f: &F,
         low_v: T,
         high_v: T,
-        alloc: &mut Bump,
-    ) -> T {
+    ) -> T where T: 'static {
         // If current node is true leaf, return accumulated high_v value
         if self.is_true() {
             high_v
@@ -374,27 +372,27 @@ impl<'a> BddPtr<'a> {
 
             let mut fold_helper = |prev_low, prev_high| {
                 // Standard fold stuff
-                let l = self.low().bdd_fold_h(f, low_v, high_v, alloc);
-                let h = self.high().bdd_fold_h(f, low_v, high_v, alloc);
+                let l = self.low().bdd_fold_h(f, low_v, high_v);
+                let h = self.high().bdd_fold_h(f, low_v, high_v);
                 let res = f(self.var(), l, h);
                 // Set cache (accumulator)
                 // Then corrects scratch so it traverses correctly in a recursive case downstream
                 if self.is_neg() {
-                    self.set_scratch::<(Option<T>, Option<T>)>(alloc, (Some(res), prev_high));
+                    self.set_scratch::<(Option<T>, Option<T>)>((Some(res), prev_high));
                 } else {
-                    self.set_scratch::<(Option<T>, Option<T>)>(alloc, (prev_low, Some(res)));
+                    self.set_scratch::<(Option<T>, Option<T>)>((prev_low, Some(res)));
                 }
                 res
             };
 
             match self.get_scratch::<(Option<T>, Option<T>)>() {
                 // If complemented and accumulated, use the already memoized value
-                Some((Some(v), _)) if self.is_neg() => *v,
+                Some((Some(v), _)) if self.is_neg() => v,
                 // Same for not complemented
-                Some((_, Some(v))) if !self.is_neg() => *v,
+                Some((_, Some(v))) if !self.is_neg() => v,
                 // (Some(v), None) but not a complemented node
                 // (None, Some(v)) but a complemented node
-                Some((prev_low, prev_high)) => fold_helper(*prev_low, *prev_high),
+                Some((prev_low, prev_high)) => fold_helper(prev_low, prev_high),
                 None => fold_helper(None, None),
             }
         }
@@ -405,8 +403,8 @@ impl<'a> BddPtr<'a> {
         f: &F,
         low_v: T,
         high_v: T,
-    ) -> T {
-        let r = self.bdd_fold_h(f, low_v, high_v, &mut Bump::new());
+    ) -> T where T: 'static {
+        let r = self.bdd_fold_h(f, low_v, high_v);
         self.clear_scratch();
         r
     }
@@ -651,7 +649,7 @@ impl<'a> BddPtr<'a> {
         partial_join_assgn: &PartialModel,
         join_vars: &BitSet,
         wmc: &WmcParams<T>,
-    ) -> T {
+    ) -> T where T: 'static  {
         let mut partial_join_acc = T::one();
         for lit in partial_join_assgn.assignment_iter() {
             let (l, h) = wmc.get_var_weight(lit.get_label());
@@ -699,7 +697,7 @@ impl<'a> BddPtr<'a> {
         join_vars: &[VarLabel],
         wmc: &WmcParams<T>,
         cur_assgn: PartialModel,
-    ) -> (T, PartialModel) {
+    ) -> (T, PartialModel) where T: 'static {
         match join_vars {
             // If all join variables are assigned,
             [] => {
@@ -761,7 +759,7 @@ impl<'a> BddPtr<'a> {
         join_vars: &[VarLabel],
         num_vars: usize,
         wmc: &WmcParams<T>,
-    ) -> (T, PartialModel) {
+    ) -> (T, PartialModel) where T: 'static {
         // Initialize all the decision variables to be true, partially instantianted resp. to this
         let all_true: Vec<Literal> = join_vars.iter().map(|x| Literal::new(*x, true)).collect();
         let cur_assgn = PartialModel::from_litvec(&all_true, num_vars);
@@ -814,13 +812,12 @@ impl<'a> DDNNFPtr<'a> for BddPtr<'a> {
         }
     }
 
-    fn fold<T: Clone + Copy + Debug, F: Fn(DDNNF<T>) -> T>(&self, _o: &VarOrder, f: F) -> T {
+    fn fold<T: Clone + Copy + Debug, F: Fn(DDNNF<T>) -> T>(&self, _o: &VarOrder, f: F) -> T where T: 'static {
         debug_assert!(self.is_scratch_cleared());
         fn bottomup_pass_h<T: Clone + Copy + Debug, F: Fn(DDNNF<T>) -> T>(
             ptr: BddPtr,
             f: &F,
-            alloc: &mut Bump,
-        ) -> T {
+        ) -> T where T: 'static {
             match ptr {
                 PtrTrue => f(DDNNF::True),
                 PtrFalse => f(DDNNF::False),
@@ -836,8 +833,8 @@ impl<'a> DDNNFPtr<'a> for BddPtr<'a> {
                             (ptr.low_raw(), ptr.high_raw())
                         };
 
-                        let low_v = bottomup_pass_h(l, f, alloc);
-                        let high_v = bottomup_pass_h(h, f, alloc);
+                        let low_v = bottomup_pass_h(l, f);
+                        let high_v = bottomup_pass_h(h, f);
                         let top = ptr.var();
 
                         let lit_high = f(DDNNF::Lit(top, true));
@@ -854,9 +851,9 @@ impl<'a> DDNNFPtr<'a> for BddPtr<'a> {
 
                         // cache and return or_v
                         if ptr.is_neg() {
-                            ptr.set_scratch::<DDNNFCache<T>>(alloc, (Some(or_v), cached));
+                            ptr.set_scratch::<DDNNFCache<T>>((Some(or_v), cached));
                         } else {
-                            ptr.set_scratch::<DDNNFCache<T>>(alloc, (cached, Some(or_v)));
+                            ptr.set_scratch::<DDNNFCache<T>>((cached, Some(or_v)));
                         }
                         or_v
                     };
@@ -865,23 +862,22 @@ impl<'a> DDNNFPtr<'a> for BddPtr<'a> {
                         // first, check if cached; explicit arms here for clarity
                         Some((Some(l), Some(h))) => {
                             if ptr.is_neg() {
-                                *l
+                                l
                             } else {
-                                *h
+                                h
                             }
                         }
-                        Some((Some(v), None)) if ptr.is_neg() => *v,
-                        Some((None, Some(v))) if !ptr.is_neg() => *v,
+                        Some((Some(v), None)) if ptr.is_neg() => v,
+                        Some((None, Some(v))) if !ptr.is_neg() => v,
                         // no cached value found, compute it
-                        Some((None, cached)) | Some((cached, None)) => bottomup_helper(*cached),
+                        Some((None, cached)) | Some((cached, None)) => bottomup_helper(cached),
                         None => bottomup_helper(None),
                     }
                 }
             }
         }
 
-        let mut alloc = Bump::new();
-        let r = bottomup_pass_h(*self, &f, &mut alloc);
+        let r = bottomup_pass_h(*self, &f);
         self.clear_scratch();
         r
     }
@@ -897,7 +893,7 @@ impl<'a> DDNNFPtr<'a> for BddPtr<'a> {
                 None => {
                     // found a new node
                     *count = *count + 1;
-                    ptr.set_scratch::<usize>(alloc, 0);
+                    ptr.set_scratch::<usize>(0);
                     count_h(ptr.low_raw(), count, alloc);
                     count_h(ptr.high_raw(), count, alloc);
                 }
@@ -920,14 +916,14 @@ impl<'a> DDNNFPtr<'a> for BddPtr<'a> {
 }
 
 /// Core BDD node storage
-#[derive(Debug, Clone, Eq, PartialOrd, Ord)]
+#[derive(Debug)]
 pub struct BddNode<'a> {
     pub var: VarLabel,
     pub low: BddPtr<'a>,
     pub high: BddPtr<'a>,
     /// scratch space used for caching data during traversals; ignored during
     /// equality checking and hashing
-    data: usize,
+    data: RefCell<Option<Box<dyn Any>>>,
 }
 
 impl<'a> BddNode<'a> {
@@ -936,7 +932,7 @@ impl<'a> BddNode<'a> {
             var,
             low,
             high,
-            data: 0,
+            data: RefCell::new(None),
         }
     }
 }
@@ -956,5 +952,39 @@ impl<'a> Hash for BddNode<'a> {
         self.var.hash(state);
         self.low.hash(state);
         self.high.hash(state);
+    }
+}
+
+impl<'a> Eq for BddNode<'a> {
+
+}
+
+impl<'a> PartialOrd for BddNode<'a> {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        match self.var.partial_cmp(&other.var) {
+            Some(core::cmp::Ordering::Equal) => {}
+            ord => return ord,
+        }
+        match self.low.partial_cmp(&other.low) {
+            Some(core::cmp::Ordering::Equal) => {}
+            ord => return ord,
+        }
+        match self.high.partial_cmp(&other.high) {
+            Some(core::cmp::Ordering::Equal) => {}
+            ord => return ord,
+        }
+        return Some(core::cmp::Ordering::Equal);
+    }
+}
+
+impl<'a> Clone for BddNode<'a> {
+    fn clone(&self) -> Self {
+        Self { var: self.var.clone(), low: self.low.clone(), high: self.high.clone(), data: RefCell::new(None) }
+    }
+}
+
+impl<'a> Ord for BddNode<'a> {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.partial_cmp(other).unwrap()
     }
 }

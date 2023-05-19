@@ -233,7 +233,7 @@ impl<'a> DecisionNNFBuilder<'a> {
             // check cache
             let _idx = match bdd.get_scratch::<BddPtr>() {
                 None => (),
-                Some(v) => return if bdd.is_neg() { v.neg() } else { *v },
+                Some(v) => return if bdd.is_neg() { v.neg() } else { v },
             };
 
             // recurse on the children
@@ -259,7 +259,8 @@ impl<'a> DecisionNNFBuilder<'a> {
                 // nothing changed
                 bdd
             };
-            bdd.set_scratch(alloc, if bdd.is_neg() { res.neg() } else { res });
+            todo!();
+            bdd.set_scratch(if bdd.is_neg() { res.neg() } else { res });
             res
         }
     }
