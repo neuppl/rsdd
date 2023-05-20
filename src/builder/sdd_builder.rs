@@ -660,10 +660,6 @@ impl<'a, T: SddCanonicalizationScheme<'a>> SddManager<'a, T> {
         self.print_sdd_internal(ptr)
     }
 
-    pub fn dump_sdd_state(&'a self, ptr: SddPtr<'a>) {
-        todo!()
-    }
-
     pub fn sdd_eq(&'a self, a: SddPtr<'a>, b: SddPtr<'a>) -> bool {
         todo!()
     }
@@ -828,14 +824,14 @@ impl<'a, T: SddCanonicalizationScheme<'a>> SddManager<'a, T> {
             }
             s.insert(h.value());
         }
-        return num_collisions;
+        num_collisions
     }
 }
 
 // check that (a \/ b) /\ a === a
 #[test]
 fn simple_equality() {
-    let mut mgr = SddManager::<CompressionCanonicalizer>::new(VTree::even_split(
+    let man = SddManager::<CompressionCanonicalizer>::new(VTree::even_split(
         &[
             VarLabel::new(0),
             VarLabel::new(1),
@@ -847,16 +843,16 @@ fn simple_equality() {
     ));
     let a = SddPtr::var(VarLabel::new(0), true);
     let d = SddPtr::var(VarLabel::new(3), true);
-    let inner = mgr.or(a, d);
-    println!("0 || 3:\n{}", mgr.print_sdd(inner));
-    let term = mgr.and(inner, a);
+    let inner = man.or(a, d);
+    println!("0 || 3:\n{}", man.print_sdd(inner));
+    let term = man.and(inner, a);
     assert_eq!(a, term);
 }
 
 // check that (a \/ b) | !b === a
 #[test]
 fn sdd_simple_cond() {
-    let mut mgr = SddManager::<CompressionCanonicalizer>::new(VTree::even_split(
+    let man = SddManager::<CompressionCanonicalizer>::new(VTree::even_split(
         &[
             VarLabel::new(0),
             VarLabel::new(1),
@@ -868,21 +864,21 @@ fn sdd_simple_cond() {
     ));
     let a = SddPtr::var(VarLabel::new(0), true);
     let d = SddPtr::var(VarLabel::new(3), true);
-    let inner = mgr.or(a, d);
-    println!("0 || 3: {}", mgr.print_sdd(inner));
-    let term = mgr.condition(inner, VarLabel::new(3), false);
+    let inner = man.or(a, d);
+    println!("0 || 3: {}", man.print_sdd(inner));
+    let term = man.condition(inner, VarLabel::new(3), false);
     assert_eq!(
         a,
         term,
         "Got:\n{}\nexpected:\n{}\n",
-        mgr.print_sdd(term),
-        mgr.print_sdd(a)
+        man.print_sdd(term),
+        man.print_sdd(a)
     );
 }
 
 #[test]
 fn sdd_test_exist() {
-    let mut man = SddManager::<CompressionCanonicalizer>::new(VTree::even_split(
+    let man = SddManager::<CompressionCanonicalizer>::new(VTree::even_split(
         &[
             VarLabel::new(0),
             VarLabel::new(1),
@@ -910,7 +906,7 @@ fn sdd_test_exist() {
 
 #[test]
 fn sdd_bigand() {
-    let mut man = SddManager::<CompressionCanonicalizer>::new(VTree::right_linear(&[
+    let man = SddManager::<CompressionCanonicalizer>::new(VTree::right_linear(&[
         VarLabel::new(0),
         VarLabel::new(1),
         VarLabel::new(2),
@@ -918,7 +914,7 @@ fn sdd_bigand() {
         VarLabel::new(4),
     ]));
 
-    // let mut man = SddManager::<CompressionCanonicalizer>::new(VTree::even_split(
+    // let man = SddManager::<CompressionCanonicalizer>::new(VTree::even_split(
     //     &[
     //         VarLabel::new(0),
     //         VarLabel::new(1),
@@ -946,7 +942,7 @@ fn sdd_bigand() {
 
 #[test]
 fn sdd_ite1() {
-    let mut man = SddManager::<CompressionCanonicalizer>::new(VTree::even_split(
+    let man = SddManager::<CompressionCanonicalizer>::new(VTree::even_split(
         &[
             VarLabel::new(0),
             VarLabel::new(1),
@@ -975,7 +971,7 @@ fn sdd_ite1() {
 
 #[test]
 fn sdd_demorgan() {
-    let mut man = SddManager::<CompressionCanonicalizer>::new(VTree::even_split(
+    let man = SddManager::<CompressionCanonicalizer>::new(VTree::even_split(
         &[
             VarLabel::new(0),
             VarLabel::new(1),
@@ -999,7 +995,7 @@ fn sdd_demorgan() {
 
 #[test]
 fn sdd_circuit1() {
-    let mut man = SddManager::<CompressionCanonicalizer>::new(VTree::even_split(
+    let man = SddManager::<CompressionCanonicalizer>::new(VTree::even_split(
         &[
             VarLabel::new(0),
             VarLabel::new(1),
@@ -1032,7 +1028,7 @@ fn sdd_circuit1() {
 #[test]
 fn sdd_circuit2() {
     // same as circuit1, but with a different variable order
-    let mut man = SddManager::<CompressionCanonicalizer>::new(VTree::even_split(
+    let man = SddManager::<CompressionCanonicalizer>::new(VTree::even_split(
         &[
             VarLabel::new(0),
             VarLabel::new(1),
@@ -1082,7 +1078,7 @@ fn sdd_wmc1() {
         ],
         1,
     );
-    let mut man = SddManager::<CompressionCanonicalizer>::new(vtree);
+    let man = SddManager::<CompressionCanonicalizer>::new(vtree);
     let mut wmc_map = crate::repr::wmc::WmcParams::new(RealSemiring(0.0), RealSemiring(1.0));
     let x = SddPtr::var(VarLabel::new(0), true);
     wmc_map.set_weight(VarLabel::new(0), RealSemiring(1.0), RealSemiring(1.0));

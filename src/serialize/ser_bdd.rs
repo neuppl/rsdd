@@ -43,9 +43,9 @@ impl BDDSerializer {
             return SerBDDPtr::False;
         }
         if table.contains_key(&bdd.bdd_node_ref()) {
-            let index = table.get(&bdd.bdd_node_ref()).unwrap().clone();
+            let index = *table.get(&bdd.bdd_node_ref()).unwrap();
             return SerBDDPtr::Ptr {
-                index: index,
+                index,
                 compl: bdd.is_neg(),
             };
         }
@@ -61,7 +61,7 @@ impl BDDSerializer {
         nodes.push(new_node);
         let index = nodes.len() - 1;
         let new_ptr = SerBDDPtr::Ptr {
-            index: index,
+            index,
             compl: bdd.is_neg(),
         };
         table.insert(bdd.bdd_node_ref(), index);

@@ -64,7 +64,7 @@ pub struct DecisionNNFBuilder<'a> {
 impl<'a> DecisionNNFBuilder<'a> {
     pub fn new(order: VarOrder) -> DecisionNNFBuilder<'a> {
         DecisionNNFBuilder {
-            order: order.clone(),
+            order,
             compute_table: RefCell::new(BackedRobinhoodTable::new()),
             hasher: DefaultUniqueTableHasher::default(),
             // hasher: BddSemanticUniqueTableHasher {
@@ -242,10 +242,9 @@ impl<'a> DecisionNNFBuilder<'a> {
             }
         } else {
             // check cache
-            let _idx = match bdd.get_scratch::<BddPtr>() {
-                None => (),
-                Some(v) => return if bdd.is_neg() { v.neg() } else { v },
-            };
+            if let Some(v) = bdd.get_scratch::<BddPtr>() {
+                return if bdd.is_neg() { v.neg() } else { v };
+            }
 
             // recurse on the children
             let l = self.cond_helper(bdd.low(), lbl, value, alloc);

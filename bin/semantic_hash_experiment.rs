@@ -202,7 +202,6 @@ fn run_canonicalizer_experiment(c: Cnf, vtree: VTree, verbose: bool) {
         BenchStats::from_run("s".to_owned(), start.elapsed(), &sem_cnf, &sem_mgr)
     );
 
-    sem_mgr.dump_sdd_state(sem_cnf);
     if !sem_mgr.sdd_eq(compr_cnf, sem_cnf) {
         println!(" ");
         println!("not equal! test is broken...");

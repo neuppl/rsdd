@@ -16,6 +16,7 @@ pub trait UniqueTableHasher<T> {
     fn u64hash(&self, elem: &T) -> u64;
 }
 
+#[derive(Default)]
 pub struct DefaultUniqueTableHasher {}
 
 impl<T: Hash> UniqueTableHasher<T> for DefaultUniqueTableHasher {
@@ -23,11 +24,5 @@ impl<T: Hash> UniqueTableHasher<T> for DefaultUniqueTableHasher {
         let mut hasher = FxHasher::default();
         elem.hash(&mut hasher);
         hasher.finish()
-    }
-}
-
-impl Default for DefaultUniqueTableHasher {
-    fn default() -> Self {
-        Self {}
     }
 }

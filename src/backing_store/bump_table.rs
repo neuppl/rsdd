@@ -235,6 +235,15 @@ impl<'a, T: Eq + PartialEq + Hash + Clone + std::fmt::Debug, H: UniqueTableHashe
         let hash = hasher.u64hash(&item);
         let ret =
             <BackedRobinhoodTable<T> as UniqueTable<T, H>>::get_or_insert_by_hash(self, item, hash);
-        return ret;
+        ret
+    }
+}
+
+impl<'a, T: Clone> Default for BackedRobinhoodTable<'a, T>
+where
+    T: Hash + PartialEq + Eq + Clone,
+{
+    fn default() -> Self {
+        Self::new()
     }
 }

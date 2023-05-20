@@ -13,7 +13,6 @@ use crate::{
     util::semiring::{BBAlgebra, ExpectedUtility, JoinSemilattice},
 };
 use bit_set::BitSet;
-use bumpalo::Bump;
 use core::fmt::Debug;
 use std::{any::Any, cell::RefCell, iter::FromIterator, ptr};
 use BddPtr::*;
@@ -111,12 +110,12 @@ impl<'a, T: Clone, U> Fold<'a, T, U> {
                 let t = (self.step)(r.clone(), FoldNode::new(*bdd, p_compl, None));
                 (self.extract)(t, None)
             }
-            BddPtr::Compl(n) => self.mut_fold_h(&BddPtr::Reg(*n), true, r),
+            BddPtr::Compl(n) => self.mut_fold_h(&BddPtr::Reg(n), true, r),
             BddPtr::Reg(n) => {
-                let l_p = (*(*n)).low;
-                let r_p = (*(*n)).high;
+                let l_p = n.low;
+                let r_p = n.high;
 
-                let lbl = (*(*n)).var;
+                let lbl = n.var;
                 let t = (self.step)(r.clone(), FoldNode::new(*bdd, p_compl, Some(lbl)));
                 let l_r = self.mut_fold_h(&l_p, false, &r.clone());
                 let r_r = self.mut_fold_h(&r_p, false, &r.clone());
@@ -210,8 +209,8 @@ impl<'a> BddPtr<'a> {
     /// convert a BddPtr into a regular (non-complemented) pointer
     pub fn to_reg(&self) -> BddPtr {
         match &self {
-            Compl(x) => Reg(*x),
-            Reg(x) => Reg(*x),
+            Compl(x) => Reg(x),
+            Reg(x) => Reg(x),
             PtrTrue => PtrTrue,
             PtrFalse => PtrTrue,
         }
@@ -289,7 +288,7 @@ impl<'a> BddPtr<'a> {
                     .unwrap()
                     .as_ref()
                     .downcast_ref::<T>()
-                    .map(|x| x.clone())
+                    .cloned()
             }
             PtrTrue => None,
             PtrFalse => None,
@@ -354,22 +353,22 @@ impl<'a> BddPtr<'a> {
             // BddPtr::PtrFalse => String::from("T"),
             BddPtr::PtrFalse => String::from("F"), // TODO: check that this is right?
             BddPtr::Compl(n) => {
-                let s = BddPtr::Reg(*n).print_bdd_lbl(map);
+                let s = BddPtr::Reg(n).print_bdd_lbl(map);
                 format!("!{}", s)
             }
-            BddPtr::Reg(n) => unsafe {
-                let l_p = (*(*n)).low;
-                let r_p = (*(*n)).high;
+            BddPtr::Reg(n) => {
+                let l_p = n.low;
+                let r_p = n.high;
                 let l_s = l_p.print_bdd_lbl(map);
                 let r_s = r_p.print_bdd_lbl(map);
-                let lbl = (*(*n)).var;
+                let lbl = n.var;
                 format!(
                     "({:?}, {}, {})",
                     map.get(&lbl).unwrap_or(&lbl).value(),
                     l_s,
                     r_s
                 )
-            },
+            }
         }
     }
     #[inline]
@@ -397,7 +396,7 @@ impl<'a> BddPtr<'a> {
             // Scratch data is arbitrary (depends on use case)
             // fst is negated, snd is non-negated accumulator
 
-            let mut fold_helper = |prev_low, prev_high| {
+            let fold_helper = |prev_low, prev_high| {
                 // Standard fold stuff
                 let l = self.low().bdd_fold_h(f, low_v, high_v);
                 let h = self.high().bdd_fold_h(f, low_v, high_v);
@@ -503,7 +502,7 @@ impl<'a> BddPtr<'a> {
                 let mut true_model = cur_assgn.clone();
                 true_model.set(*x, true);
 
-                let mut false_model = cur_assgn.clone();
+                let mut false_model = cur_assgn;
                 false_model.set(*x, false);
 
                 let true_ub = self.marginal_map_eval(&true_model, &margvar_bits, wmc);
@@ -563,7 +562,8 @@ impl<'a> BddPtr<'a> {
         // println!("Assigned decision variables: {:?}", partial_decisions);
 
         // accumulator for EU via bdd_fold
-        let v = self.bdd_fold(
+
+        self.bdd_fold(
             &|varlabel, low: ExpectedUtility, high: ExpectedUtility| {
                 // get True and False weights for VarLabel
                 let (false_w, true_w) = wmc.get_var_weight(varlabel);
@@ -588,8 +588,7 @@ impl<'a> BddPtr<'a> {
             },
             wmc.zero,
             wmc.one,
-        );
-        v
+        )
     }
 
     fn meu_h(
@@ -622,7 +621,7 @@ impl<'a> BddPtr<'a> {
                 let mut true_model = cur_assgn.clone();
                 true_model.set(*x, true);
                 // ... and false...
-                let mut false_model = cur_assgn.clone();
+                let mut false_model = cur_assgn;
                 false_model.set(*x, false);
 
                 // and calculate their respective upper bounds.
@@ -757,7 +756,7 @@ impl<'a> BddPtr<'a> {
                 let mut true_model = cur_assgn.clone();
                 true_model.set(*x, true);
                 // ... and false...
-                let mut false_model = cur_assgn.clone();
+                let mut false_model = cur_assgn;
                 false_model.set(*x, false);
 
                 // and calculate their respective upper bounds.
@@ -868,7 +867,7 @@ impl<'a> DDNNFPtr<'a> for BddPtr<'a> {
                     // complemented and uncomplemented pass over this node
 
                     // helper performs actual fold-and-cache work
-                    let mut bottomup_helper = |cached| {
+                    let bottomup_helper = |cached| {
                         let (l, h) = if ptr.is_neg() {
                             (ptr.low_raw().neg(), ptr.high_raw().neg())
                         } else {
@@ -926,31 +925,31 @@ impl<'a> DDNNFPtr<'a> for BddPtr<'a> {
 
     fn count_nodes(&self) -> usize {
         debug_assert!(self.is_scratch_cleared());
-        fn count_h(ptr: BddPtr, count: &mut usize, alloc: &mut Bump) -> () {
+        fn count_h(ptr: BddPtr, count: &mut usize) {
             if ptr.is_const() {
-                return ();
+                return;
             }
             match ptr.get_scratch::<usize>() {
                 Some(_) => (),
                 None => {
                     // found a new node
-                    *count = *count + 1;
+                    *count += 1;
                     ptr.set_scratch::<usize>(0);
-                    count_h(ptr.low_raw(), count, alloc);
-                    count_h(ptr.high_raw(), count, alloc);
+                    count_h(ptr.low_raw(), count);
+                    count_h(ptr.high_raw(), count);
                 }
             }
         }
         let mut count = 0;
-        count_h(*self, &mut count, &mut Bump::new());
+        count_h(*self, &mut count);
         self.clear_scratch();
-        return count;
+        count
     }
 
     fn neg(&self) -> Self {
         match &self {
-            Compl(x) => Reg(*x),
-            Reg(x) => Compl(*x),
+            Compl(x) => Reg(x),
+            Reg(x) => Compl(x),
             PtrTrue => PtrFalse,
             PtrFalse => PtrTrue,
         }
@@ -1013,16 +1012,16 @@ impl<'a> PartialOrd for BddNode<'a> {
             Some(core::cmp::Ordering::Equal) => {}
             ord => return ord,
         }
-        return Some(core::cmp::Ordering::Equal);
+        Some(core::cmp::Ordering::Equal)
     }
 }
 
 impl<'a> Clone for BddNode<'a> {
     fn clone(&self) -> Self {
         Self {
-            var: self.var.clone(),
-            low: self.low.clone(),
-            high: self.high.clone(),
+            var: self.var,
+            low: self.low,
+            high: self.high,
             data: RefCell::new(None),
         }
     }

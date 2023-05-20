@@ -38,7 +38,9 @@ trait BottomUpBuilder {
     fn compose<'a>(&'a self, a: Self::Ptr<'a>, v: VarLabel, value: bool) -> Self::Ptr<'a>;
 
     fn negate<'a>(&'a self, f: Self::Ptr<'a>) -> Self::Ptr<'a>;
-    fn true_ptr<'a>(&'a self) -> Self::Ptr<'a>;
-    fn false_ptr<'a>(&'a self) -> Self::Ptr<'a>;
-    fn var<'a>(&'a self, label: VarLabel, polarity: bool) -> Self::Ptr<'a>;
+
+    // constants --- can elide the input lifetimes
+    fn true_ptr(&self) -> Self::Ptr<'_>;
+    fn false_ptr(&self) -> Self::Ptr<'_>;
+    fn var(&self, label: VarLabel, polarity: bool) -> Self::Ptr<'_>;
 }
