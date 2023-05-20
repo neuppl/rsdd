@@ -254,7 +254,7 @@ fn get_canonical_forms() -> Vec<(Cnf, Cnf)> {
 #[test]
 fn test_bdd_canonicity() {
     for (cnf1, cnf2) in get_canonical_forms().into_iter() {
-        let mut man = BddManager::<AllTable<BddPtr>>::new_default_order(cnf1.num_vars());
+        let man = BddManager::<AllTable<BddPtr>>::new_default_order(cnf1.num_vars());
         let r1 = man.from_cnf(&cnf1);
         let r2 = man.from_cnf(&cnf2);
         assert!(
@@ -275,7 +275,7 @@ fn test_sdd_canonicity() {
             .map(|x| VarLabel::new(x as u64))
             .collect();
         let vtree = VTree::even_split(&v, 1);
-        let mut man = SddManager::<CompressionCanonicalizer>::new(vtree);
+        let man = SddManager::<CompressionCanonicalizer>::new(vtree);
         let r1 = man.from_cnf(&cnf1);
         let r2 = man.from_cnf(&cnf2);
         assert!(
@@ -296,7 +296,7 @@ fn test_sdd_is_canonical() {
             .map(|x| VarLabel::new(x as u64))
             .collect();
         let vtree = VTree::even_split(&v, 1);
-        let mut man = SddManager::<CompressionCanonicalizer>::new(vtree);
+        let man = SddManager::<CompressionCanonicalizer>::new(vtree);
         let r1 = man.from_cnf(&cnf1);
         let r2 = man.from_cnf(&cnf2);
         assert!(
@@ -323,10 +323,10 @@ mod test_bdd_manager {
     use rand::Rng;
     use rsdd::builder::cache::all_app::AllTable;
     use rsdd::builder::cache::lru_app::BddApplyTable;
-    use rsdd::repr::robdd::BddPtr;
     use rsdd::repr::ddnnf::{create_semantic_hash_map, DDNNFPtr};
     use rsdd::repr::dtree::DTree;
     use rsdd::repr::model::PartialModel;
+    use rsdd::repr::robdd::BddPtr;
     use rsdd::repr::var_order::VarOrder;
     use rsdd::repr::vtree::VTree;
     use rsdd::repr::wmc::WmcParams;
@@ -336,7 +336,7 @@ mod test_bdd_manager {
 
     quickcheck! {
         fn test_cond_and(c: Cnf) -> bool {
-            let mut mgr = super::BddManager::<AllTable<BddPtr>>::new_default_order(16);
+            let mgr = super::BddManager::<AllTable<BddPtr>>::new_default_order(16);
             let cnf = mgr.from_cnf(&c);
             let v1 = VarLabel::new(0);
             let bdd1 = mgr.exists(cnf, v1);
@@ -350,7 +350,7 @@ mod test_bdd_manager {
 
     quickcheck! {
         fn test_ite_and(c1: Cnf, c2: Cnf) -> bool {
-            let mut mgr = super::BddManager::<AllTable<BddPtr>>::new_default_order(16);
+            let mgr = super::BddManager::<AllTable<BddPtr>>::new_default_order(16);
             let cnf1 = mgr.from_cnf(&c1);
             let cnf2 = mgr.from_cnf(&c2);
 
@@ -365,7 +365,7 @@ mod test_bdd_manager {
         fn bdd_ite_iff(c1: Cnf, c2: Cnf) -> TestResult {
             if c1.num_vars() == 0 || c1.num_vars() > 8 { return TestResult::discard() }
             if c1.clauses().len() > 12 { return TestResult::discard() }
-            let mut mgr = super::BddManager::<AllTable<BddPtr>>::new_default_order(16);
+            let mgr = super::BddManager::<AllTable<BddPtr>>::new_default_order(16);
             let cnf1 = mgr.from_cnf(&c1);
             let cnf2 = mgr.from_cnf(&c2);
             let iff1 = mgr.iff(cnf1, cnf2);
@@ -387,7 +387,7 @@ mod test_bdd_manager {
         fn compile_with_assignments(c1: Cnf) -> TestResult {
             if c1.num_vars() < 3 || c1.num_vars() > 8 { return TestResult::discard() }
             if c1.clauses().len() > 12 { return TestResult::discard() }
-            let mut mgr = super::BddManager::<AllTable<BddPtr>>::new_default_order(c1.num_vars());
+            let mgr = super::BddManager::<AllTable<BddPtr>>::new_default_order(c1.num_vars());
             let mut pm = PartialModel::from_litvec(&Vec::new(), c1.num_vars());
             pm.set(VarLabel::new(0), true);
             pm.set(VarLabel::new(1), true);
@@ -407,7 +407,7 @@ mod test_bdd_manager {
             if c1.num_vars() == 0 || c1.num_vars() > 8 { return TestResult::discard() }
             if c1.clauses().len() > 16 { return TestResult::discard() }
 
-            let mut mgr = super::BddManager::<AllTable<BddPtr>>::new_default_order(c1.num_vars());
+            let mgr = super::BddManager::<AllTable<BddPtr>>::new_default_order(c1.num_vars());
             let weight = create_semantic_hash_map::<{crate::BIG_PRIME}>(c1.num_vars());
             let cnf1 = mgr.from_cnf(&c1);
             let bddres = cnf1.wmc(mgr.get_order(), &weight);
@@ -419,8 +419,8 @@ mod test_bdd_manager {
     quickcheck! {
         /// test that an SDD and BDD both have the same semantic hash
         fn sdd_semantic_eq_bdd(c1: Cnf, vtree: VTree) -> bool {
-            let mut bdd_mgr = super::BddManager::<AllTable<BddPtr>>::new_default_order(c1.num_vars());
-            let mut sdd_mgr = super::SddManager::<rsdd::builder::canonicalize::CompressionCanonicalizer>::new(vtree);
+            let bdd_mgr = super::BddManager::<AllTable<BddPtr>>::new_default_order(c1.num_vars());
+            let sdd_mgr = super::SddManager::<rsdd::builder::canonicalize::CompressionCanonicalizer>::new(vtree);
             let map : WmcParams<rsdd::util::semiring::FiniteField<{ crate::BIG_PRIME }>>= create_semantic_hash_map(c1.num_vars());
             let bdd = bdd_mgr.from_cnf(&c1);
             let sdd = sdd_mgr.from_cnf(&c1);
@@ -431,12 +431,12 @@ mod test_bdd_manager {
     quickcheck! {
         /// test that an SDD and BDD both have the same semantic hash with min-fill order
         fn sdd_semantic_eq_bdd_dtree(c1: Cnf) -> bool {
-            let mut bdd_mgr = super::BddManager::<AllTable<BddPtr>>::new_default_order(c1.num_vars());
+            let bdd_mgr = super::BddManager::<AllTable<BddPtr>>::new_default_order(c1.num_vars());
             let min_fill_order = c1.min_fill_order();
             let dtree = DTree::from_cnf(&c1, &min_fill_order);
             let vtree = VTree::from_dtree(&dtree).unwrap();
 
-            let mut sdd_mgr = super::SddManager::<rsdd::builder::canonicalize::CompressionCanonicalizer>::new(vtree);
+            let sdd_mgr = super::SddManager::<rsdd::builder::canonicalize::CompressionCanonicalizer>::new(vtree);
             let map : WmcParams<rsdd::util::semiring::FiniteField<{ crate::BIG_PRIME }>>= create_semantic_hash_map(c1.num_vars());
             let bdd = bdd_mgr.from_cnf(&c1);
             let sdd = sdd_mgr.from_cnf(&c1);
@@ -450,13 +450,13 @@ mod test_bdd_manager {
             if c1.num_vars() == 0 || c1.num_vars() > 8 { return TestResult::discard() }
             if c1.clauses().len() > 16 { return TestResult::discard() }
 
-            let mut mgr = super::BddManager::<AllTable<BddPtr>>::new_default_order(c1.num_vars());
+            let mgr = super::BddManager::<AllTable<BddPtr>>::new_default_order(c1.num_vars());
             let weight_map : HashMap<VarLabel, (RealSemiring, RealSemiring)> = HashMap::from_iter(
                 (0..16).map(|x| (VarLabel::new(x as u64), (RealSemiring(0.3), RealSemiring(0.7)))));
             let order = VarOrder::linear_order(c1.num_vars());
             let cnf1 = mgr.from_cnf(&c1);
 
-            let mut mgr2 = DecisionNNFBuilder::new(order);
+            let mgr2 = DecisionNNFBuilder::new(order);
             let dnnf = mgr2.from_cnf_topdown(&c1);
 
             let bddwmc = super::repr::wmc::WmcParams::new_with_default(RealSemiring::zero(), RealSemiring::one(), weight_map);
@@ -474,8 +474,8 @@ mod test_bdd_manager {
     quickcheck! {
         /// test if the lru cache and the all cache give the same results
         fn bdd_lru(c1: Cnf) -> TestResult {
-            let mut mgr1 = super::BddManager::<AllTable<BddPtr>>::new_default_order(16);
-            let mut mgr2 = super::BddManager::<BddApplyTable<BddPtr>>::new_default_order_lru(16);
+            let mgr1 = super::BddManager::<AllTable<BddPtr>>::new_default_order(16);
+            let mgr2 = super::BddManager::<BddApplyTable<BddPtr>>::new_default_order_lru(16);
 
             let weight_map : HashMap<VarLabel, (RealSemiring, RealSemiring)> = HashMap::from_iter(
                 (0..16).map(|x| (VarLabel::new(x as u64), (RealSemiring(0.3), RealSemiring(0.7)))));
@@ -496,7 +496,7 @@ mod test_bdd_manager {
             if c1.num_vars() < 5 || c1.num_vars() > 8 { return TestResult::discard() }
             if c1.clauses().len() > 14 { return TestResult::discard() }
 
-            let mut mgr = super::BddManager::<AllTable<BddPtr>>::new_default_order(c1.num_vars());
+            let mgr = super::BddManager::<AllTable<BddPtr>>::new_default_order(c1.num_vars());
             let weight_map : HashMap<VarLabel, (RealSemiring, RealSemiring)> = HashMap::from_iter(
                 (0..16).map(|x| (VarLabel::new(x as u64), (RealSemiring(0.3), RealSemiring(0.7)))));
             let cnf = mgr.from_cnf(&c1);
@@ -580,7 +580,7 @@ mod test_bdd_manager {
             // constrain the size, make BDD
             if !(5..=8).contains(&n) { return TestResult::discard() }
             if c1.clauses().len() > 14 { return TestResult::discard() }
-            let mut mgr = super::BddManager::<AllTable<BddPtr>>::new_default_order(n);
+            let mgr = super::BddManager::<AllTable<BddPtr>>::new_default_order(n);
             let cnf = mgr.from_cnf(&c1);
 
             // randomizing the decisions
@@ -698,9 +698,9 @@ mod test_sdd_manager {
     use rand::SeedableRng;
     use rsdd::builder::cache::all_app::AllTable;
     use rsdd::builder::canonicalize::*;
-    use rsdd::repr::robdd::BddPtr;
     use rsdd::repr::ddnnf::{create_semantic_hash_map, DDNNFPtr};
     use rsdd::repr::dtree::DTree;
+    use rsdd::repr::robdd::BddPtr;
     use rsdd::repr::sdd::SddPtr;
     use rsdd::repr::var_order::VarOrder;
     use rsdd::repr::vtree::VTree;
@@ -711,7 +711,7 @@ mod test_sdd_manager {
     quickcheck! {
         fn test_cond_and(c: Cnf) -> bool {
             let order : Vec<VarLabel> = (0..16).map(VarLabel::new).collect();
-            let mut mgr = super::SddManager::<CompressionCanonicalizer>::new(VTree::even_split(&order, 4));
+            let mgr = super::SddManager::<CompressionCanonicalizer>::new(VTree::even_split(&order, 4));
             let cnf = mgr.from_cnf(&c);
             let v1 = VarLabel::new(0);
             let bdd1 = mgr.exists(cnf, v1);
@@ -729,7 +729,7 @@ mod test_sdd_manager {
             let order : Vec<VarLabel> = (0..16).map(VarLabel::new).collect();
             // let vtree = VTree::even_split(&order, 4);
             let vtree = VTree::right_linear(&order);
-            let mut mgr = super::SddManager::<CompressionCanonicalizer>::new(vtree);
+            let mgr = super::SddManager::<CompressionCanonicalizer>::new(vtree);
             let cnf1 = mgr.from_cnf(&c1);
             let cnf2 = mgr.from_cnf(&c2);
             let iff1 = mgr.iff(cnf1, cnf2);
@@ -750,7 +750,7 @@ mod test_sdd_manager {
         fn ite_iff_split(c1: Cnf, c2: Cnf) -> bool {
             let order : Vec<VarLabel> = (0..16).map(VarLabel::new).collect();
             let vtree = VTree::even_split(&order, 4);
-            let mut mgr = super::SddManager::<CompressionCanonicalizer>::new(vtree);
+            let mgr = super::SddManager::<CompressionCanonicalizer>::new(vtree);
             let cnf1 = mgr.from_cnf(&c1);
             let cnf2 = mgr.from_cnf(&c2);
             let iff1 = mgr.iff(cnf1, cnf2);
@@ -777,12 +777,12 @@ mod test_sdd_manager {
 
            let weight_map = create_semantic_hash_map::< {crate::BIG_PRIME} >(cnf.num_vars());
            let order : Vec<VarLabel> = (0..cnf.num_vars()).map(|x| VarLabel::new(x as u64)).collect();
-           let mut mgr = super::SddManager::<CompressionCanonicalizer>::new(VTree::even_split(&order, 3));
+           let mgr = super::SddManager::<CompressionCanonicalizer>::new(VTree::even_split(&order, 3));
            let cnf_sdd = mgr.from_cnf(&cnf);
            let sdd_res = cnf_sdd.semantic_hash(mgr.get_vtree_manager(), &weight_map);
 
 
-            let mut bddmgr = BddManager::<AllTable<BddPtr>>::new_default_order(cnf.num_vars());
+            let bddmgr = BddManager::<AllTable<BddPtr>>::new_default_order(cnf.num_vars());
             let cnf_bdd = bddmgr.from_cnf(&cnf);
             let bdd_res = cnf_bdd.semantic_hash(bddmgr.get_order(), &weight_map);
             assert_eq!(bdd_res, sdd_res);
@@ -802,12 +802,12 @@ mod test_sdd_manager {
             let vtree = VTree::from_dtree(&dtree).unwrap();
 
             let weight_map = create_semantic_hash_map::< {crate::BIG_PRIME} >(cnf.num_vars());
-            let mut mgr = super::SddManager::<CompressionCanonicalizer>::new(vtree);
+            let mgr = super::SddManager::<CompressionCanonicalizer>::new(vtree);
             let cnf_sdd = mgr.from_cnf(&cnf);
             let sdd_res = cnf_sdd.semantic_hash(mgr.get_vtree_manager(), &weight_map);
 
 
-            let mut bddmgr = BddManager::<AllTable<BddPtr>>::new_default_order(cnf.num_vars());
+            let bddmgr = BddManager::<AllTable<BddPtr>>::new_default_order(cnf.num_vars());
             let cnf_bdd = bddmgr.from_cnf(&cnf);
             let bdd_res = cnf_bdd.semantic_hash(bddmgr.get_order(), &weight_map);
             assert_eq!(bdd_res, sdd_res);
@@ -849,7 +849,7 @@ mod test_sdd_manager {
         fn sdd_compressed_right_linear(c: Cnf) -> bool {
             let order : Vec<VarLabel> = (0..16).map(VarLabel::new).collect();
             let vtree = VTree::right_linear(&order);
-            let mut mgr = super::SddManager::<CompressionCanonicalizer>::new(vtree);
+            let mgr = super::SddManager::<CompressionCanonicalizer>::new(vtree);
             let cnf = mgr.from_cnf(&c);
             cnf.is_compressed()
         }
@@ -859,7 +859,7 @@ mod test_sdd_manager {
         fn sdd_trimmed_right_linear(c: Cnf) -> bool {
             let order : Vec<VarLabel> = (0..16).map(VarLabel::new).collect();
             let vtree = VTree::right_linear(&order);
-            let mut mgr = super::SddManager::<CompressionCanonicalizer>::new(vtree);
+            let mgr = super::SddManager::<CompressionCanonicalizer>::new(vtree);
             let cnf = mgr.from_cnf(&c);
 
             cnf.is_trimmed()
@@ -868,7 +868,7 @@ mod test_sdd_manager {
 
     quickcheck! {
         fn sdd_compressed_arbitrary_vtree(c: Cnf, vtree: VTree) -> bool {
-            let mut mgr = super::SddManager::<CompressionCanonicalizer>::new(vtree);
+            let mgr = super::SddManager::<CompressionCanonicalizer>::new(vtree);
             let cnf = mgr.from_cnf(&c);
             cnf.is_compressed()
         }
@@ -876,7 +876,7 @@ mod test_sdd_manager {
 
     quickcheck! {
         fn sdd_trimmed_arbitrary_vtree(c: Cnf, vtree: VTree) -> bool {
-            let mut mgr = super::SddManager::<CompressionCanonicalizer>::new(vtree);
+            let mgr = super::SddManager::<CompressionCanonicalizer>::new(vtree);
             let cnf = mgr.from_cnf(&c);
             cnf.is_trimmed()
         }
@@ -884,11 +884,11 @@ mod test_sdd_manager {
 
     quickcheck! {
         fn prob_equiv_trivial(c: Cnf, vtree:VTree) -> bool {
-            let mut mgr1 = super::SddManager::<CompressionCanonicalizer>::new(vtree.clone());
+            let mgr1 = super::SddManager::<CompressionCanonicalizer>::new(vtree.clone());
             let c1 = mgr1.from_cnf(&c);
 
             // in this test, compression is still enabled; c2 should be identical to c1
-            let mut mgr2 = super::SddManager::<SemanticCanonicalizer<{ crate::BIG_PRIME }>>::new(vtree);
+            let mgr2 = super::SddManager::<SemanticCanonicalizer<{ crate::BIG_PRIME }>>::new(vtree);
             let c2 = mgr2.from_cnf(&c);
 
             let map : WmcParams<FiniteField<100000049>> = create_semantic_hash_map(mgr1.num_vars());
@@ -902,7 +902,7 @@ mod test_sdd_manager {
 
     quickcheck! {
         fn prob_equiv_sdd_identity_uncompressed_depr(c: Cnf, vtree:VTree) -> TestResult {
-            let mut compr_mgr = super::SddManager::<CompressionCanonicalizer>::new(vtree.clone());
+            let compr_mgr = super::SddManager::<CompressionCanonicalizer>::new(vtree.clone());
             let compr_cnf = compr_mgr.from_cnf(&c);
 
             let mut uncompr_mgr = super::SddManager::<CompressionCanonicalizer>::new(vtree);
@@ -929,10 +929,10 @@ mod test_sdd_manager {
 
     quickcheck! {
         fn prob_equiv_sdd_identity_uncompressed(c: Cnf, vtree:VTree) -> TestResult {
-            let mut compr_mgr = super::SddManager::<CompressionCanonicalizer>::new(vtree.clone());
+            let compr_mgr = super::SddManager::<CompressionCanonicalizer>::new(vtree.clone());
             let compr_cnf = compr_mgr.from_cnf(&c);
 
-            let mut uncompr_mgr = super::SddManager::<SemanticCanonicalizer<{ crate::BIG_PRIME }>>::new(vtree);
+            let uncompr_mgr = super::SddManager::<SemanticCanonicalizer<{ crate::BIG_PRIME }>>::new(vtree);
             let uncompr_cnf = uncompr_mgr.from_cnf(&c);
 
             if !uncompr_mgr.sdd_eq(compr_cnf, uncompr_cnf) {
@@ -992,7 +992,7 @@ mod test_sdd_manager {
     quickcheck! {
         /// verify that every node in the SDD compression canonicalizer has a unique semantic hash, using CompressionCanonicalizer
         fn qc_sdd_canonicity(c1: Cnf, vtree:VTree) -> TestResult {
-            let mut mgr = super::SddManager::<CompressionCanonicalizer>::new(vtree);
+            let mgr = super::SddManager::<CompressionCanonicalizer>::new(vtree);
             let _ = mgr.from_cnf(&c1);
 
             let map : WmcParams<FiniteField<{ crate::BIG_PRIME }>>= create_semantic_hash_map(mgr.num_vars());
@@ -1018,7 +1018,7 @@ mod test_sdd_manager {
         /// verify that every node in the SDD with the semantic canonicalizer a unique semantic hash w.r.t negations
         /// using SemanticCanonicalizer
         fn qc_semantic_sdd_canonicity(c1: Cnf, vtree:VTree) -> TestResult {
-            let mut mgr = super::SddManager::<SemanticCanonicalizer< {crate::BIG_PRIME} >>::new(vtree);
+            let mgr = super::SddManager::<SemanticCanonicalizer< {crate::BIG_PRIME} >>::new(vtree);
             let _ = mgr.from_cnf(&c1);
 
             let map : WmcParams<FiniteField<{ crate::BIG_PRIME }>>= create_semantic_hash_map(mgr.num_vars());
@@ -1070,7 +1070,7 @@ mod test_sdd_manager {
     quickcheck! {
         /// verify that the semantic hash of an SDDPtr + its compl is always equal to 1
         fn semantic_reg_plus_compl_eq_one(c1: Cnf, vtree:VTree) -> bool {
-            let mut mgr = super::SddManager::<SemanticCanonicalizer<{ crate::BIG_PRIME }>>::new(vtree);
+            let mgr = super::SddManager::<SemanticCanonicalizer<{ crate::BIG_PRIME }>>::new(vtree);
             let map : WmcParams<FiniteField<{ crate::BIG_PRIME }>>= create_semantic_hash_map(mgr.num_vars());
 
             let sdd = mgr.from_cnf(&c1);

@@ -1,7 +1,7 @@
 //! Apply cache for ITEs that uses a dynamically-expanding LRU cache
-use std::hash::{Hash, Hasher};
-use rustc_hash::FxHasher;
 use crate::{repr::ddnnf::DDNNFPtr, util::lru::*};
+use rustc_hash::FxHasher;
+use std::hash::{Hash, Hasher};
 
 use super::{ite::Ite, LruTable};
 

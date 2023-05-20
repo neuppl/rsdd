@@ -1,10 +1,5 @@
 //! Binary decision diagram representation
 
-use crate::{
-    repr::var_label::VarSet,
-    util::semiring::RealSemiring,
-    util::semiring::{BBAlgebra, ExpectedUtility, JoinSemilattice},
-};
 pub use super::{
     ddnnf::*,
     model::PartialModel,
@@ -12,12 +7,16 @@ pub use super::{
     var_order::VarOrder,
     wmc::WmcParams,
 };
-use core::fmt::Debug;
-use std::{iter::FromIterator, cell::RefCell, any::Any, ptr};
+use crate::{
+    repr::var_label::VarSet,
+    util::semiring::RealSemiring,
+    util::semiring::{BBAlgebra, ExpectedUtility, JoinSemilattice},
+};
 use bit_set::BitSet;
 use bumpalo::Bump;
+use core::fmt::Debug;
+use std::{any::Any, cell::RefCell, iter::FromIterator, ptr};
 use BddPtr::*;
-
 
 /// Core BDD pointer datatype
 #[derive(Debug, Clone, Eq, Copy, PartialOrd, Ord)]
@@ -43,11 +42,10 @@ impl<'a> Hash for BddPtr<'a> {
         core::mem::discriminant(self).hash(state);
         match self {
             Compl(n) | Reg(n) => ptr::hash(*n, state),
-            _ => ()
+            _ => (),
         }
     }
 }
-
 
 /// The intermediate representation for a BddPtr that is being folded in a
 /// [`Fold`] computation.
@@ -123,7 +121,7 @@ impl<'a, T: Clone, U> Fold<'a, T, U> {
                 let l_r = self.mut_fold_h(&l_p, false, &r.clone());
                 let r_r = self.mut_fold_h(&r_p, false, &r.clone());
                 (self.extract)(t, Some((l_r, r_r)))
-            },
+            }
         }
     }
     /// A mutable fold. An example of how to use this fold can be seen by collecting all VarLabels in the sub-tree referenced by a given [`BddPtr`]:
@@ -181,7 +179,7 @@ impl<'a> BddPtr<'a> {
     pub fn bdd_node_ref(&self) -> &'a BddNode<'a> {
         match self {
             Compl(x) | Reg(x) => x,
-            _ => panic!("Attempting to deref non-node BDD pointer")
+            _ => panic!("Attempting to deref non-node BDD pointer"),
         }
     }
 
@@ -196,7 +194,7 @@ impl<'a> BddPtr<'a> {
     pub fn var(&self) -> VarLabel {
         match self {
             Compl(n) | Reg(n) => n.var,
-            _ => panic!("attempting to dereference non-node")
+            _ => panic!("attempting to dereference non-node"),
         }
     }
 
@@ -205,7 +203,7 @@ impl<'a> BddPtr<'a> {
     pub fn var_safe(&self) -> Option<VarLabel> {
         match self {
             Compl(n) | Reg(n) => Some(n.var),
-            _ => None
+            _ => None,
         }
     }
 
@@ -254,13 +252,13 @@ impl<'a> BddPtr<'a> {
     /// Traverses the BDD and clears all scratch memory (sets it equal to 0)
     pub fn clear_scratch(&self) {
         match &self {
-            Compl(x) | Reg(x) => { 
+            Compl(x) | Reg(x) => {
                 if x.data.borrow().is_some() {
                     x.data.replace(None);
                     x.low.clear_scratch();
                     x.high.clear_scratch();
                 }
-            },
+            }
             PtrTrue | PtrFalse => (),
         }
     }
@@ -280,15 +278,21 @@ impl<'a> BddPtr<'a> {
     /// Panics if not node.
     pub fn get_scratch<T: ?Sized + Clone + 'static>(&self) -> Option<T> {
         match self {
-             Compl(n) | Reg(n) => { 
+            Compl(n) | Reg(n) => {
                 if self.is_scratch_cleared() {
                     return None;
                 }
                 // println!("dereferencing {:?}", n.data.as_ptr());
-                n.data.borrow().as_ref().unwrap().as_ref().downcast_ref::<T>().map(|x| x.clone())
-             },
-             PtrTrue => None,
-             PtrFalse => None,
+                n.data
+                    .borrow()
+                    .as_ref()
+                    .unwrap()
+                    .as_ref()
+                    .downcast_ref::<T>()
+                    .map(|x| x.clone())
+            }
+            PtrTrue => None,
+            PtrFalse => None,
         }
     }
 
@@ -301,10 +305,10 @@ impl<'a> BddPtr<'a> {
     /// involves dereferencing a pointer stored in `alloc`)
     pub fn set_scratch<T: 'static>(&self, v: T) {
         match self {
-            Compl(n) | Reg(n) => { 
+            Compl(n) | Reg(n) => {
                 n.data.replace(Some(Box::new(v)));
             }
-            _ => panic!("attempting to store scratch on constant")
+            _ => panic!("attempting to store scratch on constant"),
         }
     }
 
@@ -312,12 +316,10 @@ impl<'a> BddPtr<'a> {
     pub fn is_scratch_cleared(&self) -> bool {
         // return true;
         match self {
-             Compl(n) | Reg(n) => {
-                n.data.borrow().is_none()
-             },
-             PtrTrue => true,
-             PtrFalse => true,
-         } 
+            Compl(n) | Reg(n) => n.data.borrow().is_none(),
+            PtrTrue => true,
+            PtrFalse => true,
+        }
     }
 
     pub fn to_string_debug(&self) -> String {
@@ -380,7 +382,10 @@ impl<'a> BddPtr<'a> {
         f: &F,
         low_v: T,
         high_v: T,
-    ) -> T where T: 'static {
+    ) -> T
+    where
+        T: 'static,
+    {
         // If current node is true leaf, return accumulated high_v value
         if self.is_true() {
             high_v
@@ -425,7 +430,10 @@ impl<'a> BddPtr<'a> {
         f: &F,
         low_v: T,
         high_v: T,
-    ) -> T where T: 'static {
+    ) -> T
+    where
+        T: 'static,
+    {
         let r = self.bdd_fold_h(f, low_v, high_v);
         self.clear_scratch();
         r
@@ -671,7 +679,10 @@ impl<'a> BddPtr<'a> {
         partial_join_assgn: &PartialModel,
         join_vars: &BitSet,
         wmc: &WmcParams<T>,
-    ) -> T where T: 'static  {
+    ) -> T
+    where
+        T: 'static,
+    {
         let mut partial_join_acc = T::one();
         for lit in partial_join_assgn.assignment_iter() {
             let (l, h) = wmc.get_var_weight(lit.get_label());
@@ -719,7 +730,10 @@ impl<'a> BddPtr<'a> {
         join_vars: &[VarLabel],
         wmc: &WmcParams<T>,
         cur_assgn: PartialModel,
-    ) -> (T, PartialModel) where T: 'static {
+    ) -> (T, PartialModel)
+    where
+        T: 'static,
+    {
         match join_vars {
             // If all join variables are assigned,
             [] => {
@@ -781,7 +795,10 @@ impl<'a> BddPtr<'a> {
         join_vars: &[VarLabel],
         num_vars: usize,
         wmc: &WmcParams<T>,
-    ) -> (T, PartialModel) where T: 'static {
+    ) -> (T, PartialModel)
+    where
+        T: 'static,
+    {
         // Initialize all the decision variables to be true, partially instantianted resp. to this
         let all_true: Vec<Literal> = join_vars.iter().map(|x| Literal::new(*x, true)).collect();
         let cur_assgn = PartialModel::from_litvec(&all_true, num_vars);
@@ -834,12 +851,15 @@ impl<'a> DDNNFPtr<'a> for BddPtr<'a> {
         }
     }
 
-    fn fold<T: Clone + Copy + Debug, F: Fn(DDNNF<T>) -> T>(&self, _o: &VarOrder, f: F) -> T where T: 'static {
+    fn fold<T: Clone + Copy + Debug, F: Fn(DDNNF<T>) -> T>(&self, _o: &VarOrder, f: F) -> T
+    where
+        T: 'static,
+    {
         debug_assert!(self.is_scratch_cleared());
-        fn bottomup_pass_h<T: Clone + Copy + Debug, F: Fn(DDNNF<T>) -> T>(
-            ptr: BddPtr,
-            f: &F,
-        ) -> T where T: 'static {
+        fn bottomup_pass_h<T: Clone + Copy + Debug, F: Fn(DDNNF<T>) -> T>(ptr: BddPtr, f: &F) -> T
+        where
+            T: 'static,
+        {
             match ptr {
                 PtrTrue => f(DDNNF::True),
                 PtrFalse => f(DDNNF::False),
@@ -977,9 +997,7 @@ impl<'a> Hash for BddNode<'a> {
     }
 }
 
-impl<'a> Eq for BddNode<'a> {
-
-}
+impl<'a> Eq for BddNode<'a> {}
 
 impl<'a> PartialOrd for BddNode<'a> {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
@@ -1001,7 +1019,12 @@ impl<'a> PartialOrd for BddNode<'a> {
 
 impl<'a> Clone for BddNode<'a> {
     fn clone(&self) -> Self {
-        Self { var: self.var.clone(), low: self.low.clone(), high: self.high.clone(), data: RefCell::new(None) }
+        Self {
+            var: self.var.clone(),
+            low: self.low.clone(),
+            high: self.high.clone(),
+            data: RefCell::new(None),
+        }
     }
 }
 

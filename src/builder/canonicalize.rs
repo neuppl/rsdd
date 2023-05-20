@@ -22,7 +22,7 @@ pub trait SddCanonicalizationScheme<'a> {
 
     /// this is mutable because we may update an internal cache
     fn sdd_eq(&'a self, a: SddPtr<'a>, b: SddPtr<'a>) -> bool;
-    fn app_cache(& self) -> &mut Self::ApplyCacheMethod;
+    fn app_cache(&self) -> &mut Self::ApplyCacheMethod;
 
     // BackedRobinhoodTable-related methods
     fn bdd_tbl(&self) -> &BackedRobinhoodTable<BinarySDD>;
@@ -69,7 +69,7 @@ impl<'a> SddCanonicalizationScheme<'a> for CompressionCanonicalizer<'a> {
         self.use_compression
     }
 
-    fn app_cache(& self) -> &mut Self::ApplyCacheMethod {
+    fn app_cache(&self) -> &mut Self::ApplyCacheMethod {
         todo!("make this typecheck with interior mutability");
         &mut self.app_cache
     }
@@ -135,7 +135,11 @@ pub struct SemanticCanonicalizer<'a, const P: u128> {
 }
 
 impl<'a, const P: u128> SemanticCanonicalizer<'a, P> {
-    fn get_shared_sdd_ptr(&'a self, semantic_hash: FiniteField<P>, hash: u64) -> Option<SddPtr<'a>> {
+    fn get_shared_sdd_ptr(
+        &'a self,
+        semantic_hash: FiniteField<P>,
+        hash: u64,
+    ) -> Option<SddPtr<'a>> {
         match semantic_hash.value() {
             0 => Some(SddPtr::PtrFalse),
             1 => Some(SddPtr::PtrTrue),
@@ -226,7 +230,7 @@ impl<'a, const P: u128> SddCanonicalizationScheme<'a> for SemanticCanonicalizer<
     }
 
     fn bdd_get_or_insert(&'a mut self, item: BinarySDD<'a>) -> SddPtr<'a> {
-        todo!(); // make this typecheck with interior mutability 
+        todo!(); // make this typecheck with interior mutability
         let semantic_hash = item.semantic_hash(&self.vtree, &self.map);
         if let Some(sdd) = self.check_cached_hash_and_neg(semantic_hash) {
             return sdd;
@@ -236,7 +240,7 @@ impl<'a, const P: u128> SddCanonicalizationScheme<'a> for SemanticCanonicalizer<
     }
 
     fn sdd_get_or_insert(&'a mut self, item: SddOr<'a>) -> SddPtr<'a> {
-        todo!(); // make this typecheck with interior mutability 
+        todo!(); // make this typecheck with interior mutability
         let semantic_hash = item.semantic_hash(&self.vtree, &self.map);
         if let Some(sdd) = self.check_cached_hash_and_neg(semantic_hash) {
             return sdd;

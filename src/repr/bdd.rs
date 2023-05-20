@@ -1,10 +1,10 @@
-use std::{fmt::Debug, hash::Hash, collections::HashMap, cell::RefCell};
+use std::{cell::RefCell, collections::HashMap, fmt::Debug, hash::Hash};
 
 use bumpalo::Bump;
 
 use super::var_label::VarLabel;
 
-pub trait BddPtr<'a> : Clone + Copy + Debug + Eq + PartialEq + Hash {
+pub trait BddPtr<'a>: Clone + Copy + Debug + Eq + PartialEq + Hash {
     fn is_true(&self) -> bool;
     fn is_false(&self) -> bool;
     fn is_node(&self) -> bool;
@@ -14,10 +14,10 @@ pub trait BddPtr<'a> : Clone + Copy + Debug + Eq + PartialEq + Hash {
 
 #[derive(Debug, Eq, PartialEq, Clone)]
 struct BackedROBDDNode<'a> {
-    low: ROBDDPtr<'a>, 
-    high: ROBDDPtr<'a>, 
+    low: ROBDDPtr<'a>,
+    high: ROBDDPtr<'a>,
     topvar: VarLabel,
-    scratch: RefCell<Option<usize>>
+    scratch: RefCell<Option<usize>>,
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
@@ -25,7 +25,7 @@ enum ROBDDPtr<'a> {
     True,
     False,
     Node(&'a BackedROBDDNode<'a>),
-    NegatedNode(&'a BackedROBDDNode<'a>)
+    NegatedNode(&'a BackedROBDDNode<'a>),
 }
 
 impl<'a> BddPtr<'a> for ROBDDPtr<'a> {
@@ -84,9 +84,9 @@ pub trait BddBuilder<'a, TPtr: BddPtr<'a>> {
     }
 }
 
-struct ROBDDBuilder<'a> { 
+struct ROBDDBuilder<'a> {
     alloc_table: Bump,
-    compute_table: RefCell<HashMap<BackedROBDDNode<'a>, ROBDDPtr<'a>>>
+    compute_table: RefCell<HashMap<BackedROBDDNode<'a>, ROBDDPtr<'a>>>,
 }
 
 impl<'a> ROBDDBuilder<'a> {
@@ -106,7 +106,12 @@ impl<'a> ROBDDBuilder<'a> {
 
 impl<'a> BddBuilder<'a, ROBDDPtr<'a>> for ROBDDBuilder<'a> {
     fn var(&'a self, v: VarLabel) -> ROBDDPtr<'a> {
-        let n = BackedROBDDNode { low: ROBDDPtr::False, high: ROBDDPtr::True, topvar: v, scratch: RefCell::new(None) };
+        let n = BackedROBDDNode {
+            low: ROBDDPtr::False,
+            high: ROBDDPtr::True,
+            topvar: v,
+            scratch: RefCell::new(None),
+        };
         self.get_or_insert(n)
     }
 
@@ -120,7 +125,7 @@ impl<'a> BddBuilder<'a, ROBDDPtr<'a>> for ROBDDBuilder<'a> {
 
     fn ite(&'a self, f: ROBDDPtr<'a>, g: ROBDDPtr<'a>, h: ROBDDPtr<'a>) -> ROBDDPtr<'a> {
         let v = g.high();
-        return v.unwrap()
+        return v.unwrap();
         // let n : Bdd<ROBDDPtr<'a>> = g.();
         // match n {
         //     Bdd::True => todo!(),

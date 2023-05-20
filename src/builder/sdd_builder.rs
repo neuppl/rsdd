@@ -1,7 +1,7 @@
 //! The main implementation of the SDD manager, the primary way of interacting
 //! with SDDs.
 
-use std::cell::{RefCell, Ref};
+use std::cell::{Ref, RefCell};
 use std::cmp::Ordering;
 use std::collections::HashSet;
 
@@ -11,8 +11,8 @@ use super::cache::sdd_apply_cache::SddApply;
 use super::cache::LruTable;
 use super::canonicalize::*;
 
-use crate::repr::robdd::create_semantic_hash_map;
 use crate::repr::ddnnf::DDNNFPtr;
+use crate::repr::robdd::create_semantic_hash_map;
 use crate::repr::sdd::{BinarySDD, SddAnd, SddOr, SddPtr};
 use crate::repr::vtree::{VTree, VTreeIndex, VTreeManager};
 use crate::{repr::cnf::Cnf, repr::logical_expr::LogicalExpr, repr::var_label::VarLabel};
@@ -53,7 +53,7 @@ pub struct SddManager<'a, T: SddCanonicalizationScheme<'a>> {
     canonicalizer: RefCell<T>,
     vtree: VTreeManager,
     stats: SddStats,
-   ite_cache: RefCell<AllTable<SddPtr<'a>>>,
+    ite_cache: RefCell<AllTable<SddPtr<'a>>>,
 }
 
 impl<'a, T: SddCanonicalizationScheme<'a>> SddManager<'a, T> {
@@ -178,7 +178,6 @@ impl<'a, T: SddCanonicalizationScheme<'a>> SddManager<'a, T> {
         if self.is_true(bdd.high()) && self.is_false(bdd.low()) {
             return SddPtr::var(bdd.label(), true);
         }
-
 
         unsafe {
             // self.stats.num_get_or_insert += 1;
@@ -663,12 +662,10 @@ impl<'a, T: SddCanonicalizationScheme<'a>> SddManager<'a, T> {
 
     pub fn dump_sdd_state(&'a self, ptr: SddPtr<'a>) {
         todo!()
-        // self.canonicalizer.borrow().on_sdd_print_dump_state(ptr)
     }
 
     pub fn sdd_eq(&'a self, a: SddPtr<'a>, b: SddPtr<'a>) -> bool {
-        todo!();
-        self.canonicalizer.borrow().sdd_eq(a, b)
+        todo!()
     }
 
     pub fn is_true(&'a self, a: SddPtr<'a>) -> bool {
@@ -800,7 +797,12 @@ impl<'a, T: SddCanonicalizationScheme<'a>> SddManager<'a, T> {
     /// get an iterator over all unique allocated nodes by the manager
     pub fn node_iter(&self) -> impl Iterator<Item = SddPtr> + '_ {
         todo!();
-        let bdditer = self.canonicalizer.borrow().bdd_tbl().iter().map(|x| SddPtr::bdd(x));
+        let bdditer = self
+            .canonicalizer
+            .borrow()
+            .bdd_tbl()
+            .iter()
+            .map(|x| SddPtr::bdd(x));
         self.canonicalizer
             .borrow()
             .sdd_tbl()

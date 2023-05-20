@@ -3,8 +3,8 @@
 use std::collections::HashMap;
 
 use crate::repr::{
-    robdd::{BddNode, BddPtr},
     ddnnf::DDNNFPtr,
+    robdd::{BddNode, BddPtr},
 };
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

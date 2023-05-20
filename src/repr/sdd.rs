@@ -38,7 +38,12 @@ pub struct BinarySDD<'a> {
 }
 
 impl<'a> BinarySDD<'a> {
-    pub fn new(label: VarLabel, low: SddPtr<'a>, high: SddPtr<'a>, vtree: VTreeIndex) -> BinarySDD<'a> {
+    pub fn new(
+        label: VarLabel,
+        low: SddPtr<'a>,
+        high: SddPtr<'a>,
+        vtree: VTreeIndex,
+    ) -> BinarySDD<'a> {
         BinarySDD {
             label,
             low,
@@ -111,32 +116,32 @@ impl<'a> Iterator for SddNodeIter<'a> {
 
     fn next(&mut self) -> Option<Self::Item> {
         todo!("redesign this iterator to not have ownership");
-    //     if self.sdd.is_bdd() {
-    //         // if this is a binary SDD, produce the appropriate nodes
-    //         if self.count == 0 {
-    //             self.count += 1;
-    //             Some(SddAnd::new(
-    //                 SddPtr::var(self.sdd.topvar(), true),
-    //                 self.sdd.high_raw(),
-    //             ))
-    //         } else if self.count == 1 {
-    //             self.count += 1;
-    //             Some(SddAnd::new(
-    //                 SddPtr::var(self.sdd.topvar(), false),
-    //                 self.sdd.low_raw(),
-    //             ))
-    //         } else {
-    //             None
-    //         }
-    //     } else {
-    //         let sdd = self.sdd.node_ref();
-    //         if self.count >= sdd.nodes.len() {
-    //             None
-    //         } else {
-    //             self.count += 1;
-    //             Some(sdd.nodes[self.count - 1])
-    //         }
-    //     }
+        //     if self.sdd.is_bdd() {
+        //         // if this is a binary SDD, produce the appropriate nodes
+        //         if self.count == 0 {
+        //             self.count += 1;
+        //             Some(SddAnd::new(
+        //                 SddPtr::var(self.sdd.topvar(), true),
+        //                 self.sdd.high_raw(),
+        //             ))
+        //         } else if self.count == 1 {
+        //             self.count += 1;
+        //             Some(SddAnd::new(
+        //                 SddPtr::var(self.sdd.topvar(), false),
+        //                 self.sdd.low_raw(),
+        //             ))
+        //         } else {
+        //             None
+        //         }
+        //     } else {
+        //         let sdd = self.sdd.node_ref();
+        //         if self.count >= sdd.nodes.len() {
+        //             None
+        //         } else {
+        //             self.count += 1;
+        //             Some(sdd.nodes[self.count - 1])
+        //         }
+        //     }
     }
 }
 
@@ -207,8 +212,8 @@ impl<'a> PartialEq for SddOr<'a> {
 use std::hash::{Hash, Hasher};
 
 use super::{
-    robdd::WmcParams,
     ddnnf::DDNNFPtr,
+    robdd::WmcParams,
     var_label::Literal,
     vtree::{VTreeIndex, VTreeManager},
 };
@@ -393,13 +398,13 @@ impl<'a> SddPtr<'a> {
     }
 
     /// get a reference to a binary SDD node
-    /// 
+    ///
     /// panics if not a binary SDD
     pub fn bdd_ref(&self) -> &'a BinarySDD<'a> {
         match self {
             BDD(n) => n,
             ComplBDD(n) => n,
-            _ => panic!()
+            _ => panic!(),
         }
     }
 

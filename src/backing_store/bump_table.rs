@@ -37,7 +37,11 @@ impl<'a, T: Clone> Default for HashTableElement<'a, T> {
 
 impl<'a, T: Clone> HashTableElement<'a, T> {
     pub fn new(ptr: &'a T, hash: u64, psl: u8) -> HashTableElement<'a, T> {
-        HashTableElement { ptr: Some(ptr), hash, psl }
+        HashTableElement {
+            ptr: Some(ptr),
+            hash,
+            psl,
+        }
     }
 
     #[inline]
@@ -138,7 +142,10 @@ where
     }
 
     pub fn iter(&self) -> impl Iterator<Item = &'a T> + '_ {
-        self.tbl.iter().filter(|x| x.is_occupied()).map(|x| x.ptr.unwrap())
+        self.tbl
+            .iter()
+            .filter(|x| x.is_occupied())
+            .map(|x| x.ptr.unwrap())
     }
 
     pub fn num_nodes(&self) -> usize {
@@ -150,8 +157,8 @@ where
     }
 }
 
-impl<'a, T: Eq + PartialEq + Hash + Clone + std::fmt::Debug, H: UniqueTableHasher<T>> UniqueTable<'a, T, H>
-    for BackedRobinhoodTable<'a, T>
+impl<'a, T: Eq + PartialEq + Hash + Clone + std::fmt::Debug, H: UniqueTableHasher<T>>
+    UniqueTable<'a, T, H> for BackedRobinhoodTable<'a, T>
 {
     /// assumption: the hash *is* an accurate identifier for equality
     fn get_by_hash(&'a self, elem_hash: u64) -> Option<&'a T> {

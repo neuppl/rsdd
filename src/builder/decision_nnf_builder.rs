@@ -1,15 +1,16 @@
 //! Top-down decision DNNF compiler and manipulator
 
 use std::{
+    cell::RefCell,
     collections::HashSet,
-    hash::{Hash, Hasher}, cell::RefCell,
+    hash::{Hash, Hasher},
 };
 
 use crate::{
     backing_store::*,
     repr::{
-        robdd::{create_semantic_hash_map, WmcParams},
         ddnnf::DDNNFPtr,
+        robdd::{create_semantic_hash_map, WmcParams},
         unit_prop::{DecisionResult, SATSolver},
     },
     util::semiring::FiniteField,
@@ -20,8 +21,8 @@ use rustc_hash::{FxHashMap, FxHasher};
 use crate::{
     backing_store::bump_table::BackedRobinhoodTable,
     repr::{
-        robdd::{BddNode, BddPtr},
         cnf::*,
+        robdd::{BddNode, BddPtr},
         var_label::{Literal, VarLabel},
         var_order::VarOrder,
     },
@@ -99,7 +100,11 @@ impl<'a> DecisionNNFBuilder<'a> {
         }
     }
 
-    fn conjoin_implied(&'a self, literals: impl Iterator<Item = Literal>, nnf: BddPtr<'a>) -> BddPtr<'a> {
+    fn conjoin_implied(
+        &'a self,
+        literals: impl Iterator<Item = Literal>,
+        nnf: BddPtr<'a>,
+    ) -> BddPtr<'a> {
         if nnf.is_false() {
             return BddPtr::false_ptr();
         }
@@ -219,7 +224,13 @@ impl<'a> DecisionNNFBuilder<'a> {
         r
     }
 
-    fn cond_helper(&'a self, bdd: BddPtr<'a>, lbl: VarLabel, value: bool, alloc: &mut Bump) -> BddPtr<'a> {
+    fn cond_helper(
+        &'a self,
+        bdd: BddPtr<'a>,
+        lbl: VarLabel,
+        value: bool,
+        alloc: &mut Bump,
+    ) -> BddPtr<'a> {
         if bdd.is_const() {
             bdd
         } else if bdd.var() == lbl {
