@@ -9,8 +9,8 @@ use crate::{
     util::semiring::FiniteField,
 };
 use bumpalo::Bump;
-use std::collections::HashSet;
 use std::fmt::Debug;
+use std::{cell::RefCell, collections::HashSet};
 use SddPtr::*;
 
 // This type is used a lot. Make sure it doesn't unintentionally get bigger.
@@ -27,14 +27,14 @@ pub enum SddPtr<'a> {
 
 /// Specialized SDD node for a right-linear sub-vtree
 /// SDDs for these fragments are binary decisions
-#[derive(Debug, Clone, Eq, Ord, PartialOrd, Copy)]
+#[derive(Debug, Clone, Eq, Ord, PartialOrd)]
 pub struct BinarySDD<'a> {
     label: VarLabel,
     vtree: VTreeIndex,
     low: SddPtr<'a>,
     high: SddPtr<'a>,
-    scratch: usize,
-    semantic_hash: Option<u128>,
+    scratch: RefCell<Option<usize>>,
+    semantic_hash: RefCell<Option<u128>>,
 }
 
 impl<'a> BinarySDD<'a> {
@@ -49,8 +49,8 @@ impl<'a> BinarySDD<'a> {
             low,
             high,
             vtree,
-            semantic_hash: None,
-            scratch: 0,
+            semantic_hash: RefCell::new(None),
+            scratch: RefCell::new(None),
         }
     }
 
@@ -115,33 +115,28 @@ impl<'a> Iterator for SddNodeIter<'a> {
     type Item = SddAnd<'a> where Self: 'a;
 
     fn next(&mut self) -> Option<Self::Item> {
-        todo!("redesign this iterator to not have ownership");
-        //     if self.sdd.is_bdd() {
-        //         // if this is a binary SDD, produce the appropriate nodes
-        //         if self.count == 0 {
-        //             self.count += 1;
-        //             Some(SddAnd::new(
-        //                 SddPtr::var(self.sdd.topvar(), true),
-        //                 self.sdd.high_raw(),
-        //             ))
-        //         } else if self.count == 1 {
-        //             self.count += 1;
-        //             Some(SddAnd::new(
-        //                 SddPtr::var(self.sdd.topvar(), false),
-        //                 self.sdd.low_raw(),
-        //             ))
-        //         } else {
-        //             None
-        //         }
-        //     } else {
-        //         let sdd = self.sdd.node_ref();
-        //         if self.count >= sdd.nodes.len() {
-        //             None
-        //         } else {
-        //             self.count += 1;
-        //             Some(sdd.nodes[self.count - 1])
-        //         }
-        //     }
+        match self.sdd {
+            PtrTrue | PtrFalse | Var(_, _) => panic!("called iterator on constant"),
+            BDD(bdd) | ComplBDD(bdd) => match self.count {
+                0 => {
+                    self.count += 1;
+                    Some(SddAnd::new(SddPtr::var(bdd.label, true), bdd.high))
+                }
+                1 => {
+                    self.count += 1;
+                    Some(SddAnd::new(SddPtr::var(bdd.label, false), bdd.low))
+                }
+                _ => None,
+            },
+            Reg(or) | Compl(or) => {
+                if self.count >= or.nodes.len() {
+                    None
+                } else {
+                    self.count += 1;
+                    Some(or.nodes[self.count - 1])
+                }
+            }
+        }
     }
 }
 
@@ -175,8 +170,8 @@ impl<'a> SddAnd<'a> {
 pub struct SddOr<'a> {
     index: VTreeIndex,
     pub nodes: Vec<SddAnd<'a>>,
-    pub scratch: usize,
-    pub semantic_hash: Option<u128>,
+    pub scratch: RefCell<Option<usize>>,
+    pub semantic_hash: RefCell<Option<u128>>,
 }
 
 impl<'a> SddOr<'a> {
@@ -184,8 +179,8 @@ impl<'a> SddOr<'a> {
         SddOr {
             nodes,
             index,
-            scratch: 0,
-            semantic_hash: None,
+            scratch: RefCell::new(None),
+            semantic_hash: RefCell::new(None),
         }
     }
 
@@ -239,7 +234,6 @@ impl<'a> SddPtr<'a> {
         vtree: &VTreeManager,
         map: &WmcParams<FiniteField<P>>,
     ) -> FiniteField<P> {
-        todo!(); // make this typecheck with interior mutability for semantic hash
         match self {
             PtrTrue => FiniteField::new(1),
             PtrFalse => FiniteField::new(0),
@@ -247,22 +241,24 @@ impl<'a> SddPtr<'a> {
                 let (l_w, h_w) = map.get_var_weight(*label);
                 return if *polarity { *h_w } else { *l_w };
             }
-            BDD(_) => {
-                if let Some(h) = self.bdd_ref().semantic_hash {
+            BDD(v) => {
+                if let Some(h) = *(v.semantic_hash.borrow()) {
                     return FiniteField::new(h);
                 }
 
-                let h = self.bdd_ref().semantic_hash(vtree, map);
-                self.bdd_ref().semantic_hash = Some(h.value());
+                let h = v.semantic_hash(vtree, map);
+                *(v.semantic_hash.borrow_mut()) = Some(h.value());
+
                 h
             }
-            Reg(_) => {
-                if let Some(h) = self.node_ref().semantic_hash {
+            Reg(v) => {
+                if let Some(h) = *(v.semantic_hash.borrow()) {
                     return FiniteField::new(h);
                 }
 
-                let h = self.node_ref().semantic_hash(vtree, map);
-                self.node_ref().semantic_hash = Some(h.value());
+                let h = v.semantic_hash(vtree, map);
+                *(v.semantic_hash.borrow_mut()) = Some(h.value());
+
                 h
             }
             ComplBDD(_) | Compl(_) => self.neg().cached_semantic_hash(vtree, map).negate(),
@@ -273,18 +269,18 @@ impl<'a> SddPtr<'a> {
     ///
     /// Panics if not node.
     pub fn get_scratch<T>(&self) -> Option<&T> {
-        unsafe {
-            let ptr = if self.is_bdd() {
-                self.bdd_ref().scratch
-            } else {
-                self.node_ref().scratch
-            };
-            if ptr == 0 {
-                None
-            } else {
-                Some(&*(ptr as *const T))
+        let scratch = match self {
+            PtrTrue | PtrFalse | Var(_, _) => panic!("called get scratch on constant"),
+            BDD(v) | ComplBDD(v) => v.scratch.borrow(),
+            Reg(v) | Compl(v) => v.scratch.borrow(),
+        };
+
+        if let Some(ptr) = *scratch {
+            unsafe {
+                return Some(&*(ptr as *const T));
             }
         }
+        None
     }
 
     /// Set the scratch in this node to the value `v`.
@@ -295,49 +291,38 @@ impl<'a> SddPtr<'a> {
     /// the provided allocator `alloc` (i.e., calling `get_scratch`
     /// involves dereferencing a pointer stored in `alloc`)
     pub fn set_scratch<T>(&self, alloc: &mut Bump, v: T) {
-        todo!("make this typecheck with interior mutability");
         if self.is_bdd() {
-            self.bdd_ref().scratch = (alloc.alloc(v) as *const T) as usize;
+            *(self.bdd_ref().scratch.borrow_mut()) = Some((alloc.alloc(v) as *const T) as usize);
         } else {
-            self.node_ref().scratch = (alloc.alloc(v) as *const T) as usize;
+            *(self.node_ref().scratch.borrow_mut()) = Some((alloc.alloc(v) as *const T) as usize);
         }
     }
 
     pub fn is_scratch_cleared(&self) -> bool {
-        if self.is_bdd() {
-            self.bdd_ref().scratch == 0
-        } else if self.is_node() {
-            self.node_ref().scratch == 0
-        } else {
-            true
+        match self {
+            PtrTrue | PtrFalse | Var(_, _) => true,
+            BDD(v) | ComplBDD(v) => v.scratch.borrow().is_none(),
+            Reg(v) | Compl(v) => v.scratch.borrow().is_none(),
         }
     }
 
     /// recursively traverses the SDD and clears all scratch
     pub fn clear_scratch(&self) {
-        todo!("make this typecheck with interior mutability");
-        if self.is_const() || self.is_var() {
-            return;
-        }
-        if self.is_bdd() {
-            if self.bdd_ref().scratch == 0 {
-                return;
-            } else {
-                // clear children and return
-                self.bdd_ref().scratch = 0;
-                self.high().clear_scratch();
-                self.low().clear_scratch();
-                return;
-            }
-        }
+        match self {
+            PtrTrue | PtrFalse | Var(_, _) => return,
+            BDD(v) | ComplBDD(v) => {
+                *(v.scratch.borrow_mut()) = None;
 
-        // node is an sdd
-        let n = self.node_ref();
-        if n.scratch != 0 {
-            n.scratch = 0;
-            for a in &n.nodes {
-                a.prime().clear_scratch();
-                a.sub().clear_scratch();
+                v.low.clear_scratch();
+                v.high.clear_scratch();
+            }
+            Reg(v) | Compl(v) => {
+                *(v.scratch.borrow_mut()) = None;
+
+                for n in &v.nodes {
+                    n.prime.clear_scratch();
+                    n.sub.clear_scratch();
+                }
             }
         }
     }
