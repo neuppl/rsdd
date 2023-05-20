@@ -30,19 +30,24 @@ enum ROBDDPtr<'a> {
 
 impl<'a> BddPtr<'a> for ROBDDPtr<'a> {
     fn is_true(&self) -> bool {
-        todo!()
+        matches!(self, ROBDDPtr::True)
     }
 
     fn is_false(&self) -> bool {
-        todo!()
+        matches!(self, ROBDDPtr::False)
     }
 
     fn is_node(&self) -> bool {
-        todo!()
+        matches!(self, ROBDDPtr::Node(_) | ROBDDPtr::NegatedNode(_))
     }
 
     fn low(&self) -> Option<Self> {
-        todo!()
+        match self {
+            ROBDDPtr::True => None,
+            ROBDDPtr::False => None,
+            ROBDDPtr::Node(n) => Some(n.low),
+            ROBDDPtr::NegatedNode(n) => Some(n.low),
+        }
     }
 
     fn high(&self) -> Option<Self> {
