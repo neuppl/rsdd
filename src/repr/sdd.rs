@@ -552,9 +552,7 @@ fn is_trimmed_trivial() {
 
 #[test]
 fn is_trimmed_simple_demorgan() {
-    let man = crate::builder::sdd_builder::SddManager::<
-        crate::builder::canonicalize::CompressionCanonicalizer,
-    >::new(crate::repr::vtree::VTree::even_split(
+    let man = crate::builder::sdd_builder::SddManager::new(crate::repr::vtree::VTree::even_split(
         &[
             VarLabel::new(0),
             VarLabel::new(1),
@@ -584,9 +582,7 @@ fn is_canonical_trivial() {
 
 #[test]
 fn is_canonical_simple_demorgan() {
-    let man = crate::builder::sdd_builder::SddManager::<
-        crate::builder::canonicalize::CompressionCanonicalizer,
-    >::new(crate::repr::vtree::VTree::even_split(
+    let man = crate::builder::sdd_builder::SddManager::new(crate::repr::vtree::VTree::even_split(
         &[
             VarLabel::new(0),
             VarLabel::new(1),

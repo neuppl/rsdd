@@ -7,7 +7,6 @@ pub mod cache;
 
 pub mod bdd_builder;
 pub mod bdd_plan;
-pub mod canonicalize;
 pub mod decision_nnf_builder;
 pub mod sdd_builder;
 

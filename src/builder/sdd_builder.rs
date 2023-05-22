@@ -1,16 +1,16 @@
 //! The main implementation of the SDD manager, the primary way of interacting
 //! with SDDs.
 
-use std::cell::{Ref, RefCell};
+use std::cell::RefCell;
 use std::cmp::Ordering;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use super::cache::all_app::AllTable;
 use super::cache::ite::Ite;
-use super::cache::sdd_apply_cache::SddApply;
 use super::cache::LruTable;
-use super::canonicalize::*;
 
+use crate::backing_store::bump_table::BackedRobinhoodTable;
+use crate::backing_store::{DefaultUniqueTableHasher, UniqueTable};
 use crate::repr::ddnnf::DDNNFPtr;
 use crate::repr::robdd::create_semantic_hash_map;
 use crate::repr::sdd::binary_sdd::BinarySDD;
@@ -51,30 +51,36 @@ impl Default for SddStats {
     }
 }
 
-pub struct SddManager<'a, T: SddCanonicalizationScheme<'a>> {
-    canonicalizer: RefCell<T>,
+pub struct SddManager<'a> {
     vtree: VTreeManager,
     stats: SddStats,
+    should_compress: bool,
+    // tables
+    bdd_tbl: RefCell<BackedRobinhoodTable<'a, BinarySDD<'a>>>,
+    sdd_tbl: RefCell<BackedRobinhoodTable<'a, SddOr<'a>>>,
+    hasher: DefaultUniqueTableHasher,
+    // caches
     ite_cache: RefCell<AllTable<SddPtr<'a>>>,
+    app_cache: RefCell<HashMap<SddAnd<'a>, SddPtr<'a>>>,
 }
 
-impl<'a, T: SddCanonicalizationScheme<'a>> SddManager<'a, T> {
-    pub fn new(vtree: VTree) -> SddManager<'a, T> {
+impl<'a> SddManager<'a> {
+    pub fn new(vtree: VTree) -> SddManager<'a> {
         let vtree_man = VTreeManager::new(vtree);
         SddManager {
             stats: SddStats::new(),
             ite_cache: RefCell::new(AllTable::new()),
-            canonicalizer: RefCell::new(T::new(&vtree_man)),
+            app_cache: RefCell::new(HashMap::new()),
+            bdd_tbl: RefCell::new(BackedRobinhoodTable::new()),
+            sdd_tbl: RefCell::new(BackedRobinhoodTable::new()),
+            hasher: DefaultUniqueTableHasher::default(),
             vtree: vtree_man,
+            should_compress: true,
         }
     }
 
-    pub fn canonicalizer(&self) -> Ref<T> {
-        self.canonicalizer.borrow()
-    }
-
     pub fn set_compression(&mut self, b: bool) {
-        self.canonicalizer.borrow_mut().set_compress(b)
+        self.should_compress = false
     }
 
     pub fn get_vtree_root(&self) -> &VTree {
@@ -106,16 +112,6 @@ impl<'a, T: SddCanonicalizationScheme<'a>> SddManager<'a, T> {
                     j += 1;
                 }
             }
-        }
-    }
-
-    /// Normalizes and fetches a node from the store
-    pub fn get_or_insert(&'a self, sdd: SddOr<'a>) -> SddPtr<'a> {
-        // self.stats.num_get_or_insert += 1;
-        // TODO make this safe
-        unsafe {
-            let c = &mut *self.canonicalizer.as_ptr();
-            c.sdd_get_or_insert(sdd)
         }
     }
 
@@ -163,9 +159,18 @@ impl<'a, T: SddCanonicalizationScheme<'a>> SddManager<'a, T> {
                 for x in node.iter_mut() {
                     *x = SddAnd::new(x.prime(), x.sub().neg());
                 }
-                self.get_or_insert(SddOr::new(node, table)).neg()
+                SddPtr::Reg(
+                    self.sdd_tbl
+                        .borrow_mut()
+                        .get_or_insert(SddOr::new(node, table), &self.hasher),
+                )
+                .neg()
             } else {
-                self.get_or_insert(SddOr::new(node, table))
+                SddPtr::Reg(
+                    self.sdd_tbl
+                        .borrow_mut()
+                        .get_or_insert(SddOr::new(node, table), &self.hasher),
+                )
             }
         }
     }
@@ -181,18 +186,19 @@ impl<'a, T: SddCanonicalizationScheme<'a>> SddManager<'a, T> {
             return SddPtr::var(bdd.label(), true);
         }
 
-        unsafe {
-            // self.stats.num_get_or_insert += 1;
-            // uniqify BDD
-            let c = &mut *self.canonicalizer.as_ptr();
-            if bdd.high().is_neg() || self.is_false(bdd.high()) || bdd.high().is_neg_var() {
-                let neg_bdd =
-                    BinarySDD::new(bdd.label(), bdd.low().neg(), bdd.high().neg(), bdd.vtree());
-                c.bdd_get_or_insert(neg_bdd).neg()
-            } else {
-                c.bdd_get_or_insert(bdd)
-            }
+        if bdd.high().is_neg() || self.is_false(bdd.high()) || bdd.high().is_neg_var() {
+            let low = bdd.low().neg();
+            let high = bdd.high().neg();
+            let neg_bdd = BinarySDD::new(bdd.label(), low, high, bdd.vtree());
+            return SddPtr::BDD(
+                self.bdd_tbl
+                    .borrow_mut()
+                    .get_or_insert(neg_bdd, &self.hasher),
+            )
+            .neg();
         }
+
+        SddPtr::BDD(self.bdd_tbl.borrow_mut().get_or_insert(bdd, &self.hasher))
     }
 
     #[inline]
@@ -226,7 +232,7 @@ impl<'a, T: SddCanonicalizationScheme<'a>> SddManager<'a, T> {
             return sdd;
         }
 
-        if self.canonicalizer.borrow().should_compress() {
+        if self.should_compress {
             self.compress(&mut node);
 
             // check for a base case after compression (compression can sometimes
@@ -458,45 +464,44 @@ impl<'a, T: SddCanonicalizationScheme<'a>> SddManager<'a, T> {
             (b, a)
         };
 
+        let mut app_cache = self.app_cache.borrow_mut();
+
         // check if we have this application cached
-        // TODO make this safe
-        unsafe {
-            let c = &mut *self.canonicalizer.as_ptr();
-            if let Some(x) = c.app_cache().get(SddAnd::new(a, b)) {
-                // self.stats.num_app_cache_hits += 1;
-                return x;
-            }
-
-            let av = self.get_vtree_idx(a);
-            let bv = self.get_vtree_idx(b);
-            let lca = self.vtree.lca(av, bv);
-
-            // now we determine the current iterator for primes and subs
-            // consider the following example vtree:
-            //       3
-            //    1       5
-            //  0  2    4   6
-            // 4 cases:
-            //   1. `a` and `b` have the same vtree
-            //   2. The lca is `a`
-            //   3. The lca is `b`
-            //   4. The lca is a shared parent equal to neither
-            // we can only conjoin two SDD nodes if they are normalized with respect
-            // to the same vtree; the following code does this for each of the
-            // above cases.
-            let r = if av == bv {
-                self.and_cartesian(a, b, lca)
-            } else if lca == av {
-                self.and_sub_desc(a, b)
-            } else if lca == bv {
-                self.and_prime_desc(b, a)
-            } else {
-                self.and_indep(a, b, lca)
-            };
-            // cache and return
-            c.app_cache().insert(SddAnd::new(a, b), r);
-            r
+        if let Some(x) = app_cache.get(&SddAnd::new(a, b)) {
+            // self.stats.num_app_cache_hits += 1;
+            return *x;
         }
+
+        let av = self.get_vtree_idx(a);
+        let bv = self.get_vtree_idx(b);
+        let lca = self.vtree.lca(av, bv);
+
+        // now we determine the current iterator for primes and subs
+        // consider the following example vtree:
+        //       3
+        //    1       5
+        //  0  2    4   6
+        // 4 cases:
+        //   1. `a` and `b` have the same vtree
+        //   2. The lca is `a`
+        //   3. The lca is `b`
+        //   4. The lca is a shared parent equal to neither
+        // we can only conjoin two SDD nodes if they are normalized with respect
+        // to the same vtree; the following code does this for each of the
+        // above cases.
+        let r = if av == bv {
+            self.and_cartesian(a, b, lca)
+        } else if lca == av {
+            self.and_sub_desc(a, b)
+        } else if lca == bv {
+            self.and_prime_desc(b, a)
+        } else {
+            self.and_indep(a, b, lca)
+        };
+
+        // cache and return
+        app_cache.insert(SddAnd::new(a, b), r);
+        r
     }
 
     pub fn or(&'a self, a: SddPtr<'a>, b: SddPtr<'a>) -> SddPtr<'a> {
@@ -798,13 +803,21 @@ impl<'a, T: SddCanonicalizationScheme<'a>> SddManager<'a, T> {
         &self.stats
     }
 
+    fn node_iter(&self) -> Vec<SddPtr> {
+        let binding = self.bdd_tbl.borrow_mut();
+        let bdds = binding.iter().map(|x| SddPtr::bdd(x));
+        let binding = self.sdd_tbl.borrow_mut();
+        let sdds = binding.iter().map(|x| SddPtr::Reg(x));
+        bdds.chain(sdds).collect()
+    }
+
     /// computes the number of logically redundant nodes allocated by the
     /// manager (nodes that have the same semantic hash)
     pub fn num_logically_redundant(&self) -> usize {
         let mut s: HashSet<u128> = HashSet::new();
         let hasher = create_semantic_hash_map::<100000000063>(self.num_vars() + 1000); // TODO FIX THIS BADNESS
         let mut num_collisions = 0;
-        for n in self.canonicalizer.borrow().node_iter() {
+        for n in self.node_iter() {
             let h = n.cached_semantic_hash(self.get_vtree_manager(), &hasher);
             if s.contains(&h.value()) {
                 num_collisions += 1;
@@ -818,7 +831,7 @@ impl<'a, T: SddCanonicalizationScheme<'a>> SddManager<'a, T> {
 // check that (a \/ b) /\ a === a
 #[test]
 fn simple_equality() {
-    let man = SddManager::<CompressionCanonicalizer>::new(VTree::even_split(
+    let man = SddManager::new(VTree::even_split(
         &[
             VarLabel::new(0),
             VarLabel::new(1),
@@ -839,7 +852,7 @@ fn simple_equality() {
 // check that (a \/ b) | !b === a
 #[test]
 fn sdd_simple_cond() {
-    let man = SddManager::<CompressionCanonicalizer>::new(VTree::even_split(
+    let man = SddManager::new(VTree::even_split(
         &[
             VarLabel::new(0),
             VarLabel::new(1),
@@ -865,7 +878,7 @@ fn sdd_simple_cond() {
 
 #[test]
 fn sdd_test_exist() {
-    let man = SddManager::<CompressionCanonicalizer>::new(VTree::even_split(
+    let man = SddManager::new(VTree::even_split(
         &[
             VarLabel::new(0),
             VarLabel::new(1),
@@ -893,7 +906,7 @@ fn sdd_test_exist() {
 
 #[test]
 fn sdd_bigand() {
-    let man = SddManager::<CompressionCanonicalizer>::new(VTree::right_linear(&[
+    let man = SddManager::new(VTree::right_linear(&[
         VarLabel::new(0),
         VarLabel::new(1),
         VarLabel::new(2),
@@ -901,7 +914,7 @@ fn sdd_bigand() {
         VarLabel::new(4),
     ]));
 
-    // let man = SddManager::<CompressionCanonicalizer>::new(VTree::even_split(
+    // let man = SddManager::new(VTree::even_split(
     //     &[
     //         VarLabel::new(0),
     //         VarLabel::new(1),
@@ -929,7 +942,7 @@ fn sdd_bigand() {
 
 #[test]
 fn sdd_ite1() {
-    let man = SddManager::<CompressionCanonicalizer>::new(VTree::even_split(
+    let man = SddManager::new(VTree::even_split(
         &[
             VarLabel::new(0),
             VarLabel::new(1),
@@ -958,7 +971,7 @@ fn sdd_ite1() {
 
 #[test]
 fn sdd_demorgan() {
-    let man = SddManager::<CompressionCanonicalizer>::new(VTree::even_split(
+    let man = SddManager::new(VTree::even_split(
         &[
             VarLabel::new(0),
             VarLabel::new(1),
@@ -982,7 +995,7 @@ fn sdd_demorgan() {
 
 #[test]
 fn sdd_circuit1() {
-    let man = SddManager::<CompressionCanonicalizer>::new(VTree::even_split(
+    let man = SddManager::new(VTree::even_split(
         &[
             VarLabel::new(0),
             VarLabel::new(1),
@@ -1015,7 +1028,7 @@ fn sdd_circuit1() {
 #[test]
 fn sdd_circuit2() {
     // same as circuit1, but with a different variable order
-    let man = SddManager::<CompressionCanonicalizer>::new(VTree::even_split(
+    let man = SddManager::new(VTree::even_split(
         &[
             VarLabel::new(0),
             VarLabel::new(1),
@@ -1065,7 +1078,7 @@ fn sdd_wmc1() {
         ],
         1,
     );
-    let man = SddManager::<CompressionCanonicalizer>::new(vtree);
+    let man = SddManager::new(vtree);
     let mut wmc_map = crate::repr::wmc::WmcParams::new(RealSemiring(0.0), RealSemiring(1.0));
     let x = SddPtr::var(VarLabel::new(0), true);
     wmc_map.set_weight(VarLabel::new(0), RealSemiring(1.0), RealSemiring(1.0));
