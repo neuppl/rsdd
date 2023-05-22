@@ -85,7 +85,7 @@ fn propagate<'a, T: Clone>(
 /// whose keys are given by BDD pointers.
 pub struct BackedRobinhoodTable<'a, T>
 where
-    T: Hash + PartialEq + Eq + Clone,
+    T: Hash + PartialEq + Clone,
 {
     /// hash table which stores indexes in the elem vector
     tbl: Vec<HashTableElement<'a, T>>,

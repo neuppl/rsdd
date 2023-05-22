@@ -13,7 +13,9 @@ use super::canonicalize::*;
 
 use crate::repr::ddnnf::DDNNFPtr;
 use crate::repr::robdd::create_semantic_hash_map;
-use crate::repr::sdd::{BinarySDD, SddAnd, SddOr, SddPtr};
+use crate::repr::sdd::binary_sdd::BinarySDD;
+use crate::repr::sdd::sdd_or::{SddAnd, SddOr};
+use crate::repr::sdd::SddPtr;
 use crate::repr::vtree::{VTree, VTreeIndex, VTreeManager};
 use crate::{repr::cnf::Cnf, repr::logical_expr::LogicalExpr, repr::var_label::VarLabel};
 

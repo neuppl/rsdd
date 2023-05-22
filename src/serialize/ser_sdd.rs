@@ -2,7 +2,7 @@
 
 use std::collections::HashMap;
 
-use crate::repr::{ddnnf::DDNNFPtr, sdd::SddPtr};
+use crate::repr::sdd::SddPtr;
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub enum SerSDDPtr {

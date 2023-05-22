@@ -7,7 +7,9 @@ use super::cache::sdd_apply_cache::{SddApply, SddApplyCompression, SddApplySeman
 use crate::backing_store::bump_table::BackedRobinhoodTable;
 use crate::backing_store::{DefaultUniqueTableHasher, UniqueTable, UniqueTableHasher};
 use crate::repr::robdd::{create_semantic_hash_map, WmcParams};
-use crate::repr::sdd::{BinarySDD, SddOr, SddPtr};
+use crate::repr::sdd::binary_sdd::BinarySDD;
+use crate::repr::sdd::sdd_or::{SddAnd, SddOr};
+use crate::repr::sdd::SddPtr;
 use crate::repr::vtree::VTreeManager;
 use crate::util::semiring::FiniteField;
 

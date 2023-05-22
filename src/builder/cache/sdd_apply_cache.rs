@@ -3,7 +3,7 @@ use rustc_hash::FxHashMap;
 use crate::{
     repr::{
         robdd::WmcParams,
-        sdd::{SddAnd, SddPtr},
+        sdd::{sdd_or::SddAnd, SddPtr},
         vtree::VTreeManager,
     },
     util::semiring::FiniteField,

@@ -1,6 +1,9 @@
 //! Defines the internal representations for a trimmed and compressed SDD with
 //! complemented edges.
 
+pub mod binary_sdd;
+pub mod sdd_or;
+
 use crate::{
     repr::{
         ddnnf::DDNNF,
@@ -9,9 +12,14 @@ use crate::{
     util::semiring::FiniteField,
 };
 use bumpalo::Bump;
+use std::collections::HashSet;
 use std::fmt::Debug;
-use std::{cell::RefCell, collections::HashSet};
 use SddPtr::*;
+
+use std::hash::Hash;
+
+use self::binary_sdd::BinarySDD;
+use self::sdd_or::{SddAnd, SddNodeIter, SddOr};
 
 // This type is used a lot. Make sure it doesn't unintentionally get bigger.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Ord, PartialOrd, Copy)]
@@ -25,199 +33,12 @@ pub enum SddPtr<'a> {
     Reg(&'a SddOr<'a>),
 }
 
-/// Specialized SDD node for a right-linear sub-vtree
-/// SDDs for these fragments are binary decisions
-#[derive(Debug, Clone, Eq, Ord, PartialOrd)]
-pub struct BinarySDD<'a> {
-    label: VarLabel,
-    vtree: VTreeIndex,
-    low: SddPtr<'a>,
-    high: SddPtr<'a>,
-    scratch: RefCell<Option<usize>>,
-    semantic_hash: RefCell<Option<u128>>,
-}
-
-impl<'a> BinarySDD<'a> {
-    pub fn new(
-        label: VarLabel,
-        low: SddPtr<'a>,
-        high: SddPtr<'a>,
-        vtree: VTreeIndex,
-    ) -> BinarySDD<'a> {
-        BinarySDD {
-            label,
-            low,
-            high,
-            vtree,
-            semantic_hash: RefCell::new(None),
-            scratch: RefCell::new(None),
-        }
-    }
-
-    pub fn vtree(&self) -> VTreeIndex {
-        self.vtree
-    }
-
-    pub fn low(&self) -> SddPtr<'a> {
-        self.low
-    }
-
-    pub fn high(&self) -> SddPtr<'a> {
-        self.high
-    }
-
-    pub fn label(&self) -> VarLabel {
-        self.label
-    }
-
-    pub fn semantic_hash<const P: u128>(
-        &self,
-        vtree: &VTreeManager,
-        map: &WmcParams<FiniteField<P>>,
-    ) -> FiniteField<P> {
-        let (low_w, high_w) = map.get_var_weight(self.label());
-        self.low().cached_semantic_hash(vtree, map) * (*low_w)
-            + self.high().cached_semantic_hash(vtree, map) * (*high_w)
-    }
-}
-
-impl<'a> Hash for BinarySDD<'a> {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.vtree.hash(state);
-        self.label.hash(state);
-        self.low.hash(state);
-        self.high.hash(state);
-    }
-}
-
-impl<'a> PartialEq for BinarySDD<'a> {
-    fn eq(&self, other: &Self) -> bool {
-        self.vtree == other.vtree
-            && self.low == other.low
-            && self.high == other.high
-            && self.label == other.label
-    }
-}
-
-/// Produces a node iterator for SDD or-nodes from an SDD pointer
-struct SddNodeIter<'a> {
-    sdd: SddPtr<'a>,
-    count: usize,
-}
-
-impl<'a> SddNodeIter<'a> {
-    pub fn new(sdd: SddPtr<'a>) -> SddNodeIter<'a> {
-        SddNodeIter { sdd, count: 0 }
-    }
-}
-
-impl<'a> Iterator for SddNodeIter<'a> {
-    type Item = SddAnd<'a> where Self: 'a;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        match self.sdd {
-            PtrTrue | PtrFalse | Var(_, _) => panic!("called iterator on constant"),
-            BDD(bdd) | ComplBDD(bdd) => match self.count {
-                0 => {
-                    self.count += 1;
-                    Some(SddAnd::new(SddPtr::var(bdd.label, true), bdd.high))
-                }
-                1 => {
-                    self.count += 1;
-                    Some(SddAnd::new(SddPtr::var(bdd.label, false), bdd.low))
-                }
-                _ => None,
-            },
-            Reg(or) | Compl(or) => {
-                if self.count >= or.nodes.len() {
-                    None
-                } else {
-                    self.count += 1;
-                    Some(or.nodes[self.count - 1])
-                }
-            }
-        }
-    }
-}
-
-#[derive(Debug, Clone, Hash, PartialEq, Eq, Ord, PartialOrd, Copy)]
-pub struct SddAnd<'a> {
-    prime: SddPtr<'a>,
-    sub: SddPtr<'a>,
-}
-
-impl<'a> SddAnd<'a> {
-    pub fn prime(&self) -> SddPtr<'a> {
-        self.prime
-    }
-    pub fn sub(&self) -> SddPtr<'a> {
-        self.sub
-    }
-    pub fn new(prime: SddPtr<'a>, sub: SddPtr<'a>) -> SddAnd<'a> {
-        SddAnd { prime, sub }
-    }
-    pub fn semantic_hash<const P: u128>(
-        &self,
-        vtree: &VTreeManager,
-        map: &WmcParams<FiniteField<P>>,
-    ) -> FiniteField<P> {
-        self.prime.cached_semantic_hash(vtree, map) * self.sub.cached_semantic_hash(vtree, map)
-    }
-}
-
-/// An SddOr node is a vector of (prime, sub) pairs.
-#[derive(Debug, Clone, Eq, Ord, PartialOrd)]
-pub struct SddOr<'a> {
-    index: VTreeIndex,
-    pub nodes: Vec<SddAnd<'a>>,
-    pub scratch: RefCell<Option<usize>>,
-    pub semantic_hash: RefCell<Option<u128>>,
-}
-
-impl<'a> SddOr<'a> {
-    pub fn new(nodes: Vec<SddAnd>, index: VTreeIndex) -> SddOr {
-        SddOr {
-            nodes,
-            index,
-            scratch: RefCell::new(None),
-            semantic_hash: RefCell::new(None),
-        }
-    }
-
-    pub fn semantic_hash<const P: u128>(
-        &self,
-        vtree: &VTreeManager,
-        map: &WmcParams<FiniteField<P>>,
-    ) -> FiniteField<P> {
-        FiniteField::new(
-            self.nodes
-                .iter()
-                .map(|and| and.semantic_hash(vtree, map).value())
-                .fold(0, |accum, elem| accum + elem),
-        )
-    }
-}
-
-impl<'a> PartialEq for SddOr<'a> {
-    fn eq(&self, other: &Self) -> bool {
-        self.index == other.index && self.nodes == other.nodes
-    }
-}
-
-use std::hash::{Hash, Hasher};
-
 use super::{
     ddnnf::DDNNFPtr,
     robdd::WmcParams,
     var_label::Literal,
     vtree::{VTreeIndex, VTreeManager},
 };
-impl<'a> Hash for SddOr<'a> {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.index.hash(state);
-        self.nodes.hash(state);
-    }
-}
 
 impl<'a> SddPtr<'a> {
     pub fn or(ptr: &'a SddOr) -> SddPtr<'a> {
@@ -241,46 +62,19 @@ impl<'a> SddPtr<'a> {
                 let (l_w, h_w) = map.get_var_weight(*label);
                 return if *polarity { *h_w } else { *l_w };
             }
-            BDD(v) => {
-                if let Some(h) = *(v.semantic_hash.borrow()) {
-                    return FiniteField::new(h);
-                }
-
-                let h = v.semantic_hash(vtree, map);
-                *(v.semantic_hash.borrow_mut()) = Some(h.value());
-
-                h
-            }
-            Reg(v) => {
-                if let Some(h) = *(v.semantic_hash.borrow()) {
-                    return FiniteField::new(h);
-                }
-
-                let h = v.semantic_hash(vtree, map);
-                *(v.semantic_hash.borrow_mut()) = Some(h.value());
-
-                h
-            }
+            BDD(bdd) => bdd.cached_semantic_hash(vtree, map),
+            Reg(or) => or.cached_semantic_hash(vtree, map),
             ComplBDD(_) | Compl(_) => self.neg().cached_semantic_hash(vtree, map).negate(),
         }
     }
 
     /// Gets the scratch value stored in `&self`
-    ///
-    /// Panics if not node.
-    pub fn get_scratch<T>(&self) -> Option<&T> {
-        let scratch = match self {
-            PtrTrue | PtrFalse | Var(_, _) => panic!("called get scratch on constant"),
-            BDD(v) | ComplBDD(v) => v.scratch.borrow(),
-            Reg(v) | Compl(v) => v.scratch.borrow(),
-        };
-
-        if let Some(ptr) = *scratch {
-            unsafe {
-                return Some(&*(ptr as *const T));
-            }
+    pub fn get_scratch<T: ?Sized + Clone + 'static>(&self) -> Option<T> {
+        match self {
+            PtrTrue | PtrFalse | Var(_, _) => None,
+            BDD(bdd) | ComplBDD(bdd) => bdd.get_scratch(),
+            Reg(or) | Compl(or) => or.get_scratch(),
         }
-        None
     }
 
     /// Set the scratch in this node to the value `v`.
@@ -290,19 +84,19 @@ impl<'a> SddPtr<'a> {
     /// Invariant: values stored in `set_scratch` must not outlive
     /// the provided allocator `alloc` (i.e., calling `get_scratch`
     /// involves dereferencing a pointer stored in `alloc`)
-    pub fn set_scratch<T>(&self, alloc: &mut Bump, v: T) {
-        if self.is_bdd() {
-            *(self.bdd_ref().scratch.borrow_mut()) = Some((alloc.alloc(v) as *const T) as usize);
-        } else {
-            *(self.node_ref().scratch.borrow_mut()) = Some((alloc.alloc(v) as *const T) as usize);
-        }
+    pub fn set_scratch<T: 'static>(&self, v: T) {
+        match self {
+            PtrTrue | PtrFalse | Var(_, _) => panic!("attempting to store scratch on constant"),
+            BDD(bdd) | ComplBDD(bdd) => bdd.set_scratch(v),
+            Reg(or) | Compl(or) => or.set_scratch(v),
+        };
     }
 
     pub fn is_scratch_cleared(&self) -> bool {
         match self {
             PtrTrue | PtrFalse | Var(_, _) => true,
-            BDD(v) | ComplBDD(v) => v.scratch.borrow().is_none(),
-            Reg(v) | Compl(v) => v.scratch.borrow().is_none(),
+            BDD(bdd) | ComplBDD(bdd) => bdd.is_scratch_cleared(),
+            Reg(or) | Compl(or) => or.scratch.borrow().is_none(),
         }
     }
 
@@ -310,20 +104,8 @@ impl<'a> SddPtr<'a> {
     pub fn clear_scratch(&self) {
         match self {
             PtrTrue | PtrFalse | Var(_, _) => return,
-            BDD(v) | ComplBDD(v) => {
-                *(v.scratch.borrow_mut()) = None;
-
-                v.low.clear_scratch();
-                v.high.clear_scratch();
-            }
-            Reg(v) | Compl(v) => {
-                *(v.scratch.borrow_mut()) = None;
-
-                for n in &v.nodes {
-                    n.prime.clear_scratch();
-                    n.sub.clear_scratch();
-                }
-            }
+            BDD(v) | ComplBDD(v) => self.clear_scratch(),
+            Reg(v) | Compl(v) => self.clear_scratch(),
         }
     }
 
@@ -397,7 +179,7 @@ impl<'a> SddPtr<'a> {
     ///
     /// panics if not a bdd pointer
     pub fn topvar(&self) -> VarLabel {
-        self.bdd_ref().label
+        self.bdd_ref().label()
     }
 
     /// gets the low pointer of a BDD
@@ -406,9 +188,9 @@ impl<'a> SddPtr<'a> {
     /// panics if not a bdd pointer
     pub fn low(&self) -> SddPtr<'a> {
         if self.is_neg() {
-            self.bdd_ref().low.neg()
+            self.bdd_ref().low().neg()
         } else {
-            self.bdd_ref().low
+            self.bdd_ref().low()
         }
     }
 
@@ -416,7 +198,7 @@ impl<'a> SddPtr<'a> {
     ///
     /// panics if not a bdd pointer
     pub fn low_raw(&self) -> SddPtr<'a> {
-        self.bdd_ref().low
+        self.bdd_ref().low()
     }
 
     /// gets the high pointer of a BDD
@@ -425,9 +207,9 @@ impl<'a> SddPtr<'a> {
     /// panics if not a bdd pointer
     pub fn high(&self) -> SddPtr<'a> {
         if self.is_neg() {
-            self.bdd_ref().high.neg()
+            self.bdd_ref().high().neg()
         } else {
-            self.bdd_ref().high
+            self.bdd_ref().high()
         }
     }
 
@@ -435,7 +217,7 @@ impl<'a> SddPtr<'a> {
     ///
     /// panics if not a bdd pointer
     pub fn high_raw(&self) -> SddPtr<'a> {
-        self.bdd_ref().high
+        self.bdd_ref().high()
     }
 
     /// get an iterator to all the (prime, sub) pairs this node points to
@@ -493,7 +275,7 @@ impl<'a> SddPtr<'a> {
         if self.is_bdd() {
             self.bdd_ref().vtree()
         } else {
-            self.node_ref().index
+            self.node_ref().index()
         }
     }
 
@@ -582,13 +364,13 @@ type DDNNFCache<T> = (Option<T>, Option<T>);
 impl<'a> DDNNFPtr<'a> for SddPtr<'a> {
     type Order = VTreeManager;
 
-    fn fold<T: Clone + Copy + std::fmt::Debug, F: Fn(super::ddnnf::DDNNF<T>) -> T>(
+    fn fold<T: 'static + Clone + Copy + std::fmt::Debug, F: Fn(super::ddnnf::DDNNF<T>) -> T>(
         &self,
         _v: &VTreeManager,
         f: F,
     ) -> T {
         debug_assert!(self.is_scratch_cleared());
-        fn bottomup_pass_h<T: Clone + Copy + Debug, F: Fn(DDNNF<T>) -> T>(
+        fn bottomup_pass_h<T: 'static + Clone + Copy + Debug, F: Fn(DDNNF<T>) -> T>(
             ptr: SddPtr,
             f: &F,
             alloc: &mut Bump,
@@ -619,9 +401,9 @@ impl<'a> DDNNFPtr<'a> for SddPtr<'a> {
 
                         // cache and return or_v
                         if ptr.is_neg() {
-                            ptr.set_scratch::<DDNNFCache<T>>(alloc, (Some(or_v), cached));
+                            ptr.set_scratch::<DDNNFCache<T>>((Some(or_v), cached));
                         } else {
-                            ptr.set_scratch::<DDNNFCache<T>>(alloc, (cached, Some(or_v)));
+                            ptr.set_scratch::<DDNNFCache<T>>((cached, Some(or_v)));
                         }
                         or_v
                     };
@@ -630,15 +412,15 @@ impl<'a> DDNNFPtr<'a> for SddPtr<'a> {
                         // first, check if cached; explicit arms here for clarity
                         Some((Some(l), Some(h))) => {
                             if ptr.is_neg() {
-                                *l
+                                l
                             } else {
-                                *h
+                                h
                             }
                         }
-                        Some((Some(v), None)) if ptr.is_neg() => *v,
-                        Some((None, Some(v))) if !ptr.is_neg() => *v,
+                        Some((Some(v), None)) if ptr.is_neg() => v,
+                        Some((None, Some(v))) if !ptr.is_neg() => v,
                         // no cached value found, compute it
-                        Some((None, cached)) | Some((cached, None)) => bottomup_helper(*cached),
+                        Some((None, cached)) | Some((cached, None)) => bottomup_helper(cached),
                         None => bottomup_helper(None),
                     }
                 }
@@ -661,7 +443,7 @@ impl<'a> DDNNFPtr<'a> for SddPtr<'a> {
                 Some(_) => 0,
                 None => {
                     // found a new node
-                    ptr.set_scratch::<usize>(alloc, 0);
+                    ptr.set_scratch::<usize>(0);
                     let mut c = 0;
                     for a in ptr.node_iter() {
                         c += count_h(a.sub(), alloc);
