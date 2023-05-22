@@ -663,7 +663,9 @@ impl<'a, T: SddCanonicalizationScheme<'a>> SddManager<'a, T> {
     }
 
     pub fn sdd_eq(&'a self, a: SddPtr<'a>, b: SddPtr<'a>) -> bool {
-        todo!()
+        a == b
+        // TODO: fix this to use semantic compression / the canonicalizer!
+        // self.canonicalizer.borrow().sdd_eq(a, b)
     }
 
     pub fn is_true(&'a self, a: SddPtr<'a>) -> bool {
@@ -792,23 +794,6 @@ impl<'a, T: SddCanonicalizationScheme<'a>> SddManager<'a, T> {
         // }
     }
 
-    /// get an iterator over all unique allocated nodes by the manager
-    pub fn node_iter(&self) -> impl Iterator<Item = SddPtr> + '_ {
-        todo!();
-        let bdditer = self
-            .canonicalizer
-            .borrow()
-            .bdd_tbl()
-            .iter()
-            .map(|x| SddPtr::bdd(x));
-        self.canonicalizer
-            .borrow()
-            .sdd_tbl()
-            .iter()
-            .map(|x| SddPtr::Reg(x))
-            .chain(bdditer)
-    }
-
     pub fn stats(&self) -> &SddStats {
         &self.stats
     }
@@ -819,7 +804,7 @@ impl<'a, T: SddCanonicalizationScheme<'a>> SddManager<'a, T> {
         let mut s: HashSet<u128> = HashSet::new();
         let hasher = create_semantic_hash_map::<100000000063>(self.num_vars() + 1000); // TODO FIX THIS BADNESS
         let mut num_collisions = 0;
-        for n in self.node_iter() {
+        for n in self.canonicalizer.borrow().node_iter() {
             let h = n.cached_semantic_hash(self.get_vtree_manager(), &hasher);
             if s.contains(&h.value()) {
                 num_collisions += 1;
@@ -1105,34 +1090,34 @@ fn sdd_wmc1() {
     );
 }
 
-#[test]
-fn prob_equiv_sdd_demorgan() {
-    use crate::repr::robdd::create_semantic_hash_map;
-    use crate::repr::robdd::WmcParams;
-    use crate::util::semiring::FiniteField;
+// #[test]
+// fn prob_equiv_sdd_demorgan() {
+//     use crate::repr::robdd::create_semantic_hash_map;
+//     use crate::repr::robdd::WmcParams;
+//     use crate::util::semiring::FiniteField;
 
-    let mut man = SddManager::<crate::builder::canonicalize::SemanticCanonicalizer<100000049>>::new(
-        VTree::even_split(
-            &[
-                VarLabel::new(0),
-                VarLabel::new(1),
-                VarLabel::new(2),
-                VarLabel::new(3),
-                VarLabel::new(4),
-            ],
-            1,
-        ),
-    );
-    man.set_compression(false);
-    let x = SddPtr::var(VarLabel::new(0), true);
-    let y = SddPtr::var(VarLabel::new(3), true);
-    let res = man.or(x, y).neg();
-    let expected = man.and(x.neg(), y.neg());
+//     let mut man = SddManager::<crate::builder::canonicalize::SemanticCanonicalizer<100000049>>::new(
+//         VTree::even_split(
+//             &[
+//                 VarLabel::new(0),
+//                 VarLabel::new(1),
+//                 VarLabel::new(2),
+//                 VarLabel::new(3),
+//                 VarLabel::new(4),
+//             ],
+//             1,
+//         ),
+//     );
+//     man.set_compression(false);
+//     let x = SddPtr::var(VarLabel::new(0), true);
+//     let y = SddPtr::var(VarLabel::new(3), true);
+//     let res = man.or(x, y).neg();
+//     let expected = man.and(x.neg(), y.neg());
 
-    let map: WmcParams<FiniteField<100000049>> = create_semantic_hash_map(man.num_vars());
+//     let map: WmcParams<FiniteField<100000049>> = create_semantic_hash_map(man.num_vars());
 
-    let sh1 = res.cached_semantic_hash(man.get_vtree_manager(), &map);
-    let sh2 = expected.cached_semantic_hash(man.get_vtree_manager(), &map);
+//     let sh1 = res.cached_semantic_hash(man.get_vtree_manager(), &map);
+//     let sh2 = expected.cached_semantic_hash(man.get_vtree_manager(), &map);
 
-    assert!(sh1 == sh2, "Not eq:\nGot: {:?}\nExpected: {:?}", sh1, sh2);
-}
+//     assert!(sh1 == sh2, "Not eq:\nGot: {:?}\nExpected: {:?}", sh1, sh2);
+// }

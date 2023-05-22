@@ -104,8 +104,8 @@ impl<'a> SddPtr<'a> {
     pub fn clear_scratch(&self) {
         match self {
             PtrTrue | PtrFalse | Var(_, _) => return,
-            BDD(v) | ComplBDD(v) => self.clear_scratch(),
-            Reg(v) | Compl(v) => self.clear_scratch(),
+            BDD(bdd) | ComplBDD(bdd) => bdd.clear_scratch(),
+            Reg(or) | Compl(or) => or.clear_scratch(),
         }
     }
 
