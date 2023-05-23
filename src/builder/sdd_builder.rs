@@ -78,7 +78,7 @@ impl<'a> SddManager<'a> {
     }
 
     pub fn set_compression(&mut self, b: bool) {
-        self.should_compress = false
+        self.should_compress = b
     }
 
     pub fn get_vtree_root(&self) -> &VTree {

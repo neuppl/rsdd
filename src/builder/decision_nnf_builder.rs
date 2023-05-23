@@ -1,22 +1,17 @@
 //! Top-down decision DNNF compiler and manipulator
 
-use std::{
-    cell::RefCell,
-    collections::HashSet,
-    hash::{Hash, Hasher},
-};
+use std::{cell::RefCell, collections::HashSet};
 
 use crate::{
     backing_store::*,
     repr::{
         ddnnf::DDNNFPtr,
-        robdd::{create_semantic_hash_map, WmcParams},
+        robdd::create_semantic_hash_map,
         unit_prop::{DecisionResult, SATSolver},
     },
-    util::semiring::FiniteField,
 };
 use bumpalo::Bump;
-use rustc_hash::{FxHashMap, FxHasher};
+use rustc_hash::FxHashMap;
 
 use crate::{
     backing_store::bump_table::BackedRobinhoodTable,
@@ -269,8 +264,8 @@ impl<'a> DecisionNNFBuilder<'a> {
                 // nothing changed
                 bdd
             };
-            todo!();
-            bdd.set_scratch(if bdd.is_neg() { res.neg() } else { res });
+            // TODO: fix scratch lifetime issue
+            // bdd.set_scratch(if bdd.is_neg() { res.neg() } else { res });
             res
         }
     }

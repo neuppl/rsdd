@@ -20,6 +20,7 @@ struct BackedROBDDNode<'a> {
     scratch: RefCell<Option<usize>>,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
 enum ROBDDPtr<'a> {
     True,
@@ -60,6 +61,7 @@ impl<'a> BddPtr<'a> for ROBDDPtr<'a> {
     }
 }
 
+#[allow(dead_code)]
 impl<'a> ROBDDPtr<'a> {
     fn negate(&'a self) -> ROBDDPtr<'a> {
         match self {
@@ -128,7 +130,7 @@ impl<'a> BddBuilder<'a, ROBDDPtr<'a>> for ROBDDBuilder<'a> {
         ROBDDPtr::False
     }
 
-    fn ite(&'a self, f: ROBDDPtr<'a>, g: ROBDDPtr<'a>, h: ROBDDPtr<'a>) -> ROBDDPtr<'a> {
+    fn ite(&'a self, _f: ROBDDPtr<'a>, g: ROBDDPtr<'a>, _h: ROBDDPtr<'a>) -> ROBDDPtr<'a> {
         let v = g.high();
         return v.unwrap();
         // let n : Bdd<ROBDDPtr<'a>> = g.();

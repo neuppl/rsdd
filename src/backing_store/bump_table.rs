@@ -149,10 +149,12 @@ where
             .map(|x| x.ptr.unwrap())
     }
 
+    #[allow(dead_code)]
     pub fn num_nodes(&self) -> usize {
         self.len
     }
 
+    #[allow(dead_code)]
     pub fn hits(&self) -> usize {
         self.hits
     }
