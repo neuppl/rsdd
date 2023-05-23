@@ -907,7 +907,6 @@ mod test_sdd_manager {
     //         uncompr_mgr.set_compression(false);
     //         let uncompr_cnf = uncompr_mgr.from_cnf(&c);
 
-
     //         let map : WmcParams<FiniteField<100000049>> = create_semantic_hash_map(compr_mgr.num_vars());
 
     //         let compr_h = compr_cnf.semantic_hash(compr_mgr.get_vtree_manager(), &map);

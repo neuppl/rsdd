@@ -12,8 +12,8 @@ use crate::{
     util::semiring::FiniteField,
 };
 use bumpalo::Bump;
-use std::{collections::HashSet, ptr};
 use std::fmt::Debug;
+use std::{collections::HashSet, ptr};
 use SddPtr::*;
 
 use std::hash::Hash;
@@ -38,12 +38,12 @@ impl<'a> Hash for SddPtr<'a> {
         core::mem::discriminant(self).hash(state);
         match self {
             BDD(p) | ComplBDD(p) => ptr::hash(*p, state),
-            Var(l, p) => { 
+            Var(l, p) => {
                 l.hash(state);
                 p.hash(state);
-            },
+            }
             Compl(p) | Reg(p) => ptr::hash(*p, state),
-            _ => ()
+            _ => (),
         };
     }
 }

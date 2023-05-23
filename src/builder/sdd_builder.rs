@@ -134,7 +134,7 @@ impl<'a> SddManager<'a> {
 
     fn unique_or(&'a self, mut node: Vec<SddAnd<'a>>, table: VTreeIndex) -> SddPtr<'a> {
         // check if it is a BDD; if it is, return that
-        unsafe { 
+        unsafe {
             let tbl = &mut *self.sdd_tbl.as_ptr();
             if node.len() == 2 && node[0].prime().is_var() && node[1].prime().is_var() {
                 // this is a BDD
@@ -154,25 +154,23 @@ impl<'a> SddManager<'a> {
                 self.unique_bdd(BinarySDD::new(v, low, high, table))
             } else {
                 node.sort_by_key(|a| a.prime());
-                if node[0].sub().is_neg() || self.is_false(node[0].sub()) || node[0].sub().is_neg_var()
+                if node[0].sub().is_neg()
+                    || self.is_false(node[0].sub())
+                    || node[0].sub().is_neg_var()
                 {
                     for x in node.iter_mut() {
                         *x = SddAnd::new(x.prime(), x.sub().neg());
                     }
-                    SddPtr::Reg(tbl.get_or_insert(SddOr::new(node, table)),
-                    )
-                    .neg()
+                    SddPtr::Reg(tbl.get_or_insert(SddOr::new(node, table))).neg()
                 } else {
-                    SddPtr::Reg(tbl.get_or_insert(SddOr::new(node, table)),
-                    )
+                    SddPtr::Reg(tbl.get_or_insert(SddOr::new(node, table)))
                 }
             }
         }
     }
 
     fn unique_bdd(&'a self, bdd: BinarySDD<'a>) -> SddPtr<'a> {
-        unsafe { 
-
+        unsafe {
             let tbl = &mut *self.bdd_tbl.as_ptr();
             if bdd.high() == bdd.low() {
                 return bdd.high();
@@ -1130,4 +1128,3 @@ fn sdd_wmc1() {
 
 //     assert!(sh1 == sh2, "Not eq:\nGot: {:?}\nExpected: {:?}", sh1, sh2);
 // }
-
