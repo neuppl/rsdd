@@ -1,9 +1,10 @@
 //! A unique table based on a bump allocator and robin-hood hashing
 //! this is the primary unique table for storing all nodes
 
-use super::{UniqueTable, UniqueTableHasher};
+use super::UniqueTable;
 use bumpalo::Bump;
-use std::hash::Hash;
+use rustc_hash::FxHasher;
+use std::hash::{Hash, Hasher};
 use std::mem;
 
 use crate::util::*;
@@ -157,36 +158,17 @@ where
     }
 }
 
-impl<'a, T: Eq + PartialEq + Hash + Clone + std::fmt::Debug, H: UniqueTableHasher<T>>
-    UniqueTable<'a, T, H> for BackedRobinhoodTable<'a, T>
+impl<'a, T: Eq + PartialEq + Hash + Clone + std::fmt::Debug> UniqueTable<'a, T>
+    for BackedRobinhoodTable<'a, T>
 {
-    /// assumption: the hash *is* an accurate identifier for equality
-    fn get_by_hash(&'a self, elem_hash: u64) -> Option<&'a T> {
-        let mut pos: usize = (elem_hash as usize) % self.cap;
-        let mut psl = 0;
-
-        loop {
-            if self.is_occupied(pos) {
-                let cur_itm = self.tbl[pos].clone();
-                if elem_hash == cur_itm.hash {
-                    return cur_itm.ptr;
-                }
-
-                if cur_itm.psl < psl {
-                    return None;
-                }
-                psl += 1;
-                pos = (pos + 1) % self.cap;
-            } else {
-                return None;
-            }
-        }
-    }
-
-    fn get_or_insert_by_hash(&'a mut self, elem: T, elem_hash: u64) -> &'a T {
+    fn get_or_insert(&'a mut self, elem: T) -> &'a T {
         if (self.len + 1) as f64 > (self.cap as f64 * LOAD_FACTOR) {
             self.grow();
         }
+
+        let mut hasher = FxHasher::default();
+        elem.hash(&mut hasher);
+        let elem_hash = hasher.finish();
 
         // the current index into the array
         let mut pos: usize = (elem_hash as usize) % self.cap;
@@ -229,13 +211,6 @@ impl<'a, T: Eq + PartialEq + Hash + Clone + std::fmt::Debug, H: UniqueTableHashe
                 return ptr;
             }
         }
-    }
-
-    fn get_or_insert(&'a mut self, item: T, hasher: &H) -> &'a T {
-        let hash = hasher.u64hash(&item);
-        let ret =
-            <BackedRobinhoodTable<T> as UniqueTable<T, H>>::get_or_insert_by_hash(self, item, hash);
-        ret
     }
 }
 

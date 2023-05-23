@@ -173,12 +173,11 @@ impl<'a, T: LruTable<'a, BddPtr<'a>>> BddManager<'a, T> {
             let tbl = &mut *self.compute_table.as_ptr();
             if bdd.high.is_neg() || bdd.high.is_false() {
                 let bdd: BddNode<'a> = BddNode::new(bdd.var, bdd.low.neg(), bdd.high.neg());
-                let r: &'a BddNode<'a> =
-                    tbl.get_or_insert(bdd, &DefaultUniqueTableHasher::default());
+                let r: &'a BddNode<'a> = tbl.get_or_insert(bdd);
                 BddPtr::new_compl(r)
             } else {
                 let bdd = BddNode::new(bdd.var, bdd.low, bdd.high);
-                BddPtr::new_reg(tbl.get_or_insert(bdd, &DefaultUniqueTableHasher::default()))
+                BddPtr::new_reg(tbl.get_or_insert(bdd))
             }
         }
     }

@@ -10,7 +10,7 @@ use super::cache::ite::Ite;
 use super::cache::LruTable;
 
 use crate::backing_store::bump_table::BackedRobinhoodTable;
-use crate::backing_store::{DefaultUniqueTableHasher, UniqueTable};
+use crate::backing_store::UniqueTable;
 use crate::repr::ddnnf::DDNNFPtr;
 use crate::repr::robdd::create_semantic_hash_map;
 use crate::repr::sdd::binary_sdd::BinarySDD;
@@ -58,7 +58,6 @@ pub struct SddManager<'a> {
     // tables
     bdd_tbl: RefCell<BackedRobinhoodTable<'a, BinarySDD<'a>>>,
     sdd_tbl: RefCell<BackedRobinhoodTable<'a, SddOr<'a>>>,
-    hasher: DefaultUniqueTableHasher,
     // caches
     ite_cache: RefCell<AllTable<SddPtr<'a>>>,
     app_cache: RefCell<HashMap<SddAnd<'a>, SddPtr<'a>>>,
@@ -73,7 +72,6 @@ impl<'a> SddManager<'a> {
             app_cache: RefCell::new(HashMap::new()),
             bdd_tbl: RefCell::new(BackedRobinhoodTable::new()),
             sdd_tbl: RefCell::new(BackedRobinhoodTable::new()),
-            hasher: DefaultUniqueTableHasher::default(),
             vtree: vtree_man,
             should_compress: true,
         }
@@ -162,14 +160,14 @@ impl<'a> SddManager<'a> {
                 SddPtr::Reg(
                     self.sdd_tbl
                         .borrow_mut()
-                        .get_or_insert(SddOr::new(node, table), &self.hasher),
+                        .get_or_insert(SddOr::new(node, table)),
                 )
                 .neg()
             } else {
                 SddPtr::Reg(
                     self.sdd_tbl
                         .borrow_mut()
-                        .get_or_insert(SddOr::new(node, table), &self.hasher),
+                        .get_or_insert(SddOr::new(node, table)),
                 )
             }
         }
@@ -190,15 +188,13 @@ impl<'a> SddManager<'a> {
             let low = bdd.low().neg();
             let high = bdd.high().neg();
             let neg_bdd = BinarySDD::new(bdd.label(), low, high, bdd.vtree());
-            return SddPtr::BDD(
-                self.bdd_tbl
-                    .borrow_mut()
-                    .get_or_insert(neg_bdd, &self.hasher),
-            )
-            .neg();
+
+            let unique = self.bdd_tbl.borrow_mut().get_or_insert(neg_bdd);
+
+            return SddPtr::BDD(unique).neg();
         }
 
-        SddPtr::BDD(self.bdd_tbl.borrow_mut().get_or_insert(bdd, &self.hasher))
+        SddPtr::BDD(self.bdd_tbl.borrow_mut().get_or_insert(bdd))
     }
 
     #[inline]
@@ -669,8 +665,6 @@ impl<'a> SddManager<'a> {
 
     pub fn sdd_eq(&'a self, a: SddPtr<'a>, b: SddPtr<'a>) -> bool {
         a == b
-        // TODO: fix this to use semantic compression / the canonicalizer!
-        // self.canonicalizer.borrow().sdd_eq(a, b)
     }
 
     pub fn is_true(&'a self, a: SddPtr<'a>) -> bool {
