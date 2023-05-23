@@ -134,67 +134,68 @@ impl<'a> SddManager<'a> {
 
     fn unique_or(&'a self, mut node: Vec<SddAnd<'a>>, table: VTreeIndex) -> SddPtr<'a> {
         // check if it is a BDD; if it is, return that
-        if node.len() == 2 && node[0].prime().is_var() && node[1].prime().is_var() {
-            // this is a BDD
-            // this SDD may be unsorted, so extract the low and high value
-            // based on whether or not node[0]'s prime is negated
-            let v = node[1].prime().get_var().get_label();
-            let low = if node[0].prime().is_neg_var() {
-                node[0].sub()
+        unsafe { 
+            let tbl = &mut *self.sdd_tbl.as_ptr();
+            if node.len() == 2 && node[0].prime().is_var() && node[1].prime().is_var() {
+                // this is a BDD
+                // this SDD may be unsorted, so extract the low and high value
+                // based on whether or not node[0]'s prime is negated
+                let v = node[1].prime().get_var().get_label();
+                let low = if node[0].prime().is_neg_var() {
+                    node[0].sub()
+                } else {
+                    node[1].sub()
+                };
+                let high = if node[0].prime().is_pos_var() {
+                    node[0].sub()
+                } else {
+                    node[1].sub()
+                };
+                self.unique_bdd(BinarySDD::new(v, low, high, table))
             } else {
-                node[1].sub()
-            };
-            let high = if node[0].prime().is_pos_var() {
-                node[0].sub()
-            } else {
-                node[1].sub()
-            };
-            self.unique_bdd(BinarySDD::new(v, low, high, table))
-        } else {
-            node.sort_by_key(|a| a.prime());
-            if node[0].sub().is_neg() || self.is_false(node[0].sub()) || node[0].sub().is_neg_var()
-            {
-                for x in node.iter_mut() {
-                    *x = SddAnd::new(x.prime(), x.sub().neg());
+                node.sort_by_key(|a| a.prime());
+                if node[0].sub().is_neg() || self.is_false(node[0].sub()) || node[0].sub().is_neg_var()
+                {
+                    for x in node.iter_mut() {
+                        *x = SddAnd::new(x.prime(), x.sub().neg());
+                    }
+                    SddPtr::Reg(tbl.get_or_insert(SddOr::new(node, table)),
+                    )
+                    .neg()
+                } else {
+                    SddPtr::Reg(tbl.get_or_insert(SddOr::new(node, table)),
+                    )
                 }
-                SddPtr::Reg(
-                    self.sdd_tbl
-                        .borrow_mut()
-                        .get_or_insert(SddOr::new(node, table)),
-                )
-                .neg()
-            } else {
-                SddPtr::Reg(
-                    self.sdd_tbl
-                        .borrow_mut()
-                        .get_or_insert(SddOr::new(node, table)),
-                )
             }
         }
     }
 
     fn unique_bdd(&'a self, bdd: BinarySDD<'a>) -> SddPtr<'a> {
-        if bdd.high() == bdd.low() {
-            return bdd.high();
-        }
-        if self.is_false(bdd.high()) && self.is_true(bdd.low()) {
-            return SddPtr::var(bdd.label(), false);
-        }
-        if self.is_true(bdd.high()) && self.is_false(bdd.low()) {
-            return SddPtr::var(bdd.label(), true);
-        }
+        unsafe { 
 
-        if bdd.high().is_neg() || self.is_false(bdd.high()) || bdd.high().is_neg_var() {
-            let low = bdd.low().neg();
-            let high = bdd.high().neg();
-            let neg_bdd = BinarySDD::new(bdd.label(), low, high, bdd.vtree());
+            let tbl = &mut *self.bdd_tbl.as_ptr();
+            if bdd.high() == bdd.low() {
+                return bdd.high();
+            }
+            if self.is_false(bdd.high()) && self.is_true(bdd.low()) {
+                return SddPtr::var(bdd.label(), false);
+            }
+            if self.is_true(bdd.high()) && self.is_false(bdd.low()) {
+                return SddPtr::var(bdd.label(), true);
+            }
 
-            let unique = self.bdd_tbl.borrow_mut().get_or_insert(neg_bdd);
+            if bdd.high().is_neg() || self.is_false(bdd.high()) || bdd.high().is_neg_var() {
+                let low = bdd.low().neg();
+                let high = bdd.high().neg();
+                let neg_bdd = BinarySDD::new(bdd.label(), low, high, bdd.vtree());
 
-            return SddPtr::BDD(unique).neg();
+                let unique = tbl.get_or_insert(neg_bdd);
+
+                return SddPtr::BDD(unique).neg();
+            }
+
+            SddPtr::BDD(tbl.get_or_insert(bdd))
         }
-
-        SddPtr::BDD(self.bdd_tbl.borrow_mut().get_or_insert(bdd))
     }
 
     #[inline]
@@ -460,12 +461,13 @@ impl<'a> SddManager<'a> {
             (b, a)
         };
 
-        let mut app_cache = self.app_cache.borrow_mut();
-
-        // check if we have this application cached
-        if let Some(x) = app_cache.get(&SddAnd::new(a, b)) {
-            // self.stats.num_app_cache_hits += 1;
-            return *x;
+        {
+            let app_cache = self.app_cache.borrow();
+            // check if we have this application cached
+            if let Some(x) = app_cache.get(&SddAnd::new(a, b)) {
+                // self.stats.num_app_cache_hits += 1;
+                return *x;
+            }
         }
 
         let av = self.get_vtree_idx(a);
@@ -496,7 +498,7 @@ impl<'a> SddManager<'a> {
         };
 
         // cache and return
-        app_cache.insert(SddAnd::new(a, b), r);
+        self.app_cache.borrow_mut().insert(SddAnd::new(a, b), r);
         r
     }
 
@@ -797,7 +799,7 @@ impl<'a> SddManager<'a> {
         &self.stats
     }
 
-    fn node_iter(&self) -> Vec<SddPtr> {
+    pub fn node_iter(&self) -> Vec<SddPtr> {
         let binding = self.bdd_tbl.borrow_mut();
         let bdds = binding.iter().map(|x| SddPtr::bdd(x));
         let binding = self.sdd_tbl.borrow_mut();

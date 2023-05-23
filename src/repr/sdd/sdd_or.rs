@@ -72,6 +72,9 @@ impl<'a> SddOr<'a> {
     where
         T: Clone,
     {
+        if self.scratch.borrow().is_none() {
+            return None;
+        }
         self.scratch
             .borrow()
             .as_ref()
