@@ -263,7 +263,7 @@ impl<'a, T: LruTable<'a, BddPtr<'a>>> BddManager<'a, T> {
     /// # use rsdd::repr::var_label::VarLabel;
     /// # use crate::rsdd::repr::ddnnf::DDNNFPtr;
     /// # use rsdd::builder::cache::all_app::AllTable;
-    /// # use rsdd::repr::bdd::BddPtr;
+    /// # use rsdd::repr::robdd::BddPtr;
     /// let mut man = BddManager::<AllTable<BddPtr>>::new_default_order(10);
     /// let lbl_a = man.new_label();
     /// let a = man.var(lbl_a, true);
