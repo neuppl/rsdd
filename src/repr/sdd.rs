@@ -12,7 +12,7 @@ use crate::{
     util::semiring::FiniteField,
 };
 use bumpalo::Bump;
-use std::collections::HashSet;
+use std::{collections::HashSet, ptr};
 use std::fmt::Debug;
 use SddPtr::*;
 
@@ -22,7 +22,7 @@ use self::binary_sdd::BinarySDD;
 use self::sdd_or::{SddAnd, SddNodeIter, SddOr};
 
 // This type is used a lot. Make sure it doesn't unintentionally get bigger.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Ord, PartialOrd, Copy)]
+#[derive(Debug, Clone, Eq, Ord, PartialOrd, Copy)]
 pub enum SddPtr<'a> {
     PtrTrue,
     PtrFalse,
@@ -31,6 +31,34 @@ pub enum SddPtr<'a> {
     Var(VarLabel, bool),
     Compl(&'a SddOr<'a>),
     Reg(&'a SddOr<'a>),
+}
+
+impl<'a> Hash for SddPtr<'a> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        core::mem::discriminant(self).hash(state);
+        match self {
+            BDD(p) | ComplBDD(p) => ptr::hash(*p, state),
+            Var(l, p) => { 
+                l.hash(state);
+                p.hash(state);
+            },
+            Compl(p) | Reg(p) => ptr::hash(*p, state),
+            _ => ()
+        };
+    }
+}
+
+impl<'a> PartialEq for SddPtr<'a> {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::BDD(l0), Self::BDD(r0)) => std::ptr::eq(*l0, *r0),
+            (Self::ComplBDD(l0), Self::ComplBDD(r0)) => std::ptr::eq(*l0, *r0),
+            (Self::Var(l0, l1), Self::Var(r0, r1)) => l0 == r0 && l1 == r1,
+            (Self::Compl(l0), Self::Compl(r0)) => std::ptr::eq(*l0, *r0),
+            (Self::Reg(l0), Self::Reg(r0)) => std::ptr::eq(*l0, *r0),
+            _ => core::mem::discriminant(self) == core::mem::discriminant(other),
+        }
+    }
 }
 
 use super::{
