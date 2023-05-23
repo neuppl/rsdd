@@ -286,9 +286,7 @@ fn compile_sdd_cnf(network: BayesianNetwork) {
     println!("Dtree built\nNumber of variables: {}\n\tNumber of clauses: {}\n\tWidth: {}\n\tElapsed dtree time: {:?}",
         bn.cnf.num_vars(), bn.cnf.clauses().len(), dtree.cutwidth(), duration);
 
-    let mut compiler = sdd_builder::SddManager::new(
-        VTree::from_dtree(&dtree).unwrap(),
-    );
+    let mut compiler = sdd_builder::SddManager::new(VTree::from_dtree(&dtree).unwrap());
 
     println!("Compiling");
     let start = Instant::now();
