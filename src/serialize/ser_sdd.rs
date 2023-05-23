@@ -29,11 +29,10 @@ pub struct SDDSerializer {
     roots: Vec<SerSDDPtr>,
 }
 
-#[allow(unused_variables)]
 impl SDDSerializer {
     fn serialize_helper<'a>(
         sdd: SddPtr<'a>,
-        table: &mut HashMap<&'a SddPtr<'a>, usize>,
+        table: &mut HashMap<SddPtr<'a>, usize>,
         nodes: &mut Vec<SDDOr>,
     ) -> SerSDDPtr {
         let compl = matches!(
@@ -54,8 +53,8 @@ impl SDDSerializer {
                 label: label.value_usize(),
                 polarity,
             },
-            SddPtr::BDD(_) | SddPtr::ComplBDD(_) => {
-                let v = sdd.topvar();
+            SddPtr::BDD(bdd) | SddPtr::ComplBDD(bdd) => {
+                let v = bdd.label();
                 let prime_t = SerSDDPtr::Literal {
                     label: v.value_usize(),
                     polarity: true,
@@ -64,8 +63,8 @@ impl SDDSerializer {
                     label: v.value_usize(),
                     polarity: false,
                 };
-                let l = SDDSerializer::serialize_helper(sdd.low_raw(), table, nodes);
-                let h = SDDSerializer::serialize_helper(sdd.high_raw(), table, nodes);
+                let l = SDDSerializer::serialize_helper(bdd.low(), table, nodes);
+                let h = SDDSerializer::serialize_helper(bdd.high(), table, nodes);
                 let o = SDDOr(vec![
                     SDDAnd {
                         prime: prime_t,
@@ -79,13 +78,13 @@ impl SDDSerializer {
                 nodes.push(o);
                 let index = nodes.len() - 1;
                 let r = SerSDDPtr::Ptr { index, compl };
-                todo!();
-                // table.insert(&sdd.to_reg(), index);
-                // r
+                table.insert(SddPtr::BDD(bdd), index);
+                r
             }
-            SddPtr::Compl(_) | SddPtr::Reg(_) => {
-                let o: Vec<SDDAnd> = sdd
-                    .node_iter()
+            SddPtr::Compl(or) | SddPtr::Reg(or) => {
+                let o: Vec<SDDAnd> = or
+                    .nodes
+                    .iter()
                     .map(|and| {
                         let p = SDDSerializer::serialize_helper(and.prime(), table, nodes);
                         let s = SDDSerializer::serialize_helper(and.sub(), table, nodes);
@@ -95,9 +94,8 @@ impl SDDSerializer {
                 nodes.push(SDDOr(o));
                 let index = nodes.len() - 1;
                 let r = SerSDDPtr::Ptr { index, compl };
-                todo!();
-                // table.insert(&sdd.to_reg(), index);
-                // r
+                table.insert(SddPtr::Reg(or), index);
+                r
             }
         }
     }
