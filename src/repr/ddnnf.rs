@@ -10,7 +10,7 @@ use rand_chacha::ChaCha8Rng;
 /// the constant `P` denotes the size of the field over which the semantic hash will
 /// be computed. For more info, see <https://tr.inf.unibe.ch/pdf/iam-06-001.pdf>
 pub fn create_semantic_hash_map<const P: u128>(num_vars: usize) -> WmcParams<FiniteField<P>> {
-    let vars: Vec<VarLabel> = (0..num_vars).map(|x| VarLabel::new_usize(x)).collect();
+    let vars: Vec<VarLabel> = (0..num_vars).map(VarLabel::new_usize).collect();
 
     // theoretical guarantee from paper; need to verify more!
     // in "theory", this should be a 0.1% fail rate in one-shot for a BDD.

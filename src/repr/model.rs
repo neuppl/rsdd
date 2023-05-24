@@ -22,8 +22,8 @@ impl PartialModel {
     pub fn from_vec(assignments: Vec<Option<bool>>) -> PartialModel {
         let mut true_v = VarSet::new_with_num_vars(assignments.len());
         let mut false_v = VarSet::new_with_num_vars(assignments.len());
-        for i in 0..assignments.len() {
-            match assignments[i] {
+        for (i, assignment) in assignments.iter().enumerate() {
+            match assignment {
                 Some(true) => true_v.insert(VarLabel::new_usize(i)),
                 Some(false) => false_v.insert(VarLabel::new_usize(i)),
                 None => (),
@@ -67,11 +67,11 @@ impl PartialModel {
     /// Returns the value of a variable (None if unset)
     pub fn get(&self, label: VarLabel) -> Option<bool> {
         if self.true_assignments.contains(label) {
-            return Some(true);
+            Some(true)
         } else if self.false_assignments.contains(label) {
-            return Some(false);
+            Some(false)
         } else {
-            return None;
+            None
         }
     }
 
@@ -91,11 +91,11 @@ impl PartialModel {
 
     /// True if this is a set variable, false otherwise
     pub fn is_set(&self, label: VarLabel) -> bool {
-        return self.true_assignments.contains(label) || self.false_assignments.contains(label);
+        self.true_assignments.contains(label) || self.false_assignments.contains(label)
     }
 
     /// Produces an iterator of all the assigned literals
-    pub fn assignment_iter<'a>(&'a self) -> impl Iterator<Item = Literal> + 'a {
+    pub fn assignment_iter(&self) -> impl Iterator<Item = Literal> + '_ {
         let false_iter = self
             .false_assignments
             .iter()

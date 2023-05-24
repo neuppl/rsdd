@@ -49,7 +49,7 @@ impl VTree {
                     return true;
                 }
                 s.insert(v.value_usize());
-                return false;
+                false
             }
             BTree::Node((), l, r) => l.check_redundant_vars(s) || r.check_redundant_vars(s),
         }
@@ -269,7 +269,7 @@ pub struct VTreeManager {
     bfs_to_dfs: Vec<usize>,
     /// maps an Sdd VarLabel into its vtree index in the depth-first order
     vtree_idx: Vec<usize>,
-    index_lookup: Vec<Box<VTree>>,
+    index_lookup: Vec<VTree>,
     lca: LeastCommonAncestor,
 }
 
@@ -283,7 +283,7 @@ impl VTreeManager {
         let mut vtree_lookup = vec![0; tree.num_vars()];
         let mut index_lookup = Vec::new();
         for (idx, v) in tree.inorder_dfs_iter().enumerate() {
-            index_lookup.push(Box::new(v.clone()));
+            index_lookup.push(v.clone());
             if v.is_leaf() {
                 vtree_lookup[v.extract_leaf().value_usize()] = idx;
             }
