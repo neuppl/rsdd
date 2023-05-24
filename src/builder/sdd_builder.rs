@@ -270,14 +270,9 @@ impl<'a> SddManager<'a> {
     fn and_sub_desc(&'a self, r: SddPtr<'a>, d: SddPtr<'a>) -> SddPtr<'a> {
         // check if `r` is a bdd and handle that case
         match r {
-            SddPtr::BDD(bdd) => {
+            SddPtr::BDD(bdd) | SddPtr::ComplBDD(bdd) => {
                 let l = self.and(r.low(), d);
                 let h = self.and(r.high(), d);
-                self.unique_bdd(BinarySDD::new(bdd.label(), l, h, r.vtree()))
-            }
-            SddPtr::ComplBDD(bdd) => {
-                let l = self.and(r.low().neg(), d);
-                let h = self.and(r.high().neg(), d);
                 self.unique_bdd(BinarySDD::new(bdd.label(), l, h, r.vtree()))
             }
             SddPtr::Reg(or) | SddPtr::Compl(or) => {
