@@ -51,6 +51,14 @@ impl Default for SddStats {
     }
 }
 
+pub trait SddBuilder<'a> {
+    fn ite(&'a self, f: SddPtr<'a>, g: SddPtr<'a>, h: SddPtr<'a>) -> SddPtr<'a>;
+    fn and(&'a self, a: SddPtr<'a>, b: SddPtr<'a>) -> SddPtr<'a>;
+    fn or(&'a self, a: SddPtr<'a>, b: SddPtr<'a>) -> SddPtr<'a> {
+        self.and(a.neg(), b.neg()).neg()
+    }
+}
+
 pub struct SddManager<'a> {
     vtree: VTreeManager,
     stats: SddStats,
