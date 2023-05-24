@@ -161,7 +161,7 @@ fn exactly_one(lits: Vec<Literal>) -> Vec<Vec<Literal>> {
 
 fn compile_bdd_cnf(args: &Args, network: BayesianNetwork) {
     let bn = BayesianNetworkCNF::new(&network);
-    let mut compiler = BddManager::<AllTable<BddPtr>>::new_default_order(bn.cnf.num_vars());
+    let compiler = BddManager::<AllTable<BddPtr>>::new_default_order(bn.cnf.num_vars());
 
     println!("Compiling...");
     let start = Instant::now();
@@ -196,7 +196,7 @@ fn compile_bdd_cnf(args: &Args, network: BayesianNetwork) {
 }
 
 fn compile_bdd(_args: &Args, network: BayesianNetwork) {
-    let mut compiler = BddManager::<AllTable<BddPtr>>::new_default_order(1);
+    let compiler = BddManager::<AllTable<BddPtr>>::new_default_order(1);
 
     // let mut clauses : Vec<Vec<Literal>> = Vec::new();
     let mut wmc_params: HashMap<VarLabel, (f64, f64)> = HashMap::new();
@@ -286,7 +286,7 @@ fn compile_sdd_cnf(network: BayesianNetwork) {
     println!("Dtree built\nNumber of variables: {}\n\tNumber of clauses: {}\n\tWidth: {}\n\tElapsed dtree time: {:?}",
         bn.cnf.num_vars(), bn.cnf.clauses().len(), dtree.cutwidth(), duration);
 
-    let mut compiler = sdd_builder::SddManager::new(VTree::from_dtree(&dtree).unwrap());
+    let compiler = sdd_builder::SddManager::new(VTree::from_dtree(&dtree).unwrap());
 
     println!("Compiling");
     let start = Instant::now();
@@ -300,7 +300,7 @@ fn compile_topdown(network: BayesianNetwork) {
     println!("############################\n\tCompiling topdown\n############################");
     let bn = BayesianNetworkCNF::new(&network);
     let order = VarOrder::linear_order(bn.cnf.num_vars());
-    let mut compiler = DecisionNNFBuilder::new(order);
+    let compiler = DecisionNNFBuilder::new(order);
 
     println!("Compiling");
     let start = Instant::now();
