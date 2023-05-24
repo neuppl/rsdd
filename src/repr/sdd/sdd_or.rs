@@ -172,11 +172,11 @@ impl<'a> Iterator for SddNodeIter<'a> {
             BDD(bdd) | ComplBDD(bdd) => match self.count {
                 0 => {
                     self.count += 1;
-                    Some(SddAnd::new(SddPtr::var(bdd.label(), true), bdd.high()))
+                    Some(SddAnd::new(SddPtr::Var(bdd.label(), true), bdd.high()))
                 }
                 1 => {
                     self.count += 1;
-                    Some(SddAnd::new(SddPtr::var(bdd.label(), false), bdd.low()))
+                    Some(SddAnd::new(SddPtr::Var(bdd.label(), false), bdd.low()))
                 }
                 _ => None,
             },
