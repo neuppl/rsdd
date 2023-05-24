@@ -49,7 +49,7 @@ impl<'a> SddOr<'a> {
             self.nodes
                 .iter()
                 .map(|and| and.semantic_hash(vtree, map).value())
-                .fold(0, |accum, elem| accum + elem),
+                .sum(),
         )
     }
 
