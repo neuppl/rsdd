@@ -10,7 +10,6 @@ use crate::{
         unit_prop::{DecisionResult, SATSolver},
     },
 };
-use bumpalo::Bump;
 use rustc_hash::FxHashMap;
 
 use crate::{
@@ -214,18 +213,12 @@ impl<'a> DecisionNNFBuilder<'a> {
 
     /// Compute the Boolean function `f | var = value`
     pub fn condition(&'a self, bdd: BddPtr<'a>, lbl: VarLabel, value: bool) -> BddPtr<'a> {
-        let r = self.cond_helper(bdd, lbl, value, &mut Bump::new());
+        let r = self.cond_helper(bdd, lbl, value);
         bdd.clear_scratch();
         r
     }
 
-    fn cond_helper(
-        &'a self,
-        bdd: BddPtr<'a>,
-        lbl: VarLabel,
-        value: bool,
-        alloc: &mut Bump,
-    ) -> BddPtr<'a> {
+    fn cond_helper(&'a self, bdd: BddPtr<'a>, lbl: VarLabel, value: bool) -> BddPtr<'a> {
         if bdd.is_const() {
             bdd
         } else if bdd.var() == lbl {
@@ -242,8 +235,8 @@ impl<'a> DecisionNNFBuilder<'a> {
             }
 
             // recurse on the children
-            let l = self.cond_helper(bdd.low(), lbl, value, alloc);
-            let h = self.cond_helper(bdd.high(), lbl, value, alloc);
+            let l = self.cond_helper(bdd.low(), lbl, value);
+            let h = self.cond_helper(bdd.high(), lbl, value);
             if l == h {
                 if bdd.is_neg() {
                     return l.neg();
