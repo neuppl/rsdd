@@ -70,6 +70,7 @@ impl BDDSerializer {
 
     pub fn from_bdd(bdd: BddPtr) -> BDDSerializer {
         let mut nodes = Vec::new();
+        #[allow(clippy::mutable_key_type)] // TODO: fix this
         let mut table = HashMap::new();
         let r = BDDSerializer::serialize_helper(bdd, &mut table, &mut nodes);
         BDDSerializer {

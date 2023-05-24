@@ -132,7 +132,7 @@ impl<'a> BddBuilder<'a, ROBDDPtr<'a>> for ROBDDBuilder<'a> {
 
     fn ite(&'a self, _f: ROBDDPtr<'a>, g: ROBDDPtr<'a>, _h: ROBDDPtr<'a>) -> ROBDDPtr<'a> {
         let v = g.high();
-        return v.unwrap();
+        v.unwrap()
         // let n : Bdd<ROBDDPtr<'a>> = g.();
         // match n {
         //     Bdd::True => todo!(),

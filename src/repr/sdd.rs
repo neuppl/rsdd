@@ -11,7 +11,6 @@ use crate::{
     },
     util::semiring::FiniteField,
 };
-use bumpalo::Bump;
 use std::fmt::Debug;
 use std::{collections::HashSet, ptr};
 use SddPtr::*;
@@ -79,7 +78,11 @@ impl<'a> SddPtr<'a> {
             PtrFalse => FiniteField::new(0),
             Var(label, polarity) => {
                 let (l_w, h_w) = map.get_var_weight(*label);
-                return if *polarity { *h_w } else { *l_w };
+                if *polarity {
+                    *h_w
+                } else {
+                    *l_w
+                }
             }
             BDD(bdd) => bdd.cached_semantic_hash(vtree, map),
             Reg(or) => or.cached_semantic_hash(vtree, map),
@@ -122,7 +125,7 @@ impl<'a> SddPtr<'a> {
     /// recursively traverses the SDD and clears all scratch
     pub fn clear_scratch(&self) {
         match self {
-            PtrTrue | PtrFalse | Var(_, _) => return,
+            PtrTrue | PtrFalse | Var(_, _) => {}
             BDD(bdd) | ComplBDD(bdd) => bdd.clear_scratch(),
             Reg(or) | Compl(or) => or.clear_scratch(),
         }
@@ -209,7 +212,7 @@ impl<'a> SddPtr<'a> {
                 1 + or
                     .nodes
                     .iter()
-                    .map(|n| return 1 + n.prime.num_child_nodes() + n.sub.num_child_nodes())
+                    .map(|n| 1 + n.prime.num_child_nodes() + n.sub.num_child_nodes())
                     .sum::<usize>()
             }
         }
@@ -315,7 +318,6 @@ impl<'a> DDNNFPtr<'a> for SddPtr<'a> {
         fn bottomup_pass_h<T: 'static + Clone + Copy + Debug, F: Fn(DDNNF<T>) -> T>(
             ptr: SddPtr,
             f: &F,
-            alloc: &mut Bump,
         ) -> T {
             match ptr {
                 PtrTrue => f(DDNNF::True),
@@ -326,7 +328,7 @@ impl<'a> DDNNFPtr<'a> for SddPtr<'a> {
                     // complemented and uncomplemented pass over this node
 
                     // helper performs actual fold-and-cache work
-                    let mut bottomup_helper = |cached| {
+                    let bottomup_helper = |cached| {
                         let mut or_v = f(DDNNF::False);
                         for and in ptr.node_iter() {
                             let s = if ptr.is_neg() {
@@ -334,8 +336,8 @@ impl<'a> DDNNFPtr<'a> for SddPtr<'a> {
                             } else {
                                 and.sub()
                             };
-                            let p_sub = bottomup_pass_h(and.prime(), f, alloc);
-                            let s_sub = bottomup_pass_h(s, f, alloc);
+                            let p_sub = bottomup_pass_h(and.prime(), f);
+                            let s_sub = bottomup_pass_h(s, f);
                             let a = f(DDNNF::And(p_sub, s_sub));
                             let v = VarSet::new();
                             or_v = f(DDNNF::Or(or_v, a, v));
@@ -369,15 +371,14 @@ impl<'a> DDNNFPtr<'a> for SddPtr<'a> {
             }
         }
 
-        let mut alloc = Bump::new();
-        let r = bottomup_pass_h(*self, &f, &mut alloc);
+        let r = bottomup_pass_h(*self, &f);
         self.clear_scratch();
         r
     }
 
     fn count_nodes(&self) -> usize {
         debug_assert!(self.is_scratch_cleared());
-        fn count_h(ptr: SddPtr, alloc: &mut Bump) -> usize {
+        fn count_h(ptr: SddPtr) -> usize {
             if ptr.is_const() || ptr.is_var() {
                 return 0;
             }
@@ -388,17 +389,17 @@ impl<'a> DDNNFPtr<'a> for SddPtr<'a> {
                     ptr.set_scratch::<usize>(0);
                     let mut c = 0;
                     for a in ptr.node_iter() {
-                        c += count_h(a.sub(), alloc);
-                        c += count_h(a.prime(), alloc);
+                        c += count_h(a.sub());
+                        c += count_h(a.prime());
                         c += 1;
                     }
                     c
                 }
             }
         }
-        let r = count_h(*self, &mut Bump::new());
+        let r = count_h(*self);
         self.clear_scratch();
-        return r;
+        r
     }
 
     fn false_ptr() -> SddPtr<'a> {
@@ -427,10 +428,10 @@ impl<'a> DDNNFPtr<'a> for SddPtr<'a> {
             PtrTrue => PtrFalse,
             PtrFalse => PtrTrue,
             Var(x, p) => Var(*x, !p),
-            Compl(x) => Reg(*x),
-            Reg(x) => Compl(*x),
-            BDD(x) => ComplBDD(*x),
-            ComplBDD(x) => BDD(*x),
+            Compl(x) => Reg(x),
+            Reg(x) => Compl(x),
+            BDD(x) => ComplBDD(x),
+            ComplBDD(x) => BDD(x),
         }
     }
 }

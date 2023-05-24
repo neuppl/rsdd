@@ -77,7 +77,7 @@ struct BenchResult {
 fn compile_topdown_nnf(str: String, _args: &Args) -> BenchResult {
     let cnf = Cnf::from_file(str);
     let order = VarOrder::linear_order(cnf.num_vars());
-    let mut man = rsdd::builder::decision_nnf_builder::DecisionNNFBuilder::new(order);
+    let man = rsdd::builder::decision_nnf_builder::DecisionNNFBuilder::new(order);
     // let order = cnf.force_order();
     let ddnnf = man.from_cnf_topdown(&cnf);
     println!("num redundant: {}", man.num_logically_redundant());
@@ -92,7 +92,7 @@ fn compile_sdd_dtree(str: String, _args: &Args) -> BenchResult {
     let cnf = Cnf::from_file(str);
     let dtree = DTree::from_cnf(&cnf, &cnf.min_fill_order());
     let vtree = VTree::from_dtree(&dtree).unwrap();
-    let mut man = SddManager::new(vtree.clone());
+    let man = SddManager::new(vtree.clone());
     let _sdd = man.from_cnf(&cnf);
 
     if let Some(path) = &_args.dump_sdd {
@@ -122,7 +122,7 @@ fn compile_sdd_rightlinear(str: String, _args: &Args) -> BenchResult {
         .map(|x| VarLabel::new(x as u64))
         .collect();
     let vtree = VTree::right_linear(&o);
-    let mut man = SddManager::new(vtree.clone());
+    let man = SddManager::new(vtree.clone());
     let _sdd = man.from_cnf(&cnf);
 
     if let Some(path) = &_args.dump_sdd {
@@ -148,7 +148,7 @@ fn compile_sdd_rightlinear(str: String, _args: &Args) -> BenchResult {
 fn compile_bdd(str: String, _args: &Args) -> BenchResult {
     use rsdd::builder::bdd_builder::*;
     let cnf = Cnf::from_file(str);
-    let mut man = BddManager::<BddApplyTable<BddPtr>>::new_default_order_lru(cnf.num_vars());
+    let man = BddManager::<BddApplyTable<BddPtr>>::new_default_order_lru(cnf.num_vars());
     let _bdd = man.from_cnf(&cnf);
 
     if let Some(path) = &_args.dump_bdd {
@@ -169,8 +169,7 @@ fn compile_bdd_dtree(str: String, _args: &Args) -> BenchResult {
     let cnf = Cnf::from_file(str);
     let order = cnf.min_fill_order();
     let dtree = DTree::from_cnf(&cnf, &order);
-    let mut man =
-        BddManager::<BddApplyTable<BddPtr>>::new(order, BddApplyTable::new(cnf.num_vars()));
+    let man = BddManager::<BddApplyTable<BddPtr>>::new(order, BddApplyTable::new(cnf.num_vars()));
     let plan = BddPlan::from_dtree(&dtree);
     let _bdd = man.compile_plan(&plan);
 

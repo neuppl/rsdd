@@ -889,7 +889,7 @@ mod test_sdd_manager {
     //         let mgr2 = super::SddManager::<SemanticCanonicalizer<{ crate::BIG_PRIME }>>::new(vtree);
     //         let c2 = mgr2.from_cnf(&c);
 
-    //         let map : WmcParams<FiniteField<100000049>> = create_semantic_hash_map(mgr1.num_vars());
+    //         let map : WmcParams<FiniteField<{ crate::BIG_PRIME }>> = create_semantic_hash_map(mgr1.num_vars());
 
     //         let h1 = c1.semantic_hash(mgr1.get_vtree_manager(), &map);
     //         let h2 = c2.semantic_hash(mgr2.get_vtree_manager(), &map);
@@ -898,31 +898,31 @@ mod test_sdd_manager {
     //     }
     // }
 
-    // quickcheck! {
-    //     fn prob_equiv_sdd_identity_uncompressed_depr(c: Cnf, vtree:VTree) -> TestResult {
-    //         let compr_mgr = super::SddManager::<CompressionCanonicalizer>::new(vtree.clone());
-    //         let compr_cnf = compr_mgr.from_cnf(&c);
+    quickcheck! {
+        fn prob_equiv_sdd_identity_uncompressed_depr(c: Cnf, vtree:VTree) -> TestResult {
+            let compr_mgr = super::SddManager::new(vtree.clone());
+            let compr_cnf = compr_mgr.from_cnf(&c);
 
-    //         let mut uncompr_mgr = super::SddManager::<CompressionCanonicalizer>::new(vtree);
-    //         uncompr_mgr.set_compression(false);
-    //         let uncompr_cnf = uncompr_mgr.from_cnf(&c);
+            let mut uncompr_mgr = super::SddManager::new(vtree);
+            uncompr_mgr.set_compression(false);
+            let uncompr_cnf = uncompr_mgr.from_cnf(&c);
 
-    //         let map : WmcParams<FiniteField<100000049>> = create_semantic_hash_map(compr_mgr.num_vars());
+            let map : WmcParams<FiniteField<{ crate::BIG_PRIME }>> = create_semantic_hash_map(compr_mgr.num_vars());
 
-    //         let compr_h = compr_cnf.semantic_hash(compr_mgr.get_vtree_manager(), &map);
-    //         let uncompr_h = uncompr_cnf.semantic_hash(uncompr_mgr.get_vtree_manager(), &map);
+            let compr_h = compr_cnf.semantic_hash(compr_mgr.get_vtree_manager(), &map);
+            let uncompr_h = uncompr_cnf.semantic_hash(uncompr_mgr.get_vtree_manager(), &map);
 
-    //         if compr_h != uncompr_h {
-    //             println!("not equal! hashes: compr: {compr_h}, uncompr: {uncompr_h}");
-    //             println!("map: {:?}", map);
-    //             println!("compr sdd: {}", compr_mgr.print_sdd(compr_cnf));
-    //             println!("uncompr sdd: {}", uncompr_mgr.print_sdd(uncompr_cnf));
-    //             TestResult::from_bool(false)
-    //         } else {
-    //             TestResult::from_bool(true)
-    //         }
-    //     }
-    // }
+            if compr_h != uncompr_h {
+                println!("not equal! hashes: compr: {compr_h}, uncompr: {uncompr_h}");
+                println!("map: {:?}", map);
+                println!("compr sdd: {}", compr_mgr.print_sdd(compr_cnf));
+                println!("uncompr sdd: {}", uncompr_mgr.print_sdd(uncompr_cnf));
+                TestResult::from_bool(false)
+            } else {
+                TestResult::from_bool(true)
+            }
+        }
+    }
 
     // quickcheck! {
     //     fn prob_equiv_sdd_identity_uncompressed(c: Cnf, vtree:VTree) -> TestResult {
