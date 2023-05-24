@@ -4,12 +4,11 @@ extern crate rsgm;
 
 use clap::Parser;
 use rsdd::builder::cache::all_app::AllTable;
-use rsdd::builder::canonicalize::*;
 use rsdd::builder::decision_nnf_builder::DecisionNNFBuilder;
 use rsdd::builder::sdd_builder;
-use rsdd::repr::bdd::BddPtr;
 use rsdd::repr::ddnnf::DDNNFPtr;
 use rsdd::repr::dtree::DTree;
+use rsdd::repr::robdd::BddPtr;
 use rsdd::repr::var_order::VarOrder;
 use rsdd::repr::vtree::VTree;
 use rsdd::util::semiring::{RealSemiring, Semiring};
@@ -287,9 +286,7 @@ fn compile_sdd_cnf(network: BayesianNetwork) {
     println!("Dtree built\nNumber of variables: {}\n\tNumber of clauses: {}\n\tWidth: {}\n\tElapsed dtree time: {:?}",
         bn.cnf.num_vars(), bn.cnf.clauses().len(), dtree.cutwidth(), duration);
 
-    let mut compiler = sdd_builder::SddManager::<CompressionCanonicalizer>::new(
-        VTree::from_dtree(&dtree).unwrap(),
-    );
+    let mut compiler = sdd_builder::SddManager::new(VTree::from_dtree(&dtree).unwrap());
 
     println!("Compiling");
     let start = Instant::now();

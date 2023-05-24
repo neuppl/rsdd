@@ -1,9 +1,8 @@
 use crate::builder::bdd_builder::{BddManager, BddPtr};
 use crate::builder::cache::lru_app::BddApplyTable;
-use crate::builder::canonicalize::CompressionCanonicalizer;
 use crate::builder::sdd_builder::SddManager;
-use crate::repr::bdd::VarOrder;
 use crate::repr::dtree::DTree;
+use crate::repr::robdd::VarOrder;
 use crate::repr::{cnf::Cnf, var_label::VarLabel, vtree::VTree};
 use crate::serialize::{ser_bdd, ser_sdd, ser_vtree};
 use wasm_bindgen::prelude::*;
@@ -36,7 +35,7 @@ pub fn vtree(cnf_input: String, vtree_type_input: JsValue) -> Result<JsValue, Js
 pub fn bdd(cnf_input: String) -> String {
     let cnf = Cnf::from_file(cnf_input);
 
-    let mut man = BddManager::<BddApplyTable<BddPtr>>::new_default_order_lru(cnf.num_vars());
+    let man = BddManager::<BddApplyTable<BddPtr>>::new_default_order_lru(cnf.num_vars());
     let bdd = man.from_cnf(&cnf);
 
     let json = ser_bdd::BDDSerializer::from_bdd(bdd);
@@ -51,7 +50,7 @@ pub fn bdd_with_var_order(cnf_input: String, order: &[u64]) -> String {
 
     let var_order = VarOrder::new(order.iter().map(|v| VarLabel::new(*v)).collect());
 
-    let mut man = BddManager::new(var_order, BddApplyTable::new(21));
+    let man = BddManager::new(var_order, BddApplyTable::new(21));
     let bdd = man.from_cnf(&cnf);
 
     let json = ser_bdd::BDDSerializer::from_bdd(bdd);
@@ -68,7 +67,7 @@ pub fn sdd(cnf_input: String, vtree_type_input: JsValue) -> Result<JsValue, JsVa
 
     let vtree = build_vtree(&cnf, vtree_type);
 
-    let mut compr_mgr = SddManager::<CompressionCanonicalizer>::new(vtree);
+    let compr_mgr = SddManager::new(vtree);
     let sdd = compr_mgr.from_cnf(&cnf);
 
     let serialized = ser_sdd::SDDSerializer::from_sdd(sdd);

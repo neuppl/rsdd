@@ -6,7 +6,7 @@ use clap::Parser;
 use rand::Rng;
 use rsdd::{
     builder::{bdd_builder::BddManager, cache::all_app::AllTable},
-    repr::{bdd::BddPtr, cnf::Cnf, var_label::VarLabel, wmc::WmcParams},
+    repr::{cnf::Cnf, robdd::BddPtr, var_label::VarLabel, wmc::WmcParams},
     util::semiring::{RealSemiring, Semiring},
 };
 

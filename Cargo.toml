@@ -69,17 +69,12 @@ name = "bayesian_network_compiler"
 path = "bin/bayesian_network_compiler.rs"
 required-features = ["build-binary"]
 
-[[bin]]
-name = "semantic_hash_experiment"
-path = "bin/semantic_hash_experiment.rs"
-required-features = ["build-binary"]
+# [[bin]]
+# name = "semantic_hash_experiment"
+# path = "bin/semantic_hash_experiment.rs"
+# required-features = ["build-binary"]
 
 [[bin]]
 name = "marginal_map_experiment"
 path = "bin/marginal_map_experiment.rs"
-required-features = ["build-binary"]
-
-[[bin]]
-name = "dump_models"
-path = "bin/dump_models.rs"
 required-features = ["build-binary"]
