@@ -134,37 +134,39 @@ impl<'a> SddManager<'a> {
 
     fn unique_or(&'a self, mut node: Vec<SddAnd<'a>>, table: VTreeIndex) -> SddPtr<'a> {
         // check if it is a BDD; if it is, return that
+        if node.len() == 2 {
+            if let SddPtr::Var(_, polarity_a) = node[0].prime() {
+                if let SddPtr::Var(label_b, _) = node[1].prime() {
+                    // this is a BDD
+                    // this SDD may be unsorted, so extract the low and high value
+                    // based on whether or not node[0]'s prime is negated
+                    let low = if !polarity_a {
+                        node[0].sub()
+                    } else {
+                        node[1].sub()
+                    };
+                    let high = if polarity_a {
+                        node[0].sub()
+                    } else {
+                        node[1].sub()
+                    };
+                    return self.unique_bdd(BinarySDD::new(label_b, low, high, table));
+                }
+            }
+        }
+
         unsafe {
             let tbl = &mut *self.sdd_tbl.as_ptr();
-            if node.len() == 2 && node[0].prime().is_var() && node[1].prime().is_var() {
-                // this is a BDD
-                // this SDD may be unsorted, so extract the low and high value
-                // based on whether or not node[0]'s prime is negated
-                let v = node[1].prime().get_var().get_label();
-                let low = if node[0].prime().is_neg_var() {
-                    node[0].sub()
-                } else {
-                    node[1].sub()
-                };
-                let high = if node[0].prime().is_pos_var() {
-                    node[0].sub()
-                } else {
-                    node[1].sub()
-                };
-                self.unique_bdd(BinarySDD::new(v, low, high, table))
-            } else {
-                node.sort_by_key(|a| a.prime());
-                if node[0].sub().is_neg()
-                    || self.is_false(node[0].sub())
-                    || node[0].sub().is_neg_var()
-                {
-                    for x in node.iter_mut() {
-                        *x = SddAnd::new(x.prime(), x.sub().neg());
-                    }
-                    SddPtr::Reg(tbl.get_or_insert(SddOr::new(node, table))).neg()
-                } else {
-                    SddPtr::Reg(tbl.get_or_insert(SddOr::new(node, table)))
+
+            node.sort_by_key(|a| a.prime());
+            if node[0].sub().is_neg() || self.is_false(node[0].sub()) || node[0].sub().is_neg_var()
+            {
+                for x in node.iter_mut() {
+                    *x = SddAnd::new(x.prime(), x.sub().neg());
                 }
+                SddPtr::Reg(tbl.get_or_insert(SddOr::new(node, table))).neg()
+            } else {
+                SddPtr::Reg(tbl.get_or_insert(SddOr::new(node, table)))
             }
         }
     }
@@ -268,9 +270,14 @@ impl<'a> SddManager<'a> {
     fn and_sub_desc(&'a self, r: SddPtr<'a>, d: SddPtr<'a>) -> SddPtr<'a> {
         // check if `r` is a bdd and handle that case
         match r {
-            SddPtr::BDD(bdd) | SddPtr::ComplBDD(bdd) => {
+            SddPtr::BDD(bdd) => {
                 let l = self.and(r.low(), d);
                 let h = self.and(r.high(), d);
+                self.unique_bdd(BinarySDD::new(bdd.label(), l, h, r.vtree()))
+            }
+            SddPtr::ComplBDD(bdd) => {
+                let l = self.and(r.low().neg(), d);
+                let h = self.and(r.high().neg(), d);
                 self.unique_bdd(BinarySDD::new(bdd.label(), l, h, r.vtree()))
             }
             SddPtr::Reg(or) | SddPtr::Compl(or) => {
@@ -374,12 +381,14 @@ impl<'a> SddManager<'a> {
     /// conjoin SDDs where `a` and `b` are wrt. the same vtree node
     fn and_cartesian(&'a self, a: SddPtr<'a>, b: SddPtr<'a>, lca: VTreeIndex) -> SddPtr<'a> {
         // check if a and b are both binary SDDs; if so, we apply BDD conjunction here
-        if a.is_bdd() && self.vtree.get_idx(lca).is_right_linear() {
-            let l = self.and(a.low(), b.low());
-            let h = self.and(a.high(), b.high());
-            return self.unique_bdd(BinarySDD::new(a.topvar(), l, h, lca));
-        }
 
+        if let SddPtr::BDD(or) | SddPtr::ComplBDD(or) = a {
+            if self.vtree.get_idx(lca).is_right_linear() {
+                let l = self.and(a.low(), b.low());
+                let h = self.and(a.high(), b.high());
+                return self.unique_bdd(BinarySDD::new(or.label(), l, h, lca));
+            }
+        }
         // now the SDDs are normalized with respect to the same vtree, so we can
         // apply the prime/sub pairs
 

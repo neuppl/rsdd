@@ -64,7 +64,6 @@ impl<'a> PartialEq for SddPtr<'a> {
 use super::{
     ddnnf::DDNNFPtr,
     robdd::WmcParams,
-    var_label::Literal,
     vtree::{VTreeIndex, VTreeManager},
 };
 
@@ -156,33 +155,9 @@ impl<'a> SddPtr<'a> {
         }
     }
 
-    pub fn get_var(&self) -> Literal {
-        match &self {
-            Var(v, b) => Literal::new(*v, *b),
-            _ => panic!("called get_var on non var"),
-        }
-    }
-
+    #[inline]
     pub fn is_bdd(&self) -> bool {
         matches!(self, BDD(_) | ComplBDD(_))
-    }
-
-    /// get a reference to a binary SDD node
-    ///
-    /// panics if not a binary SDD
-    pub fn bdd_ref(&self) -> &'a BinarySDD<'a> {
-        match self {
-            BDD(n) => n,
-            ComplBDD(n) => n,
-            _ => panic!(),
-        }
-    }
-
-    /// gets the top variable of a BDD
-    ///
-    /// panics if not a bdd pointer
-    pub fn topvar(&self) -> VarLabel {
-        self.bdd_ref().label()
     }
 
     /// gets the low pointer of a BDD
@@ -190,10 +165,10 @@ impl<'a> SddPtr<'a> {
     ///
     /// panics if not a bdd pointer
     pub fn low(&self) -> SddPtr<'a> {
-        if self.is_neg() {
-            self.bdd_ref().low().neg()
-        } else {
-            self.bdd_ref().low()
+        match self {
+            BDD(bdd) => bdd.low(),
+            ComplBDD(bdd) => bdd.low().neg(),
+            _ => panic!("Called low() on a pointer to a non-BinarySDD"),
         }
     }
 
@@ -202,10 +177,10 @@ impl<'a> SddPtr<'a> {
     ///
     /// panics if not a bdd pointer
     pub fn high(&self) -> SddPtr<'a> {
-        if self.is_neg() {
-            self.bdd_ref().high().neg()
-        } else {
-            self.bdd_ref().high()
+        match self {
+            BDD(bdd) => bdd.high(),
+            ComplBDD(bdd) => bdd.high().neg(),
+            _ => panic!("Called high() on a pointer to a non-BinarySDD"),
         }
     }
 
@@ -284,15 +259,15 @@ impl<'a> SddPtr<'a> {
     pub fn is_trimmed(&self) -> bool {
         match &self {
             PtrTrue | PtrFalse | Var(_, _) => true,
-            BDD(or) | ComplBDD(or) => {
+            BDD(bdd) | ComplBDD(bdd) => {
                 // core assumption: in binary SDD, the prime is always x and not x
                 // so, we only check low/high being flipped versions
-                if !or.low().is_const() || !or.high().is_const() {
-                    return or.low().is_trimmed() && or.high().is_trimmed();
+                if !bdd.low().is_const() || !bdd.high().is_const() {
+                    return bdd.low().is_trimmed() && bdd.high().is_trimmed();
                 }
 
                 // both low and high are constants; need to check for (a,T) and (~a, F) case
-                or.low() != or.high()
+                bdd.low() != bdd.high()
             }
             Reg(or) | Compl(or) => {
                 // this next part is an O(n^2) (i.e., pairwise) comparison of each SDD
