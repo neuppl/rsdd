@@ -135,22 +135,22 @@ impl<'a> SddManager<'a> {
     fn unique_or(&'a self, mut node: Vec<SddAnd<'a>>, table: VTreeIndex) -> SddPtr<'a> {
         // check if it is a BDD; if it is, return that
         if node.len() == 2 {
-            if let SddPtr::Var(_, polarity_a) = node[0].prime() {
-                if let SddPtr::Var(label_b, _) = node[1].prime() {
+            if let SddPtr::Var(_, polarity) = node[0].prime() {
+                if let SddPtr::Var(label, _) = node[1].prime() {
                     // this is a BDD
                     // this SDD may be unsorted, so extract the low and high value
                     // based on whether or not node[0]'s prime is negated
-                    let low = if !polarity_a {
+                    let low = if !polarity {
                         node[0].sub()
                     } else {
                         node[1].sub()
                     };
-                    let high = if polarity_a {
+                    let high = if polarity {
                         node[0].sub()
                     } else {
                         node[1].sub()
                     };
-                    return self.unique_bdd(BinarySDD::new(label_b, low, high, table));
+                    return self.unique_bdd(BinarySDD::new(label, low, high, table));
                 }
             }
         }
