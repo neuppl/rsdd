@@ -60,7 +60,7 @@ fn main() {
     println!("num vars: {}", cnf.num_vars());
 
     // TODO: allow user to pick varorder
-    let mut mgr = BddManager::<AllTable<BddPtr>>::new_default_order(cnf.num_vars());
+    let mgr = BddManager::<AllTable<BddPtr>>::new_default_order(cnf.num_vars());
 
     let bdd = mgr.from_cnf(&cnf);
 
