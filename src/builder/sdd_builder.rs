@@ -636,7 +636,7 @@ impl<'a> SddManager<'a> {
                             .append(h.append(Doc::newline()).append(l)))
                         .nest(2),
                     );
-                    return doc;
+                    doc
                 }
                 SddPtr::Reg(or) | SddPtr::Compl(or) => {
                     let mut doc: Doc<BoxDoc> = Doc::from("");
@@ -681,6 +681,7 @@ impl<'a> SddManager<'a> {
     }
 
     /// compile an SDD from an input CNF
+    /// #[allow(clippy::wrong_self_convention)] // this is a naming thing; consider renaming in the future
     pub fn from_cnf(&'a self, cnf: &Cnf) -> SddPtr<'a> {
         let mut cvec: Vec<SddPtr> = Vec::with_capacity(cnf.clauses().len());
         if cnf.clauses().is_empty() {
@@ -740,6 +741,7 @@ impl<'a> SddManager<'a> {
         }
     }
 
+    #[allow(clippy::wrong_self_convention)] // this is a naming thing; consider renaming in the future
     fn from_cnf_helper(&'a self, vec: &[SddPtr<'a>]) -> Option<SddPtr<'a>> {
         if vec.is_empty() {
             None
@@ -804,9 +806,9 @@ impl<'a> SddManager<'a> {
 
     pub fn node_iter(&self) -> Vec<SddPtr> {
         let binding = self.bdd_tbl.borrow_mut();
-        let bdds = binding.iter().map(|x| SddPtr::BDD(x));
+        let bdds = binding.iter().map(SddPtr::BDD);
         let binding = self.sdd_tbl.borrow_mut();
-        let sdds = binding.iter().map(|x| SddPtr::Reg(x));
+        let sdds = binding.iter().map(SddPtr::Reg);
         bdds.chain(sdds).collect()
     }
 
