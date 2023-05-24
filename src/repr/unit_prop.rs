@@ -78,6 +78,7 @@ pub struct UnitPropagate {
     cnf: Cnf,
 }
 
+#[allow(clippy::upper_case_acronyms)]
 enum UnitPropResult {
     UNSAT,
     PartialSAT(PartialModel),
@@ -196,10 +197,7 @@ impl UnitPropagate {
             // gather a list of all remaining unassigned literals in the current clause
             let mut remaining_lits = clause
                 .iter()
-                .filter(|x| match cur_state.get(x.get_label()) {
-                    None => true,
-                    Some(_) => false,
-                });
+                .filter(|x| cur_state.get(x.get_label()).is_none());
 
             let num_remaining = remaining_lits.clone().count();
             if num_remaining == 0 {
@@ -348,34 +346,39 @@ impl SATSolver {
             }
         }
 
-        return (hash, new_set);
+        (hash, new_set)
     }
 
     /// returns a new SATSolver
     /// None if initially UNSAT
     pub fn new(cnf: Cnf) -> Option<SATSolver> {
         match UnitPropagate::new(cnf.clone()) {
-            None => return None,
+            None => None,
             Some((up, state)) => {
                 // normalize the clauses by (1) deduplicating and (2) filtering
                 // out all clauses that contain a literal and its negation
-                let mut clauses: Vec<Vec<Literal>> =
-                    cnf.clauses().iter().map(|x| x.clone()).collect();
-                for i in 0..clauses.len() {
-                    clauses[i].sort();
-                    clauses[i].dedup();
-                }
+                let clauses: Vec<Vec<Literal>> = cnf
+                    .clauses()
+                    .iter()
+                    .map(|clause| {
+                        let mut c = clause.clone();
+                        c.sort();
+                        c.dedup();
+                        c
+                    })
+                    .collect();
+
                 let i = clauses.iter().filter(|clause| {
                     for i in 0..clause.len() {
                         for j in (i + 1)..clause.len() {
                             if clause[i].get_label() == clause[j].get_label()
-                                && clause[i].get_polarity() == !clause[j].get_polarity()
+                                && clause[i].get_polarity() != clause[j].get_polarity()
                             {
                                 return false;
                             }
                         }
                     }
-                    return true;
+                    true
                 });
 
                 // weight each literal
@@ -430,7 +433,7 @@ impl SATSolver {
                     sat_clauses: new_sat_set,
                 });
 
-                return Some(solver);
+                Some(solver)
             }
         }
     }
@@ -457,9 +460,9 @@ impl SATSolver {
                     sat_clauses: new_sat,
                 });
                 if num_set == self.clauses.len() {
-                    return DecisionResult::SAT;
+                    DecisionResult::SAT
                 } else {
-                    return DecisionResult::Unknown;
+                    DecisionResult::Unknown
                 }
             }
         }
@@ -467,7 +470,7 @@ impl SATSolver {
 
     /// Get an iterator over the difference between the units implied at
     /// the top and second-to-top decision
-    pub fn get_difference<'a>(&'a self) -> impl Iterator<Item = Literal> + 'a {
+    pub fn get_difference(&self) -> impl Iterator<Item = Literal> + '_ {
         self.top_state()
             .model
             .difference(&self.state_stack[self.state_stack.len() - 2].model)
@@ -502,7 +505,7 @@ fn test_unit_propagate_1() {
 
     let cnf = Cnf::new(v);
     match UnitPropagate::new(cnf) {
-        None => assert!(false),
+        None => panic!("test failed - no partial model generated"),
         Some((_, assgn)) => {
             assert_eq!(assgn.get(VarLabel::new(0)), Some(false));
             assert_eq!(assgn.get(VarLabel::new(1)), Some(false));
@@ -526,7 +529,7 @@ fn test_unit_propagate_2() {
 
     let cnf = Cnf::new(v);
     match UnitPropagate::new(cnf) {
-        None => assert!(false),
+        None => panic!("test failed - no partial model generated"),
         Some((_, assgn)) => {
             assert_eq!(assgn.get(VarLabel::new(0)), None);
             assert_eq!(assgn.get(VarLabel::new(1)), None);
@@ -555,7 +558,7 @@ fn test_unit_propagate_3() {
 
     let cnf = Cnf::new(v);
     match UnitPropagate::new(cnf) {
-        None => assert!(false),
+        None => panic!("test failed - no partial model generated"),
         Some((_, assgn)) => {
             assert_eq!(assgn.get(VarLabel::new(0)), Some(false));
             assert_eq!(assgn.get(VarLabel::new(1)), None);

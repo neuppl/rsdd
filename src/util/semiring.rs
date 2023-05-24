@@ -77,7 +77,7 @@ impl<const P: u128> FiniteField<P> {
 
     /// computes the additive inverse of self
     pub fn negate(&self) -> FiniteField<P> {
-        return FiniteField::new(P - self.v + 1);
+        FiniteField::new(P - self.v + 1)
     }
 }
 
@@ -192,7 +192,7 @@ pub trait BBAlgebra: Semiring + JoinSemilattice {
 
 impl BBAlgebra for RealSemiring {
     fn choose(&self, arg: &RealSemiring) -> RealSemiring {
-        JoinSemilattice::join(&self, arg)
+        JoinSemilattice::join(self, arg)
     }
 }
 
