@@ -176,10 +176,10 @@ impl<'a> SddManager<'a> {
                 return bdd.high();
             }
             if self.is_false(bdd.high()) && self.is_true(bdd.low()) {
-                return SddPtr::var(bdd.label(), false);
+                return SddPtr::Var(bdd.label(), false);
             }
             if self.is_true(bdd.high()) && self.is_false(bdd.low()) {
-                return SddPtr::var(bdd.label(), true);
+                return SddPtr::Var(bdd.label(), true);
             }
 
             if bdd.high().is_neg() || self.is_false(bdd.high()) || bdd.high().is_neg_var() {
@@ -676,6 +676,7 @@ impl<'a> SddManager<'a> {
     }
 
     /// compile an SDD from an input CNF
+    /// #[allow(clippy::wrong_self_convention)] // this is a naming thing; consider renaming in the future
     pub fn from_cnf(&'a self, cnf: &Cnf) -> SddPtr<'a> {
         let mut cvec: Vec<SddPtr> = Vec::with_capacity(cnf.clauses().len());
         if cnf.clauses().is_empty() {
@@ -719,10 +720,10 @@ impl<'a> SddManager<'a> {
 
         for lit_vec in cnf_sorted.iter() {
             let (vlabel, val) = (lit_vec[0].get_label(), lit_vec[0].get_polarity());
-            let mut bdd = SddPtr::var(vlabel, val);
+            let mut bdd = SddPtr::Var(vlabel, val);
             for lit in lit_vec {
                 let (vlabel, val) = (lit.get_label(), lit.get_polarity());
-                let var = SddPtr::var(vlabel, val);
+                let var = SddPtr::Var(vlabel, val);
                 bdd = self.or(bdd, var);
             }
             cvec.push(bdd);
@@ -735,6 +736,7 @@ impl<'a> SddManager<'a> {
         }
     }
 
+    #[allow(clippy::wrong_self_convention)] // this is a naming thing; consider renaming in the future
     fn from_cnf_helper(&'a self, vec: &[SddPtr<'a>]) -> Option<SddPtr<'a>> {
         if vec.is_empty() {
             None
@@ -799,9 +801,9 @@ impl<'a> SddManager<'a> {
 
     pub fn node_iter(&self) -> Vec<SddPtr> {
         let binding = self.bdd_tbl.borrow_mut();
-        let bdds = binding.iter().map(|x| SddPtr::bdd(x));
+        let bdds = binding.iter().map(SddPtr::BDD);
         let binding = self.sdd_tbl.borrow_mut();
-        let sdds = binding.iter().map(|x| SddPtr::Reg(x));
+        let sdds = binding.iter().map(SddPtr::Reg);
         bdds.chain(sdds).collect()
     }
 
@@ -835,8 +837,8 @@ fn simple_equality() {
         ],
         2,
     ));
-    let a = SddPtr::var(VarLabel::new(0), true);
-    let d = SddPtr::var(VarLabel::new(3), true);
+    let a = SddPtr::Var(VarLabel::new(0), true);
+    let d = SddPtr::Var(VarLabel::new(3), true);
     let inner = man.or(a, d);
     println!("0 || 3:\n{}", man.print_sdd(inner));
     let term = man.and(inner, a);
@@ -856,8 +858,8 @@ fn sdd_simple_cond() {
         ],
         2,
     ));
-    let a = SddPtr::var(VarLabel::new(0), true);
-    let d = SddPtr::var(VarLabel::new(3), true);
+    let a = SddPtr::Var(VarLabel::new(0), true);
+    let d = SddPtr::Var(VarLabel::new(3), true);
     let inner = man.or(a, d);
     println!("0 || 3: {}", man.print_sdd(inner));
     let term = man.condition(inner, VarLabel::new(3), false);
@@ -883,9 +885,9 @@ fn sdd_test_exist() {
         2,
     ));
     // 1 /\ 2 /\ 3
-    let v1 = SddPtr::var(VarLabel::new(0), true);
-    let v2 = SddPtr::var(VarLabel::new(1), true);
-    let v3 = SddPtr::var(VarLabel::new(2), true);
+    let v1 = SddPtr::Var(VarLabel::new(0), true);
+    let v2 = SddPtr::Var(VarLabel::new(1), true);
+    let v3 = SddPtr::Var(VarLabel::new(2), true);
     let a1 = man.and(v1, v2);
     let r1 = man.and(a1, v3);
     let r_expected = man.and(v1, v3);
@@ -919,12 +921,12 @@ fn sdd_bigand() {
     //     2,
     // ));
     // 1 /\ 2 /\ 3
-    let v1 = SddPtr::var(VarLabel::new(0), true);
-    let v2 = SddPtr::var(VarLabel::new(1), true);
-    let v3 = SddPtr::var(VarLabel::new(2), true);
+    let v1 = SddPtr::Var(VarLabel::new(0), true);
+    let v2 = SddPtr::Var(VarLabel::new(1), true);
+    let v3 = SddPtr::Var(VarLabel::new(2), true);
     let a1 = man.and(v1, v2);
     let r1 = man.and(a1, v3);
-    let f = man.and(r1, SddPtr::var(VarLabel::new(0), false));
+    let f = man.and(r1, SddPtr::Var(VarLabel::new(0), false));
     println!("{}", man.print_sdd(r1));
     assert_eq!(
         f,
@@ -946,8 +948,8 @@ fn sdd_ite1() {
         ],
         2,
     ));
-    let v1 = SddPtr::var(VarLabel::new(0), true);
-    let v2 = SddPtr::var(VarLabel::new(1), true);
+    let v1 = SddPtr::Var(VarLabel::new(0), true);
+    let v2 = SddPtr::Var(VarLabel::new(1), true);
     println!("v1: {}", man.print_sdd(v1));
     println!("v2: {}", man.print_sdd(v2));
     let r1 = man.or(v1, v2);
@@ -975,8 +977,8 @@ fn sdd_demorgan() {
         ],
         1,
     ));
-    let x = SddPtr::var(VarLabel::new(0), true);
-    let y = SddPtr::var(VarLabel::new(3), true);
+    let x = SddPtr::Var(VarLabel::new(0), true);
+    let y = SddPtr::Var(VarLabel::new(3), true);
     let res = man.or(x, y).neg();
     let expected = man.and(x.neg(), y.neg());
     assert!(
@@ -999,10 +1001,10 @@ fn sdd_circuit1() {
         ],
         2,
     ));
-    let x = SddPtr::var(VarLabel::new(0), false);
-    let y = SddPtr::var(VarLabel::new(1), true);
+    let x = SddPtr::Var(VarLabel::new(0), false);
+    let y = SddPtr::Var(VarLabel::new(1), true);
     let delta = man.and(x, y);
-    let yp = SddPtr::var(VarLabel::new(2), true);
+    let yp = SddPtr::Var(VarLabel::new(2), true);
     let inner = man.iff(yp, y);
     println!("(2 <=> 1): \n{}", man.print_sdd(inner));
     println!("(0 && 1): \n{}", man.print_sdd(delta));
@@ -1032,10 +1034,10 @@ fn sdd_circuit2() {
         ],
         2,
     ));
-    let x = SddPtr::var(VarLabel::new(3), false);
-    let y = SddPtr::var(VarLabel::new(1), true);
+    let x = SddPtr::Var(VarLabel::new(3), false);
+    let y = SddPtr::Var(VarLabel::new(1), true);
     let delta = man.and(x, y);
-    let yp = SddPtr::var(VarLabel::new(4), true);
+    let yp = SddPtr::Var(VarLabel::new(4), true);
     let inner = man.iff(yp, y);
     let conj = man.and(inner, delta);
     let res = man.exists(conj, VarLabel::new(1));
@@ -1074,13 +1076,13 @@ fn sdd_wmc1() {
     );
     let man = SddManager::new(vtree);
     let mut wmc_map = crate::repr::wmc::WmcParams::new(RealSemiring(0.0), RealSemiring(1.0));
-    let x = SddPtr::var(VarLabel::new(0), true);
+    let x = SddPtr::Var(VarLabel::new(0), true);
     wmc_map.set_weight(VarLabel::new(0), RealSemiring(1.0), RealSemiring(1.0));
-    let y = SddPtr::var(VarLabel::new(1), true);
+    let y = SddPtr::Var(VarLabel::new(1), true);
     wmc_map.set_weight(VarLabel::new(1), RealSemiring(1.0), RealSemiring(1.0));
-    let fx = SddPtr::var(VarLabel::new(2), true);
+    let fx = SddPtr::Var(VarLabel::new(2), true);
     wmc_map.set_weight(VarLabel::new(2), RealSemiring(0.5), RealSemiring(0.5));
-    let fy = SddPtr::var(VarLabel::new(3), true);
+    let fy = SddPtr::Var(VarLabel::new(3), true);
     wmc_map.set_weight(VarLabel::new(3), RealSemiring(0.5), RealSemiring(0.5));
     let x_fx = man.iff(x, fx);
     let y_fy = man.iff(y, fy);
@@ -1116,8 +1118,8 @@ fn sdd_wmc1() {
 //         ),
 //     );
 //     man.set_compression(false);
-//     let x = SddPtr::var(VarLabel::new(0), true);
-//     let y = SddPtr::var(VarLabel::new(3), true);
+//     let x = SddPtr::Var(VarLabel::new(0), true);
+//     let y = SddPtr::Var(VarLabel::new(3), true);
 //     let res = man.or(x, y).neg();
 //     let expected = man.and(x.neg(), y.neg());
 

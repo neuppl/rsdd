@@ -68,14 +68,6 @@ use super::{
 };
 
 impl<'a> SddPtr<'a> {
-    pub fn or(ptr: &'a SddOr) -> SddPtr<'a> {
-        Reg(ptr)
-    }
-
-    pub fn bdd(ptr: &'a BinarySDD) -> SddPtr<'a> {
-        Self::BDD(ptr)
-    }
-
     /// performs a semantic hash and caches the result on the node
     pub fn cached_semantic_hash<const P: u128>(
         &self,
@@ -142,10 +134,6 @@ impl<'a> SddPtr<'a> {
 
     pub fn is_or(&self) -> bool {
         matches!(self, Compl(_) | Reg(_))
-    }
-
-    pub fn var(lbl: VarLabel, polarity: bool) -> SddPtr<'a> {
-        Var(lbl, polarity)
     }
 
     /// uncomplement a pointer
@@ -537,8 +525,8 @@ fn is_compressed_simple_bdd() {
         1,
     );
     let vtree_manager = VTreeManager::new(vtree);
-    let a = SddPtr::var(VarLabel::new(0), true);
-    let b = SddPtr::var(VarLabel::new(1), false);
+    let a = SddPtr::Var(VarLabel::new(0), true);
+    let b = SddPtr::Var(VarLabel::new(1), false);
     let mut binary_sdd = BinarySDD::new(
         VarLabel::new(2),
         a,
@@ -546,7 +534,7 @@ fn is_compressed_simple_bdd() {
         vtree_manager.get_varlabel_idx(VarLabel::new(2)),
     );
     let binary_sdd_ptr = &mut binary_sdd;
-    let bdd_ptr = SddPtr::bdd(binary_sdd_ptr);
+    let bdd_ptr = SddPtr::BDD(binary_sdd_ptr);
     assert_ne!(a, b);
     assert!(bdd_ptr.is_compressed());
 }
@@ -558,7 +546,7 @@ fn is_compressed_simple_bdd_duplicate() {
         1,
     );
     let vtree_manager = VTreeManager::new(vtree);
-    let a = SddPtr::var(VarLabel::new(0), true);
+    let a = SddPtr::Var(VarLabel::new(0), true);
     let mut binary_sdd = BinarySDD::new(
         VarLabel::new(2),
         a,
@@ -566,7 +554,7 @@ fn is_compressed_simple_bdd_duplicate() {
         vtree_manager.get_varlabel_idx(VarLabel::new(2)),
     );
     let binary_sdd_ptr = &mut binary_sdd;
-    let bdd_ptr = SddPtr::bdd(binary_sdd_ptr);
+    let bdd_ptr = SddPtr::BDD(binary_sdd_ptr);
 
     assert!(!bdd_ptr.is_compressed())
 }
@@ -592,8 +580,8 @@ fn is_trimmed_simple_demorgan() {
         1,
     ));
 
-    let x = SddPtr::var(VarLabel::new(0), true);
-    let y = SddPtr::var(VarLabel::new(3), true);
+    let x = SddPtr::Var(VarLabel::new(0), true);
+    let y = SddPtr::Var(VarLabel::new(3), true);
     let res = man.or(x, y).neg();
     let expected = man.and(x.neg(), y.neg());
 
@@ -621,8 +609,8 @@ fn is_canonical_simple_demorgan() {
         ],
         1,
     ));
-    let x = SddPtr::var(VarLabel::new(0), true);
-    let y = SddPtr::var(VarLabel::new(3), true);
+    let x = SddPtr::Var(VarLabel::new(0), true);
+    let y = SddPtr::Var(VarLabel::new(3), true);
     let res = man.or(x, y).neg();
     let expected = man.and(x.neg(), y.neg());
     assert!(expected.is_canonical());
