@@ -134,37 +134,39 @@ impl<'a> SddManager<'a> {
 
     fn unique_or(&'a self, mut node: Vec<SddAnd<'a>>, table: VTreeIndex) -> SddPtr<'a> {
         // check if it is a BDD; if it is, return that
+        if node.len() == 2 {
+            if let SddPtr::Var(_, polarity) = node[0].prime() {
+                if let SddPtr::Var(label, _) = node[1].prime() {
+                    // this is a BDD
+                    // this SDD may be unsorted, so extract the low and high value
+                    // based on whether or not node[0]'s prime is negated
+                    let low = if !polarity {
+                        node[0].sub()
+                    } else {
+                        node[1].sub()
+                    };
+                    let high = if polarity {
+                        node[0].sub()
+                    } else {
+                        node[1].sub()
+                    };
+                    return self.unique_bdd(BinarySDD::new(label, low, high, table));
+                }
+            }
+        }
+
         unsafe {
             let tbl = &mut *self.sdd_tbl.as_ptr();
-            if node.len() == 2 && node[0].prime().is_var() && node[1].prime().is_var() {
-                // this is a BDD
-                // this SDD may be unsorted, so extract the low and high value
-                // based on whether or not node[0]'s prime is negated
-                let v = node[1].prime().get_var().get_label();
-                let low = if node[0].prime().is_neg_var() {
-                    node[0].sub()
-                } else {
-                    node[1].sub()
-                };
-                let high = if node[0].prime().is_pos_var() {
-                    node[0].sub()
-                } else {
-                    node[1].sub()
-                };
-                self.unique_bdd(BinarySDD::new(v, low, high, table))
-            } else {
-                node.sort_by_key(|a| a.prime());
-                if node[0].sub().is_neg()
-                    || self.is_false(node[0].sub())
-                    || node[0].sub().is_neg_var()
-                {
-                    for x in node.iter_mut() {
-                        *x = SddAnd::new(x.prime(), x.sub().neg());
-                    }
-                    SddPtr::Reg(tbl.get_or_insert(SddOr::new(node, table))).neg()
-                } else {
-                    SddPtr::Reg(tbl.get_or_insert(SddOr::new(node, table)))
+
+            node.sort_by_key(|a| a.prime());
+            if node[0].sub().is_neg() || self.is_false(node[0].sub()) || node[0].sub().is_neg_var()
+            {
+                for x in node.iter_mut() {
+                    *x = SddAnd::new(x.prime(), x.sub().neg());
                 }
+                SddPtr::Reg(tbl.get_or_insert(SddOr::new(node, table))).neg()
+            } else {
+                SddPtr::Reg(tbl.get_or_insert(SddOr::new(node, table)))
             }
         }
     }
@@ -267,21 +269,25 @@ impl<'a> SddManager<'a> {
     /// r might be wrt. node 3, and d wrt. node 5
     fn and_sub_desc(&'a self, r: SddPtr<'a>, d: SddPtr<'a>) -> SddPtr<'a> {
         // check if `r` is a bdd and handle that case
-        if r.is_bdd() {
-            let l = self.and(r.low(), d);
-            let h = self.and(r.high(), d);
-            return self.unique_bdd(BinarySDD::new(r.topvar(), l, h, r.vtree()));
+        match r {
+            SddPtr::BDD(bdd) | SddPtr::ComplBDD(bdd) => {
+                let l = self.and(r.low(), d);
+                let h = self.and(r.high(), d);
+                self.unique_bdd(BinarySDD::new(bdd.label(), l, h, r.vtree()))
+            }
+            SddPtr::Reg(or) | SddPtr::Compl(or) => {
+                let mut v: Vec<SddAnd> = Vec::with_capacity(or.nodes.len());
+                for a in or.nodes.iter() {
+                    let root_p = a.prime();
+                    let root_s = a.sub();
+                    let root_s = if r.is_neg() { root_s.neg() } else { root_s };
+                    let new_s = self.and(root_s, d);
+                    v.push(SddAnd::new(root_p, new_s));
+                }
+                self.canonicalize(v, r.vtree())
+            }
+            _ => panic!("Called and_sub_desc() on a constant"),
         }
-
-        let mut v: Vec<SddAnd> = Vec::with_capacity(r.num_nodes());
-        for a in r.node_iter() {
-            let root_p = a.prime();
-            let root_s = a.sub();
-            let root_s = if r.is_neg() { root_s.neg() } else { root_s };
-            let new_s = self.and(root_s, d);
-            v.push(SddAnd::new(root_p, new_s));
-        }
-        self.canonicalize(v, r.vtree())
     }
 
     /// conjoin SDDs where `d` is a descendent of `r`, and `r` is sub to `d`
@@ -370,12 +376,14 @@ impl<'a> SddManager<'a> {
     /// conjoin SDDs where `a` and `b` are wrt. the same vtree node
     fn and_cartesian(&'a self, a: SddPtr<'a>, b: SddPtr<'a>, lca: VTreeIndex) -> SddPtr<'a> {
         // check if a and b are both binary SDDs; if so, we apply BDD conjunction here
-        if a.is_bdd() && self.vtree.get_idx(lca).is_right_linear() {
-            let l = self.and(a.low(), b.low());
-            let h = self.and(a.high(), b.high());
-            return self.unique_bdd(BinarySDD::new(a.topvar(), l, h, lca));
-        }
 
+        if let SddPtr::BDD(or) | SddPtr::ComplBDD(or) = a {
+            if self.vtree.get_idx(lca).is_right_linear() {
+                let l = self.and(a.low(), b.low());
+                let h = self.and(a.high(), b.high());
+                return self.unique_bdd(BinarySDD::new(or.label(), l, h, lca));
+            }
+        }
         // now the SDDs are normalized with respect to the same vtree, so we can
         // apply the prime/sub pairs
 
@@ -506,57 +514,55 @@ impl<'a> SddManager<'a> {
 
     /// Computes `f | var = value`
     /// TODO: This is highly inefficient, will re-traverse nodes, needs a cache
+    /// TODO : this can bail out early by checking the vtree
     pub fn condition(&'a self, f: SddPtr<'a>, lbl: VarLabel, value: bool) -> SddPtr<'a> {
         // self.stats.num_rec += 1;
-        // TODO : this can bail out early by checking the vtree
-        // check base case
-        if f.is_const() {
-            return f;
-        };
-        if f.is_var() {
-            let l = f.get_var();
-            if l.get_label() == lbl {
-                // condition this var
-                if l.get_polarity() == value {
-                    return SddPtr::true_ptr();
+        match f {
+            SddPtr::PtrTrue | SddPtr::PtrFalse => f,
+            SddPtr::Var(label, polarity) => {
+                if label == lbl {
+                    if polarity == value {
+                        SddPtr::PtrTrue
+                    } else {
+                        SddPtr::PtrFalse
+                    }
                 } else {
-                    return SddPtr::false_ptr();
+                    f
                 }
-            } else {
-                return f;
+            }
+            // if f.is_bdd() {
+            //     if f.topvar() == lbl {
+            //         if !f.is_compl() == value {
+            //             return f.high();
+            //         } else {
+            //             return f.low();
+            //         }
+            //     } else {
+            //         let l = self.condition(f.low(), lbl, value);
+            //         let h = self.condition(f.high(), lbl, value);
+            //         return self.unique_bdd(BinarySDD::new(f.topvar(), l, h));
+            //     }
+            // }
+            _ => {
+                let mut v = Vec::new();
+                // f is a node; recurse and compress the result
+                for a in f.node_iter() {
+                    let prime = a.prime();
+                    let sub = a.sub();
+                    let newp = self.condition(prime, lbl, value);
+                    let sub = if f.is_neg() { sub.neg() } else { sub };
+                    if self.is_false(newp) {
+                        continue;
+                    };
+                    let news = self.condition(sub, lbl, value);
+                    if self.is_true(newp) {
+                        return news;
+                    }
+                    v.push(SddAnd::new(newp, news));
+                }
+                self.canonicalize(v, f.vtree())
             }
         }
-        // if f.is_bdd() {
-        //     if f.topvar() == lbl {
-        //         if !f.is_compl() == value {
-        //             return f.high();
-        //         } else {
-        //             return f.low();
-        //         }
-        //     } else {
-        //         let l = self.condition(f.low(), lbl, value);
-        //         let h = self.condition(f.high(), lbl, value);
-        //         return self.unique_bdd(BinarySDD::new(f.topvar(), l, h));
-        //     }
-        // }
-
-        let mut v = Vec::new();
-        // f is a node; recurse and compress the result
-        for a in f.node_iter() {
-            let prime = a.prime();
-            let sub = a.sub();
-            let newp = self.condition(prime, lbl, value);
-            let sub = if f.is_neg() { sub.neg() } else { sub };
-            if self.is_false(newp) {
-                continue;
-            };
-            let news = self.condition(sub, lbl, value);
-            if self.is_true(newp) {
-                return news;
-            }
-            v.push(SddAnd::new(newp, news));
-        }
-        self.canonicalize(v, f.vtree())
     }
 
     /// Computes the SDD representing the logical function `if f then g else h`
@@ -612,46 +618,45 @@ impl<'a> SddManager<'a> {
         // self.canonicalizer.borrow().on_sdd_print_dump_state(ptr);
         use pretty::*;
         fn helper(ptr: SddPtr) -> Doc<'static, BoxDoc<'static>> {
-            if ptr.is_true() {
-                return Doc::from("T");
-            } else if ptr.is_false() {
-                return Doc::from("F");
-            } else if ptr.is_var() {
-                let l = ptr.get_var();
-                return Doc::from(format!(
+            match ptr {
+                SddPtr::PtrTrue => Doc::from("T"),
+                SddPtr::PtrFalse => Doc::from("F"),
+                SddPtr::Var(label, polarity) => Doc::from(format!(
                     "{}{}",
-                    if l.get_polarity() { "" } else { "!" },
-                    l.get_label().value()
-                ));
-            } else if ptr.is_bdd() {
-                let l = helper(ptr.low_raw());
-                let h = helper(ptr.high_raw());
-                let mut doc: Doc<BoxDoc> = Doc::from("");
-                doc = doc.append(Doc::newline()).append(
-                    (Doc::from(format!("ITE {:?} {}", ptr, ptr.topvar().value()))
-                        .append(Doc::newline())
-                        .append(h.append(Doc::newline()).append(l)))
-                    .nest(2),
-                );
-                return doc;
+                    if polarity { "" } else { "!" },
+                    label.value()
+                )),
+                SddPtr::BDD(bdd) | SddPtr::ComplBDD(bdd) => {
+                    let l = helper(bdd.low());
+                    let h = helper(bdd.high());
+                    let mut doc: Doc<BoxDoc> = Doc::from("");
+                    doc = doc.append(Doc::newline()).append(
+                        (Doc::from(format!("ITE {:?} {}", ptr, bdd.label().value()))
+                            .append(Doc::newline())
+                            .append(h.append(Doc::newline()).append(l)))
+                        .nest(2),
+                    );
+                    doc
+                }
+                SddPtr::Reg(or) | SddPtr::Compl(or) => {
+                    let mut doc: Doc<BoxDoc> = Doc::from("");
+                    for a in or.nodes.iter() {
+                        let sub = a.sub();
+                        let prime = a.prime();
+                        let s = if ptr.is_neg() { sub.neg() } else { sub };
+                        let new_s1 = helper(prime);
+                        let new_s2 = helper(s);
+                        doc = doc.append(Doc::newline()).append(
+                            (Doc::from("/\\")
+                                .append(Doc::newline())
+                                .append(new_s1.append(Doc::newline()).append(new_s2)))
+                            .nest(2),
+                        );
+                    }
+                    let d = Doc::from(format!("\\/ {:?}", ptr));
+                    d.append(doc.nest(2))
+                }
             }
-
-            let mut doc: Doc<BoxDoc> = Doc::from("");
-            for a in ptr.node_iter() {
-                let sub = a.sub();
-                let prime = a.prime();
-                let s = if ptr.is_neg() { sub.neg() } else { sub };
-                let new_s1 = helper(prime);
-                let new_s2 = helper(s);
-                doc = doc.append(Doc::newline()).append(
-                    (Doc::from("/\\")
-                        .append(Doc::newline())
-                        .append(new_s1.append(Doc::newline()).append(new_s2)))
-                    .nest(2),
-                );
-            }
-            let d = Doc::from(format!("\\/ {:?}", ptr));
-            d.append(doc.nest(2))
         }
         let d = helper(ptr);
         let mut w = Vec::new();

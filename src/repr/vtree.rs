@@ -324,15 +324,13 @@ impl VTreeManager {
     /// true if a is prime to b
     /// panics if either is constant
     pub fn is_prime(&self, a: SddPtr, b: SddPtr) -> bool {
-        let a_vtree = if a.is_var() {
-            self.get_varlabel_idx(a.get_var_label())
-        } else {
-            a.vtree()
+        let a_vtree = match a {
+            SddPtr::Var(label, _) => self.get_varlabel_idx(label),
+            _ => a.vtree(),
         };
-        let b_vtree = if b.is_var() {
-            self.get_varlabel_idx(b.get_var_label())
-        } else {
-            b.vtree()
+        let b_vtree = match b {
+            SddPtr::Var(label, _) => self.get_varlabel_idx(label),
+            _ => b.vtree(),
         };
         self.is_prime_index(a_vtree, b_vtree)
     }

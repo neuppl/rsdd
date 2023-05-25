@@ -63,7 +63,6 @@ impl<'a> PartialEq for SddPtr<'a> {
 use super::{
     ddnnf::DDNNFPtr,
     robdd::WmcParams,
-    var_label::Literal,
     vtree::{VTreeIndex, VTreeManager},
 };
 
@@ -132,31 +131,22 @@ impl<'a> SddPtr<'a> {
         }
     }
 
-    pub fn is_or(&self) -> bool {
-        matches!(self, Compl(_) | Reg(_))
-    }
-
-    /// uncomplement a pointer
-    pub fn to_reg(&self) -> SddPtr {
-        match &self {
-            Compl(x) => Reg(x),
-            ComplBDD(x) => BDD(x),
-            _ => *self,
-        }
-    }
-
+    #[inline]
     pub fn is_const(&self) -> bool {
         matches!(self, PtrTrue | PtrFalse)
     }
 
+    #[inline]
     pub fn is_var(&self) -> bool {
         matches!(self, Var(_, _))
     }
 
+    #[inline]
     pub fn is_neg_var(&self) -> bool {
         matches!(self, Var(_, false))
     }
 
+    #[inline]
     pub fn is_pos_var(&self) -> bool {
         matches!(self, Var(_, true))
     }
@@ -168,37 +158,9 @@ impl<'a> SddPtr<'a> {
         }
     }
 
-    pub fn get_var(&self) -> Literal {
-        match &self {
-            Var(v, b) => Literal::new(*v, *b),
-            _ => panic!("called get_var on non var"),
-        }
-    }
-
+    #[inline]
     pub fn is_bdd(&self) -> bool {
         matches!(self, BDD(_) | ComplBDD(_))
-    }
-
-    pub fn is_node(&self) -> bool {
-        matches!(self, Compl(_) | Reg(_))
-    }
-
-    /// get a reference to a binary SDD node
-    ///
-    /// panics if not a binary SDD
-    pub fn bdd_ref(&self) -> &'a BinarySDD<'a> {
-        match self {
-            BDD(n) => n,
-            ComplBDD(n) => n,
-            _ => panic!(),
-        }
-    }
-
-    /// gets the top variable of a BDD
-    ///
-    /// panics if not a bdd pointer
-    pub fn topvar(&self) -> VarLabel {
-        self.bdd_ref().label()
     }
 
     /// gets the low pointer of a BDD
@@ -206,18 +168,11 @@ impl<'a> SddPtr<'a> {
     ///
     /// panics if not a bdd pointer
     pub fn low(&self) -> SddPtr<'a> {
-        if self.is_neg() {
-            self.bdd_ref().low().neg()
-        } else {
-            self.bdd_ref().low()
+        match self {
+            BDD(bdd) => bdd.low(),
+            ComplBDD(bdd) => bdd.low().neg(),
+            _ => panic!("Called low() on a pointer to a non-BinarySDD"),
         }
-    }
-
-    /// gets the low pointer of a BDD
-    ///
-    /// panics if not a bdd pointer
-    pub fn low_raw(&self) -> SddPtr<'a> {
-        self.bdd_ref().low()
     }
 
     /// gets the high pointer of a BDD
@@ -225,18 +180,11 @@ impl<'a> SddPtr<'a> {
     ///
     /// panics if not a bdd pointer
     pub fn high(&self) -> SddPtr<'a> {
-        if self.is_neg() {
-            self.bdd_ref().high().neg()
-        } else {
-            self.bdd_ref().high()
+        match self {
+            BDD(bdd) => bdd.high(),
+            ComplBDD(bdd) => bdd.high().neg(),
+            _ => panic!("Called high() on a pointer to a non-BinarySDD"),
         }
-    }
-
-    /// gets the high pointer of a BDD
-    ///
-    /// panics if not a bdd pointer
-    pub fn high_raw(&self) -> SddPtr<'a> {
-        self.bdd_ref().high()
     }
 
     /// get an iterator to all the (prime, sub) pairs this node points to
@@ -248,13 +196,10 @@ impl<'a> SddPtr<'a> {
     /// returns number of (prime, sub) pairs this node points to
     /// panics if not an or-node or const
     pub fn num_nodes(&self) -> usize {
-        if self.is_const() {
-            return 1;
-        }
-        if self.is_bdd() {
-            2
-        } else {
-            self.node_ref().nodes.len()
+        match self {
+            PtrTrue | PtrFalse | Var(_, _) => 1,
+            BDD(_) | ComplBDD(_) => 2,
+            Reg(or) | Compl(or) => or.nodes.len(),
         }
     }
 
@@ -262,12 +207,9 @@ impl<'a> SddPtr<'a> {
     pub fn num_child_nodes(&self) -> usize {
         match &self {
             PtrTrue | PtrFalse | Var(_, _) => 1,
-            BDD(_) | ComplBDD(_) => {
-                1 + self.low().num_child_nodes() + self.high().num_child_nodes()
-            }
-            Compl(_) | Reg(_) => {
-                1 + self
-                    .node_ref()
+            BDD(or) | ComplBDD(or) => 1 + or.low().num_child_nodes() + or.high().num_child_nodes(),
+            Compl(or) | Reg(or) => {
+                1 + or
                     .nodes
                     .iter()
                     .map(|n| 1 + n.prime.num_child_nodes() + n.sub.num_child_nodes())
@@ -276,25 +218,14 @@ impl<'a> SddPtr<'a> {
         }
     }
 
-    /// Get an immutable reference to the node that &self points to
-    ///
-    /// Panics if not a node pointer
-    pub fn node_ref(&self) -> &SddOr {
-        match &self {
-            Reg(x) => x,
-            Compl(x) => x,
-            _ => panic!("Called node_ref on non-node {:?}", self),
-        }
-    }
-
     /// retrieve the vtree index (as its index in a left-first depth-first traversal)
     ///
     /// panics if this is not a node
     pub fn vtree(&self) -> VTreeIndex {
-        if self.is_bdd() {
-            self.bdd_ref().vtree()
-        } else {
-            self.node_ref().index()
+        match self {
+            BDD(bdd) | ComplBDD(bdd) => bdd.vtree(),
+            Reg(or) | Compl(or) => or.index(),
+            _ => panic!("called vtree() on a constant"),
         }
     }
 
@@ -307,51 +238,46 @@ impl<'a> SddPtr<'a> {
     // definition 8
     pub fn is_compressed(&self) -> bool {
         match &self {
-            PtrTrue => true,
-            PtrFalse => true,
-            Var(_, _) => true,
-            BDD(_) | ComplBDD(_) => {
-                let low = self.low();
-                let high = self.high();
+            PtrTrue | PtrFalse | Var(_, _) => true,
+            BDD(or) | ComplBDD(or) => {
+                let low = or.low();
+                let high = or.high();
 
                 (low != high) && low.is_compressed() && high.is_compressed()
             }
-            Reg(_) | Compl(_) => {
+            Reg(or) | Compl(or) => {
                 let mut visited_sdds: HashSet<SddPtr> = HashSet::new();
-                for and in self.node_iter() {
+                for and in or.nodes.iter() {
                     if visited_sdds.contains(&and.sub) {
                         return false;
                     }
                     visited_sdds.insert(and.sub);
                 }
 
-                self.node_iter().all(|and| and.prime.is_compressed())
+                or.nodes.iter().all(|and| and.prime.is_compressed())
             }
         }
     }
 
     pub fn is_trimmed(&self) -> bool {
         match &self {
-            PtrTrue => true,
-            PtrFalse => true,
-            Var(_, _) => true,
-            BDD(_) => {
+            PtrTrue | PtrFalse | Var(_, _) => true,
+            BDD(bdd) | ComplBDD(bdd) => {
                 // core assumption: in binary SDD, the prime is always x and not x
                 // so, we only check low/high being flipped versions
-                if !self.low().is_const() || !self.high().is_const() {
-                    return self.low().is_trimmed() && self.high().is_trimmed();
+                if !bdd.low().is_const() || !bdd.high().is_const() {
+                    return bdd.low().is_trimmed() && bdd.high().is_trimmed();
                 }
 
                 // both low and high are constants; need to check for (a,T) and (~a, F) case
-                self.low() != self.high()
+                bdd.low() != bdd.high()
             }
-            ComplBDD(_) => self.neg().is_trimmed(),
-            Reg(_) | Compl(_) => {
+            Reg(or) | Compl(or) => {
                 // this next part is an O(n^2) (i.e., pairwise) comparison of each SDD
                 // and an arbitrary prime. we are looking for untrimmed decomposition pairs of the form (a, T) and (~a, F)
                 let mut visited_primes: HashSet<SddPtr> = HashSet::new();
 
-                for and in self.node_iter() {
+                for and in or.nodes.iter() {
                     let prime = and.prime;
 
                     // decomposition of the form (T, a)
@@ -372,7 +298,7 @@ impl<'a> SddPtr<'a> {
                     visited_primes.insert(prime.neg());
                 }
 
-                self.node_iter().all(|s| s.prime.is_trimmed())
+                or.nodes.iter().all(|s| s.prime.is_trimmed())
             }
         }
     }
