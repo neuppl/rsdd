@@ -68,7 +68,7 @@ pub struct CnfHasher {
 }
 
 impl CnfHasher {
-    pub fn new(clauses: &Vec<Vec<Literal>>, num_vars: usize) -> CnfHasher {
+    pub fn new(clauses: &[Vec<Literal>], num_vars: usize) -> CnfHasher {
         let mut primes = primal::Primes::all();
         let weighted_cnf = clauses
             .iter()
@@ -277,7 +277,7 @@ impl Cnf {
                 let mut clause = clause.clone();
                 clause.sort_by_key(|a| a.get_label().value());
                 clause.dedup();
-                return clause;
+                clause
             })
             .collect();
 
@@ -499,7 +499,6 @@ impl Cnf {
 
     pub fn linear_order(&self) -> VarOrder {
         let v = (0..(self.num_vars))
-            .into_iter()
             .map(|x| VarLabel::new(x as u64))
             .collect();
         VarOrder::new(v)

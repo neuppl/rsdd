@@ -40,7 +40,13 @@ impl SDDSerializer {
             SddPtr::PtrFalse | SddPtr::Var(_, false) | SddPtr::ComplBDD(_) | SddPtr::Compl(_)
         );
 
-        if let Some(index) = table.get(&sdd.to_reg()) {
+        let reg = match sdd {
+            SddPtr::ComplBDD(bdd) => SddPtr::BDD(bdd),
+            SddPtr::Compl(or) => SddPtr::Reg(or),
+            _ => sdd,
+        };
+
+        if let Some(index) = table.get(&reg) {
             return SerSDDPtr::Ptr {
                 index: *index,
                 compl,

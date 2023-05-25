@@ -24,10 +24,6 @@ petgraph = "0.6.2"
 rsgm = { git = "https://github.com/neuppl/rsgm" }
 rand_chacha = "0.3.1"
 
-# binary-only features can be optional
-clap = { version = "4.2.1", features = ["derive"], optional = true }
-serde_json = { version = "1.0.81", optional = true }
-
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 getrandom = { version = "0.2", features = ["js"] }
 serde_json = { version = "1.0.81" }
@@ -38,10 +34,8 @@ wasm-bindgen = { version = "0.2.84" }
 # test-only
 [dev-dependencies]
 time-test = "0.2.2"
-
-[features]
-build-binary = ["clap", "serde_json"]
-
+clap = { version = "4.2.1", features = ["derive"] }
+serde_json = { version = "1.0.81" }
 
 [lib]
 name = "rsdd"
@@ -59,22 +53,18 @@ incremental = false
 codegen-units = 16
 rpath = false
 
-[[bin]]
+[[example]]
 name = "one_shot_benchmark"
-path = "bin/one_shot_benchmark.rs"
-required-features = ["build-binary"]
+path = "examples/one_shot_benchmark.rs"
 
-[[bin]]
+[[example]]
 name = "bayesian_network_compiler"
-path = "bin/bayesian_network_compiler.rs"
-required-features = ["build-binary"]
+path = "examples/bayesian_network_compiler.rs"
 
-# [[bin]]
-# name = "semantic_hash_experiment"
-# path = "bin/semantic_hash_experiment.rs"
-# required-features = ["build-binary"]
+[[example]]
+name = "semantic_hash_experiment"
+path = "examples/semantic_hash_experiment.rs"
 
-[[bin]]
+[[example]]
 name = "marginal_map_experiment"
-path = "bin/marginal_map_experiment.rs"
-required-features = ["build-binary"]
+path = "examples/marginal_map_experiment.rs"

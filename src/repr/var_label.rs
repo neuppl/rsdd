@@ -105,10 +105,7 @@ impl Serialize for VarSet {
 
 impl Display for VarSet {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_fmt(format_args!(
-            "{:?}",
-            self.b.iter().map(|v| v).collect::<Vec<usize>>()
-        ))
+        f.write_fmt(format_args!("{:?}", self.b.iter().collect::<Vec<usize>>()))
     }
 }
 
@@ -159,12 +156,12 @@ impl VarSet {
         self.b.intersection(&other.b)
     }
 
-    pub fn remove(&mut self, v: VarLabel) -> () {
+    pub fn remove(&mut self, v: VarLabel) {
         self.b.remove(v.value_usize());
     }
 
     pub fn difference<'a>(&'a self, other: &'a VarSet) -> impl Iterator<Item = VarLabel> + 'a {
-        self.b.difference(&other.b).map(|x| VarLabel::new_usize(x))
+        self.b.difference(&other.b).map(VarLabel::new_usize)
     }
 
     pub fn intersect_varset<'a>(&'a self, other: &'a VarSet) -> VarSet {

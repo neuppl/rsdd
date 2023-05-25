@@ -258,3 +258,7 @@
 
 //     run_canonicalizer_experiment(cnf, vtree, args.verbose);
 // }
+
+fn main() {
+    println!("not implemented!")
+}
