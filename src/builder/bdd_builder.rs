@@ -84,7 +84,7 @@ impl BddManagerStats {
     }
 }
 
-pub trait BddBuilder<'a>: BottomUpBuilder<'a, Ptr = BddPtr<'a>> {
+pub trait BddBuilder<'a>: BottomUpBuilder<'a, BddPtr<'a>> {
     fn eq_bdd(&self, a: BddPtr, b: BddPtr) -> bool;
 
     fn get_or_insert(&'a self, bdd: BddNode<'a>) -> BddPtr<'a>;
@@ -114,22 +114,22 @@ pub trait BddBuilder<'a>: BottomUpBuilder<'a, Ptr = BddPtr<'a>> {
     }
 }
 
-impl<'a, T> BottomUpBuilder<'a> for T
+impl<'a, T> BottomUpBuilder<'a, BddPtr<'a>> for T
 where
     T: BddBuilder<'a>,
 {
-    type Ptr = BddPtr<'a>;
+    // type Ptr = BddPtr<'a>;
 
-    fn true_ptr(&self) -> Self::Ptr {
+    fn true_ptr(&self) -> BddPtr<'a> {
         BddPtr::true_ptr()
     }
 
-    fn false_ptr(&self) -> Self::Ptr {
+    fn false_ptr(&self) -> BddPtr<'a> {
         BddPtr::false_ptr()
     }
 
     /// Get a pointer to the variable with label `lbl` and polarity `polarity`
-    fn var(&'a self, label: VarLabel, polarity: bool) -> Self::Ptr {
+    fn var(&'a self, label: VarLabel, polarity: bool) -> BddPtr<'a> {
         let bdd = BddNode::new(label, BddPtr::false_ptr(), BddPtr::true_ptr());
         let r = self.get_or_insert(bdd);
         if polarity {
@@ -153,30 +153,30 @@ where
     /// let a_and_not_a = man.and(a, a.neg());
     /// assert!(a_and_not_a.is_false());
     /// ```
-    fn and(&'a self, f: Self::Ptr, g: Self::Ptr) -> Self::Ptr {
+    fn and(&'a self, f: BddPtr<'a>, g: BddPtr<'a>) -> BddPtr<'a> {
         self.ite(f, g, BddPtr::false_ptr())
     }
 
-    fn negate(&'a self, f: Self::Ptr) -> Self::Ptr {
+    fn negate(&'a self, f: BddPtr<'a>) -> BddPtr<'a> {
         f.neg()
     }
 
     /// if f then g else h
-    fn ite(&'a self, f: Self::Ptr, g: Self::Ptr, h: Self::Ptr) -> Self::Ptr {
+    fn ite(&'a self, f: BddPtr<'a>, g: BddPtr<'a>, h: BddPtr<'a>) -> BddPtr<'a> {
         self.ite_helper(f, g, h)
     }
 
     /// Compute the Boolean function `f iff g`
-    fn iff(&'a self, f: Self::Ptr, g: Self::Ptr) -> Self::Ptr {
+    fn iff(&'a self, f: BddPtr<'a>, g: BddPtr<'a>) -> BddPtr<'a> {
         self.ite(f, g, g.neg())
     }
 
-    fn xor(&'a self, f: Self::Ptr, g: Self::Ptr) -> Self::Ptr {
+    fn xor(&'a self, f: BddPtr<'a>, g: BddPtr<'a>) -> BddPtr<'a> {
         self.ite(f, g.neg(), g)
     }
 
     /// Existentially quantifies out the variable `lbl` from `f`
-    fn exists(&'a self, bdd: Self::Ptr, lbl: VarLabel) -> Self::Ptr {
+    fn exists(&'a self, bdd: BddPtr<'a>, lbl: VarLabel) -> BddPtr<'a> {
         // TODO this can be optimized by specializing it
         let v1 = self.condition(bdd, lbl, true);
         let v2 = self.condition(bdd, lbl, false);
@@ -184,14 +184,14 @@ where
     }
 
     /// Compute the Boolean function `f | var = value`
-    fn condition(&'a self, bdd: Self::Ptr, lbl: VarLabel, value: bool) -> Self::Ptr {
+    fn condition(&'a self, bdd: BddPtr<'a>, lbl: VarLabel, value: bool) -> BddPtr<'a> {
         let r = self.cond_helper(bdd, lbl, value);
         bdd.clear_scratch();
         r
     }
 
     /// Compose `g` into `f` by substituting for `lbl`
-    fn compose(&'a self, f: Self::Ptr, lbl: VarLabel, g: Self::Ptr) -> Self::Ptr {
+    fn compose(&'a self, f: BddPtr<'a>, lbl: VarLabel, g: BddPtr<'a>) -> BddPtr<'a> {
         // TODO this can be optimized with a specialized implementation to make
         // it a single traversal
         let var = self.var(lbl, true);

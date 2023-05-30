@@ -6,7 +6,7 @@ use crate::rsdd::builder::BottomUpBuilder;
 use clap::Parser;
 use rsdd::builder::cache::all_app::AllTable;
 use rsdd::builder::decision_nnf_builder::DecisionNNFBuilder;
-use rsdd::builder::sdd_builder;
+use rsdd::builder::sdd_builder::{self, SddBuilder};
 use rsdd::repr::ddnnf::DDNNFPtr;
 use rsdd::repr::dtree::DTree;
 use rsdd::repr::robdd::BddPtr;

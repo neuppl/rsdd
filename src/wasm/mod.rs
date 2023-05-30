@@ -1,6 +1,6 @@
 use crate::builder::bdd_builder::{BddManager, BddPtr};
 use crate::builder::cache::lru_app::BddApplyTable;
-use crate::builder::sdd_builder::SddManager;
+use crate::builder::sdd_builder::{SddBuilder, SddManager};
 use crate::repr::dtree::DTree;
 use crate::repr::robdd::VarOrder;
 use crate::repr::{cnf::Cnf, var_label::VarLabel, vtree::VTree};
