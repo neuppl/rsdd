@@ -1,6 +1,6 @@
 use crate::builder::bdd_builder::{BddManager, BddPtr};
 use crate::builder::cache::lru_app::BddApplyTable;
-use crate::builder::sdd_builder::SddManager;
+use crate::builder::sdd_builder::{CompressionSddManager, SddBuilder};
 use crate::repr::dtree::DTree;
 use crate::repr::robdd::VarOrder;
 use crate::repr::{cnf::Cnf, var_label::VarLabel, vtree::VTree};
@@ -67,7 +67,7 @@ pub fn sdd(cnf_input: String, vtree_type_input: JsValue) -> Result<JsValue, JsVa
 
     let vtree = build_vtree(&cnf, vtree_type);
 
-    let compr_mgr = SddManager::new(vtree);
+    let compr_mgr = CompressionSddManager::new(vtree);
     let sdd = compr_mgr.from_cnf(&cnf);
 
     let serialized = ser_sdd::SDDSerializer::from_sdd(sdd);

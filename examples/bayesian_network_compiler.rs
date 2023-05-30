@@ -2,10 +2,11 @@
 extern crate rsdd;
 extern crate rsgm;
 
+use crate::rsdd::builder::BottomUpBuilder;
 use clap::Parser;
 use rsdd::builder::cache::all_app::AllTable;
 use rsdd::builder::decision_nnf_builder::DecisionNNFBuilder;
-use rsdd::builder::sdd_builder;
+use rsdd::builder::sdd_builder::{self, SddBuilder};
 use rsdd::repr::ddnnf::DDNNFPtr;
 use rsdd::repr::dtree::DTree;
 use rsdd::repr::robdd::BddPtr;
@@ -286,7 +287,7 @@ fn compile_sdd_cnf(network: BayesianNetwork) {
     println!("Dtree built\nNumber of variables: {}\n\tNumber of clauses: {}\n\tWidth: {}\n\tElapsed dtree time: {:?}",
         bn.cnf.num_vars(), bn.cnf.clauses().len(), dtree.cutwidth(), duration);
 
-    let compiler = sdd_builder::SddManager::new(VTree::from_dtree(&dtree).unwrap());
+    let compiler = sdd_builder::CompressionSddManager::new(VTree::from_dtree(&dtree).unwrap());
 
     println!("Compiling");
     let start = Instant::now();

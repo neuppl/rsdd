@@ -13,6 +13,7 @@ use crate::{
 use super::cache::all_app::AllTable;
 use super::cache::ite::Ite;
 use super::cache::lru_app::BddApplyTable;
+use super::BottomUpBuilder;
 use crate::backing_store::*;
 use std::cell::RefCell;
 use std::cmp::Ordering;
@@ -83,11 +84,199 @@ impl BddManagerStats {
     }
 }
 
+pub trait BddBuilder<'a>: BottomUpBuilder<'a, BddPtr<'a>> {
+    fn eq_bdd(&self, a: BddPtr, b: BddPtr) -> bool;
+
+    fn get_or_insert(&'a self, bdd: BddNode<'a>) -> BddPtr<'a>;
+
+    // implementation-dependent helper functions
+
+    fn ite_helper(&'a self, f: BddPtr<'a>, g: BddPtr<'a>, h: BddPtr<'a>) -> BddPtr<'a>;
+    fn cond_helper(&'a self, bdd: BddPtr<'a>, lbl: VarLabel, value: bool) -> BddPtr<'a>;
+
+    // convenience utilities
+    /// disjoins a list of BDDs
+    fn or_lst(&'a self, f: &[BddPtr<'a>]) -> BddPtr<'a> {
+        let mut cur_bdd = BddPtr::false_ptr();
+        for &itm in f {
+            cur_bdd = self.or(cur_bdd, itm);
+        }
+        cur_bdd
+    }
+
+    /// disjoins a list of BDDs
+    fn and_lst(&'a self, f: &[BddPtr<'a>]) -> BddPtr<'a> {
+        let mut cur_bdd = BddPtr::true_ptr();
+        for &itm in f {
+            cur_bdd = self.and(cur_bdd, itm);
+        }
+        cur_bdd
+    }
+}
+
+impl<'a, T> BottomUpBuilder<'a, BddPtr<'a>> for T
+where
+    T: BddBuilder<'a>,
+{
+    fn true_ptr(&self) -> BddPtr<'a> {
+        BddPtr::true_ptr()
+    }
+
+    fn false_ptr(&self) -> BddPtr<'a> {
+        BddPtr::false_ptr()
+    }
+
+    /// Get a pointer to the variable with label `lbl` and polarity `polarity`
+    fn var(&'a self, label: VarLabel, polarity: bool) -> BddPtr<'a> {
+        let bdd = BddNode::new(label, BddPtr::false_ptr(), BddPtr::true_ptr());
+        let r = self.get_or_insert(bdd);
+        if polarity {
+            r
+        } else {
+            r.neg()
+        }
+    }
+
+    /// Produce a new BDD that is the result of conjoining `f` and `g`
+    /// ```
+    /// # use rsdd::builder::bdd_builder::BddManager;
+    /// # use rsdd::builder::BottomUpBuilder;
+    /// # use rsdd::repr::var_label::VarLabel;
+    /// # use crate::rsdd::repr::ddnnf::DDNNFPtr;
+    /// # use rsdd::builder::cache::all_app::AllTable;
+    /// # use rsdd::repr::robdd::BddPtr;
+    /// let mut man = BddManager::<AllTable<BddPtr>>::new_default_order(10);
+    /// let lbl_a = man.new_label();
+    /// let a = man.var(lbl_a, true);
+    /// let a_and_not_a = man.and(a, a.neg());
+    /// assert!(a_and_not_a.is_false());
+    /// ```
+    fn and(&'a self, f: BddPtr<'a>, g: BddPtr<'a>) -> BddPtr<'a> {
+        self.ite(f, g, BddPtr::false_ptr())
+    }
+
+    fn negate(&'a self, f: BddPtr<'a>) -> BddPtr<'a> {
+        f.neg()
+    }
+
+    /// if f then g else h
+    fn ite(&'a self, f: BddPtr<'a>, g: BddPtr<'a>, h: BddPtr<'a>) -> BddPtr<'a> {
+        self.ite_helper(f, g, h)
+    }
+
+    /// Compute the Boolean function `f iff g`
+    fn iff(&'a self, f: BddPtr<'a>, g: BddPtr<'a>) -> BddPtr<'a> {
+        self.ite(f, g, g.neg())
+    }
+
+    fn xor(&'a self, f: BddPtr<'a>, g: BddPtr<'a>) -> BddPtr<'a> {
+        self.ite(f, g.neg(), g)
+    }
+
+    /// Existentially quantifies out the variable `lbl` from `f`
+    fn exists(&'a self, bdd: BddPtr<'a>, lbl: VarLabel) -> BddPtr<'a> {
+        // TODO this can be optimized by specializing it
+        let v1 = self.condition(bdd, lbl, true);
+        let v2 = self.condition(bdd, lbl, false);
+        self.or(v1, v2)
+    }
+
+    /// Compute the Boolean function `f | var = value`
+    fn condition(&'a self, bdd: BddPtr<'a>, lbl: VarLabel, value: bool) -> BddPtr<'a> {
+        let r = self.cond_helper(bdd, lbl, value);
+        bdd.clear_scratch();
+        r
+    }
+
+    /// Compose `g` into `f` by substituting for `lbl`
+    fn compose(&'a self, f: BddPtr<'a>, lbl: VarLabel, g: BddPtr<'a>) -> BddPtr<'a> {
+        // TODO this can be optimized with a specialized implementation to make
+        // it a single traversal
+        let var = self.var(lbl, true);
+        let iff = self.iff(var, g);
+        let a = self.and(iff, f);
+
+        self.exists(a, lbl)
+    }
+}
+
 pub struct BddManager<'a, T: LruTable<'a, BddPtr<'a>>> {
     compute_table: RefCell<BackedRobinhoodTable<'a, BddNode<'a>>>,
     apply_table: RefCell<T>,
     stats: RefCell<BddManagerStats>,
     order: RefCell<VarOrder>,
+}
+
+impl<'a, T: LruTable<'a, BddPtr<'a>>> BddBuilder<'a> for BddManager<'a, T> {
+    fn eq_bdd(&self, a: BddPtr, b: BddPtr) -> bool {
+        a == b
+    }
+
+    /// Normalizes and fetches a node from the store
+    fn get_or_insert(&'a self, bdd: BddNode<'a>) -> BddPtr<'a> {
+        unsafe {
+            // TODO: Make this safe if possible
+            let tbl = &mut *self.compute_table.as_ptr();
+            if bdd.high.is_neg() || bdd.high.is_false() {
+                let bdd: BddNode<'a> = BddNode::new(bdd.var, bdd.low.neg(), bdd.high.neg());
+                let r: &'a BddNode<'a> = tbl.get_or_insert(bdd);
+                BddPtr::new_compl(r)
+            } else {
+                let bdd = BddNode::new(bdd.var, bdd.low, bdd.high);
+                BddPtr::new_reg(tbl.get_or_insert(bdd))
+            }
+        }
+    }
+
+    fn ite_helper(&'a self, f: BddPtr<'a>, g: BddPtr<'a>, h: BddPtr<'a>) -> BddPtr<'a> {
+        self.stats.borrow_mut().num_recursive_calls += 1;
+        let o = |a: BddPtr, b: BddPtr| {
+            if a.is_const() {
+                return true;
+            }
+            if b.is_const() {
+                return false;
+            }
+            return self.order.borrow().lt(a.var(), b.var());
+        };
+
+        let ite = Ite::new(o, f, g, h);
+
+        if let Ite::IteConst(f) = ite {
+            return f;
+        }
+
+        let hash = self.apply_table.borrow().hash(&ite);
+        if let Some(v) = self.apply_table.borrow().get(ite, hash) {
+            return v;
+        }
+
+        // ok the work!
+        // find the first essential variable for f, g, or h
+        let lbl = self.order.borrow().first_essential(f, g, h);
+        let fx = self.condition_essential(f, lbl, true);
+        let gx = self.condition_essential(g, lbl, true);
+        let hx = self.condition_essential(h, lbl, true);
+        let fxn = self.condition_essential(f, lbl, false);
+        let gxn = self.condition_essential(g, lbl, false);
+        let hxn = self.condition_essential(h, lbl, false);
+        let t = self.ite(fx, gx, hx);
+        let f = self.ite(fxn, gxn, hxn);
+
+        if t == f {
+            return t;
+        };
+
+        // now we have a new BDD
+        let node = BddNode::new(lbl, f, t);
+        let r = self.get_or_insert(node);
+        self.apply_table.borrow_mut().insert(ite, r, hash);
+        r
+    }
+
+    fn cond_helper(&'a self, bdd: BddPtr<'a>, lbl: VarLabel, value: bool) -> BddPtr<'a> {
+        self.cond_with_alloc(bdd, lbl, value, &mut Vec::new())
+    }
 }
 
 impl<'a, T: LruTable<'a, BddPtr<'a>>> BddManager<'a, T> {
@@ -115,7 +304,7 @@ impl<'a, T: LruTable<'a, BddPtr<'a>>> BddManager<'a, T> {
     /// Returns the number of variables in the manager
     #[inline]
     pub fn num_vars(&self) -> usize {
-        return self.get_order().num_vars();
+        self.order.borrow().num_vars()
     }
 
     /// Generate a new variable label which was not in the original order. Places the
@@ -155,44 +344,6 @@ impl<'a, T: LruTable<'a, BddPtr<'a>>> BddManager<'a, T> {
         unsafe { &*self.order.as_ptr() }
     }
 
-    /// Get a pointer to the variable with label `lbl` and polarity `polarity`
-    pub fn var(&'a self, lbl: VarLabel, polarity: bool) -> BddPtr<'a> {
-        let bdd = BddNode::new(lbl, BddPtr::false_ptr(), BddPtr::true_ptr());
-        let r = self.get_or_insert(bdd);
-        if polarity {
-            r
-        } else {
-            r.neg()
-        }
-    }
-
-    /// Normalizes and fetches a node from the store
-    fn get_or_insert(&'a self, bdd: BddNode<'a>) -> BddPtr<'a> {
-        unsafe {
-            // TODO: Make this safe if possible
-            let tbl = &mut *self.compute_table.as_ptr();
-            if bdd.high.is_neg() || bdd.high.is_false() {
-                let bdd: BddNode<'a> = BddNode::new(bdd.var, bdd.low.neg(), bdd.high.neg());
-                let r: &'a BddNode<'a> = tbl.get_or_insert(bdd);
-                BddPtr::new_compl(r)
-            } else {
-                let bdd = BddNode::new(bdd.var, bdd.low, bdd.high);
-                BddPtr::new_reg(tbl.get_or_insert(bdd))
-            }
-        }
-    }
-
-    /// Compose `g` into `f` by substituting for `lbl`
-    pub fn compose(&'a self, f: BddPtr<'a>, lbl: VarLabel, g: BddPtr<'a>) -> BddPtr<'a> {
-        // TODO this can be optimized with a specialized implementation to make
-        // it a single traversal
-        let var = self.var(lbl, true);
-        let iff = self.iff(var, g);
-        let a = self.and(iff, f);
-
-        self.exists(a, lbl)
-    }
-
     // condition a BDD *only* if the top variable is `v`; used in `ite`
     fn condition_essential(&'a self, f: BddPtr<'a>, lbl: VarLabel, v: bool) -> BddPtr<'a> {
         if f.is_const() || f.var() != lbl {
@@ -206,107 +357,7 @@ impl<'a, T: LruTable<'a, BddPtr<'a>>> BddManager<'a, T> {
         }
     }
 
-    fn ite_helper(&'a self, f: BddPtr<'a>, g: BddPtr<'a>, h: BddPtr<'a>) -> BddPtr<'a> {
-        self.stats.borrow_mut().num_recursive_calls += 1;
-        let o = |a: BddPtr, b: BddPtr| {
-            if a.is_const() {
-                return true;
-            }
-            if b.is_const() {
-                return false;
-            }
-            return self.get_order().lt(a.var(), b.var());
-        };
-
-        let ite = Ite::new(o, f, g, h);
-
-        if let Ite::IteConst(f) = ite {
-            return f;
-        }
-
-        let hash = self.apply_table.borrow().hash(&ite);
-        if let Some(v) = self.apply_table.borrow().get(ite, hash) {
-            return v;
-        }
-
-        // ok the work!
-        // find the first essential variable for f, g, or h
-        let lbl = self.get_order().first_essential(f, g, h);
-        let fx = self.condition_essential(f, lbl, true);
-        let gx = self.condition_essential(g, lbl, true);
-        let hx = self.condition_essential(h, lbl, true);
-        let fxn = self.condition_essential(f, lbl, false);
-        let gxn = self.condition_essential(g, lbl, false);
-        let hxn = self.condition_essential(h, lbl, false);
-        let t = self.ite(fx, gx, hx);
-        let f = self.ite(fxn, gxn, hxn);
-
-        if t == f {
-            return t;
-        };
-
-        // now we have a new BDD
-        let node = BddNode::new(lbl, f, t);
-        let r = self.get_or_insert(node);
-        self.apply_table.borrow_mut().insert(ite, r, hash);
-        r
-    }
-
-    /// if f then g else h
-    pub fn ite(&'a self, f: BddPtr<'a>, g: BddPtr<'a>, h: BddPtr<'a>) -> BddPtr<'a> {
-        self.ite_helper(f, g, h)
-    }
-
-    /// Produce a new BDD that is the result of conjoining `f` and `g`
-    /// ```
-    /// # use rsdd::builder::bdd_builder::BddManager;
-    /// # use rsdd::repr::var_label::VarLabel;
-    /// # use crate::rsdd::repr::ddnnf::DDNNFPtr;
-    /// # use rsdd::builder::cache::all_app::AllTable;
-    /// # use rsdd::repr::robdd::BddPtr;
-    /// let mut man = BddManager::<AllTable<BddPtr>>::new_default_order(10);
-    /// let lbl_a = man.new_label();
-    /// let a = man.var(lbl_a, true);
-    /// let a_and_not_a = man.and(a, a.neg());
-    /// assert!(a_and_not_a.is_false());
-    /// ```
-    pub fn and(&'a self, f: BddPtr<'a>, g: BddPtr<'a>) -> BddPtr<'a> {
-        self.ite(f, g, BddPtr::false_ptr())
-    }
-
-    /// Compute the Boolean function `f || g`
-    pub fn or(&'a self, f: BddPtr<'a>, g: BddPtr<'a>) -> BddPtr<'a> {
-        self.and(f.neg(), g.neg()).neg()
-    }
-
-    /// disjoins a list of BDDs
-    pub fn or_lst(&'a self, f: &[BddPtr<'a>]) -> BddPtr<'a> {
-        let mut cur_bdd = BddPtr::false_ptr();
-        for &itm in f {
-            cur_bdd = self.or(cur_bdd, itm);
-        }
-        cur_bdd
-    }
-
-    /// disjoins a list of BDDs
-    pub fn and_lst(&'a self, f: &[BddPtr<'a>]) -> BddPtr<'a> {
-        let mut cur_bdd = BddPtr::true_ptr();
-        for &itm in f {
-            cur_bdd = self.and(cur_bdd, itm);
-        }
-        cur_bdd
-    }
-
-    /// Compute the Boolean function `f iff g`
-    pub fn iff(&'a self, f: BddPtr<'a>, g: BddPtr<'a>) -> BddPtr<'a> {
-        self.ite(f, g, g.neg())
-    }
-
-    pub fn xor(&'a self, f: BddPtr<'a>, g: BddPtr<'a>) -> BddPtr<'a> {
-        self.ite(f, g.neg(), g)
-    }
-
-    fn cond_helper(
+    fn cond_with_alloc(
         &'a self,
         bdd: BddPtr<'a>,
         lbl: VarLabel,
@@ -314,7 +365,7 @@ impl<'a, T: LruTable<'a, BddPtr<'a>>> BddManager<'a, T> {
         alloc: &mut Vec<BddPtr<'a>>,
     ) -> BddPtr<'a> {
         self.stats.borrow_mut().num_recursive_calls += 1;
-        if bdd.is_const() || self.get_order().lt(lbl, bdd.var()) {
+        if bdd.is_const() || self.order.borrow().lt(lbl, bdd.var()) {
             // we passed the variable in the order, we will never find it
             bdd
         } else if bdd.var() == lbl {
@@ -338,8 +389,8 @@ impl<'a, T: LruTable<'a, BddPtr<'a>>> BddManager<'a, T> {
             };
 
             // recurse on the children
-            let l = self.cond_helper(bdd.low_raw(), lbl, value, alloc);
-            let h = self.cond_helper(bdd.high_raw(), lbl, value, alloc);
+            let l = self.cond_with_alloc(bdd.low_raw(), lbl, value, alloc);
+            let h = self.cond_with_alloc(bdd.high_raw(), lbl, value, alloc);
 
             if l == h {
                 // reduce the BDD -- two children identical
@@ -375,13 +426,6 @@ impl<'a, T: LruTable<'a, BddPtr<'a>>> BddManager<'a, T> {
         }
     }
 
-    /// Compute the Boolean function `f | var = value`
-    pub fn condition(&'a self, bdd: BddPtr<'a>, lbl: VarLabel, value: bool) -> BddPtr<'a> {
-        let r = self.cond_helper(bdd, lbl, value, &mut Vec::new());
-        bdd.clear_scratch();
-        r
-    }
-
     fn cond_model_h(&'a self, bdd: BddPtr<'a>, m: &PartialModel) -> BddPtr<'a> {
         // TODO: optimize this
         let mut bdd = bdd;
@@ -400,20 +444,6 @@ impl<'a, T: LruTable<'a, BddPtr<'a>>> BddManager<'a, T> {
         let r = self.cond_model_h(bdd, m);
         bdd.clear_scratch();
         r
-    }
-
-    /// Existentially quantifies out the variable `lbl` from `f`
-    pub fn exists(&'a self, bdd: BddPtr<'a>, lbl: VarLabel) -> BddPtr<'a> {
-        // TODO this can be optimized by specializing it
-        let v1 = self.condition(bdd, lbl, true);
-        let v2 = self.condition(bdd, lbl, false);
-        self.or(v1, v2)
-    }
-
-    /// Returns true if `a` == `b`
-    pub fn eq_bdd(&self, a: BddPtr, b: BddPtr) -> bool {
-        // the magic of BDDs!
-        a == b
     }
 
     pub fn from_cnf_with_assignments(
@@ -473,7 +503,7 @@ impl<'a, T: LruTable<'a, BddPtr<'a>>> BddManager<'a, T> {
 
         // sort the clauses based on a best-effort bottom-up ordering of clauses
         let mut cnf_sorted = cnf.clauses().to_vec();
-        let order = self.get_order();
+        let order = self.order.borrow();
         cnf_sorted.sort_by(|c1, c2| {
             // order the clause with the first-most variable last
             let fst1 = c1
@@ -623,13 +653,14 @@ mod tests {
 
     use std::borrow::Borrow;
 
+    use crate::builder::BottomUpBuilder;
     use crate::repr::wmc::WmcParams;
     use crate::util::semiring::{RealSemiring, Semiring};
     use crate::{builder::cache::all_app::AllTable, repr::ddnnf::DDNNFPtr};
     use maplit::*;
 
     use crate::{
-        builder::bdd_builder::BddManager,
+        builder::bdd_builder::{BddBuilder, BddManager},
         repr::{cnf::Cnf, robdd::BddPtr, var_label::VarLabel},
     };
 

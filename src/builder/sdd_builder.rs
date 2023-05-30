@@ -4,10 +4,14 @@
 use std::cell::RefCell;
 use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
+use std::hash::{Hash, Hasher};
+
+use rustc_hash::FxHasher;
 
 use super::cache::all_app::AllTable;
 use super::cache::ite::Ite;
 use super::cache::LruTable;
+pub use super::BottomUpBuilder;
 
 use crate::backing_store::bump_table::BackedRobinhoodTable;
 use crate::backing_store::UniqueTable;
@@ -17,120 +21,40 @@ use crate::repr::sdd::binary_sdd::BinarySDD;
 use crate::repr::sdd::sdd_or::{SddAnd, SddOr};
 use crate::repr::sdd::SddPtr;
 use crate::repr::vtree::{VTree, VTreeIndex, VTreeManager};
+use crate::repr::wmc::WmcParams;
+use crate::util::semiring::FiniteField;
 use crate::{repr::cnf::Cnf, repr::logical_expr::LogicalExpr, repr::var_label::VarLabel};
 
-#[derive(Debug, Clone)]
-pub struct SddStats {
-    /// total number of recursive calls
-    pub num_rec: usize,
-    /// total number of calls to compress
-    pub num_compr: usize,
-    /// total number of new SddAnds generated in compress
-    pub num_compr_and: usize,
-    /// total number of gets/inserts generated in compress
-    pub num_get_or_insert: usize,
-    /// app cache hits
-    pub num_app_cache_hits: usize,
-}
+pub trait SddBuilder<'a>: BottomUpBuilder<'a, SddPtr<'a>> {
+    // internal data structures
+    fn get_vtree_manager(&self) -> &VTreeManager;
 
-impl SddStats {
-    pub fn new() -> SddStats {
-        SddStats {
-            num_rec: 0,
-            num_compr: 0,
-            num_compr_and: 0,
-            num_get_or_insert: 0,
-            num_app_cache_hits: 0,
-        }
-    }
-}
+    fn app_cache_get(&self, and: &SddAnd<'a>) -> Option<SddPtr<'a>>;
+    fn app_cache_insert(&self, and: SddAnd<'a>, ptr: SddPtr<'a>);
 
-impl Default for SddStats {
-    fn default() -> Self {
-        Self::new()
-    }
-}
+    fn ite_cache_hash(&self, ite: &Ite<SddPtr>) -> u64;
+    fn ite_cache_get(&self, ite: Ite<SddPtr<'a>>, hash: u64) -> Option<SddPtr>;
+    fn ite_cache_insert(&self, ite: Ite<SddPtr<'a>>, res: SddPtr<'a>, hash: u64);
 
-pub struct SddManager<'a> {
-    vtree: VTreeManager,
-    stats: SddStats,
-    should_compress: bool,
-    // tables
-    bdd_tbl: RefCell<BackedRobinhoodTable<'a, BinarySDD<'a>>>,
-    sdd_tbl: RefCell<BackedRobinhoodTable<'a, SddOr<'a>>>,
-    // caches
-    ite_cache: RefCell<AllTable<SddPtr<'a>>>,
-    app_cache: RefCell<HashMap<SddAnd<'a>, SddPtr<'a>>>,
-}
+    fn get_or_insert_bdd(&'a self, bdd: BinarySDD<'a>) -> SddPtr<'a>;
+    fn get_or_insert_sdd(&'a self, or: SddOr<'a>) -> SddPtr<'a>;
+    fn node_iter(&self) -> Vec<SddPtr>;
 
-impl<'a> SddManager<'a> {
-    pub fn new(vtree: VTree) -> SddManager<'a> {
-        let vtree_man = VTreeManager::new(vtree);
-        SddManager {
-            stats: SddStats::new(),
-            ite_cache: RefCell::new(AllTable::new()),
-            app_cache: RefCell::new(HashMap::new()),
-            bdd_tbl: RefCell::new(BackedRobinhoodTable::new()),
-            sdd_tbl: RefCell::new(BackedRobinhoodTable::new()),
-            vtree: vtree_man,
-            should_compress: true,
-        }
+    // equality
+    fn sdd_eq(&'a self, a: SddPtr<'a>, b: SddPtr<'a>) -> bool;
+
+    fn is_true(&'a self, a: SddPtr<'a>) -> bool {
+        self.sdd_eq(a, SddPtr::PtrTrue)
     }
 
-    pub fn set_compression(&mut self, b: bool) {
-        self.should_compress = b
+    fn is_false(&'a self, a: SddPtr<'a>) -> bool {
+        self.sdd_eq(a, SddPtr::PtrFalse)
     }
 
-    pub fn get_vtree_root(&self) -> &VTree {
-        self.vtree.vtree_root()
-    }
-
-    pub fn get_vtree_manager(&self) -> &VTreeManager {
-        &self.vtree
-    }
-
-    pub fn num_vars(&self) -> usize {
-        self.vtree.num_vars()
-    }
-
-    /// Canonicalizes the list of (prime, sub) terms in-place
-    /// `node`: a list of (prime, sub) pairs
-    fn compress(&'a self, node: &mut Vec<SddAnd<'a>>) {
-        // self.stats.num_compr += 1;
-        for i in 0..node.len() {
-            // see if we can compress i
-            let mut j = i + 1;
-            while j < node.len() {
-                if self.sdd_eq(node[i].sub(), node[j].sub()) {
-                    // self.stats.num_compr_and += 1;
-                    // compress j into i and remove j from the node list
-                    node[i] = SddAnd::new(self.or(node[i].prime(), node[j].prime()), node[i].sub());
-                    node.swap_remove(j);
-                } else {
-                    j += 1;
-                }
-            }
-        }
-    }
-
-    pub fn get_vtree(&self, ptr: SddPtr) -> &VTree {
-        match ptr {
-            SddPtr::Var(lbl, _) => {
-                let idx = self.vtree.get_varlabel_idx(lbl);
-                self.vtree.get_idx(idx)
-            }
-            SddPtr::Compl(_) | SddPtr::Reg(_) => self.vtree.get_idx(ptr.vtree()),
-            _ => panic!("called vtree on constant"),
-        }
-    }
-
-    pub fn get_vtree_idx(&self, ptr: SddPtr) -> VTreeIndex {
-        match ptr {
-            SddPtr::Var(lbl, _) => self.vtree.get_varlabel_idx(lbl),
-            SddPtr::BDD(_) | SddPtr::ComplBDD(_) | SddPtr::Compl(_) | SddPtr::Reg(_) => ptr.vtree(),
-            _ => panic!("called vtree on constant"),
-        }
-    }
+    // compression & canonicalization
+    fn set_compression(&mut self, b: bool);
+    fn compress(&'a self, node: &mut Vec<SddAnd<'a>>);
+    fn canonicalize(&'a self, node: Vec<SddAnd<'a>>, table: VTreeIndex) -> SddPtr<'a>;
 
     fn unique_or(&'a self, mut node: Vec<SddAnd<'a>>, table: VTreeIndex) -> SddPtr<'a> {
         // check if it is a BDD; if it is, return that
@@ -155,98 +79,45 @@ impl<'a> SddManager<'a> {
             }
         }
 
-        unsafe {
-            let tbl = &mut *self.sdd_tbl.as_ptr();
-
-            node.sort_by_key(|a| a.prime());
-            if node[0].sub().is_neg() || self.is_false(node[0].sub()) || node[0].sub().is_neg_var()
-            {
-                for x in node.iter_mut() {
-                    *x = SddAnd::new(x.prime(), x.sub().neg());
-                }
-                SddPtr::Reg(tbl.get_or_insert(SddOr::new(node, table))).neg()
-            } else {
-                SddPtr::Reg(tbl.get_or_insert(SddOr::new(node, table)))
+        node.sort_by_key(|a| a.prime());
+        if node[0].sub().is_neg() || self.is_false(node[0].sub()) || node[0].sub().is_neg_var() {
+            for x in node.iter_mut() {
+                *x = SddAnd::new(x.prime(), x.sub().neg());
             }
+            self.get_or_insert_sdd(SddOr::new(node, table)).neg()
+        } else {
+            self.get_or_insert_sdd(SddOr::new(node, table))
         }
     }
 
     fn unique_bdd(&'a self, bdd: BinarySDD<'a>) -> SddPtr<'a> {
-        unsafe {
-            let tbl = &mut *self.bdd_tbl.as_ptr();
-            if bdd.high() == bdd.low() {
-                return bdd.high();
-            }
-            if self.is_false(bdd.high()) && self.is_true(bdd.low()) {
-                return SddPtr::Var(bdd.label(), false);
-            }
-            if self.is_true(bdd.high()) && self.is_false(bdd.low()) {
-                return SddPtr::Var(bdd.label(), true);
-            }
-
-            if bdd.high().is_neg() || self.is_false(bdd.high()) || bdd.high().is_neg_var() {
-                let low = bdd.low().neg();
-                let high = bdd.high().neg();
-                let neg_bdd = BinarySDD::new(bdd.label(), low, high, bdd.vtree());
-
-                let unique = tbl.get_or_insert(neg_bdd);
-
-                return SddPtr::BDD(unique).neg();
-            }
-
-            SddPtr::BDD(tbl.get_or_insert(bdd))
+        if bdd.high() == bdd.low() {
+            return bdd.high();
         }
+        if self.is_false(bdd.high()) && self.is_true(bdd.low()) {
+            return SddPtr::Var(bdd.label(), false);
+        }
+        if self.is_true(bdd.high()) && self.is_false(bdd.low()) {
+            return SddPtr::Var(bdd.label(), true);
+        }
+
+        if bdd.high().is_neg() || self.is_false(bdd.high()) || bdd.high().is_neg_var() {
+            let low = bdd.low().neg();
+            let high = bdd.high().neg();
+            let neg_bdd = BinarySDD::new(bdd.label(), low, high, bdd.vtree());
+
+            return self.get_or_insert_bdd(neg_bdd).neg();
+        }
+
+        self.get_or_insert_bdd(bdd)
     }
 
-    #[inline]
-    fn canonicalize_base_case(&'a self, node: &Vec<SddAnd<'a>>) -> Option<SddPtr<'a>> {
-        if node.is_empty() {
-            return Some(SddPtr::true_ptr());
-        }
-        if node.len() == 1 {
-            if self.is_true(node[0].prime()) {
-                return Some(node[0].sub());
-            }
-
-            if self.is_false(node[0].sub()) {
-                return Some(SddPtr::false_ptr());
-            }
-        }
-        if node.len() == 2 {
-            if self.is_true(node[0].sub()) && self.is_false(node[1].sub()) {
-                return Some(node[0].prime());
-            } else if self.is_false(node[0].sub()) && self.is_true(node[1].sub()) {
-                return Some(node[1].prime());
-            }
-        }
-        None
-    }
-
-    /// Returns a canonicalized SDD pointer from a list of (prime, sub) pairs
-    fn canonicalize(&'a self, mut node: Vec<SddAnd<'a>>, table: VTreeIndex) -> SddPtr<'a> {
-        // check for base cases before compression
-        if let Some(sdd) = self.canonicalize_base_case(&node) {
-            return sdd;
-        }
-
-        if self.should_compress {
-            self.compress(&mut node);
-
-            // check for a base case after compression (compression can sometimes
-            // reduce node counts to a base case)
-            if let Some(sdd) = self.canonicalize_base_case(&node) {
-                return sdd;
-            }
-        }
-
-        self.unique_or(node, table)
-    }
-
+    // calc
     /// conjoin two SDDs that are in independent vtrees
     /// a is prime to b
     fn and_indep(&'a self, a: SddPtr<'a>, b: SddPtr<'a>, lca: VTreeIndex) -> SddPtr<'a> {
         // check if this is a right-linear fragment and construct the relevant SDD type
-        if self.vtree.get_idx(lca).is_right_linear() {
+        if self.get_vtree_manager().get_idx(lca).is_right_linear() {
             // a is a right-linear decision for b; construct a binary decision
             let bdd = if a.is_neg_var() {
                 BinarySDD::new(a.get_var_label(), b, SddPtr::false_ptr(), lca)
@@ -378,7 +249,7 @@ impl<'a> SddManager<'a> {
         // check if a and b are both binary SDDs; if so, we apply BDD conjunction here
 
         if let SddPtr::BDD(or) | SddPtr::ComplBDD(or) = a {
-            if self.vtree.get_idx(lca).is_right_linear() {
+            if self.get_vtree_manager().get_idx(lca).is_right_linear() {
                 let l = self.and(a.low(), b.low());
                 let h = self.and(a.high(), b.high());
                 return self.unique_bdd(BinarySDD::new(or.label(), l, h, lca));
@@ -443,7 +314,243 @@ impl<'a> SddManager<'a> {
         self.canonicalize(r, lca)
     }
 
-    pub fn and(&'a self, a: SddPtr<'a>, b: SddPtr<'a>) -> SddPtr<'a> {
+    // helpers
+
+    fn get_vtree_root(&self) -> &VTree {
+        self.get_vtree_manager().vtree_root()
+    }
+
+    fn num_vars(&self) -> usize {
+        self.get_vtree_manager().num_vars()
+    }
+
+    fn get_vtree(&self, ptr: SddPtr) -> &VTree {
+        match ptr {
+            SddPtr::Var(lbl, _) => {
+                let idx = self.get_vtree_manager().get_varlabel_idx(lbl);
+                self.get_vtree_manager().get_idx(idx)
+            }
+            SddPtr::Compl(_) | SddPtr::Reg(_) => self.get_vtree_manager().get_idx(ptr.vtree()),
+            _ => panic!("called vtree on constant"),
+        }
+    }
+
+    fn get_vtree_idx(&self, ptr: SddPtr) -> VTreeIndex {
+        match ptr {
+            SddPtr::Var(lbl, _) => self.get_vtree_manager().get_varlabel_idx(lbl),
+            SddPtr::BDD(_) | SddPtr::ComplBDD(_) | SddPtr::Compl(_) | SddPtr::Reg(_) => ptr.vtree(),
+            _ => panic!("called vtree on constant"),
+        }
+    }
+
+    /// compile an SDD from an input CNF
+    #[allow(clippy::wrong_self_convention)] // this is a naming thing; consider renaming in the future
+    fn from_cnf(&'a self, cnf: &Cnf) -> SddPtr<'a> {
+        let mut cvec: Vec<SddPtr> = Vec::with_capacity(cnf.clauses().len());
+        if cnf.clauses().is_empty() {
+            return SddPtr::true_ptr();
+        }
+        // check if there is an empty clause -- if so, UNSAT
+        if cnf.clauses().iter().any(|x| x.is_empty()) {
+            return SddPtr::false_ptr();
+        }
+
+        // sort the clauses based on a best-effort bottom-up ordering of clauses
+        let mut cnf_sorted = cnf.clauses().to_vec();
+        cnf_sorted.sort_by(|c1, c2| {
+            // order the clause with the first-most variable last
+            let fst1 = c1
+                .iter()
+                .max_by(|l1, l2| {
+                    if self
+                        .get_vtree_manager()
+                        .is_prime_var(l1.get_label(), l2.get_label())
+                    {
+                        Ordering::Less
+                    } else {
+                        Ordering::Equal
+                    }
+                })
+                .unwrap();
+            let fst2 = c2
+                .iter()
+                .max_by(|l1, l2| {
+                    if self
+                        .get_vtree_manager()
+                        .is_prime_var(l1.get_label(), l2.get_label())
+                    {
+                        Ordering::Less
+                    } else {
+                        Ordering::Equal
+                    }
+                })
+                .unwrap();
+            if self
+                .get_vtree_manager()
+                .is_prime_var(fst1.get_label(), fst2.get_label())
+            {
+                Ordering::Less
+            } else {
+                Ordering::Equal
+            }
+        });
+
+        for lit_vec in cnf_sorted.iter() {
+            let (vlabel, val) = (lit_vec[0].get_label(), lit_vec[0].get_polarity());
+            let mut bdd = SddPtr::Var(vlabel, val);
+            for lit in lit_vec {
+                let (vlabel, val) = (lit.get_label(), lit.get_polarity());
+                let var = SddPtr::Var(vlabel, val);
+                bdd = self.or(bdd, var);
+            }
+            cvec.push(bdd);
+        }
+        // now cvec has a list of all the clauses; collapse it down
+        let r = self.from_cnf_helper(&cvec);
+        match r {
+            None => SddPtr::true_ptr(),
+            Some(x) => x,
+        }
+    }
+
+    #[allow(clippy::wrong_self_convention)] // this is a naming thing; consider renaming in the future
+    fn from_cnf_helper(&'a self, vec: &[SddPtr<'a>]) -> Option<SddPtr<'a>> {
+        if vec.is_empty() {
+            None
+        } else if vec.len() == 1 {
+            Some(vec[0])
+        } else {
+            let (l, r) = vec.split_at(vec.len() / 2);
+            let sub_l = self.from_cnf_helper(l);
+            let sub_r = self.from_cnf_helper(r);
+            match (sub_l, sub_r) {
+                (None, None) => None,
+                (Some(v), None) | (None, Some(v)) => Some(v),
+                (Some(l), Some(r)) => Some(self.and(l, r)),
+            }
+        }
+    }
+
+    #[allow(clippy::wrong_self_convention)] // this is a naming thing; consider renaming in the future
+    fn from_logical_expr(&mut self, _expr: &LogicalExpr) -> SddPtr {
+        panic!("not impl")
+        // match expr {
+        //     &LogicalExpr::Literal(lbl, polarity) => self.var(VarLabel::new(lbl as u64), polarity),
+        //     &LogicalExpr::Not(ref e) => {
+        //         let e = self.from_logical_expr(e);
+        //         e.neg()
+        //     }
+        //     &LogicalExpr::And(ref l, ref r) => {
+        //         let r1 = self.from_logical_expr(l);
+        //         let r2 = self.from_logical_expr(r);
+        //         self.and(r1, r2)
+        //     }
+        //     &LogicalExpr::Or(ref l, ref r) => {
+        //         let r1 = self.from_logical_expr(l);
+        //         let r2 = self.from_logical_expr(r);
+        //         self.or(r1, r2)
+        //     }
+        //     &LogicalExpr::Xor(ref l, ref r) => {
+        //         let r1 = self.from_logical_expr(l);
+        //         let r2 = self.from_logical_expr(r);
+        //         self.xor(r1, r2)
+        //     }
+        //     &LogicalExpr::Iff(ref l, ref r) => {
+        //         let r1 = self.from_logical_expr(l);
+        //         let r2 = self.from_logical_expr(r);
+        //         self.iff(r1, r2)
+        //     }
+        //     &LogicalExpr::Ite {
+        //         ref guard,
+        //         ref thn,
+        //         ref els,
+        //     } => {
+        //         let g = self.from_logical_expr(guard);
+        //         let thn = self.from_logical_expr(thn);
+        //         let els = self.from_logical_expr(els);
+        //         self.ite(g, thn, els)
+        //     }
+        // }
+    }
+
+    fn print_sdd(&'a self, ptr: SddPtr<'a>) -> String {
+        use pretty::*;
+        fn helper(ptr: SddPtr) -> Doc<'static, BoxDoc<'static>> {
+            match ptr {
+                SddPtr::PtrTrue => Doc::from("T"),
+                SddPtr::PtrFalse => Doc::from("F"),
+                SddPtr::Var(label, polarity) => Doc::from(format!(
+                    "{}{}",
+                    if polarity { "" } else { "!" },
+                    label.value()
+                )),
+                SddPtr::BDD(bdd) | SddPtr::ComplBDD(bdd) => {
+                    let l = helper(bdd.low());
+                    let h = helper(bdd.high());
+                    let mut doc: Doc<BoxDoc> = Doc::from("");
+                    doc = doc.append(Doc::newline()).append(
+                        (Doc::from(format!("ITE {:?} {}", ptr, bdd.label().value()))
+                            .append(Doc::newline())
+                            .append(h.append(Doc::newline()).append(l)))
+                        .nest(2),
+                    );
+                    doc
+                }
+                SddPtr::Reg(or) | SddPtr::Compl(or) => {
+                    let mut doc: Doc<BoxDoc> = Doc::from("");
+                    for a in or.nodes.iter() {
+                        let sub = a.sub();
+                        let prime = a.prime();
+                        let s = if ptr.is_neg() { sub.neg() } else { sub };
+                        let new_s1 = helper(prime);
+                        let new_s2 = helper(s);
+                        doc = doc.append(Doc::newline()).append(
+                            (Doc::from("/\\")
+                                .append(Doc::newline())
+                                .append(new_s1.append(Doc::newline()).append(new_s2)))
+                            .nest(2),
+                        );
+                    }
+                    let d = Doc::from(format!("\\/ {:?}", ptr));
+                    d.append(doc.nest(2))
+                }
+            }
+        }
+        let d = helper(ptr);
+        let mut w = Vec::new();
+        d.render(10, &mut w).unwrap();
+        String::from_utf8(w).unwrap()
+    }
+
+    fn num_app_cache_hits(&self) -> usize;
+    fn num_logically_redundant(&self) -> usize;
+}
+
+impl<'a, T> BottomUpBuilder<'a, SddPtr<'a>> for T
+where
+    T: SddBuilder<'a>,
+{
+    #[inline]
+    fn true_ptr(&self) -> SddPtr<'a> {
+        SddPtr::PtrTrue
+    }
+
+    #[inline]
+    fn false_ptr(&self) -> SddPtr<'a> {
+        SddPtr::PtrFalse
+    }
+
+    #[inline]
+    fn var(&'a self, label: VarLabel, polarity: bool) -> SddPtr<'a> {
+        SddPtr::Var(label, polarity)
+    }
+
+    #[inline]
+    fn negate(&'a self, f: SddPtr<'a>) -> SddPtr<'a> {
+        f.neg()
+    }
+
+    fn and(&'a self, a: SddPtr<'a>, b: SddPtr<'a>) -> SddPtr<'a> {
         // println!("and a: {}\nb: {}", self.print_sdd(a), self.print_sdd(b));
         // first, check for a base case
         match (a, b) {
@@ -459,7 +566,7 @@ impl<'a> SddManager<'a> {
         // normalize so `a` is always prime if possible
         let (a, b) = if self.get_vtree_idx(a) == self.get_vtree_idx(b)
             || self
-                .vtree
+                .get_vtree_manager()
                 .is_prime_index(self.get_vtree_idx(a), self.get_vtree_idx(b))
         {
             (a, b)
@@ -467,18 +574,14 @@ impl<'a> SddManager<'a> {
             (b, a)
         };
 
-        {
-            let app_cache = self.app_cache.borrow();
-            // check if we have this application cached
-            if let Some(x) = app_cache.get(&SddAnd::new(a, b)) {
-                // self.stats.num_app_cache_hits += 1;
-                return *x;
-            }
+        // check if we have this application cached
+        if let Some(x) = self.app_cache_get(&SddAnd::new(a, b)) {
+            return x;
         }
 
         let av = self.get_vtree_idx(a);
         let bv = self.get_vtree_idx(b);
-        let lca = self.vtree.lca(av, bv);
+        let lca = self.get_vtree_manager().lca(av, bv);
 
         // now we determine the current iterator for primes and subs
         // consider the following example vtree:
@@ -504,19 +607,14 @@ impl<'a> SddManager<'a> {
         };
 
         // cache and return
-        self.app_cache.borrow_mut().insert(SddAnd::new(a, b), r);
+        self.app_cache_insert(SddAnd::new(a, b), r);
         r
-    }
-
-    pub fn or(&'a self, a: SddPtr<'a>, b: SddPtr<'a>) -> SddPtr<'a> {
-        self.and(a.neg(), b.neg()).neg()
     }
 
     /// Computes `f | var = value`
     /// TODO: This is highly inefficient, will re-traverse nodes, needs a cache
     /// TODO : this can bail out early by checking the vtree
-    pub fn condition(&'a self, f: SddPtr<'a>, lbl: VarLabel, value: bool) -> SddPtr<'a> {
-        // self.stats.num_rec += 1;
+    fn condition(&'a self, f: SddPtr<'a>, lbl: VarLabel, value: bool) -> SddPtr<'a> {
         match f {
             SddPtr::PtrTrue | SddPtr::PtrFalse => f,
             SddPtr::Var(label, polarity) => {
@@ -566,14 +664,14 @@ impl<'a> SddManager<'a> {
     }
 
     /// Computes the SDD representing the logical function `if f then g else h`
-    pub fn ite(&'a self, f: SddPtr<'a>, g: SddPtr<'a>, h: SddPtr<'a>) -> SddPtr<'a> {
-        let ite = Ite::new(|a, b| self.vtree.is_prime(a, b), f, g, h);
+    fn ite(&'a self, f: SddPtr<'a>, g: SddPtr<'a>, h: SddPtr<'a>) -> SddPtr<'a> {
+        let ite = Ite::new(|a, b| self.get_vtree_manager().is_prime(a, b), f, g, h);
         if let Ite::IteConst(f) = ite {
             return f;
         }
 
-        let hash = self.ite_cache.borrow().hash(&ite);
-        if let Some(v) = self.ite_cache.borrow().get(ite, hash) {
+        let hash = self.ite_cache_hash(&ite);
+        if let Some(v) = self.ite_cache_get(ite, hash) {
             return v;
         }
 
@@ -581,22 +679,22 @@ impl<'a> SddManager<'a> {
         let fg = self.and(f, g);
         let negfh = self.and(f.neg(), h);
         let r = self.or(fg, negfh);
-        self.ite_cache.borrow_mut().insert(ite, r, hash);
+        self.ite_cache_insert(ite, r, hash);
         r
     }
 
     /// Computes the SDD representing the logical function `f <=> g`
-    pub fn iff(&'a self, f: SddPtr<'a>, g: SddPtr<'a>) -> SddPtr<'a> {
+    fn iff(&'a self, f: SddPtr<'a>, g: SddPtr<'a>) -> SddPtr<'a> {
         self.ite(f, g, g.neg())
     }
 
     /// Computes the SDD representing the logical function `f xor g`
-    pub fn xor(&'a self, f: SddPtr<'a>, g: SddPtr<'a>) -> SddPtr<'a> {
+    fn xor(&'a self, f: SddPtr<'a>, g: SddPtr<'a>) -> SddPtr<'a> {
         self.ite(f, g.neg(), g)
     }
 
     /// Existentially quantifies out the variable `lbl` from `f`
-    pub fn exists(&'a self, sdd: SddPtr<'a>, lbl: VarLabel) -> SddPtr<'a> {
+    fn exists(&'a self, sdd: SddPtr<'a>, lbl: VarLabel) -> SddPtr<'a> {
         // TODO this can be optimized by specializing it
         let v1 = self.condition(sdd, lbl, true);
         let v2 = self.condition(sdd, lbl, false);
@@ -604,7 +702,7 @@ impl<'a> SddManager<'a> {
     }
 
     /// Compose `g` into `f` by substituting for `lbl`
-    pub fn compose(&'a self, _f: SddPtr<'a>, _lbl: VarLabel, _g: SddPtr<'a>) -> SddPtr<'a> {
+    fn compose(&'a self, _f: SddPtr<'a>, _lbl: VarLabel, _g: SddPtr<'a>) -> SddPtr<'a> {
         panic!("not impl")
         // TODO this can be optimized with a specialized implementation to make
         // it a single traversal
@@ -613,198 +711,116 @@ impl<'a> SddManager<'a> {
         // let a = self.and(iff, f);
         // self.exists(a, lbl)
     }
+}
 
-    fn print_sdd_internal(&'a self, ptr: SddPtr<'a>) -> String {
-        // self.canonicalizer.borrow().on_sdd_print_dump_state(ptr);
-        use pretty::*;
-        fn helper(ptr: SddPtr) -> Doc<'static, BoxDoc<'static>> {
-            match ptr {
-                SddPtr::PtrTrue => Doc::from("T"),
-                SddPtr::PtrFalse => Doc::from("F"),
-                SddPtr::Var(label, polarity) => Doc::from(format!(
-                    "{}{}",
-                    if polarity { "" } else { "!" },
-                    label.value()
-                )),
-                SddPtr::BDD(bdd) | SddPtr::ComplBDD(bdd) => {
-                    let l = helper(bdd.low());
-                    let h = helper(bdd.high());
-                    let mut doc: Doc<BoxDoc> = Doc::from("");
-                    doc = doc.append(Doc::newline()).append(
-                        (Doc::from(format!("ITE {:?} {}", ptr, bdd.label().value()))
-                            .append(Doc::newline())
-                            .append(h.append(Doc::newline()).append(l)))
-                        .nest(2),
-                    );
-                    doc
-                }
-                SddPtr::Reg(or) | SddPtr::Compl(or) => {
-                    let mut doc: Doc<BoxDoc> = Doc::from("");
-                    for a in or.nodes.iter() {
-                        let sub = a.sub();
-                        let prime = a.prime();
-                        let s = if ptr.is_neg() { sub.neg() } else { sub };
-                        let new_s1 = helper(prime);
-                        let new_s2 = helper(s);
-                        doc = doc.append(Doc::newline()).append(
-                            (Doc::from("/\\")
-                                .append(Doc::newline())
-                                .append(new_s1.append(Doc::newline()).append(new_s2)))
-                            .nest(2),
-                        );
-                    }
-                    let d = Doc::from(format!("\\/ {:?}", ptr));
-                    d.append(doc.nest(2))
-                }
-            }
+pub struct CompressionSddManager<'a> {
+    vtree: VTreeManager,
+    should_compress: bool,
+    // tables
+    bdd_tbl: RefCell<BackedRobinhoodTable<'a, BinarySDD<'a>>>,
+    sdd_tbl: RefCell<BackedRobinhoodTable<'a, SddOr<'a>>>,
+    // caches
+    ite_cache: RefCell<AllTable<SddPtr<'a>>>,
+    app_cache: RefCell<HashMap<SddAnd<'a>, SddPtr<'a>>>,
+}
+
+impl<'a> SddBuilder<'a> for CompressionSddManager<'a> {
+    #[inline]
+    fn get_vtree_manager(&self) -> &VTreeManager {
+        &self.vtree
+    }
+
+    #[inline]
+    fn app_cache_get(&self, and: &SddAnd<'a>) -> Option<SddPtr<'a>> {
+        // TODO: check if this is right?
+        self.app_cache.borrow().get(and).cloned()
+    }
+
+    #[inline]
+    fn app_cache_insert(&self, and: SddAnd<'a>, ptr: SddPtr<'a>) {
+        self.app_cache.borrow_mut().insert(and, ptr);
+    }
+
+    #[inline]
+    fn ite_cache_hash(&self, ite: &Ite<SddPtr>) -> u64 {
+        self.ite_cache.borrow().hash(ite)
+    }
+
+    #[inline]
+    fn ite_cache_get(&self, ite: Ite<SddPtr<'a>>, hash: u64) -> Option<SddPtr> {
+        self.ite_cache.borrow().get(ite, hash)
+    }
+
+    #[inline]
+    fn ite_cache_insert(&self, ite: Ite<SddPtr<'a>>, res: SddPtr<'a>, hash: u64) {
+        self.ite_cache.borrow_mut().insert(ite, res, hash)
+    }
+
+    #[inline]
+    fn get_or_insert_bdd(&'a self, bdd: BinarySDD<'a>) -> SddPtr<'a> {
+        unsafe {
+            let tbl = &mut *self.bdd_tbl.as_ptr();
+            SddPtr::BDD(tbl.get_or_insert(bdd))
         }
-        let d = helper(ptr);
-        let mut w = Vec::new();
-        d.render(10, &mut w).unwrap();
-        String::from_utf8(w).unwrap()
     }
 
-    pub fn print_sdd(&'a self, ptr: SddPtr<'a>) -> String {
-        self.print_sdd_internal(ptr)
+    #[inline]
+    fn get_or_insert_sdd(&'a self, or: SddOr<'a>) -> SddPtr<'a> {
+        unsafe {
+            let tbl = &mut *self.sdd_tbl.as_ptr();
+            SddPtr::Reg(tbl.get_or_insert(or))
+        }
     }
 
-    pub fn sdd_eq(&'a self, a: SddPtr<'a>, b: SddPtr<'a>) -> bool {
+    #[inline]
+    fn sdd_eq(&'a self, a: SddPtr<'a>, b: SddPtr<'a>) -> bool {
         a == b
     }
 
-    pub fn is_true(&'a self, a: SddPtr<'a>) -> bool {
-        self.sdd_eq(a, SddPtr::PtrTrue)
+    #[inline]
+    fn set_compression(&mut self, b: bool) {
+        self.should_compress = b
     }
 
-    pub fn is_false(&'a self, a: SddPtr<'a>) -> bool {
-        self.sdd_eq(a, SddPtr::PtrFalse)
-    }
-
-    /// compile an SDD from an input CNF
-    /// #[allow(clippy::wrong_self_convention)] // this is a naming thing; consider renaming in the future
-    pub fn from_cnf(&'a self, cnf: &Cnf) -> SddPtr<'a> {
-        let mut cvec: Vec<SddPtr> = Vec::with_capacity(cnf.clauses().len());
-        if cnf.clauses().is_empty() {
-            return SddPtr::true_ptr();
-        }
-        // check if there is an empty clause -- if so, UNSAT
-        if cnf.clauses().iter().any(|x| x.is_empty()) {
-            return SddPtr::false_ptr();
-        }
-
-        // sort the clauses based on a best-effort bottom-up ordering of clauses
-        let mut cnf_sorted = cnf.clauses().to_vec();
-        cnf_sorted.sort_by(|c1, c2| {
-            // order the clause with the first-most variable last
-            let fst1 = c1
-                .iter()
-                .max_by(|l1, l2| {
-                    if self.vtree.is_prime_var(l1.get_label(), l2.get_label()) {
-                        Ordering::Less
-                    } else {
-                        Ordering::Equal
-                    }
-                })
-                .unwrap();
-            let fst2 = c2
-                .iter()
-                .max_by(|l1, l2| {
-                    if self.vtree.is_prime_var(l1.get_label(), l2.get_label()) {
-                        Ordering::Less
-                    } else {
-                        Ordering::Equal
-                    }
-                })
-                .unwrap();
-            if self.vtree.is_prime_var(fst1.get_label(), fst2.get_label()) {
-                Ordering::Less
-            } else {
-                Ordering::Equal
-            }
-        });
-
-        for lit_vec in cnf_sorted.iter() {
-            let (vlabel, val) = (lit_vec[0].get_label(), lit_vec[0].get_polarity());
-            let mut bdd = SddPtr::Var(vlabel, val);
-            for lit in lit_vec {
-                let (vlabel, val) = (lit.get_label(), lit.get_polarity());
-                let var = SddPtr::Var(vlabel, val);
-                bdd = self.or(bdd, var);
-            }
-            cvec.push(bdd);
-        }
-        // now cvec has a list of all the clauses; collapse it down
-        let r = self.from_cnf_helper(&cvec);
-        match r {
-            None => SddPtr::true_ptr(),
-            Some(x) => x,
-        }
-    }
-
-    #[allow(clippy::wrong_self_convention)] // this is a naming thing; consider renaming in the future
-    fn from_cnf_helper(&'a self, vec: &[SddPtr<'a>]) -> Option<SddPtr<'a>> {
-        if vec.is_empty() {
-            None
-        } else if vec.len() == 1 {
-            Some(vec[0])
-        } else {
-            let (l, r) = vec.split_at(vec.len() / 2);
-            let sub_l = self.from_cnf_helper(l);
-            let sub_r = self.from_cnf_helper(r);
-            match (sub_l, sub_r) {
-                (None, None) => None,
-                (Some(v), None) | (None, Some(v)) => Some(v),
-                (Some(l), Some(r)) => Some(self.and(l, r)),
+    /// Canonicalizes the list of (prime, sub) terms in-place
+    /// `node`: a list of (prime, sub) pairs
+    fn compress(&'a self, node: &mut Vec<SddAnd<'a>>) {
+        for i in 0..node.len() {
+            // see if we can compress i
+            let mut j = i + 1;
+            while j < node.len() {
+                if self.sdd_eq(node[i].sub(), node[j].sub()) {
+                    // compress j into i and remove j from the node list
+                    node[i] = SddAnd::new(self.or(node[i].prime(), node[j].prime()), node[i].sub());
+                    node.swap_remove(j);
+                } else {
+                    j += 1;
+                }
             }
         }
     }
 
-    pub fn from_logical_expr(&mut self, _expr: &LogicalExpr) -> SddPtr {
-        panic!("not impl")
-        // match expr {
-        //     &LogicalExpr::Literal(lbl, polarity) => self.var(VarLabel::new(lbl as u64), polarity),
-        //     &LogicalExpr::Not(ref e) => {
-        //         let e = self.from_logical_expr(e);
-        //         e.neg()
-        //     }
-        //     &LogicalExpr::And(ref l, ref r) => {
-        //         let r1 = self.from_logical_expr(l);
-        //         let r2 = self.from_logical_expr(r);
-        //         self.and(r1, r2)
-        //     }
-        //     &LogicalExpr::Or(ref l, ref r) => {
-        //         let r1 = self.from_logical_expr(l);
-        //         let r2 = self.from_logical_expr(r);
-        //         self.or(r1, r2)
-        //     }
-        //     &LogicalExpr::Xor(ref l, ref r) => {
-        //         let r1 = self.from_logical_expr(l);
-        //         let r2 = self.from_logical_expr(r);
-        //         self.xor(r1, r2)
-        //     }
-        //     &LogicalExpr::Iff(ref l, ref r) => {
-        //         let r1 = self.from_logical_expr(l);
-        //         let r2 = self.from_logical_expr(r);
-        //         self.iff(r1, r2)
-        //     }
-        //     &LogicalExpr::Ite {
-        //         ref guard,
-        //         ref thn,
-        //         ref els,
-        //     } => {
-        //         let g = self.from_logical_expr(guard);
-        //         let thn = self.from_logical_expr(thn);
-        //         let els = self.from_logical_expr(els);
-        //         self.ite(g, thn, els)
-        //     }
-        // }
+    /// Returns a canonicalized SDD pointer from a list of (prime, sub) pairs
+    fn canonicalize(&'a self, mut node: Vec<SddAnd<'a>>, table: VTreeIndex) -> SddPtr<'a> {
+        // check for base cases before compression
+        if let Some(sdd) = self.canonicalize_base_case(&node) {
+            return sdd;
+        }
+
+        if self.should_compress {
+            self.compress(&mut node);
+
+            // check for a base case after compression (compression can sometimes
+            // reduce node counts to a base case)
+            if let Some(sdd) = self.canonicalize_base_case(&node) {
+                return sdd;
+            }
+        }
+
+        self.unique_or(node, table)
     }
 
-    pub fn stats(&self) -> &SddStats {
-        &self.stats
-    }
-
-    pub fn node_iter(&self) -> Vec<SddPtr> {
+    fn node_iter(&self) -> Vec<SddPtr> {
         let binding = self.bdd_tbl.borrow_mut();
         let bdds = binding.iter().map(SddPtr::BDD);
         let binding = self.sdd_tbl.borrow_mut();
@@ -812,9 +828,14 @@ impl<'a> SddManager<'a> {
         bdds.chain(sdds).collect()
     }
 
+    // eventually, remove this
+    fn num_app_cache_hits(&self) -> usize {
+        self.bdd_tbl.borrow().hits() + self.sdd_tbl.borrow().hits()
+    }
+
     /// computes the number of logically redundant nodes allocated by the
     /// manager (nodes that have the same semantic hash)
-    pub fn num_logically_redundant(&self) -> usize {
+    fn num_logically_redundant(&self) -> usize {
         let mut s: HashSet<u128> = HashSet::new();
         let hasher = create_semantic_hash_map::<100000000063>(self.num_vars() + 1000); // TODO FIX THIS BADNESS
         let mut num_collisions = 0;
@@ -829,10 +850,238 @@ impl<'a> SddManager<'a> {
     }
 }
 
+impl<'a> CompressionSddManager<'a> {
+    pub fn new(vtree: VTree) -> CompressionSddManager<'a> {
+        let vtree_man = VTreeManager::new(vtree);
+        CompressionSddManager {
+            ite_cache: RefCell::new(AllTable::new()),
+            app_cache: RefCell::new(HashMap::new()),
+            bdd_tbl: RefCell::new(BackedRobinhoodTable::new()),
+            sdd_tbl: RefCell::new(BackedRobinhoodTable::new()),
+            vtree: vtree_man,
+            should_compress: true,
+        }
+    }
+
+    #[inline]
+    fn canonicalize_base_case(&'a self, node: &Vec<SddAnd<'a>>) -> Option<SddPtr<'a>> {
+        if node.is_empty() {
+            return Some(SddPtr::true_ptr());
+        }
+        if node.len() == 1 {
+            if self.is_true(node[0].prime()) {
+                return Some(node[0].sub());
+            }
+
+            if self.is_false(node[0].sub()) {
+                return Some(SddPtr::false_ptr());
+            }
+        }
+        if node.len() == 2 {
+            if self.is_true(node[0].sub()) && self.is_false(node[1].sub()) {
+                return Some(node[0].prime());
+            } else if self.is_false(node[0].sub()) && self.is_true(node[1].sub()) {
+                return Some(node[1].prime());
+            }
+        }
+        None
+    }
+}
+
+pub struct SemanticSddManager<'a, const P: u128> {
+    vtree: VTreeManager,
+    should_compress: bool,
+    // tables
+    bdd_tbl: RefCell<BackedRobinhoodTable<'a, BinarySDD<'a>>>,
+    sdd_tbl: RefCell<BackedRobinhoodTable<'a, SddOr<'a>>>,
+    // caches
+    // ite_cache: RefCell<AllTable<SddPtr<'a>>>,
+    app_cache: RefCell<HashMap<u128, SddPtr<'a>>>,
+    // semantic hashing
+    map: WmcParams<FiniteField<P>>,
+}
+
+impl<'a, const P: u128> SddBuilder<'a> for SemanticSddManager<'a, P> {
+    #[inline]
+    fn get_vtree_manager(&self) -> &VTreeManager {
+        &self.vtree
+    }
+
+    #[inline]
+    fn set_compression(&mut self, b: bool) {
+        self.should_compress = b
+    }
+
+    fn node_iter(&self) -> Vec<SddPtr> {
+        let binding = self.bdd_tbl.borrow_mut();
+        let bdds = binding.iter().map(SddPtr::BDD);
+        let binding = self.sdd_tbl.borrow_mut();
+        let sdds = binding.iter().map(SddPtr::Reg);
+        bdds.chain(sdds).collect()
+    }
+
+    fn app_cache_get(&self, and: &SddAnd<'a>) -> Option<SddPtr<'a>> {
+        let h = and.semantic_hash(&self.vtree, &self.map);
+        match h.value() {
+            0 => Some(SddPtr::PtrFalse),
+            1 => Some(SddPtr::PtrTrue),
+            _ => self.app_cache.borrow().get(&h.value()).copied(),
+        }
+    }
+
+    fn app_cache_insert(&self, and: SddAnd<'a>, ptr: SddPtr<'a>) {
+        let h = and.semantic_hash(&self.vtree, &self.map);
+        if h.value() > 1 {
+            self.app_cache.borrow_mut().insert(h.value(), ptr);
+        }
+    }
+
+    fn ite_cache_hash(&self, _ite: &Ite<SddPtr>) -> u64 {
+        todo!()
+    }
+
+    fn ite_cache_get(&self, _ite: Ite<SddPtr<'a>>, _hash: u64) -> Option<SddPtr> {
+        todo!()
+    }
+
+    fn ite_cache_insert(&self, _ite: Ite<SddPtr<'a>>, _res: SddPtr<'a>, _hash: u64) {
+        todo!()
+    }
+
+    fn get_or_insert_bdd(&'a self, bdd: BinarySDD<'a>) -> SddPtr<'a> {
+        let semantic_hash = bdd.semantic_hash(&self.vtree, &self.map);
+
+        if let Some(sdd) = self.check_cached_hash_and_neg(semantic_hash) {
+            return sdd;
+        }
+
+        let hash = self.hash_bdd(&bdd);
+        unsafe {
+            let tbl = &mut *self.bdd_tbl.as_ptr();
+            SddPtr::BDD(tbl.get_or_insert_by_hash(hash, bdd, true))
+        }
+    }
+
+    fn get_or_insert_sdd(&'a self, or: SddOr<'a>) -> SddPtr<'a> {
+        let semantic_hash = or.semantic_hash(&self.vtree, &self.map);
+        if let Some(sdd) = self.check_cached_hash_and_neg(semantic_hash) {
+            return sdd;
+        }
+
+        let hash = self.hash_sdd(&or);
+        unsafe {
+            let tbl = &mut *self.sdd_tbl.as_ptr();
+            SddPtr::Reg(tbl.get_or_insert_by_hash(hash, or, true))
+        }
+    }
+
+    fn sdd_eq(&'a self, a: SddPtr<'a>, b: SddPtr<'a>) -> bool {
+        let h1 = a.cached_semantic_hash(&self.vtree, &self.map);
+        let h2 = b.cached_semantic_hash(&self.vtree, &self.map);
+        h1 == h2
+    }
+
+    fn compress(&'a self, _node: &mut Vec<SddAnd<'a>>) {}
+
+    fn canonicalize(&'a self, node: Vec<SddAnd<'a>>, table: VTreeIndex) -> SddPtr<'a> {
+        self.unique_or(node, table)
+    }
+
+    fn num_logically_redundant(&self) -> usize {
+        let mut s: HashSet<u128> = HashSet::new();
+        let mut num_collisions = 0;
+        for n in self.node_iter() {
+            let h = n.cached_semantic_hash(&self.vtree, &self.map);
+            if s.contains(&h.value()) {
+                num_collisions += 1;
+            }
+            s.insert(h.value());
+        }
+        num_collisions
+    }
+
+    // eventually, remove this
+    fn num_app_cache_hits(&self) -> usize {
+        self.bdd_tbl.borrow().hits() + self.sdd_tbl.borrow().hits()
+    }
+}
+
+impl<'a, const P: u128> SemanticSddManager<'a, P> {
+    pub fn new(vtree: VTree) -> Self {
+        let vtree_man = VTreeManager::new(vtree.clone());
+        let map = create_semantic_hash_map(vtree.num_vars());
+        SemanticSddManager {
+            should_compress: false,
+            vtree: vtree_man,
+            // ite_cache: RefCell::new(AllTable::new()),
+            app_cache: RefCell::new(HashMap::new()),
+            bdd_tbl: RefCell::new(BackedRobinhoodTable::new()),
+            sdd_tbl: RefCell::new(BackedRobinhoodTable::new()),
+            map,
+        }
+    }
+
+    fn hash_bdd(&self, elem: &BinarySDD) -> u64 {
+        let mut hasher = FxHasher::default();
+        elem.semantic_hash(&self.vtree, &self.map)
+            .value()
+            .hash(&mut hasher);
+        hasher.finish()
+    }
+
+    fn hash_sdd(&self, elem: &SddOr) -> u64 {
+        let mut hasher = FxHasher::default();
+        elem.semantic_hash(&self.vtree, &self.map)
+            .value()
+            .hash(&mut hasher);
+        hasher.finish()
+    }
+
+    fn get_shared_sdd_ptr(&self, semantic_hash: FiniteField<P>, hash: u64) -> Option<SddPtr> {
+        match semantic_hash.value() {
+            0 => Some(SddPtr::PtrFalse),
+            1 => Some(SddPtr::PtrTrue),
+            _ => {
+                unsafe {
+                    let tbl = &mut *self.bdd_tbl.as_ptr();
+                    if let Some(sdd) = tbl.get_by_hash(hash) {
+                        return Some(SddPtr::BDD(sdd));
+                    }
+                    let tbl = &mut *self.sdd_tbl.as_ptr();
+                    if let Some(sdd) = tbl.get_by_hash(hash) {
+                        return Some(SddPtr::Reg(sdd));
+                    }
+                }
+                None
+            }
+        }
+    }
+
+    fn check_cached_hash_and_neg(&self, semantic_hash: FiniteField<P>) -> Option<SddPtr> {
+        // check regular hash
+        let mut hasher = FxHasher::default();
+        semantic_hash.value().hash(&mut hasher);
+        let hash = hasher.finish();
+        if let Some(sdd) = self.get_shared_sdd_ptr(semantic_hash, hash) {
+            return Some(sdd);
+        }
+
+        // check negated hash
+        let semantic_hash = semantic_hash.negate();
+        let mut hasher = FxHasher::default();
+        semantic_hash.value().hash(&mut hasher);
+        let hash = hasher.finish();
+        if let Some(sdd) = self.get_shared_sdd_ptr(semantic_hash, hash) {
+            return Some(sdd.neg());
+        }
+        None
+    }
+}
+
 // check that (a \/ b) /\ a === a
 #[test]
 fn simple_equality() {
-    let man = SddManager::new(VTree::even_split(
+    let man = CompressionSddManager::new(VTree::even_split(
         &[
             VarLabel::new(0),
             VarLabel::new(1),
@@ -853,7 +1102,7 @@ fn simple_equality() {
 // check that (a \/ b) | !b === a
 #[test]
 fn sdd_simple_cond() {
-    let man = SddManager::new(VTree::even_split(
+    let man = CompressionSddManager::new(VTree::even_split(
         &[
             VarLabel::new(0),
             VarLabel::new(1),
@@ -879,7 +1128,7 @@ fn sdd_simple_cond() {
 
 #[test]
 fn sdd_test_exist() {
-    let man = SddManager::new(VTree::even_split(
+    let man = CompressionSddManager::new(VTree::even_split(
         &[
             VarLabel::new(0),
             VarLabel::new(1),
@@ -907,7 +1156,7 @@ fn sdd_test_exist() {
 
 #[test]
 fn sdd_bigand() {
-    let man = SddManager::new(VTree::right_linear(&[
+    let man = CompressionSddManager::new(VTree::right_linear(&[
         VarLabel::new(0),
         VarLabel::new(1),
         VarLabel::new(2),
@@ -915,7 +1164,7 @@ fn sdd_bigand() {
         VarLabel::new(4),
     ]));
 
-    // let man = SddManager::new(VTree::even_split(
+    // let man = CompressionSddManager::new(VTree::even_split(
     //     &[
     //         VarLabel::new(0),
     //         VarLabel::new(1),
@@ -943,7 +1192,7 @@ fn sdd_bigand() {
 
 #[test]
 fn sdd_ite1() {
-    let man = SddManager::new(VTree::even_split(
+    let man = CompressionSddManager::new(VTree::even_split(
         &[
             VarLabel::new(0),
             VarLabel::new(1),
@@ -972,7 +1221,7 @@ fn sdd_ite1() {
 
 #[test]
 fn sdd_demorgan() {
-    let man = SddManager::new(VTree::even_split(
+    let man = CompressionSddManager::new(VTree::even_split(
         &[
             VarLabel::new(0),
             VarLabel::new(1),
@@ -996,7 +1245,7 @@ fn sdd_demorgan() {
 
 #[test]
 fn sdd_circuit1() {
-    let man = SddManager::new(VTree::even_split(
+    let man = CompressionSddManager::new(VTree::even_split(
         &[
             VarLabel::new(0),
             VarLabel::new(1),
@@ -1029,7 +1278,7 @@ fn sdd_circuit1() {
 #[test]
 fn sdd_circuit2() {
     // same as circuit1, but with a different variable order
-    let man = SddManager::new(VTree::even_split(
+    let man = CompressionSddManager::new(VTree::even_split(
         &[
             VarLabel::new(0),
             VarLabel::new(1),
@@ -1079,7 +1328,7 @@ fn sdd_wmc1() {
         ],
         1,
     );
-    let man = SddManager::new(vtree);
+    let man = CompressionSddManager::new(vtree);
     let mut wmc_map = crate::repr::wmc::WmcParams::new(RealSemiring(0.0), RealSemiring(1.0));
     let x = SddPtr::Var(VarLabel::new(0), true);
     wmc_map.set_weight(VarLabel::new(0), RealSemiring(1.0), RealSemiring(1.0));
@@ -1104,34 +1353,32 @@ fn sdd_wmc1() {
     );
 }
 
-// #[test]
-// fn prob_equiv_sdd_demorgan() {
-//     use crate::repr::robdd::create_semantic_hash_map;
-//     use crate::repr::robdd::WmcParams;
-//     use crate::util::semiring::FiniteField;
+#[test]
+fn prob_equiv_sdd_demorgan() {
+    use crate::repr::robdd::create_semantic_hash_map;
+    use crate::repr::robdd::WmcParams;
+    use crate::util::semiring::FiniteField;
 
-//     let mut man = SddManager::<crate::builder::canonicalize::SemanticCanonicalizer<100000049>>::new(
-//         VTree::even_split(
-//             &[
-//                 VarLabel::new(0),
-//                 VarLabel::new(1),
-//                 VarLabel::new(2),
-//                 VarLabel::new(3),
-//                 VarLabel::new(4),
-//             ],
-//             1,
-//         ),
-//     );
-//     man.set_compression(false);
-//     let x = SddPtr::Var(VarLabel::new(0), true);
-//     let y = SddPtr::Var(VarLabel::new(3), true);
-//     let res = man.or(x, y).neg();
-//     let expected = man.and(x.neg(), y.neg());
+    let mut man = SemanticSddManager::<100000049>::new(VTree::even_split(
+        &[
+            VarLabel::new(0),
+            VarLabel::new(1),
+            VarLabel::new(2),
+            VarLabel::new(3),
+            VarLabel::new(4),
+        ],
+        1,
+    ));
+    man.set_compression(false);
+    let x = SddPtr::Var(VarLabel::new(0), true);
+    let y = SddPtr::Var(VarLabel::new(3), true);
+    let res = man.or(x, y).neg();
+    let expected = man.and(x.neg(), y.neg());
 
-//     let map: WmcParams<FiniteField<100000049>> = create_semantic_hash_map(man.num_vars());
+    let map: WmcParams<FiniteField<100000049>> = create_semantic_hash_map(man.num_vars());
 
-//     let sh1 = res.cached_semantic_hash(man.get_vtree_manager(), &map);
-//     let sh2 = expected.cached_semantic_hash(man.get_vtree_manager(), &map);
+    let sh1 = res.cached_semantic_hash(man.get_vtree_manager(), &map);
+    let sh2 = expected.cached_semantic_hash(man.get_vtree_manager(), &map);
 
-//     assert!(sh1 == sh2, "Not eq:\nGot: {:?}\nExpected: {:?}", sh1, sh2);
-// }
+    assert!(sh1 == sh2, "Not eq:\nGot: {:?}\nExpected: {:?}", sh1, sh2);
+}

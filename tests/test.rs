@@ -8,7 +8,7 @@ use crate::repr::cnf::Cnf;
 use crate::repr::var_label::VarLabel;
 use rsdd::builder::bdd_builder::BddManager;
 use rsdd::builder::cache::all_app::AllTable;
-use rsdd::builder::sdd_builder::SddManager;
+use rsdd::builder::sdd_builder::{CompressionSddManager, SddBuilder};
 use rsdd::repr::robdd::BddPtr;
 use rsdd::repr::vtree::VTree;
 use rsdd::*;
@@ -257,7 +257,7 @@ fn test_bdd_canonicity() {
         let r1 = man.from_cnf(&cnf1);
         let r2 = man.from_cnf(&cnf2);
         assert!(
-            man.eq_bdd(r1, r2),
+            builder::bdd_builder::BddBuilder::eq_bdd(&man, r1, r2),
             "Not eq\nCNF 1: {:?}\nCNF 2: {:?}\nBDD 1:{}\n BDD 2: {}",
             cnf1,
             cnf2,
@@ -274,7 +274,7 @@ fn test_sdd_canonicity() {
             .map(|x| VarLabel::new(x as u64))
             .collect();
         let vtree = VTree::even_split(&v, 1);
-        let man = SddManager::new(vtree);
+        let man = CompressionSddManager::new(vtree);
         let r1 = man.from_cnf(&cnf1);
         let r2 = man.from_cnf(&cnf2);
         assert!(
@@ -295,7 +295,7 @@ fn test_sdd_is_canonical() {
             .map(|x| VarLabel::new(x as u64))
             .collect();
         let vtree = VTree::even_split(&v, 1);
-        let man = SddManager::new(vtree);
+        let man = CompressionSddManager::new(vtree);
         let r1 = man.from_cnf(&cnf1);
         let r2 = man.from_cnf(&cnf2);
         assert!(
@@ -318,10 +318,12 @@ mod test_bdd_manager {
     use crate::builder::decision_nnf_builder::DecisionNNFBuilder;
     use crate::repr::cnf::Cnf;
     use crate::repr::var_label::VarLabel;
+    use crate::rsdd::builder::BottomUpBuilder;
     use quickcheck::TestResult;
     use rand::Rng;
     use rsdd::builder::cache::all_app::AllTable;
     use rsdd::builder::cache::lru_app::BddApplyTable;
+    use rsdd::builder::sdd_builder::SddBuilder;
     use rsdd::repr::ddnnf::{create_semantic_hash_map, DDNNFPtr};
     use rsdd::repr::dtree::DTree;
     use rsdd::repr::model::PartialModel;
@@ -419,7 +421,7 @@ mod test_bdd_manager {
         /// test that an SDD and BDD both have the same semantic hash
         fn sdd_semantic_eq_bdd(c1: Cnf, vtree: VTree) -> bool {
             let bdd_mgr = super::BddManager::<AllTable<BddPtr>>::new_default_order(c1.num_vars());
-            let sdd_mgr = super::SddManager::new(vtree);
+            let sdd_mgr = super::CompressionSddManager::new(vtree);
             let map : WmcParams<rsdd::util::semiring::FiniteField<{ crate::BIG_PRIME }>>= create_semantic_hash_map(c1.num_vars());
             let bdd = bdd_mgr.from_cnf(&c1);
             let sdd = sdd_mgr.from_cnf(&c1);
@@ -435,7 +437,7 @@ mod test_bdd_manager {
             let dtree = DTree::from_cnf(&c1, &min_fill_order);
             let vtree = VTree::from_dtree(&dtree).unwrap();
 
-            let sdd_mgr = super::SddManager::new(vtree);
+            let sdd_mgr = super::CompressionSddManager::new(vtree);
             let map : WmcParams<rsdd::util::semiring::FiniteField<{ crate::BIG_PRIME }>>= create_semantic_hash_map(c1.num_vars());
             let bdd = bdd_mgr.from_cnf(&c1);
             let sdd = sdd_mgr.from_cnf(&c1);
@@ -691,11 +693,13 @@ mod test_sdd_manager {
     use crate::builder::bdd_builder::BddManager;
     use crate::repr::cnf::Cnf;
     use crate::repr::var_label::{Literal, VarLabel};
+    use crate::rsdd::builder::BottomUpBuilder;
     use quickcheck::{Arbitrary, TestResult};
     use rand::rngs::SmallRng;
     use rand::seq::SliceRandom;
     use rand::SeedableRng;
     use rsdd::builder::cache::all_app::AllTable;
+    use rsdd::builder::sdd_builder::{CompressionSddManager, SddBuilder, SemanticSddManager};
     use rsdd::repr::ddnnf::{create_semantic_hash_map, DDNNFPtr};
     use rsdd::repr::dtree::DTree;
     use rsdd::repr::robdd::BddPtr;
@@ -709,7 +713,7 @@ mod test_sdd_manager {
     quickcheck! {
         fn test_cond_and(c: Cnf) -> bool {
             let order : Vec<VarLabel> = (0..16).map(VarLabel::new).collect();
-            let mgr = super::SddManager::new(VTree::even_split(&order, 4));
+            let mgr = super::CompressionSddManager::new(VTree::even_split(&order, 4));
             let cnf = mgr.from_cnf(&c);
             let v1 = VarLabel::new(0);
             let bdd1 = mgr.exists(cnf, v1);
@@ -727,7 +731,7 @@ mod test_sdd_manager {
             let order : Vec<VarLabel> = (0..16).map(VarLabel::new).collect();
             // let vtree = VTree::even_split(&order, 4);
             let vtree = VTree::right_linear(&order);
-            let mgr = super::SddManager::new(vtree);
+            let mgr = super::CompressionSddManager::new(vtree);
             let cnf1 = mgr.from_cnf(&c1);
             let cnf2 = mgr.from_cnf(&c2);
             let iff1 = mgr.iff(cnf1, cnf2);
@@ -748,7 +752,7 @@ mod test_sdd_manager {
         fn ite_iff_split(c1: Cnf, c2: Cnf) -> bool {
             let order : Vec<VarLabel> = (0..16).map(VarLabel::new).collect();
             let vtree = VTree::even_split(&order, 4);
-            let mgr = super::SddManager::new(vtree);
+            let mgr = super::CompressionSddManager::new(vtree);
             let cnf1 = mgr.from_cnf(&c1);
             let cnf2 = mgr.from_cnf(&c2);
             let iff1 = mgr.iff(cnf1, cnf2);
@@ -775,7 +779,7 @@ mod test_sdd_manager {
 
            let weight_map = create_semantic_hash_map::< {crate::BIG_PRIME} >(cnf.num_vars());
            let order : Vec<VarLabel> = (0..cnf.num_vars()).map(|x| VarLabel::new(x as u64)).collect();
-           let mgr = super::SddManager::new(VTree::even_split(&order, 3));
+           let mgr = super::CompressionSddManager::new(VTree::even_split(&order, 3));
            let cnf_sdd = mgr.from_cnf(&cnf);
            let sdd_res = cnf_sdd.semantic_hash(mgr.get_vtree_manager(), &weight_map);
 
@@ -800,7 +804,7 @@ mod test_sdd_manager {
             let vtree = VTree::from_dtree(&dtree).unwrap();
 
             let weight_map = create_semantic_hash_map::< {crate::BIG_PRIME} >(cnf.num_vars());
-            let mgr = super::SddManager::new(vtree);
+            let mgr = super::CompressionSddManager::new(vtree);
             let cnf_sdd = mgr.from_cnf(&cnf);
             let sdd_res = cnf_sdd.semantic_hash(mgr.get_vtree_manager(), &weight_map);
 
@@ -847,7 +851,7 @@ mod test_sdd_manager {
         fn sdd_compressed_right_linear(c: Cnf) -> bool {
             let order : Vec<VarLabel> = (0..16).map(VarLabel::new).collect();
             let vtree = VTree::right_linear(&order);
-            let mgr = super::SddManager::new(vtree);
+            let mgr = super::CompressionSddManager::new(vtree);
             let cnf = mgr.from_cnf(&c);
             cnf.is_compressed()
         }
@@ -857,7 +861,7 @@ mod test_sdd_manager {
         fn sdd_trimmed_right_linear(c: Cnf) -> bool {
             let order : Vec<VarLabel> = (0..16).map(VarLabel::new).collect();
             let vtree = VTree::right_linear(&order);
-            let mgr = super::SddManager::new(vtree);
+            let mgr = super::CompressionSddManager::new(vtree);
             let cnf = mgr.from_cnf(&c);
 
             cnf.is_trimmed()
@@ -866,7 +870,7 @@ mod test_sdd_manager {
 
     quickcheck! {
         fn sdd_compressed_arbitrary_vtree(c: Cnf, vtree: VTree) -> bool {
-            let mgr = super::SddManager::new(vtree);
+            let mgr = super::CompressionSddManager::new(vtree);
             let cnf = mgr.from_cnf(&c);
             cnf.is_compressed()
         }
@@ -874,36 +878,36 @@ mod test_sdd_manager {
 
     quickcheck! {
         fn sdd_trimmed_arbitrary_vtree(c: Cnf, vtree: VTree) -> bool {
-            let mgr = super::SddManager::new(vtree);
+            let mgr = super::CompressionSddManager::new(vtree);
             let cnf = mgr.from_cnf(&c);
             cnf.is_trimmed()
         }
     }
 
-    // quickcheck! {
-    //     fn prob_equiv_trivial(c: Cnf, vtree:VTree) -> bool {
-    //         let mgr1 = super::SddManager::new(vtree.clone());
-    //         let c1 = mgr1.from_cnf(&c);
+    quickcheck! {
+        fn prob_equiv_trivial(c: Cnf, vtree:VTree) -> bool {
+            let mgr1 = CompressionSddManager::new(vtree.clone());
+            let c1 = mgr1.from_cnf(&c);
 
-    //         // in this test, compression is still enabled; c2 should be identical to c1
-    //         let mgr2 = super::SddManager::<SemanticCanonicalizer<{ crate::BIG_PRIME }>>::new(vtree);
-    //         let c2 = mgr2.from_cnf(&c);
+            // in this test, compression is still enabled; c2 should be identical to c1
+            let mgr2 = SemanticSddManager::<{ crate::BIG_PRIME }>::new(vtree);
+            let c2 = mgr2.from_cnf(&c);
 
-    //         let map : WmcParams<FiniteField<{ crate::BIG_PRIME }>> = create_semantic_hash_map(mgr1.num_vars());
+            let map : WmcParams<FiniteField<{ crate::BIG_PRIME }>> = create_semantic_hash_map(mgr1.num_vars());
 
-    //         let h1 = c1.semantic_hash(mgr1.get_vtree_manager(), &map);
-    //         let h2 = c2.semantic_hash(mgr2.get_vtree_manager(), &map);
+            let h1 = c1.semantic_hash(mgr1.get_vtree_manager(), &map);
+            let h2 = c2.semantic_hash(mgr2.get_vtree_manager(), &map);
 
-    //         h1 == h2
-    //     }
-    // }
+            h1 == h2
+        }
+    }
 
     quickcheck! {
         fn prob_equiv_sdd_identity_uncompressed_depr(c: Cnf, vtree:VTree) -> TestResult {
-            let compr_mgr = super::SddManager::new(vtree.clone());
+            let compr_mgr = super::CompressionSddManager::new(vtree.clone());
             let compr_cnf = compr_mgr.from_cnf(&c);
 
-            let mut uncompr_mgr = super::SddManager::new(vtree);
+            let mut uncompr_mgr = super::CompressionSddManager::new(vtree);
             uncompr_mgr.set_compression(false);
             let uncompr_cnf = uncompr_mgr.from_cnf(&c);
 
@@ -924,72 +928,72 @@ mod test_sdd_manager {
         }
     }
 
-    // quickcheck! {
-    //     fn prob_equiv_sdd_identity_uncompressed(c: Cnf, vtree:VTree) -> TestResult {
-    //         let compr_mgr = super::SddManager::<CompressionCanonicalizer>::new(vtree.clone());
-    //         let compr_cnf = compr_mgr.from_cnf(&c);
+    quickcheck! {
+        fn prob_equiv_sdd_identity_uncompressed(c: Cnf, vtree:VTree) -> TestResult {
+            let compr_mgr = CompressionSddManager::new(vtree.clone());
+            let compr_cnf = compr_mgr.from_cnf(&c);
 
-    //         let uncompr_mgr = super::SddManager::<SemanticCanonicalizer<{ crate::BIG_PRIME }>>::new(vtree);
-    //         let uncompr_cnf = uncompr_mgr.from_cnf(&c);
+            let uncompr_mgr = SemanticSddManager::<{ crate::BIG_PRIME }>::new(vtree);
+            let uncompr_cnf = uncompr_mgr.from_cnf(&c);
 
-    //         if !uncompr_mgr.sdd_eq(compr_cnf, uncompr_cnf) {
-    //             println!("not equal!");
-    //             println!("compr sdd: {}", compr_mgr.print_sdd(compr_cnf));
-    //             println!("uncompr sdd: {}", uncompr_mgr.print_sdd(uncompr_cnf));
-    //             TestResult::from_bool(false)
-    //         } else {
-    //             TestResult::from_bool(true)
-    //         }
-    //     }
-    // }
+            if !uncompr_mgr.sdd_eq(compr_cnf, uncompr_cnf) {
+                println!("not equal!");
+                println!("compr sdd: {}", compr_mgr.print_sdd(compr_cnf));
+                println!("uncompr sdd: {}", uncompr_mgr.print_sdd(uncompr_cnf));
+                TestResult::from_bool(false)
+            } else {
+                TestResult::from_bool(true)
+            }
+        }
+    }
 
-    // quickcheck! {
-    //     fn prob_equiv_sdd_inequality(c1: Cnf, c2: Cnf, vtree:VTree) -> TestResult {
-    //         let mut mgr = super::SddManager::<SemanticCanonicalizer<{ crate::BIG_PRIME }>>::new(vtree);
-    //         mgr.set_compression(true); // necessary to make sure we don't generate two uncompressed SDDs that canonicalize to the same SDD
-    //         let cnf_1 = mgr.from_cnf(&c1);
-    //         let cnf_2 = mgr.from_cnf(&c2);
+    quickcheck! {
+        fn prob_equiv_sdd_inequality(c1: Cnf, c2: Cnf, vtree:VTree) -> TestResult {
+            let mut mgr = SemanticSddManager::<{ crate::BIG_PRIME }>::new(vtree);
+            mgr.set_compression(true); // necessary to make sure we don't generate two uncompressed SDDs that canonicalize to the same SDD
+            let cnf_1 = mgr.from_cnf(&c1);
+            let cnf_2 = mgr.from_cnf(&c2);
 
-    //         if cnf_1 == cnf_2 {
-    //             return TestResult::discard();
-    //         }
+            if cnf_1 == cnf_2 {
+                return TestResult::discard();
+            }
 
-    //         if mgr.sdd_eq(cnf_1, cnf_2) {
-    //             println!("collision!");
-    //             println!("sdd 1: {}", mgr.print_sdd(cnf_1));
-    //             println!("sdd 2: {}", mgr.print_sdd(cnf_2));
-    //             TestResult::from_bool(false)
-    //         } else {
-    //             TestResult::from_bool(true)
-    //         }
-    //     }
-    // }
+            if mgr.sdd_eq(cnf_1, cnf_2) {
+                println!("collision!");
+                println!("sdd 1: {}", mgr.print_sdd(cnf_1));
+                println!("sdd 2: {}", mgr.print_sdd(cnf_2));
+                TestResult::from_bool(false)
+            } else {
+                TestResult::from_bool(true)
+            }
+        }
+    }
 
-    // quickcheck! {
-    //     fn prob_equiv_sdd_eq_vs_prob_eq(c1: Cnf, c2: Cnf, vtree:VTree) -> TestResult {
-    //         let mut mgr = super::SddManager::<SemanticCanonicalizer<{ crate::BIG_PRIME }>>::new(vtree);
-    //         mgr.set_compression(true); // necessary to make sure we don't generate two uncompressed SDDs that canonicalize to the same SDD
-    //         let cnf_1 = mgr.from_cnf(&c1);
-    //         let cnf_2 = mgr.from_cnf(&c2);
+    quickcheck! {
+        fn prob_equiv_sdd_eq_vs_prob_eq(c1: Cnf, c2: Cnf, vtree:VTree) -> TestResult {
+            let mut mgr = SemanticSddManager::<{ crate::BIG_PRIME }>::new(vtree);
+            mgr.set_compression(true); // necessary to make sure we don't generate two uncompressed SDDs that canonicalize to the same SDD
+            let cnf_1 = mgr.from_cnf(&c1);
+            let cnf_2 = mgr.from_cnf(&c2);
 
-    //         let h_eq = mgr.sdd_eq(cnf_1, cnf_2);
+            let h_eq = mgr.sdd_eq(cnf_1, cnf_2);
 
-    //         if h_eq != (cnf_1 == cnf_2) {
-    //             println!("disagreement!");
-    //             println!("ptr eq: {}, mgr_eq: {}", cnf_1 == cnf_2, h_eq);
-    //             println!("sdd 1: {}", mgr.print_sdd(cnf_1));
-    //             println!("sdd 2: {}", mgr.print_sdd(cnf_2));
-    //             TestResult::from_bool(false)
-    //         } else {
-    //             TestResult::from_bool(true)
-    //         }
-    //     }
-    // }
+            if h_eq != (cnf_1 == cnf_2) {
+                println!("disagreement!");
+                println!("ptr eq: {}, mgr_eq: {}", cnf_1 == cnf_2, h_eq);
+                println!("sdd 1: {}", mgr.print_sdd(cnf_1));
+                println!("sdd 2: {}", mgr.print_sdd(cnf_2));
+                TestResult::from_bool(false)
+            } else {
+                TestResult::from_bool(true)
+            }
+        }
+    }
 
     quickcheck! {
         /// verify that every node in the SDD compression canonicalizer has a unique semantic hash, using CompressionCanonicalizer
         fn qc_sdd_canonicity(c1: Cnf, vtree:VTree) -> TestResult {
-            let mgr = super::SddManager::new(vtree);
+            let mgr = super::CompressionSddManager::new(vtree);
             let _ = mgr.from_cnf(&c1);
 
             let map : WmcParams<FiniteField<{ crate::BIG_PRIME }>>= create_semantic_hash_map(mgr.num_vars());
@@ -1011,44 +1015,44 @@ mod test_sdd_manager {
         }
     }
 
-    // quickcheck! {
-    //     /// verify that every node in the SDD with the semantic canonicalizer a unique semantic hash w.r.t negations
-    //     /// using SemanticCanonicalizer
-    //     fn qc_semantic_sdd_canonicity(c1: Cnf, vtree:VTree) -> TestResult {
-    //         let mgr = super::SddManager::<SemanticCanonicalizer< {crate::BIG_PRIME} >>::new(vtree);
-    //         let _ = mgr.from_cnf(&c1);
+    quickcheck! {
+        /// verify that every node in the SDD with the semantic canonicalizer a unique semantic hash w.r.t negations
+        /// using SemanticCanonicalizer
+        fn qc_semantic_sdd_canonicity(c1: Cnf, vtree:VTree) -> TestResult {
+            let mgr = SemanticSddManager::< {crate::BIG_PRIME} >::new(vtree);
+            let _ = mgr.from_cnf(&c1);
 
-    //         let map : WmcParams<FiniteField<{ crate::BIG_PRIME }>>= create_semantic_hash_map(mgr.num_vars());
-    //         let mut seen_hashes : HashMap<u128, SddPtr> = HashMap::new();
-    //         for sdd in mgr.node_iter() {
-    //             let hash = sdd.semantic_hash(mgr.get_vtree_manager(), &map);
+            let map : WmcParams<FiniteField<{ crate::BIG_PRIME }>>= create_semantic_hash_map(mgr.num_vars());
+            let mut seen_hashes : HashMap<u128, SddPtr> = HashMap::new();
+            for sdd in mgr.node_iter() {
+                let hash = sdd.semantic_hash(mgr.get_vtree_manager(), &map);
 
-    //             // see the hash itself
-    //             if seen_hashes.contains_key(&hash.value()) {
-    //                 let c = seen_hashes.get(&hash.value()).unwrap();
-    //                 println!("cnf: {}", c1);
-    //                 println!("probmap: {:?}", map);
-    //                 println!("collision found for hash value {}", hash);
-    //                 println!("sdd a: {}\n", mgr.print_sdd(sdd));
-    //                 println!("sdd b: {}\n", mgr.print_sdd(*c));
-    //                 return TestResult::from_bool(false);
-    //             }
+                // see the hash itself
+                if seen_hashes.contains_key(&hash.value()) {
+                    let c = seen_hashes.get(&hash.value()).unwrap();
+                    println!("cnf: {}", c1);
+                    println!("probmap: {:?}", map);
+                    println!("collision found for hash value {}", hash);
+                    println!("sdd a: {}\n", mgr.print_sdd(sdd));
+                    println!("sdd b: {}\n", mgr.print_sdd(*c));
+                    return TestResult::from_bool(false);
+                }
 
-    //             // see the hash's negation
-    //             if seen_hashes.contains_key(&hash.negate().value()) {
-    //                 let c = seen_hashes.get(&hash.negate().value()).unwrap();
-    //                 println!("cnf: {}", c1);
-    //                 println!("probmap: {:?}", map);
-    //                 println!("collision found for negated hash value {}", hash.negate());
-    //                 println!("sdd a: {}\n", mgr.print_sdd(sdd));
-    //                 println!("sdd b: {}\n", mgr.print_sdd(*c));
-    //                 return TestResult::from_bool(false);
-    //             }
-    //             seen_hashes.insert(hash.value(), sdd);
-    //         }
-    //         TestResult::from_bool(true)
-    //     }
-    // }
+                // see the hash's negation
+                if seen_hashes.contains_key(&hash.negate().value()) {
+                    let c = seen_hashes.get(&hash.negate().value()).unwrap();
+                    println!("cnf: {}", c1);
+                    println!("probmap: {:?}", map);
+                    println!("collision found for negated hash value {}", hash.negate());
+                    println!("sdd a: {}\n", mgr.print_sdd(sdd));
+                    println!("sdd b: {}\n", mgr.print_sdd(*c));
+                    return TestResult::from_bool(false);
+                }
+                seen_hashes.insert(hash.value(), sdd);
+            }
+            TestResult::from_bool(true)
+        }
+    }
 
     quickcheck! {
         fn vtree_validity_arbitrary(vtree: VTree) -> bool {
@@ -1064,25 +1068,25 @@ mod test_sdd_manager {
         }
     }
 
-    // quickcheck! {
-    //     /// verify that the semantic hash of an SDDPtr + its compl is always equal to 1
-    //     fn semantic_reg_plus_compl_eq_one(c1: Cnf, vtree:VTree) -> bool {
-    //         let mgr = super::SddManager::<SemanticCanonicalizer<{ crate::BIG_PRIME }>>::new(vtree);
-    //         let map : WmcParams<FiniteField<{ crate::BIG_PRIME }>>= create_semantic_hash_map(mgr.num_vars());
+    quickcheck! {
+        /// verify that the semantic hash of an SDDPtr + its compl is always equal to 1
+        fn semantic_reg_plus_compl_eq_one(c1: Cnf, vtree:VTree) -> bool {
+            let mgr = SemanticSddManager::<{ crate::BIG_PRIME }>::new(vtree);
+            let map : WmcParams<FiniteField<{ crate::BIG_PRIME }>>= create_semantic_hash_map(mgr.num_vars());
 
-    //         let sdd = mgr.from_cnf(&c1);
-    //         let compl = sdd.neg();
+            let sdd = mgr.from_cnf(&c1);
+            let compl = sdd.neg();
 
-    //         let sdd_hash = sdd.semantic_hash(mgr.get_vtree_manager(), &map);
-    //         let compl_hash = compl.semantic_hash(mgr.get_vtree_manager(), &map);
+            let sdd_hash = sdd.semantic_hash(mgr.get_vtree_manager(), &map);
+            let compl_hash = compl.semantic_hash(mgr.get_vtree_manager(), &map);
 
-    //         let sum = (sdd_hash + compl_hash).value();
+            let sum = (sdd_hash + compl_hash).value();
 
-    //         if sum != 1 {
-    //             println!("hashes do not sum to one; Reg: {}, Compl: {}", sdd_hash, compl_hash);
-    //         }
+            if sum != 1 {
+                println!("hashes do not sum to one; Reg: {}, Compl: {}", sdd_hash, compl_hash);
+            }
 
-    //         sum == 1
-    //     }
-    // }
+            sum == 1
+        }
+    }
 }
