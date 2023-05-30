@@ -52,6 +52,23 @@ impl Default for SddStats {
         Self::new()
     }
 }
+
+// pub trait SddBuilder<'a>: BottomUpBuilder<'a> {
+//     type SddPtr: PartialEq;
+
+//     fn sdd_eq(&'a self, a: Self::SddPtr, b: Self::SddPtr) -> bool {
+//         a == b
+//     }
+// }
+
+// impl<'a, T> BottomUpBuilder<'a> for T where T: SddBuilder<'a> {
+//     type Ptr = T::SddPtr;
+
+//     fn negate(&'a self, f: Self::Ptr) -> Self::Ptr {
+//         f.neg()
+//     }
+// }
+
 pub struct SddManager<'a> {
     vtree: VTreeManager,
     stats: SddStats,

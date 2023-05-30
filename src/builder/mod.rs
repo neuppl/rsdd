@@ -21,7 +21,12 @@ pub trait BottomUpBuilder<'a> {
 
     // primitive operations
     fn and(&'a self, a: Self::Ptr, b: Self::Ptr) -> Self::Ptr;
-    fn or(&'a self, a: Self::Ptr, b: Self::Ptr) -> Self::Ptr;
+
+    /// Compute the Boolean function `f || g`
+    /// by default, or is defined using de morgan's law as and
+    fn or(&'a self, a: Self::Ptr, b: Self::Ptr) -> Self::Ptr {
+        self.negate(self.and(self.negate(a), self.negate(b)))
+    }
     fn negate(&'a self, f: Self::Ptr) -> Self::Ptr;
 
     /// if f then g else h
