@@ -110,7 +110,8 @@ fn compile_sdd_dtree(str: String, _args: &Args) -> BenchResult {
     }
 
     BenchResult {
-        num_recursive: man.stats().num_rec,
+        // num_recursive: man.stats().num_rec,
+        num_recursive: 0, // TODO: fix
         size: _sdd.count_nodes(),
     }
 }
@@ -140,7 +141,8 @@ fn compile_sdd_rightlinear(str: String, _args: &Args) -> BenchResult {
     }
 
     BenchResult {
-        num_recursive: man.stats().num_rec,
+        // num_recursive: man.stats().num_rec,
+        num_recursive: 0, // TODO: fix
         size: _sdd.count_nodes(),
     }
 }

@@ -24,41 +24,6 @@ use crate::repr::vtree::{VTree, VTreeIndex, VTreeManager};
 use crate::repr::wmc::WmcParams;
 use crate::util::semiring::FiniteField;
 use crate::{repr::cnf::Cnf, repr::logical_expr::LogicalExpr, repr::var_label::VarLabel};
-// pub use crate::builder::BottomUpBuilder;
-
-#[derive(Debug, Clone)]
-pub struct SddStats {
-    /// total number of recursive calls
-    pub num_rec: usize,
-    /// total number of calls to compress
-    pub num_compr: usize,
-    /// total number of new SddAnds generated in compress
-    pub num_compr_and: usize,
-    /// total number of gets/inserts generated in compress
-    pub num_get_or_insert: usize,
-    /// app cache hits
-    pub num_app_cache_hits: usize,
-}
-
-impl SddStats {
-    pub fn new() -> SddStats {
-        SddStats {
-            num_rec: 0,
-            num_compr: 0,
-            num_compr_and: 0,
-            num_get_or_insert: 0,
-            num_app_cache_hits: 0,
-        }
-    }
-}
-
-impl Default for SddStats {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-// pub trait SddBottomUpBuilder<'a>: BottomUpBuilder<'a, Ptr=SddPtr<'a>> {}
 
 pub trait SddBuilder<'a>: BottomUpBuilder<'a, SddPtr<'a>> {
     // internal data structures
@@ -557,7 +522,7 @@ pub trait SddBuilder<'a>: BottomUpBuilder<'a, SddPtr<'a>> {
         String::from_utf8(w).unwrap()
     }
 
-    fn stats(&self) -> &SddStats;
+    fn num_app_cache_hits(&self) -> usize;
     fn num_logically_redundant(&self) -> usize;
 }
 
@@ -611,7 +576,6 @@ where
 
         // check if we have this application cached
         if let Some(x) = self.app_cache_get(&SddAnd::new(a, b)) {
-            // self.stats.num_app_cache_hits += 1;
             return x;
         }
 
@@ -655,7 +619,6 @@ where
     /// TODO: This is highly inefficient, will re-traverse nodes, needs a cache
     /// TODO : this can bail out early by checking the vtree
     fn condition(&'a self, f: SddPtr<'a>, lbl: VarLabel, value: bool) -> SddPtr<'a> {
-        // self.stats.num_rec += 1;
         match f {
             SddPtr::PtrTrue | SddPtr::PtrFalse => f,
             SddPtr::Var(label, polarity) => {
@@ -756,7 +719,6 @@ where
 
 pub struct CompressionSddManager<'a> {
     vtree: VTreeManager,
-    stats: SddStats,
     should_compress: bool,
     // tables
     bdd_tbl: RefCell<BackedRobinhoodTable<'a, BinarySDD<'a>>>,
@@ -827,13 +789,11 @@ impl<'a> SddBuilder<'a> for CompressionSddManager<'a> {
     /// Canonicalizes the list of (prime, sub) terms in-place
     /// `node`: a list of (prime, sub) pairs
     fn compress(&'a self, node: &mut Vec<SddAnd<'a>>) {
-        // self.stats.num_compr += 1;
         for i in 0..node.len() {
             // see if we can compress i
             let mut j = i + 1;
             while j < node.len() {
                 if self.sdd_eq(node[i].sub(), node[j].sub()) {
-                    // self.stats.num_compr_and += 1;
                     // compress j into i and remove j from the node list
                     node[i] = SddAnd::new(self.or(node[i].prime(), node[j].prime()), node[i].sub());
                     node.swap_remove(j);
@@ -872,8 +832,9 @@ impl<'a> SddBuilder<'a> for CompressionSddManager<'a> {
         bdds.chain(sdds).collect()
     }
 
-    fn stats(&self) -> &SddStats {
-        &self.stats
+    // eventually, remove this
+    fn num_app_cache_hits(&self) -> usize {
+        self.bdd_tbl.borrow().hits() + self.sdd_tbl.borrow().hits()
     }
 
     /// computes the number of logically redundant nodes allocated by the
@@ -897,7 +858,6 @@ impl<'a> CompressionSddManager<'a> {
     pub fn new(vtree: VTree) -> CompressionSddManager<'a> {
         let vtree_man = VTreeManager::new(vtree);
         CompressionSddManager {
-            stats: SddStats::new(),
             ite_cache: RefCell::new(AllTable::new()),
             app_cache: RefCell::new(HashMap::new()),
             bdd_tbl: RefCell::new(BackedRobinhoodTable::new()),
@@ -934,13 +894,12 @@ impl<'a> CompressionSddManager<'a> {
 
 pub struct SemanticSddManager<'a, const P: u128> {
     vtree: VTreeManager,
-    stats: SddStats,
     should_compress: bool,
     // tables
     bdd_tbl: RefCell<BackedRobinhoodTable<'a, BinarySDD<'a>>>,
     sdd_tbl: RefCell<BackedRobinhoodTable<'a, SddOr<'a>>>,
     // caches
-    ite_cache: RefCell<AllTable<SddPtr<'a>>>,
+    // ite_cache: RefCell<AllTable<SddPtr<'a>>>,
     app_cache: RefCell<HashMap<u128, SddPtr<'a>>>,
     // semantic hashing
     map: WmcParams<FiniteField<P>>,
@@ -965,10 +924,6 @@ impl<'a, const P: u128> SddBuilder<'a> for SemanticSddManager<'a, P> {
         bdds.chain(sdds).collect()
     }
 
-    fn stats(&self) -> &SddStats {
-        &self.stats
-    }
-
     fn app_cache_get(&self, and: &SddAnd<'a>) -> Option<SddPtr<'a>> {
         let h = and.semantic_hash(&self.vtree, &self.map);
         match h.value() {
@@ -985,15 +940,15 @@ impl<'a, const P: u128> SddBuilder<'a> for SemanticSddManager<'a, P> {
         }
     }
 
-    fn ite_cache_hash(&self, ite: &Ite<SddPtr>) -> u64 {
+    fn ite_cache_hash(&self, _ite: &Ite<SddPtr>) -> u64 {
         todo!()
     }
 
-    fn ite_cache_get(&self, ite: Ite<SddPtr<'a>>, hash: u64) -> Option<SddPtr> {
+    fn ite_cache_get(&self, _ite: Ite<SddPtr<'a>>, _hash: u64) -> Option<SddPtr> {
         todo!()
     }
 
-    fn ite_cache_insert(&self, ite: Ite<SddPtr<'a>>, res: SddPtr<'a>, hash: u64) {
+    fn ite_cache_insert(&self, _ite: Ite<SddPtr<'a>>, _res: SddPtr<'a>, _hash: u64) {
         todo!()
     }
 
@@ -1048,6 +1003,11 @@ impl<'a, const P: u128> SddBuilder<'a> for SemanticSddManager<'a, P> {
         }
         num_collisions
     }
+
+    // eventually, remove this
+    fn num_app_cache_hits(&self) -> usize {
+        self.bdd_tbl.borrow().hits() + self.sdd_tbl.borrow().hits()
+    }
 }
 
 impl<'a, const P: u128> SemanticSddManager<'a, P> {
@@ -1057,12 +1017,11 @@ impl<'a, const P: u128> SemanticSddManager<'a, P> {
         SemanticSddManager {
             should_compress: false,
             vtree: vtree_man,
-            ite_cache: RefCell::new(AllTable::new()),
+            // ite_cache: RefCell::new(AllTable::new()),
             app_cache: RefCell::new(HashMap::new()),
             bdd_tbl: RefCell::new(BackedRobinhoodTable::new()),
             sdd_tbl: RefCell::new(BackedRobinhoodTable::new()),
             map,
-            stats: SddStats::default(),
         }
     }
 
