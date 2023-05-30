@@ -691,6 +691,7 @@ mod test_sdd_manager {
     use crate::builder::bdd_builder::BddManager;
     use crate::repr::cnf::Cnf;
     use crate::repr::var_label::{Literal, VarLabel};
+    use crate::rsdd::builder::BottomUpBuilder;
     use quickcheck::{Arbitrary, TestResult};
     use rand::rngs::SmallRng;
     use rand::seq::SliceRandom;

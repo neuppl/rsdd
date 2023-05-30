@@ -10,36 +10,36 @@ pub mod bdd_plan;
 pub mod decision_nnf_builder;
 pub mod sdd_builder;
 
-trait BottomUpBuilder {
-    type Ptr<'a>
-    where
-        Self: 'a;
+pub trait BottomUpBuilder<'a> {
+    type Ptr;
+
+    // constants --- can elide the input lifetimes
+    fn true_ptr(&self) -> Self::Ptr;
+    fn false_ptr(&self) -> Self::Ptr;
+
+    fn var(&self, label: VarLabel, polarity: bool) -> Self::Ptr;
+
+    // primitive operations
+    fn and(&'a self, a: Self::Ptr, b: Self::Ptr) -> Self::Ptr;
+    fn or(&'a self, a: Self::Ptr, b: Self::Ptr) -> Self::Ptr;
+    fn negate(&'a self, f: Self::Ptr) -> Self::Ptr;
 
     /// if f then g else h
-    fn ite<'a>(&'a self, f: Self::Ptr<'a>, g: Self::Ptr<'a>, h: Self::Ptr<'a>) -> Self::Ptr<'a>;
-    fn and<'a>(&'a self, a: Self::Ptr<'a>, b: Self::Ptr<'a>) -> Self::Ptr<'a>;
-    fn or<'a>(&'a self, a: Self::Ptr<'a>, b: Self::Ptr<'a>) -> Self::Ptr<'a>;
+    fn ite(&'a self, f: Self::Ptr, g: Self::Ptr, h: Self::Ptr) -> Self::Ptr;
 
     /// if and only if (i.e., Boolean equality)
-    fn iff<'a>(&'a self, a: Self::Ptr<'a>, b: Self::Ptr<'a>) -> Self::Ptr<'a>;
+    fn iff(&'a self, a: Self::Ptr, b: Self::Ptr) -> Self::Ptr;
 
     /// logical exclusive-or
-    fn xor<'a>(&'a self, a: Self::Ptr<'a>, b: Self::Ptr<'a>) -> Self::Ptr<'a>;
+    fn xor(&'a self, a: Self::Ptr, b: Self::Ptr) -> Self::Ptr;
 
     /// existentially quantifies `v` out of `f`
-    fn exists<'a>(&'a self, f: Self::Ptr<'a>, v: VarLabel) -> Self::Ptr<'a>;
+    fn exists(&'a self, f: Self::Ptr, v: VarLabel) -> Self::Ptr;
 
     /// conditions f | v = value
-    fn condition<'a>(&'a self, a: Self::Ptr<'a>, v: VarLabel, value: bool) -> Self::Ptr<'a>;
+    fn condition(&'a self, a: Self::Ptr, v: VarLabel, value: bool) -> Self::Ptr;
 
     /// compose g into f for variable v
     /// I.e., computes the logical function (exists v. (g <=> v) /\ f).
-    fn compose<'a>(&'a self, a: Self::Ptr<'a>, v: VarLabel, value: bool) -> Self::Ptr<'a>;
-
-    fn negate<'a>(&'a self, f: Self::Ptr<'a>) -> Self::Ptr<'a>;
-
-    // constants --- can elide the input lifetimes
-    fn true_ptr(&self) -> Self::Ptr<'_>;
-    fn false_ptr(&self) -> Self::Ptr<'_>;
-    fn var(&self, label: VarLabel, polarity: bool) -> Self::Ptr<'_>;
+    fn compose(&'a self, f: Self::Ptr, lbl: VarLabel, g: Self::Ptr) -> Self::Ptr;
 }

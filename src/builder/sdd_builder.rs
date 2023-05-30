@@ -8,6 +8,7 @@ use std::collections::{HashMap, HashSet};
 use super::cache::all_app::AllTable;
 use super::cache::ite::Ite;
 use super::cache::LruTable;
+pub use super::BottomUpBuilder;
 
 use crate::backing_store::bump_table::BackedRobinhoodTable;
 use crate::backing_store::UniqueTable;
@@ -18,6 +19,7 @@ use crate::repr::sdd::sdd_or::{SddAnd, SddOr};
 use crate::repr::sdd::SddPtr;
 use crate::repr::vtree::{VTree, VTreeIndex, VTreeManager};
 use crate::{repr::cnf::Cnf, repr::logical_expr::LogicalExpr, repr::var_label::VarLabel};
+// pub use crate::builder::BottomUpBuilder;
 
 #[derive(Debug, Clone)]
 pub struct SddStats {
@@ -50,15 +52,6 @@ impl Default for SddStats {
         Self::new()
     }
 }
-
-pub trait SddBuilder<'a> {
-    fn ite(&'a self, f: SddPtr<'a>, g: SddPtr<'a>, h: SddPtr<'a>) -> SddPtr<'a>;
-    fn and(&'a self, a: SddPtr<'a>, b: SddPtr<'a>) -> SddPtr<'a>;
-    fn or(&'a self, a: SddPtr<'a>, b: SddPtr<'a>) -> SddPtr<'a> {
-        self.and(a.neg(), b.neg()).neg()
-    }
-}
-
 pub struct SddManager<'a> {
     vtree: VTreeManager,
     stats: SddStats,
@@ -69,6 +62,197 @@ pub struct SddManager<'a> {
     // caches
     ite_cache: RefCell<AllTable<SddPtr<'a>>>,
     app_cache: RefCell<HashMap<SddAnd<'a>, SddPtr<'a>>>,
+}
+
+impl<'a> BottomUpBuilder<'a> for SddManager<'a> {
+    type Ptr = SddPtr<'a>;
+
+    fn true_ptr(&self) -> Self::Ptr {
+        SddPtr::PtrTrue
+    }
+
+    fn false_ptr(&self) -> Self::Ptr {
+        SddPtr::PtrFalse
+    }
+
+    fn var(&self, label: VarLabel, polarity: bool) -> Self::Ptr {
+        SddPtr::Var(label, polarity)
+    }
+
+    fn negate(&'a self, f: Self::Ptr) -> Self::Ptr {
+        f.neg()
+    }
+
+    fn and(&'a self, a: Self::Ptr, b: Self::Ptr) -> Self::Ptr {
+        // println!("and a: {}\nb: {}", self.print_sdd(a), self.print_sdd(b));
+        // first, check for a base case
+        match (a, b) {
+            (a, b) if self.is_true(a) => return b,
+            (a, b) if self.is_true(b) => return a,
+            (a, _) if self.is_false(a) => return SddPtr::false_ptr(),
+            (_, b) if self.is_false(b) => return SddPtr::false_ptr(),
+            (a, b) if self.sdd_eq(a, b) => return a,
+            (a, b) if self.sdd_eq(a, b.neg()) => return SddPtr::false_ptr(),
+            _ => (),
+        };
+
+        // normalize so `a` is always prime if possible
+        let (a, b) = if self.get_vtree_idx(a) == self.get_vtree_idx(b)
+            || self
+                .vtree
+                .is_prime_index(self.get_vtree_idx(a), self.get_vtree_idx(b))
+        {
+            (a, b)
+        } else {
+            (b, a)
+        };
+
+        {
+            let app_cache = self.app_cache.borrow();
+            // check if we have this application cached
+            if let Some(x) = app_cache.get(&SddAnd::new(a, b)) {
+                // self.stats.num_app_cache_hits += 1;
+                return *x;
+            }
+        }
+
+        let av = self.get_vtree_idx(a);
+        let bv = self.get_vtree_idx(b);
+        let lca = self.vtree.lca(av, bv);
+
+        // now we determine the current iterator for primes and subs
+        // consider the following example vtree:
+        //       3
+        //    1       5
+        //  0  2    4   6
+        // 4 cases:
+        //   1. `a` and `b` have the same vtree
+        //   2. The lca is `a`
+        //   3. The lca is `b`
+        //   4. The lca is a shared parent equal to neither
+        // we can only conjoin two SDD nodes if they are normalized with respect
+        // to the same vtree; the following code does this for each of the
+        // above cases.
+        let r = if av == bv {
+            self.and_cartesian(a, b, lca)
+        } else if lca == av {
+            self.and_sub_desc(a, b)
+        } else if lca == bv {
+            self.and_prime_desc(b, a)
+        } else {
+            self.and_indep(a, b, lca)
+        };
+
+        // cache and return
+        self.app_cache.borrow_mut().insert(SddAnd::new(a, b), r);
+        r
+    }
+
+    fn or(&'a self, a: Self::Ptr, b: Self::Ptr) -> Self::Ptr {
+        self.and(a.neg(), b.neg()).neg()
+    }
+
+    /// Computes `f | var = value`
+    /// TODO: This is highly inefficient, will re-traverse nodes, needs a cache
+    /// TODO : this can bail out early by checking the vtree
+    fn condition(&'a self, f: Self::Ptr, lbl: VarLabel, value: bool) -> Self::Ptr {
+        // self.stats.num_rec += 1;
+        match f {
+            SddPtr::PtrTrue | SddPtr::PtrFalse => f,
+            SddPtr::Var(label, polarity) => {
+                if label == lbl {
+                    if polarity == value {
+                        SddPtr::PtrTrue
+                    } else {
+                        SddPtr::PtrFalse
+                    }
+                } else {
+                    f
+                }
+            }
+            // if f.is_bdd() {
+            //     if f.topvar() == lbl {
+            //         if !f.is_compl() == value {
+            //             return f.high();
+            //         } else {
+            //             return f.low();
+            //         }
+            //     } else {
+            //         let l = self.condition(f.low(), lbl, value);
+            //         let h = self.condition(f.high(), lbl, value);
+            //         return self.unique_bdd(BinarySDD::new(f.topvar(), l, h));
+            //     }
+            // }
+            _ => {
+                let mut v = Vec::new();
+                // f is a node; recurse and compress the result
+                for a in f.node_iter() {
+                    let prime = a.prime();
+                    let sub = a.sub();
+                    let newp = self.condition(prime, lbl, value);
+                    let sub = if f.is_neg() { sub.neg() } else { sub };
+                    if self.is_false(newp) {
+                        continue;
+                    };
+                    let news = self.condition(sub, lbl, value);
+                    if self.is_true(newp) {
+                        return news;
+                    }
+                    v.push(SddAnd::new(newp, news));
+                }
+                self.canonicalize(v, f.vtree())
+            }
+        }
+    }
+
+    /// Computes the SDD representing the logical function `if f then g else h`
+    fn ite(&'a self, f: Self::Ptr, g: Self::Ptr, h: Self::Ptr) -> Self::Ptr {
+        let ite = Ite::new(|a, b| self.vtree.is_prime(a, b), f, g, h);
+        if let Ite::IteConst(f) = ite {
+            return f;
+        }
+
+        let hash = self.ite_cache.borrow().hash(&ite);
+        if let Some(v) = self.ite_cache.borrow().get(ite, hash) {
+            return v;
+        }
+
+        // TODO make this a primitive operation
+        let fg = self.and(f, g);
+        let negfh = self.and(f.neg(), h);
+        let r = self.or(fg, negfh);
+        self.ite_cache.borrow_mut().insert(ite, r, hash);
+        r
+    }
+
+    /// Computes the SDD representing the logical function `f <=> g`
+    fn iff(&'a self, f: Self::Ptr, g: Self::Ptr) -> Self::Ptr {
+        self.ite(f, g, g.neg())
+    }
+
+    /// Computes the SDD representing the logical function `f xor g`
+    fn xor(&'a self, f: Self::Ptr, g: Self::Ptr) -> Self::Ptr {
+        self.ite(f, g.neg(), g)
+    }
+
+    /// Existentially quantifies out the variable `lbl` from `f`
+    fn exists(&'a self, sdd: Self::Ptr, lbl: VarLabel) -> Self::Ptr {
+        // TODO this can be optimized by specializing it
+        let v1 = self.condition(sdd, lbl, true);
+        let v2 = self.condition(sdd, lbl, false);
+        self.or(v1, v2)
+    }
+
+    /// Compose `g` into `f` by substituting for `lbl`
+    fn compose(&'a self, _f: Self::Ptr, _lbl: VarLabel, _g: Self::Ptr) -> Self::Ptr {
+        panic!("not impl")
+        // TODO this can be optimized with a specialized implementation to make
+        // it a single traversal
+        // let var = self.var(lbl, true);
+        // let iff = self.iff(var, g);
+        // let a = self.and(iff, f);
+        // self.exists(a, lbl)
+    }
 }
 
 impl<'a> SddManager<'a> {
@@ -449,177 +633,6 @@ impl<'a> SddManager<'a> {
 
         // canonicalize
         self.canonicalize(r, lca)
-    }
-
-    pub fn and(&'a self, a: SddPtr<'a>, b: SddPtr<'a>) -> SddPtr<'a> {
-        // println!("and a: {}\nb: {}", self.print_sdd(a), self.print_sdd(b));
-        // first, check for a base case
-        match (a, b) {
-            (a, b) if self.is_true(a) => return b,
-            (a, b) if self.is_true(b) => return a,
-            (a, _) if self.is_false(a) => return SddPtr::false_ptr(),
-            (_, b) if self.is_false(b) => return SddPtr::false_ptr(),
-            (a, b) if self.sdd_eq(a, b) => return a,
-            (a, b) if self.sdd_eq(a, b.neg()) => return SddPtr::false_ptr(),
-            _ => (),
-        };
-
-        // normalize so `a` is always prime if possible
-        let (a, b) = if self.get_vtree_idx(a) == self.get_vtree_idx(b)
-            || self
-                .vtree
-                .is_prime_index(self.get_vtree_idx(a), self.get_vtree_idx(b))
-        {
-            (a, b)
-        } else {
-            (b, a)
-        };
-
-        {
-            let app_cache = self.app_cache.borrow();
-            // check if we have this application cached
-            if let Some(x) = app_cache.get(&SddAnd::new(a, b)) {
-                // self.stats.num_app_cache_hits += 1;
-                return *x;
-            }
-        }
-
-        let av = self.get_vtree_idx(a);
-        let bv = self.get_vtree_idx(b);
-        let lca = self.vtree.lca(av, bv);
-
-        // now we determine the current iterator for primes and subs
-        // consider the following example vtree:
-        //       3
-        //    1       5
-        //  0  2    4   6
-        // 4 cases:
-        //   1. `a` and `b` have the same vtree
-        //   2. The lca is `a`
-        //   3. The lca is `b`
-        //   4. The lca is a shared parent equal to neither
-        // we can only conjoin two SDD nodes if they are normalized with respect
-        // to the same vtree; the following code does this for each of the
-        // above cases.
-        let r = if av == bv {
-            self.and_cartesian(a, b, lca)
-        } else if lca == av {
-            self.and_sub_desc(a, b)
-        } else if lca == bv {
-            self.and_prime_desc(b, a)
-        } else {
-            self.and_indep(a, b, lca)
-        };
-
-        // cache and return
-        self.app_cache.borrow_mut().insert(SddAnd::new(a, b), r);
-        r
-    }
-
-    pub fn or(&'a self, a: SddPtr<'a>, b: SddPtr<'a>) -> SddPtr<'a> {
-        self.and(a.neg(), b.neg()).neg()
-    }
-
-    /// Computes `f | var = value`
-    /// TODO: This is highly inefficient, will re-traverse nodes, needs a cache
-    /// TODO : this can bail out early by checking the vtree
-    pub fn condition(&'a self, f: SddPtr<'a>, lbl: VarLabel, value: bool) -> SddPtr<'a> {
-        // self.stats.num_rec += 1;
-        match f {
-            SddPtr::PtrTrue | SddPtr::PtrFalse => f,
-            SddPtr::Var(label, polarity) => {
-                if label == lbl {
-                    if polarity == value {
-                        SddPtr::PtrTrue
-                    } else {
-                        SddPtr::PtrFalse
-                    }
-                } else {
-                    f
-                }
-            }
-            // if f.is_bdd() {
-            //     if f.topvar() == lbl {
-            //         if !f.is_compl() == value {
-            //             return f.high();
-            //         } else {
-            //             return f.low();
-            //         }
-            //     } else {
-            //         let l = self.condition(f.low(), lbl, value);
-            //         let h = self.condition(f.high(), lbl, value);
-            //         return self.unique_bdd(BinarySDD::new(f.topvar(), l, h));
-            //     }
-            // }
-            _ => {
-                let mut v = Vec::new();
-                // f is a node; recurse and compress the result
-                for a in f.node_iter() {
-                    let prime = a.prime();
-                    let sub = a.sub();
-                    let newp = self.condition(prime, lbl, value);
-                    let sub = if f.is_neg() { sub.neg() } else { sub };
-                    if self.is_false(newp) {
-                        continue;
-                    };
-                    let news = self.condition(sub, lbl, value);
-                    if self.is_true(newp) {
-                        return news;
-                    }
-                    v.push(SddAnd::new(newp, news));
-                }
-                self.canonicalize(v, f.vtree())
-            }
-        }
-    }
-
-    /// Computes the SDD representing the logical function `if f then g else h`
-    pub fn ite(&'a self, f: SddPtr<'a>, g: SddPtr<'a>, h: SddPtr<'a>) -> SddPtr<'a> {
-        let ite = Ite::new(|a, b| self.vtree.is_prime(a, b), f, g, h);
-        if let Ite::IteConst(f) = ite {
-            return f;
-        }
-
-        let hash = self.ite_cache.borrow().hash(&ite);
-        if let Some(v) = self.ite_cache.borrow().get(ite, hash) {
-            return v;
-        }
-
-        // TODO make this a primitive operation
-        let fg = self.and(f, g);
-        let negfh = self.and(f.neg(), h);
-        let r = self.or(fg, negfh);
-        self.ite_cache.borrow_mut().insert(ite, r, hash);
-        r
-    }
-
-    /// Computes the SDD representing the logical function `f <=> g`
-    pub fn iff(&'a self, f: SddPtr<'a>, g: SddPtr<'a>) -> SddPtr<'a> {
-        self.ite(f, g, g.neg())
-    }
-
-    /// Computes the SDD representing the logical function `f xor g`
-    pub fn xor(&'a self, f: SddPtr<'a>, g: SddPtr<'a>) -> SddPtr<'a> {
-        self.ite(f, g.neg(), g)
-    }
-
-    /// Existentially quantifies out the variable `lbl` from `f`
-    pub fn exists(&'a self, sdd: SddPtr<'a>, lbl: VarLabel) -> SddPtr<'a> {
-        // TODO this can be optimized by specializing it
-        let v1 = self.condition(sdd, lbl, true);
-        let v2 = self.condition(sdd, lbl, false);
-        self.or(v1, v2)
-    }
-
-    /// Compose `g` into `f` by substituting for `lbl`
-    pub fn compose(&'a self, _f: SddPtr<'a>, _lbl: VarLabel, _g: SddPtr<'a>) -> SddPtr<'a> {
-        panic!("not impl")
-        // TODO this can be optimized with a specialized implementation to make
-        // it a single traversal
-        // let var = self.var(lbl, true);
-        // let iff = self.iff(var, g);
-        // let a = self.and(iff, f);
-        // self.exists(a, lbl)
     }
 
     fn print_sdd_internal(&'a self, ptr: SddPtr<'a>) -> String {
