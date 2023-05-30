@@ -167,9 +167,9 @@ impl<'a, T: Eq + PartialEq + Hash + Clone + std::fmt::Debug> UniqueTable<'a, T>
         let mut hasher = FxHasher::default();
         elem.hash(&mut hasher);
         let hash = hasher.finish();
-        self.get_or_insert_by_hash(hash, elem)
+        self.get_or_insert_by_hash(hash, elem, false)
     }
-    fn get_or_insert_by_hash(&'a mut self, hash: u64, elem: T) -> &'a T {
+    fn get_or_insert_by_hash(&'a mut self, hash: u64, elem: T, equality_by_hash: bool) -> &'a T {
         if (self.len + 1) as f64 > (self.cap as f64 * LOAD_FACTOR) {
             self.grow();
         }
@@ -187,7 +187,7 @@ impl<'a, T: Eq + PartialEq + Hash + Clone + std::fmt::Debug> UniqueTable<'a, T>
                 // equal and return the found pointer if so
                 if hash == cur_itm.hash {
                     let found: &T = cur_itm.ptr.unwrap();
-                    if *found == elem {
+                    if equality_by_hash || *found == elem {
                         self.hits += 1;
                         return found;
                     }

@@ -958,7 +958,7 @@ impl<'a, const P: u128> SddBuilder<'a> for SemanticSddManager<'a, P> {
         let hash = self.hash_bdd(&bdd);
         unsafe {
             let tbl = &mut *self.bdd_tbl.as_ptr();
-            SddPtr::BDD(tbl.get_or_insert_by_hash(hash, bdd))
+            SddPtr::BDD(tbl.get_or_insert_by_hash(hash, bdd, true))
         }
     }
 
@@ -971,7 +971,7 @@ impl<'a, const P: u128> SddBuilder<'a> for SemanticSddManager<'a, P> {
         let hash = self.hash_sdd(&or);
         unsafe {
             let tbl = &mut *self.sdd_tbl.as_ptr();
-            SddPtr::Reg(tbl.get_or_insert_by_hash(hash, or))
+            SddPtr::Reg(tbl.get_or_insert_by_hash(hash, or, true))
         }
     }
 
