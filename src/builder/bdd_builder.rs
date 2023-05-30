@@ -118,8 +118,6 @@ impl<'a, T> BottomUpBuilder<'a, BddPtr<'a>> for T
 where
     T: BddBuilder<'a>,
 {
-    // type Ptr = BddPtr<'a>;
-
     fn true_ptr(&self) -> BddPtr<'a> {
         BddPtr::true_ptr()
     }

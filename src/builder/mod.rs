@@ -11,8 +11,6 @@ pub mod decision_nnf_builder;
 pub mod sdd_builder;
 
 pub trait BottomUpBuilder<'a, Ptr> {
-    // type Ptr;
-
     // constants --- can elide the input lifetimes
     fn true_ptr(&self) -> Ptr;
     fn false_ptr(&self) -> Ptr;

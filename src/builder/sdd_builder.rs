@@ -611,10 +611,6 @@ where
         r
     }
 
-    // fn or(&'a self, a: SddPtr<'a>, b: SddPtr<'a>) -> SddPtr<'a> {
-    //     self.and(a.neg(), b.neg()).neg()
-    // }
-
     /// Computes `f | var = value`
     /// TODO: This is highly inefficient, will re-traverse nodes, needs a cache
     /// TODO : this can bail out early by checking the vtree
