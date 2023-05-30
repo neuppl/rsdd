@@ -75,7 +75,7 @@ impl<'a> BottomUpBuilder<'a> for SddManager<'a> {
         SddPtr::PtrFalse
     }
 
-    fn var(&self, label: VarLabel, polarity: bool) -> Self::Ptr {
+    fn var(&'a self, label: VarLabel, polarity: bool) -> Self::Ptr {
         SddPtr::Var(label, polarity)
     }
 

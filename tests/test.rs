@@ -318,6 +318,7 @@ mod test_bdd_manager {
     use crate::builder::decision_nnf_builder::DecisionNNFBuilder;
     use crate::repr::cnf::Cnf;
     use crate::repr::var_label::VarLabel;
+    use crate::rsdd::builder::BottomUpBuilder;
     use quickcheck::TestResult;
     use rand::Rng;
     use rsdd::builder::cache::all_app::AllTable;

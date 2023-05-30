@@ -17,7 +17,7 @@ pub trait BottomUpBuilder<'a> {
     fn true_ptr(&self) -> Self::Ptr;
     fn false_ptr(&self) -> Self::Ptr;
 
-    fn var(&self, label: VarLabel, polarity: bool) -> Self::Ptr;
+    fn var(&'a self, label: VarLabel, polarity: bool) -> Self::Ptr;
 
     // primitive operations
     fn and(&'a self, a: Self::Ptr, b: Self::Ptr) -> Self::Ptr;
