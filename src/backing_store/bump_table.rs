@@ -164,16 +164,18 @@ impl<'a, T: Eq + PartialEq + Hash + Clone + std::fmt::Debug> UniqueTable<'a, T>
     for BackedRobinhoodTable<'a, T>
 {
     fn get_or_insert(&'a mut self, elem: T) -> &'a T {
+        let mut hasher = FxHasher::default();
+        elem.hash(&mut hasher);
+        let hash = hasher.finish();
+        self.get_or_insert_by_hash(hash, elem)
+    }
+    fn get_or_insert_by_hash(&'a mut self, hash: u64, elem: T) -> &'a T {
         if (self.len + 1) as f64 > (self.cap as f64 * LOAD_FACTOR) {
             self.grow();
         }
 
-        let mut hasher = FxHasher::default();
-        elem.hash(&mut hasher);
-        let elem_hash = hasher.finish();
-
         // the current index into the array
-        let mut pos: usize = (elem_hash as usize) % self.cap;
+        let mut pos: usize = (hash as usize) % self.cap;
         // the distance this item is from its desired location
         let mut psl = 0;
 
@@ -183,7 +185,7 @@ impl<'a, T: Eq + PartialEq + Hash + Clone + std::fmt::Debug> UniqueTable<'a, T>
                 // first check the hashes to see if these elements could
                 // possibly be equal; if they are, check if the items are
                 // equal and return the found pointer if so
-                if elem_hash == cur_itm.hash {
+                if hash == cur_itm.hash {
                     let found: &T = cur_itm.ptr.unwrap();
                     if *found == elem {
                         self.hits += 1;
@@ -197,7 +199,7 @@ impl<'a, T: Eq + PartialEq + Hash + Clone + std::fmt::Debug> UniqueTable<'a, T>
                     // the item that is currently here
                     self.propagate(cur_itm, pos);
                     let ptr = self.alloc.alloc(elem);
-                    let entry = HashTableElement::new(ptr, elem_hash, psl);
+                    let entry = HashTableElement::new(ptr, hash, psl);
                     self.len += 1;
                     self.tbl[pos] = entry;
                     return ptr;
@@ -207,10 +209,39 @@ impl<'a, T: Eq + PartialEq + Hash + Clone + std::fmt::Debug> UniqueTable<'a, T>
             } else {
                 // this element is unique, so place it in the current spot
                 let ptr = self.alloc.alloc(elem);
-                let entry = HashTableElement::new(ptr, elem_hash, psl);
+                let entry = HashTableElement::new(ptr, hash, psl);
                 self.len += 1;
                 self.tbl[pos] = entry;
                 return ptr;
+            }
+        }
+    }
+
+    fn get_by_hash(&'a mut self, hash: u64) -> Option<&'a T> {
+        if (self.len + 1) as f64 > (self.cap as f64 * LOAD_FACTOR) {
+            self.grow();
+        }
+
+        // the current index into the array
+        let mut pos: usize = (hash as usize) % self.cap;
+        // the distance this item is from its desired location
+        let mut psl = 0;
+
+        loop {
+            if self.is_occupied(pos) {
+                let cur_itm = self.tbl[pos].clone();
+                if hash == cur_itm.hash {
+                    self.hits += 1;
+                    return cur_itm.ptr;
+                }
+
+                if cur_itm.psl < psl {
+                    return None;
+                }
+                psl += 1;
+                pos = (pos + 1) % self.cap;
+            } else {
+                return None;
             }
         }
     }

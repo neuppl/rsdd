@@ -92,7 +92,7 @@ fn compile_sdd_dtree(str: String, _args: &Args) -> BenchResult {
     let cnf = Cnf::from_file(str);
     let dtree = DTree::from_cnf(&cnf, &cnf.min_fill_order());
     let vtree = VTree::from_dtree(&dtree).unwrap();
-    let man = SddManager::new(vtree.clone());
+    let man = CompressionSddManager::new(vtree.clone());
     let _sdd = man.from_cnf(&cnf);
 
     if let Some(path) = &_args.dump_sdd {
@@ -122,7 +122,7 @@ fn compile_sdd_rightlinear(str: String, _args: &Args) -> BenchResult {
         .map(|x| VarLabel::new(x as u64))
         .collect();
     let vtree = VTree::right_linear(&o);
-    let man = SddManager::new(vtree.clone());
+    let man = CompressionSddManager::new(vtree.clone());
     let _sdd = man.from_cnf(&cnf);
 
     if let Some(path) = &_args.dump_sdd {

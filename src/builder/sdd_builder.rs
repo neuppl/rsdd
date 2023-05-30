@@ -4,6 +4,9 @@
 use std::cell::RefCell;
 use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
+use std::hash::{Hash, Hasher};
+
+use rustc_hash::FxHasher;
 
 use super::cache::all_app::AllTable;
 use super::cache::ite::Ite;
@@ -18,6 +21,8 @@ use crate::repr::sdd::binary_sdd::BinarySDD;
 use crate::repr::sdd::sdd_or::{SddAnd, SddOr};
 use crate::repr::sdd::SddPtr;
 use crate::repr::vtree::{VTree, VTreeIndex, VTreeManager};
+use crate::repr::wmc::WmcParams;
+use crate::util::semiring::FiniteField;
 use crate::{repr::cnf::Cnf, repr::logical_expr::LogicalExpr, repr::var_label::VarLabel};
 // pub use crate::builder::BottomUpBuilder;
 
@@ -66,8 +71,8 @@ pub trait SddBuilder<'a>: BottomUpBuilder<'a, SddPtr<'a>> {
     fn ite_cache_get(&self, ite: Ite<SddPtr<'a>>, hash: u64) -> Option<SddPtr>;
     fn ite_cache_insert(&self, ite: Ite<SddPtr<'a>>, res: SddPtr<'a>, hash: u64);
 
-    fn get_or_insert_bdd(&'a self, bdd: BinarySDD<'a>) -> &BinarySDD<'a>;
-    fn get_or_insert_sdd(&'a self, or: SddOr<'a>) -> &SddOr<'a>;
+    fn get_or_insert_bdd(&'a self, bdd: BinarySDD<'a>) -> SddPtr<'a>;
+    fn get_or_insert_sdd(&'a self, or: SddOr<'a>) -> SddPtr<'a>;
     fn node_iter(&self) -> Vec<SddPtr>;
 
     // equality
@@ -114,9 +119,9 @@ pub trait SddBuilder<'a>: BottomUpBuilder<'a, SddPtr<'a>> {
             for x in node.iter_mut() {
                 *x = SddAnd::new(x.prime(), x.sub().neg());
             }
-            SddPtr::Reg(self.get_or_insert_sdd(SddOr::new(node, table))).neg()
+            self.get_or_insert_sdd(SddOr::new(node, table)).neg()
         } else {
-            SddPtr::Reg(self.get_or_insert_sdd(SddOr::new(node, table)))
+            self.get_or_insert_sdd(SddOr::new(node, table))
         }
     }
 
@@ -136,12 +141,10 @@ pub trait SddBuilder<'a>: BottomUpBuilder<'a, SddPtr<'a>> {
             let high = bdd.high().neg();
             let neg_bdd = BinarySDD::new(bdd.label(), low, high, bdd.vtree());
 
-            let unique = self.get_or_insert_bdd(neg_bdd);
-
-            return SddPtr::BDD(unique).neg();
+            return self.get_or_insert_bdd(neg_bdd).neg();
         }
 
-        SddPtr::BDD(self.get_or_insert_bdd(bdd))
+        self.get_or_insert_bdd(bdd)
     }
 
     // calc
@@ -751,7 +754,7 @@ where
     }
 }
 
-pub struct SddManager<'a> {
+pub struct CompressionSddManager<'a> {
     vtree: VTreeManager,
     stats: SddStats,
     should_compress: bool,
@@ -763,7 +766,7 @@ pub struct SddManager<'a> {
     app_cache: RefCell<HashMap<SddAnd<'a>, SddPtr<'a>>>,
 }
 
-impl<'a> SddBuilder<'a> for SddManager<'a> {
+impl<'a> SddBuilder<'a> for CompressionSddManager<'a> {
     #[inline]
     fn get_vtree_manager(&self) -> &VTreeManager {
         &self.vtree
@@ -796,18 +799,18 @@ impl<'a> SddBuilder<'a> for SddManager<'a> {
     }
 
     #[inline]
-    fn get_or_insert_bdd(&'a self, bdd: BinarySDD<'a>) -> &BinarySDD<'a> {
+    fn get_or_insert_bdd(&'a self, bdd: BinarySDD<'a>) -> SddPtr<'a> {
         unsafe {
             let tbl = &mut *self.bdd_tbl.as_ptr();
-            tbl.get_or_insert(bdd)
+            SddPtr::BDD(tbl.get_or_insert(bdd))
         }
     }
 
     #[inline]
-    fn get_or_insert_sdd(&'a self, or: SddOr<'a>) -> &SddOr<'a> {
+    fn get_or_insert_sdd(&'a self, or: SddOr<'a>) -> SddPtr<'a> {
         unsafe {
             let tbl = &mut *self.sdd_tbl.as_ptr();
-            tbl.get_or_insert(or)
+            SddPtr::Reg(tbl.get_or_insert(or))
         }
     }
 
@@ -890,10 +893,10 @@ impl<'a> SddBuilder<'a> for SddManager<'a> {
     }
 }
 
-impl<'a> SddManager<'a> {
-    pub fn new(vtree: VTree) -> SddManager<'a> {
+impl<'a> CompressionSddManager<'a> {
+    pub fn new(vtree: VTree) -> CompressionSddManager<'a> {
         let vtree_man = VTreeManager::new(vtree);
-        SddManager {
+        CompressionSddManager {
             stats: SddStats::new(),
             ite_cache: RefCell::new(AllTable::new()),
             app_cache: RefCell::new(HashMap::new()),
@@ -929,10 +932,201 @@ impl<'a> SddManager<'a> {
     }
 }
 
+pub struct SemanticSddManager<'a, const P: u128> {
+    vtree: VTreeManager,
+    stats: SddStats,
+    should_compress: bool,
+    // tables
+    bdd_tbl: RefCell<BackedRobinhoodTable<'a, BinarySDD<'a>>>,
+    sdd_tbl: RefCell<BackedRobinhoodTable<'a, SddOr<'a>>>,
+    // caches
+    ite_cache: RefCell<AllTable<SddPtr<'a>>>,
+    app_cache: RefCell<HashMap<u128, SddPtr<'a>>>,
+    // semantic hashing
+    map: WmcParams<FiniteField<P>>,
+}
+
+impl<'a, const P: u128> SddBuilder<'a> for SemanticSddManager<'a, P> {
+    #[inline]
+    fn get_vtree_manager(&self) -> &VTreeManager {
+        &self.vtree
+    }
+
+    #[inline]
+    fn set_compression(&mut self, b: bool) {
+        self.should_compress = b
+    }
+
+    fn node_iter(&self) -> Vec<SddPtr> {
+        let binding = self.bdd_tbl.borrow_mut();
+        let bdds = binding.iter().map(SddPtr::BDD);
+        let binding = self.sdd_tbl.borrow_mut();
+        let sdds = binding.iter().map(SddPtr::Reg);
+        bdds.chain(sdds).collect()
+    }
+
+    fn stats(&self) -> &SddStats {
+        &self.stats
+    }
+
+    fn app_cache_get(&self, and: &SddAnd<'a>) -> Option<SddPtr<'a>> {
+        let h = and.semantic_hash(&self.vtree, &self.map);
+        match h.value() {
+            0 => Some(SddPtr::PtrFalse),
+            1 => Some(SddPtr::PtrTrue),
+            _ => self.app_cache.borrow().get(&h.value()).copied(),
+        }
+    }
+
+    fn app_cache_insert(&self, and: SddAnd<'a>, ptr: SddPtr<'a>) {
+        let h = and.semantic_hash(&self.vtree, &self.map);
+        if h.value() > 1 {
+            self.app_cache.borrow_mut().insert(h.value(), ptr);
+        }
+    }
+
+    fn ite_cache_hash(&self, ite: &Ite<SddPtr>) -> u64 {
+        todo!()
+    }
+
+    fn ite_cache_get(&self, ite: Ite<SddPtr<'a>>, hash: u64) -> Option<SddPtr> {
+        todo!()
+    }
+
+    fn ite_cache_insert(&self, ite: Ite<SddPtr<'a>>, res: SddPtr<'a>, hash: u64) {
+        todo!()
+    }
+
+    fn get_or_insert_bdd(&'a self, bdd: BinarySDD<'a>) -> SddPtr<'a> {
+        let semantic_hash = bdd.semantic_hash(&self.vtree, &self.map);
+
+        if let Some(sdd) = self.check_cached_hash_and_neg(semantic_hash) {
+            return sdd;
+        }
+
+        let hash = self.hash_bdd(&bdd);
+        unsafe {
+            let tbl = &mut *self.bdd_tbl.as_ptr();
+            SddPtr::BDD(tbl.get_or_insert_by_hash(hash, bdd))
+        }
+    }
+
+    fn get_or_insert_sdd(&'a self, or: SddOr<'a>) -> SddPtr<'a> {
+        let semantic_hash = or.semantic_hash(&self.vtree, &self.map);
+        if let Some(sdd) = self.check_cached_hash_and_neg(semantic_hash) {
+            return sdd;
+        }
+
+        let hash = self.hash_sdd(&or);
+        unsafe {
+            let tbl = &mut *self.sdd_tbl.as_ptr();
+            SddPtr::Reg(tbl.get_or_insert_by_hash(hash, or))
+        }
+    }
+
+    fn sdd_eq(&'a self, a: SddPtr<'a>, b: SddPtr<'a>) -> bool {
+        let h1 = a.cached_semantic_hash(&self.vtree, &self.map);
+        let h2 = b.cached_semantic_hash(&self.vtree, &self.map);
+        h1 == h2
+    }
+
+    fn compress(&'a self, _node: &mut Vec<SddAnd<'a>>) {}
+
+    fn canonicalize(&'a self, node: Vec<SddAnd<'a>>, table: VTreeIndex) -> SddPtr<'a> {
+        self.unique_or(node, table)
+    }
+
+    fn num_logically_redundant(&self) -> usize {
+        let mut s: HashSet<u128> = HashSet::new();
+        let mut num_collisions = 0;
+        for n in self.node_iter() {
+            let h = n.cached_semantic_hash(&self.vtree, &self.map);
+            if s.contains(&h.value()) {
+                num_collisions += 1;
+            }
+            s.insert(h.value());
+        }
+        num_collisions
+    }
+}
+
+impl<'a, const P: u128> SemanticSddManager<'a, P> {
+    pub fn new(vtree: VTree) -> Self {
+        let vtree_man = VTreeManager::new(vtree.clone());
+        let map = create_semantic_hash_map(vtree.num_vars());
+        SemanticSddManager {
+            should_compress: false,
+            vtree: vtree_man,
+            ite_cache: RefCell::new(AllTable::new()),
+            app_cache: RefCell::new(HashMap::new()),
+            bdd_tbl: RefCell::new(BackedRobinhoodTable::new()),
+            sdd_tbl: RefCell::new(BackedRobinhoodTable::new()),
+            map,
+            stats: SddStats::default(),
+        }
+    }
+
+    fn hash_bdd(&self, elem: &BinarySDD) -> u64 {
+        let mut hasher = FxHasher::default();
+        elem.semantic_hash(&self.vtree, &self.map)
+            .value()
+            .hash(&mut hasher);
+        hasher.finish()
+    }
+
+    fn hash_sdd(&self, elem: &SddOr) -> u64 {
+        let mut hasher = FxHasher::default();
+        elem.semantic_hash(&self.vtree, &self.map)
+            .value()
+            .hash(&mut hasher);
+        hasher.finish()
+    }
+
+    fn get_shared_sdd_ptr(&self, semantic_hash: FiniteField<P>, hash: u64) -> Option<SddPtr> {
+        match semantic_hash.value() {
+            0 => Some(SddPtr::PtrFalse),
+            1 => Some(SddPtr::PtrTrue),
+            _ => {
+                unsafe {
+                    let tbl = &mut *self.bdd_tbl.as_ptr();
+                    if let Some(sdd) = tbl.get_by_hash(hash) {
+                        return Some(SddPtr::BDD(sdd));
+                    }
+                    let tbl = &mut *self.sdd_tbl.as_ptr();
+                    if let Some(sdd) = tbl.get_by_hash(hash) {
+                        return Some(SddPtr::Reg(sdd));
+                    }
+                }
+                None
+            }
+        }
+    }
+
+    fn check_cached_hash_and_neg(&self, semantic_hash: FiniteField<P>) -> Option<SddPtr> {
+        // check regular hash
+        let mut hasher = FxHasher::default();
+        semantic_hash.value().hash(&mut hasher);
+        let hash = hasher.finish();
+        if let Some(sdd) = self.get_shared_sdd_ptr(semantic_hash, hash) {
+            return Some(sdd);
+        }
+
+        // check negated hash
+        let semantic_hash = semantic_hash.negate();
+        let mut hasher = FxHasher::default();
+        semantic_hash.value().hash(&mut hasher);
+        let hash = hasher.finish();
+        if let Some(sdd) = self.get_shared_sdd_ptr(semantic_hash, hash) {
+            return Some(sdd.neg());
+        }
+        None
+    }
+}
+
 // check that (a \/ b) /\ a === a
 #[test]
 fn simple_equality() {
-    let man = SddManager::new(VTree::even_split(
+    let man = CompressionSddManager::new(VTree::even_split(
         &[
             VarLabel::new(0),
             VarLabel::new(1),
@@ -953,7 +1147,7 @@ fn simple_equality() {
 // check that (a \/ b) | !b === a
 #[test]
 fn sdd_simple_cond() {
-    let man = SddManager::new(VTree::even_split(
+    let man = CompressionSddManager::new(VTree::even_split(
         &[
             VarLabel::new(0),
             VarLabel::new(1),
@@ -979,7 +1173,7 @@ fn sdd_simple_cond() {
 
 #[test]
 fn sdd_test_exist() {
-    let man = SddManager::new(VTree::even_split(
+    let man = CompressionSddManager::new(VTree::even_split(
         &[
             VarLabel::new(0),
             VarLabel::new(1),
@@ -1007,7 +1201,7 @@ fn sdd_test_exist() {
 
 #[test]
 fn sdd_bigand() {
-    let man = SddManager::new(VTree::right_linear(&[
+    let man = CompressionSddManager::new(VTree::right_linear(&[
         VarLabel::new(0),
         VarLabel::new(1),
         VarLabel::new(2),
@@ -1015,7 +1209,7 @@ fn sdd_bigand() {
         VarLabel::new(4),
     ]));
 
-    // let man = SddManager::new(VTree::even_split(
+    // let man = CompressionSddManager::new(VTree::even_split(
     //     &[
     //         VarLabel::new(0),
     //         VarLabel::new(1),
@@ -1043,7 +1237,7 @@ fn sdd_bigand() {
 
 #[test]
 fn sdd_ite1() {
-    let man = SddManager::new(VTree::even_split(
+    let man = CompressionSddManager::new(VTree::even_split(
         &[
             VarLabel::new(0),
             VarLabel::new(1),
@@ -1072,7 +1266,7 @@ fn sdd_ite1() {
 
 #[test]
 fn sdd_demorgan() {
-    let man = SddManager::new(VTree::even_split(
+    let man = CompressionSddManager::new(VTree::even_split(
         &[
             VarLabel::new(0),
             VarLabel::new(1),
@@ -1096,7 +1290,7 @@ fn sdd_demorgan() {
 
 #[test]
 fn sdd_circuit1() {
-    let man = SddManager::new(VTree::even_split(
+    let man = CompressionSddManager::new(VTree::even_split(
         &[
             VarLabel::new(0),
             VarLabel::new(1),
@@ -1129,7 +1323,7 @@ fn sdd_circuit1() {
 #[test]
 fn sdd_circuit2() {
     // same as circuit1, but with a different variable order
-    let man = SddManager::new(VTree::even_split(
+    let man = CompressionSddManager::new(VTree::even_split(
         &[
             VarLabel::new(0),
             VarLabel::new(1),
@@ -1179,7 +1373,7 @@ fn sdd_wmc1() {
         ],
         1,
     );
-    let man = SddManager::new(vtree);
+    let man = CompressionSddManager::new(vtree);
     let mut wmc_map = crate::repr::wmc::WmcParams::new(RealSemiring(0.0), RealSemiring(1.0));
     let x = SddPtr::Var(VarLabel::new(0), true);
     wmc_map.set_weight(VarLabel::new(0), RealSemiring(1.0), RealSemiring(1.0));
@@ -1204,34 +1398,32 @@ fn sdd_wmc1() {
     );
 }
 
-// #[test]
-// fn prob_equiv_sdd_demorgan() {
-//     use crate::repr::robdd::create_semantic_hash_map;
-//     use crate::repr::robdd::WmcParams;
-//     use crate::util::semiring::FiniteField;
+#[test]
+fn prob_equiv_sdd_demorgan() {
+    use crate::repr::robdd::create_semantic_hash_map;
+    use crate::repr::robdd::WmcParams;
+    use crate::util::semiring::FiniteField;
 
-//     let mut man = SddManager::<crate::builder::canonicalize::SemanticCanonicalizer<100000049>>::new(
-//         VTree::even_split(
-//             &[
-//                 VarLabel::new(0),
-//                 VarLabel::new(1),
-//                 VarLabel::new(2),
-//                 VarLabel::new(3),
-//                 VarLabel::new(4),
-//             ],
-//             1,
-//         ),
-//     );
-//     man.set_compression(false);
-//     let x = SddPtr::Var(VarLabel::new(0), true);
-//     let y = SddPtr::Var(VarLabel::new(3), true);
-//     let res = man.or(x, y).neg();
-//     let expected = man.and(x.neg(), y.neg());
+    let mut man = SemanticSddManager::<100000049>::new(VTree::even_split(
+        &[
+            VarLabel::new(0),
+            VarLabel::new(1),
+            VarLabel::new(2),
+            VarLabel::new(3),
+            VarLabel::new(4),
+        ],
+        1,
+    ));
+    man.set_compression(false);
+    let x = SddPtr::Var(VarLabel::new(0), true);
+    let y = SddPtr::Var(VarLabel::new(3), true);
+    let res = man.or(x, y).neg();
+    let expected = man.and(x.neg(), y.neg());
 
-//     let map: WmcParams<FiniteField<100000049>> = create_semantic_hash_map(man.num_vars());
+    let map: WmcParams<FiniteField<100000049>> = create_semantic_hash_map(man.num_vars());
 
-//     let sh1 = res.cached_semantic_hash(man.get_vtree_manager(), &map);
-//     let sh2 = expected.cached_semantic_hash(man.get_vtree_manager(), &map);
+    let sh1 = res.cached_semantic_hash(man.get_vtree_manager(), &map);
+    let sh2 = expected.cached_semantic_hash(man.get_vtree_manager(), &map);
 
-//     assert!(sh1 == sh2, "Not eq:\nGot: {:?}\nExpected: {:?}", sh1, sh2);
-// }
+    assert!(sh1 == sh2, "Not eq:\nGot: {:?}\nExpected: {:?}", sh1, sh2);
+}

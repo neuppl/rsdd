@@ -6,7 +6,7 @@
 //         canonicalize::{
 //             CompressionCanonicalizer, SddCanonicalizationScheme, SemanticCanonicalizer,
 //         },
-//         sdd_builder::SddManager,
+//         sdd_builder::CompressionSddManager,
 //     },
 //     repr::{
 //         cnf::Cnf, dtree::DTree, sdd::SddPtr, var_label::VarLabel, var_order::VarOrder, vtree::VTree,
@@ -73,7 +73,7 @@
 //         label: String,
 //         time: Duration,
 //         sdd: &SddPtr,
-//         mgr: &SddManager<T>,
+//         mgr: &CompressionSddManager<T>,
 //     ) -> BenchStats {
 //         let stats = mgr.stats();
 //         BenchStats {
@@ -115,12 +115,12 @@
 
 // fn run_compr_sem(cnf: &Cnf, vtree: &VTree) -> (BenchStats, BenchStats) {
 //     let start = Instant::now();
-//     let mut compr_mgr = SddManager::<CompressionCanonicalizer>::new(vtree.clone());
+//     let mut compr_mgr = CompressionSddManager::<CompressionCanonicalizer>::new(vtree.clone());
 //     let compr_cnf = compr_mgr.from_cnf(cnf);
 //     let compr = BenchStats::from_run("c".to_owned(), start.elapsed(), &compr_cnf, &compr_mgr);
 
 //     let start = Instant::now();
-//     let mut sem_mgr = SddManager::<SemanticCanonicalizer<479001599>>::new(vtree.clone());
+//     let mut sem_mgr = CompressionSddManager::<SemanticCanonicalizer<479001599>>::new(vtree.clone());
 //     let sem_cnf = sem_mgr.from_cnf(cnf);
 //     let sem = BenchStats::from_run("s".to_owned(), start.elapsed(), &sem_cnf, &sem_mgr);
 
@@ -181,7 +181,7 @@
 // fn run_canonicalizer_experiment(c: Cnf, vtree: VTree, verbose: bool) {
 //     let start = Instant::now();
 
-//     let mut compr_mgr = SddManager::<CompressionCanonicalizer>::new(vtree.clone());
+//     let mut compr_mgr = CompressionSddManager::<CompressionCanonicalizer>::new(vtree.clone());
 //     let compr_cnf = compr_mgr.from_cnf(&c);
 
 //     println!(" ");
@@ -194,7 +194,7 @@
 //     let start = Instant::now();
 
 //     // other primes: 100000049, 18_446_744_073_709_551_591
-//     let mut sem_mgr = SddManager::<SemanticCanonicalizer<18_446_744_073_709_551_591>>::new(vtree);
+//     let mut sem_mgr = CompressionSddManager::<SemanticCanonicalizer<18_446_744_073_709_551_591>>::new(vtree);
 //     let sem_cnf = sem_mgr.from_cnf(&c);
 
 //     println!(
