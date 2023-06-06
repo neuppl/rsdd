@@ -1,23 +1,9 @@
-// TODO: remove crate-level disable
-#![allow(unused_imports)]
-#![allow(
-    clippy::ptr_arg,
-    clippy::type_complexity,
-    clippy::clone_on_copy,
-    clippy::redundant_clone,
-    clippy::explicit_counter_loop
-)]
-
 use crate::repr::cnf::Cnf;
-use crate::repr::var_label::{Literal, VarLabel};
-use core::fmt::{Debug, Formatter, Result};
+use crate::repr::var_label::VarLabel;
+use core::fmt::Debug;
 use core::hash::Hash;
-use petgraph::graph::{Node, UnGraph};
+
 use std::collections::{HashMap, HashSet};
-
-use crate::repr::var_order::VarOrder;
-
-use super::btree::BTree;
 
 #[derive(Clone, Debug)]
 pub struct Hypergraph<T: Clone + Debug + PartialEq + Eq + Hash> {
@@ -34,10 +20,7 @@ impl<T: Clone + Debug + PartialEq + Eq + Hash> Hypergraph<T> {
     }
 
     /// assumes that hyperedges only includes elements from vertices
-    fn cache_from(
-        _vertices: &HashSet<T>,
-        hyperedges: &Vec<HashSet<T>>,
-    ) -> HashMap<T, HashSet<usize>> {
+    fn cache_from(_vertices: &HashSet<T>, hyperedges: &[HashSet<T>]) -> HashMap<T, HashSet<usize>> {
         let mut assoc_cache: HashMap<T, HashSet<usize>> = HashMap::new();
         for (ix, vs) in hyperedges.iter().enumerate() {
             for v in vs.clone() {
@@ -75,6 +58,7 @@ impl<T: Clone + Debug + PartialEq + Eq + Hash> Hypergraph<T> {
     pub fn edges_to_covers(es: Vec<&HashSet<T>>) -> Vec<(HashSet<T>, Vec<&HashSet<T>>)> {
         let mut overlaps: Vec<(HashSet<T>, Vec<&HashSet<T>>)> = vec![];
         for e in es {
+            #[allow(clippy::type_complexity)]
             let os: Vec<(usize, (HashSet<T>, Vec<&HashSet<T>>))> = overlaps
                 .iter()
                 .enumerate()
@@ -88,6 +72,7 @@ impl<T: Clone + Debug + PartialEq + Eq + Hash> Hypergraph<T> {
                 let mut newc = e.clone();
                 let mut newes = vec![e];
                 let mut diff = 0;
+                #[allow(clippy::explicit_counter_loop)]
                 for (i, (c, ess)) in os {
                     for v in c.iter() {
                         newc.insert(v.clone());
@@ -131,7 +116,7 @@ impl<T: Clone + Debug + PartialEq + Eq + Hash> Hypergraph<T> {
     }
 
     /// finds all edges that are in both part1 and part2
-    pub fn get_cut_edges(&self, part1: &Vec<T>, part2: &Vec<T>) -> Vec<HashSet<T>> {
+    pub fn get_cut_edges(&self, part1: &[T], part2: &[T]) -> Vec<HashSet<T>> {
         let mut r = Vec::new();
         for e in self.hyperedges.iter() {
             let contains_part1 = part1.iter().any(|i| e.contains(i));
@@ -178,7 +163,7 @@ impl<T: Clone + Debug + PartialEq + Eq + Hash> Hypergraph<T> {
             true
         }
     }
-    pub fn count_cut_edges(&self, part1: &Vec<T>, part2: &Vec<T>) -> usize {
+    pub fn count_cut_edges(&self, part1: &[T], part2: &[T]) -> usize {
         let mut r = 0;
         for e in self.edges().iter() {
             let contains_part1 = part1.iter().any(|i| e.contains(i));
@@ -265,11 +250,14 @@ pub fn from_cnf(cnf: &Cnf) -> Hypergraph<VarLabel> {
 }
 
 mod test {
-    use super::*;
-    use petgraph::dot::{Config, Dot};
-
     #[test]
     fn cnf_to_hg() {
+        use crate::repr::cnf::Cnf;
+        use crate::repr::var_label::{Literal, VarLabel};
+        use crate::util::hypergraph::from_cnf;
+        use petgraph::dot::{Config, Dot};
+        use std::collections::HashSet;
+
         let v = vec![
             vec![
                 Literal::new(VarLabel::new(0), true),
@@ -296,7 +284,7 @@ mod test {
         let _nodes = ig
             .raw_nodes()
             .iter()
-            .map(|n| n.weight.clone())
+            .map(|n| n.weight)
             .collect::<Vec<VarLabel>>();
 
         fn var(x: u64) -> VarLabel {
@@ -332,6 +320,9 @@ mod test {
 
     #[test]
     fn insert_edge_cut_vertex() {
+        use crate::util::hypergraph::Hypergraph;
+        use std::collections::HashSet;
+
         let mut hg: Hypergraph<u64> = Hypergraph::new(HashSet::new(), Vec::new());
         #[rustfmt::skip]
         let e1 = HashSet::from([   3,       0, 1]);
@@ -348,10 +339,7 @@ mod test {
         );
 
         hg.insert_edge(&e2);
-        assert_eq!(
-            hg.hyperedges,
-            Vec::from([e1.clone(), e2.clone(), e3.clone()])
-        );
+        assert_eq!(hg.hyperedges, Vec::from([e1, e2.clone(), e3.clone()]));
 
         hg.cut_vertex(&1); // order gets messed up by dedupe_hashsets
         for s in [HashSet::from([0, 3]), e2.clone(), e3.clone()] {
@@ -359,7 +347,7 @@ mod test {
         }
 
         hg.cut_vertex(&3); // order gets messed up by dedupe_hashsets
-        for s in [HashSet::from([0]), HashSet::from([2, 5, 7]), e3.clone()] {
+        for s in [HashSet::from([0]), HashSet::from([2, 5, 7]), e3] {
             assert!(hg.hyperedges.iter().any(|e| e == &s));
         }
 
@@ -381,6 +369,9 @@ mod test {
 
     #[test]
     fn test_width() {
+        use crate::util::hypergraph::Hypergraph;
+        use std::collections::{HashMap, HashSet};
+
         let mut hg: Hypergraph<u64> = Hypergraph::new(HashSet::new(), Vec::new());
         // cover 1
         #[rustfmt::skip]
@@ -388,15 +379,15 @@ mod test {
         let e2 = HashSet::from([21, 5, 7, 3]);
         let e3 = HashSet::from([21]);
         let e4 = HashSet::from([21, 5]);
-        let cover1 = vec![e1.clone(), e2.clone(), e3.clone(), e4.clone()];
+        let cover1 = vec![e1, e2, e3, e4];
 
         // cover 2
         let e5 = HashSet::from([11, 10]);
         let e6 = HashSet::from([11]);
         let e7 = HashSet::from([11, 12]);
-        let cover2 = vec![e5.clone(), e6.clone(), e7.clone()];
+        let cover2 = vec![e5, e6, e7];
 
-        for e in [cover1.clone(), cover2.clone()].iter().flatten() {
+        for e in [cover1, cover2].iter().flatten() {
             hg.insert_edge(e);
         }
 
@@ -432,6 +423,8 @@ mod test {
     }
     #[test]
     fn test_heuristic() {
+        use crate::util::hypergraph::Hypergraph;
+        use std::collections::HashSet;
         // in this heuristic, we essentially want to take the cut with the max "potential of vertex cover".
 
         // cover 1
@@ -440,13 +433,13 @@ mod test {
         let e2 = HashSet::from([21, 5, 7, 3]);
         let e3 = HashSet::from([21]);
         let e4 = HashSet::from([21, 5]);
-        let cover1 = vec![e1.clone(), e2.clone(), e3.clone(), e4.clone()];
+        let cover1 = vec![e1, e2, e3, e4];
 
         // cover 2
         let e5 = HashSet::from([11, 10]);
         let e6 = HashSet::from([11]);
         let e7 = HashSet::from([11, 12]);
-        let cover2 = vec![e5.clone(), e6.clone(), e7.clone()];
+        let cover2 = vec![e5, e6, e7];
 
         // Ideally, we want to split the graph into two partitions that are equivalently balanced.
         //
@@ -512,7 +505,7 @@ mod test {
                                 .map(|e| e.difference(&HashSet::from([*v])).cloned().collect())
                                 .filter(|e: &HashSet<u64>| !e.is_empty())
                                 .collect();
-                            let cs = Hypergraph::edges_to_covers(newes.clone().iter().collect())
+                            let cs = Hypergraph::edges_to_covers(newes.iter().collect())
                                 .iter()
                                 .map(|(_c, es)| es.len() as f64)
                                 .collect();
@@ -528,12 +521,12 @@ mod test {
                         .iter()
                         .fold(f64::MIN, |acc, w| if acc > *w { acc } else { *w });
                 let h = max_cut_cover_widths;
-                order.push((v.clone(), h));
+                order.push((*v, h));
             }
             order.sort_by(|l, r| r.1.partial_cmp(&l.1).unwrap());
             order
         }
-        fn topscore(ordering: &Vec<(u64, f64)>) -> Vec<(u64, f64)> {
+        fn topscore(ordering: &[(u64, f64)]) -> Vec<(u64, f64)> {
             ordering
                 .iter()
                 .filter(|(_, s)| *s == ordering[0].1)
@@ -543,13 +536,13 @@ mod test {
 
         // beginning with an empty hypergraph, we add in the two covers:
         let mut hg: Hypergraph<u64> = Hypergraph::new(HashSet::new(), Vec::new());
-        for e in [cover1.clone(), cover2.clone()].iter().flatten() {
+        for e in [cover1, cover2].iter().flatten() {
             hg.insert_edge(e);
         }
 
         println!("\nScenario: glue1 (want: 21 or 10)");
         let mut hg1 = hg.clone();
-        hg1.insert_edge(&glue1.clone());
+        hg1.insert_edge(&glue1);
         let ordering = heuristic(&hg1);
         println!("{:?}", ordering);
         println!("{:?}", topscore(&ordering));
@@ -563,7 +556,7 @@ mod test {
 
         println!("\nScenario: glue2 (want: 11 or 0)");
         let mut hg2 = hg.clone();
-        hg2.insert_edge(&glue2.clone());
+        hg2.insert_edge(&glue2);
         let ordering = heuristic(&hg2);
         println!("{:?}", ordering);
         println!("{:?}", topscore(&ordering));
@@ -577,7 +570,7 @@ mod test {
 
         println!("\nScenario: glue3 (want: 7 or 10)");
         let mut hg3 = hg.clone();
-        hg3.insert_edge(&glue3.clone());
+        hg3.insert_edge(&glue3);
         let ordering = heuristic(&hg3);
         println!("{:?}", ordering);
         println!("{:?}", topscore(&ordering));
@@ -591,8 +584,8 @@ mod test {
 
         println!("\nScenario: bridge (want: 21 or 55 or 12)");
         let mut hg4 = hg.clone();
-        hg4.insert_edge(&br1pt1.clone());
-        hg4.insert_edge(&br1pt2.clone());
+        hg4.insert_edge(&br1pt1);
+        hg4.insert_edge(&br1pt2);
         let ordering = heuristic(&hg4);
         println!("{:?}", ordering);
         println!("{:?}", topscore(&ordering));
