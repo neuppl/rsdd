@@ -5,7 +5,7 @@ use crate::repr::ddnnf::DDNNFPtr;
 
 /// Core ITE representation
 #[derive(Debug, Clone, Hash, PartialEq, Eq, Copy)]
-pub enum Ite<T: DDNNFPtr> {
+pub enum Ite<T> {
     /// a standard ite
     IteChoice {
         f: T,
@@ -22,7 +22,7 @@ pub enum Ite<T: DDNNFPtr> {
 }
 use Ite::*;
 
-impl<T: DDNNFPtr> Ite<T> {
+impl<'a, T: DDNNFPtr<'a>> Ite<T> {
     /// Returns a new Ite in standard form and a Bool indicating whether to complement the Ite
     /// Arguments are ITE(f, g, h), i.e. if f then g else h
     /// `order(a,b)` is true if a is before b in the decision order

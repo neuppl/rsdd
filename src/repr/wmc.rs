@@ -67,6 +67,7 @@ impl<T: Semiring + std::ops::Mul<Output = T> + std::ops::Add<Output = T>> WmcPar
         self.var_to_val[n] = Some((low, high));
     }
 
+    // gives you the weight of `(low, high)` literals for a given VarLabel
     pub fn get_var_weight(&self, label: VarLabel) -> &(T, T) {
         return (self.var_to_val[label.value_usize()]).as_ref().unwrap();
     }

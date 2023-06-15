@@ -16,7 +16,7 @@ pub enum BddPlan {
 }
 
 impl BddPlan {
-    #[allow(clippy::should_implement_trait)] // TODO: this should probably be renamed not compl?
+    #[allow(clippy::should_implement_trait)] // this is a naming thing; perhaps consider renaming this in the future?
     pub fn not(p: BddPlan) -> Self {
         Self::Not(Box::new(p))
     }

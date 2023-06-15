@@ -7,3 +7,10 @@ Cargo.lock
 .vscode/*
 .pre-commit-config.yaml
 /result
+
+# items generated from scripts
+bdd.json
+sdd.json
+vtree.json
+err.txt
+rand.cnf

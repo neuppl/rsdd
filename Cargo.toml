@@ -1,34 +1,27 @@
 [package]
 name = "rsdd"
 version = "0.1.0"
-edition = "2018"
+edition = "2021"
 authors = ["Steven Holtzen <sholtzen@gmail.com>"]
-
+license = "MIT"
+repository = "https://github.com/neuppl/rsdd"
+description = "Rust decision diagrams."
+resolver = "2"
 
 [dependencies]
-fnv = "1.0.3"
 rand = "0.8.5"
 dimacs = "0.2.0"
 primal = "0.3.0"
 pretty = "0.3.3"
-num = "0.1.41"
 maplit = "1.0.1"
-libc = "0.2"
 quickcheck = "1.0.3"
-time-test = "0.2.2"
 serde = { version = "1.0", features = ["derive"] }
-clap = { version = "3.2.14", features = ["derive"] }
-criterion = "0.3"
-rayon = "1.5.3"
 rustc-hash = "1.1.0"
-serde_json = "1.0.81"
 bit-set = "0.5.3"
 segment-tree = "2.0.0"
-dot = "0.1.4"
-tinyvec = { version = "1.6.0", features = ["alloc"] }
 bumpalo = "3.11.1"
 petgraph = "0.6.2"
-rsgm = { git = "https://github.com/pmall-neu/rsgm" }
+rsgm = { git = "https://github.com/neuppl/rsgm" }
 rand_chacha = "0.3.1"
 itertools = { version = "0.10.5", optional = true }
 indexmap = { version = "1.9.3", optional = true }
@@ -36,10 +29,23 @@ indexmap = { version = "1.9.3", optional = true }
 [features]
 hypergraph = ["dep:itertools", "dep:indexmap"]
 
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+getrandom = { version = "0.2", features = ["js"] }
+serde_json = { version = "1.0.81" }
+serde-wasm-bindgen = { version = "0.4" }
+wasm-bindgen = { version = "0.2.84" }
+
+# test-only
+[dev-dependencies]
+time-test = "0.2.2"
+clap = { version = "4.2.1", features = ["derive"] }
+serde_json = { version = "1.0.81" }
+
+
 [lib]
 name = "rsdd"
 path = "src/lib.rs"
-
+crate-type = ["cdylib", "lib"]
 
 [profile.release]
 opt-level = 3
@@ -52,14 +58,18 @@ incremental = false
 codegen-units = 16
 rpath = false
 
-[[bin]]
+[[example]]
 name = "one_shot_benchmark"
-path = "bin/one_shot_benchmark.rs"
+path = "examples/one_shot_benchmark.rs"
 
-[[bin]]
+[[example]]
 name = "bayesian_network_compiler"
-path = "bin/bayesian_network_compiler.rs"
+path = "examples/bayesian_network_compiler.rs"
 
-[[bin]]
-name = "compare_canonicalize"
-path = "bin/compare_canonicalize.rs"
+[[example]]
+name = "semantic_hash_experiment"
+path = "examples/semantic_hash_experiment.rs"
+
+[[example]]
+name = "marginal_map_experiment"
+path = "examples/marginal_map_experiment.rs"

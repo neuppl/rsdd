@@ -3,12 +3,11 @@
 
 use super::UniqueTable;
 use bumpalo::Bump;
+use rustc_hash::FxHasher;
 use std::hash::{Hash, Hasher};
 use std::mem;
 
 use crate::util::*;
-
-use rustc_hash::FxHasher;
 
 /// The load factor of the table, i.e. how full the table will be when it
 /// automatically resizes
@@ -17,9 +16,9 @@ const DEFAULT_SIZE: usize = 131072;
 
 /// data structure stored inside of the hash table
 #[derive(Clone, Debug, Copy)]
-struct HashTableElement<T: Clone> {
+struct HashTableElement<'a, T: Clone> {
     /// pointer into allocator
-    ptr: *mut T,
+    ptr: Option<&'a T>,
     /// precomputed hash for T
     hash: u64,
     /// the psl is the *probe sequence length*: it is the distance of this item
@@ -27,34 +26,38 @@ struct HashTableElement<T: Clone> {
     psl: u8,
 }
 
-impl<T: Clone> Default for HashTableElement<T> {
+impl<'a, T: Clone> Default for HashTableElement<'a, T> {
     fn default() -> Self {
         HashTableElement {
-            ptr: std::ptr::null_mut::<T>(),
+            ptr: None,
             hash: 0,
             psl: 0,
         }
     }
 }
 
-impl<T: Clone> HashTableElement<T> {
-    pub fn new(ptr: *mut T, hash: u64, psl: u8) -> HashTableElement<T> {
-        HashTableElement { ptr, hash, psl }
+impl<'a, T: Clone> HashTableElement<'a, T> {
+    pub fn new(ptr: &'a T, hash: u64, psl: u8) -> HashTableElement<'a, T> {
+        HashTableElement {
+            ptr: Some(ptr),
+            hash,
+            psl,
+        }
     }
 
-    #[allow(clippy::cmp_null)] // TODO: fix. unsure why the suggestion (using is_null) doesn't work
+    #[inline]
     pub fn is_occupied(&self) -> bool {
-        self.ptr != std::ptr::null_mut::<T>()
+        self.ptr.is_some()
     }
 }
 
 /// Insert an element into `tbl` without inserting into the backing table. This
 /// is used during growing and after an element has been found during
 /// `get_or_insert`
-fn propagate<T: Clone>(
-    v: &mut [HashTableElement<T>],
+fn propagate<'a, T: Clone>(
+    v: &mut [HashTableElement<'a, T>],
     cap: usize,
-    itm: HashTableElement<T>,
+    itm: HashTableElement<'a, T>,
     pos: usize,
 ) {
     let mut searcher = itm;
@@ -81,25 +84,27 @@ fn propagate<T: Clone>(
 
 /// Implements a mutable vector-backed robin-hood linear probing hash table,
 /// whose keys are given by BDD pointers.
-pub struct BackedRobinhoodTable<T>
+pub struct BackedRobinhoodTable<'a, T>
 where
-    T: Hash + PartialEq + Eq + Clone,
+    T: Hash + PartialEq + Clone,
 {
     /// hash table which stores indexes in the elem vector
-    tbl: Vec<HashTableElement<T>>,
+    tbl: Vec<HashTableElement<'a, T>>,
     /// backing store for BDDs
     alloc: Bump,
     cap: usize,
     /// the length of `tbl`
     len: usize,
+    /// # cache hits
+    hits: usize,
 }
 
-impl<T: Clone> BackedRobinhoodTable<T>
+impl<'a, T: Clone> BackedRobinhoodTable<'a, T>
 where
     T: Hash + PartialEq + Eq + Clone,
 {
     /// reserve a robin-hood table capable of holding at least `sz` elements
-    pub fn new() -> BackedRobinhoodTable<T> {
+    pub fn new() -> BackedRobinhoodTable<'a, T> {
         let v: Vec<HashTableElement<T>> = zero_vec(DEFAULT_SIZE);
 
         BackedRobinhoodTable {
@@ -107,6 +112,7 @@ where
             alloc: Bump::new(),
             cap: DEFAULT_SIZE,
             len: 0,
+            hits: 0,
         }
     }
 
@@ -115,18 +121,13 @@ where
         self.tbl[pos].is_occupied()
     }
 
-    #[allow(dead_code)]
-    fn get_pos(&self, pos: usize) -> *mut T {
-        self.tbl[pos].ptr
-    }
-
     /// check the distance the element at index `pos` is from its desired location
     fn _probe_distance(&self, pos: usize) -> usize {
         self.tbl[pos].psl as usize
     }
 
     /// Begin inserting `itm` from point `pos` in the hash table.
-    fn propagate(&mut self, itm: HashTableElement<T>, pos: usize) {
+    fn propagate(&mut self, itm: HashTableElement<'a, T>, pos: usize) {
         propagate(&mut self.tbl, self.cap, itm, pos)
     }
 
@@ -141,32 +142,40 @@ where
         }
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = *mut T> + '_ {
-        self.tbl.iter().filter(|x| x.is_occupied()).map(|x| x.ptr)
+    pub fn iter(&self) -> impl Iterator<Item = &'a T> + '_ {
+        self.tbl
+            .iter()
+            .filter(|x| x.is_occupied())
+            .map(|x| x.ptr.unwrap())
     }
-
-    // pub fn average_offset(&self) -> f64 {
-    //     let total = self.tbl.iter().fold(0, |sum, cur| cur.offset() + sum);
-    //     (total as f64) / (self.len as f64)
-    // }
 
     #[allow(dead_code)]
     pub fn num_nodes(&self) -> usize {
         self.len
     }
+
+    #[allow(dead_code)]
+    pub fn hits(&self) -> usize {
+        self.hits
+    }
 }
 
-impl<T: Eq + PartialEq + Hash + Clone> UniqueTable<T> for BackedRobinhoodTable<T> {
-    fn get_or_insert(&mut self, elem: T) -> *mut T {
+impl<'a, T: Eq + PartialEq + Hash + Clone + std::fmt::Debug> UniqueTable<'a, T>
+    for BackedRobinhoodTable<'a, T>
+{
+    fn get_or_insert(&'a mut self, elem: T) -> &'a T {
+        let mut hasher = FxHasher::default();
+        elem.hash(&mut hasher);
+        let hash = hasher.finish();
+        self.get_or_insert_by_hash(hash, elem, false)
+    }
+    fn get_or_insert_by_hash(&'a mut self, hash: u64, elem: T, equality_by_hash: bool) -> &'a T {
         if (self.len + 1) as f64 > (self.cap as f64 * LOAD_FACTOR) {
             self.grow();
         }
-        let mut hasher = FxHasher::default();
-        elem.hash(&mut hasher);
-        let elem_hash = hasher.finish();
 
         // the current index into the array
-        let mut pos: usize = (elem_hash as usize) % self.cap;
+        let mut pos: usize = (hash as usize) % self.cap;
         // the distance this item is from its desired location
         let mut psl = 0;
 
@@ -176,10 +185,11 @@ impl<T: Eq + PartialEq + Hash + Clone> UniqueTable<T> for BackedRobinhoodTable<T
                 // first check the hashes to see if these elements could
                 // possibly be equal; if they are, check if the items are
                 // equal and return the found pointer if so
-                if elem_hash == cur_itm.hash {
-                    let found: &T = unsafe { &*cur_itm.ptr };
-                    if *found == elem {
-                        return cur_itm.ptr;
+                if hash == cur_itm.hash {
+                    let found: &T = cur_itm.ptr.unwrap();
+                    if equality_by_hash || *found == elem {
+                        self.hits += 1;
+                        return found;
                     }
                 }
 
@@ -189,7 +199,7 @@ impl<T: Eq + PartialEq + Hash + Clone> UniqueTable<T> for BackedRobinhoodTable<T
                     // the item that is currently here
                     self.propagate(cur_itm, pos);
                     let ptr = self.alloc.alloc(elem);
-                    let entry = HashTableElement::new(ptr, elem_hash, psl);
+                    let entry = HashTableElement::new(ptr, hash, psl);
                     self.len += 1;
                     self.tbl[pos] = entry;
                     return ptr;
@@ -199,11 +209,49 @@ impl<T: Eq + PartialEq + Hash + Clone> UniqueTable<T> for BackedRobinhoodTable<T
             } else {
                 // this element is unique, so place it in the current spot
                 let ptr = self.alloc.alloc(elem);
-                let entry = HashTableElement::new(ptr, elem_hash, psl);
+                let entry = HashTableElement::new(ptr, hash, psl);
                 self.len += 1;
                 self.tbl[pos] = entry;
                 return ptr;
             }
         }
+    }
+
+    fn get_by_hash(&'a mut self, hash: u64) -> Option<&'a T> {
+        if (self.len + 1) as f64 > (self.cap as f64 * LOAD_FACTOR) {
+            self.grow();
+        }
+
+        // the current index into the array
+        let mut pos: usize = (hash as usize) % self.cap;
+        // the distance this item is from its desired location
+        let mut psl = 0;
+
+        loop {
+            if self.is_occupied(pos) {
+                let cur_itm = self.tbl[pos].clone();
+                if hash == cur_itm.hash {
+                    self.hits += 1;
+                    return cur_itm.ptr;
+                }
+
+                if cur_itm.psl < psl {
+                    return None;
+                }
+                psl += 1;
+                pos = (pos + 1) % self.cap;
+            } else {
+                return None;
+            }
+        }
+    }
+}
+
+impl<'a, T: Clone> Default for BackedRobinhoodTable<'a, T>
+where
+    T: Hash + PartialEq + Eq + Clone,
+{
+    fn default() -> Self {
+        Self::new()
     }
 }

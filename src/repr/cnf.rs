@@ -8,12 +8,14 @@ use rand;
 use rand::rngs::ThreadRng;
 use rand::Rng;
 use std::cmp::{max, min};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::fmt;
 extern crate quickcheck;
 use self::quickcheck::{Arbitrary, Gen};
 use crate::repr::model::PartialModel;
 use petgraph::graph::NodeIndex;
+
+use super::robdd::WmcParams;
 
 // TODO: resolve unused
 #[allow(unused)]
@@ -66,10 +68,9 @@ pub struct CnfHasher {
 }
 
 impl CnfHasher {
-    pub fn new(cnf: &Cnf) -> CnfHasher {
+    pub fn new(clauses: &[Vec<Literal>], num_vars: usize) -> CnfHasher {
         let mut primes = primal::Primes::all();
-        let weighted_cnf = cnf
-            .clauses
+        let weighted_cnf = clauses
             .iter()
             .map({
                 |clause| {
@@ -81,8 +82,7 @@ impl CnfHasher {
             })
             .collect();
 
-        let sat_clauses: HashSet<usize> = cnf
-            .clauses
+        let sat_clauses: HashSet<usize> = clauses
             .iter()
             .enumerate()
             .filter_map({
@@ -96,9 +96,9 @@ impl CnfHasher {
             })
             .collect();
 
-        let pos_lits: Vec<Vec<usize>> = (0..cnf.num_vars())
+        let pos_lits: Vec<Vec<usize>> = (0..num_vars)
             .map(|lit_idx| {
-                cnf.clauses
+                clauses
                     .iter()
                     .enumerate()
                     .filter_map(|(clause_idx, clause)| {
@@ -112,9 +112,9 @@ impl CnfHasher {
             })
             .collect();
 
-        let neg_lits: Vec<Vec<usize>> = (0..cnf.num_vars())
+        let neg_lits: Vec<Vec<usize>> = (0..num_vars)
             .map(|lit_idx| {
-                cnf.clauses
+                clauses
                     .iter()
                     .enumerate()
                     .filter_map(|(clause_idx, clause)| {
@@ -222,7 +222,7 @@ fn num_fill(g: &UnGraph<VarLabel, ()>, v: NodeIndex) -> usize {
 pub struct Cnf {
     clauses: Vec<Vec<Literal>>,
     num_vars: usize,
-    hasher: Option<CnfHasher>,
+    hasher: CnfHasher,
 }
 
 pub struct AssignmentIter {
@@ -269,34 +269,46 @@ impl Iterator for AssignmentIter {
 }
 
 impl Cnf {
-    pub fn new(mut clauses: Vec<Vec<Literal>>) -> Cnf {
-        let mut m = 0;
-        // filter out empty clauses
-        clauses.retain(|x| !x.is_empty());
-        for clause in clauses.iter_mut() {
-            for lit in clause.iter() {
-                m = max(lit.get_label().value() + 1, m);
-            }
-            // remove duplicate literals
-            clause.sort_by_key(|a| a.get_label().value());
-            clause.dedup();
-        }
+    pub fn new(clauses: Vec<Vec<Literal>>) -> Cnf {
+        let clauses: Vec<Vec<Literal>> = clauses
+            .iter()
+            .filter(|clause| !clause.is_empty())
+            .map(|clause| {
+                let mut clause = clause.clone();
+                clause.sort_by_key(|a| a.get_label().value());
+                clause.dedup();
+                clause
+            })
+            .collect();
 
-        let mut r = Cnf {
-            clauses: clauses.clone(),
-            num_vars: m as usize,
-            hasher: None,
-        };
-        r.hasher = Some(CnfHasher::new(&r));
-        r
+        let num_vars = clauses
+            .iter()
+            .map(|clause| {
+                clause
+                    .iter()
+                    .map(|lit| lit.get_label().value() + 1)
+                    .max()
+                    .unwrap_or(0)
+            })
+            .max()
+            .unwrap_or(0) as usize;
+
+        Cnf {
+            hasher: CnfHasher::new(&clauses, num_vars),
+            clauses,
+            num_vars,
+        }
     }
 
-    pub fn from_file(v: String) -> Cnf {
+    pub fn from_file(input: String) -> Cnf {
         use dimacs::*;
-        let r = parse_dimacs(&v).unwrap();
-        let (_, cvec) = match r {
+        let (_, cvec) = match parse_dimacs(&input).unwrap() {
             Instance::Cnf { num_vars, clauses } => (num_vars, clauses),
-            _ => panic!(),
+            Instance::Sat {
+                num_vars: _,
+                extensions: _,
+                formula: _,
+            } => panic!("Received (valid) SAT input, not CNF"),
         };
         let mut clause_vec: Vec<Vec<Literal>> = Vec::new();
         let mut m = 0;
@@ -460,12 +472,12 @@ impl Cnf {
     /// mostly for internal testing purposes
     pub fn wmc<T: Semiring + std::ops::Mul<Output = T> + std::ops::Add<Output = T>>(
         &self,
-        weights: &HashMap<VarLabel, (T, T)>,
+        weights: &WmcParams<T>,
     ) -> T {
         let mut total: T = T::zero();
         let mut weight_vec = Vec::new();
         for i in 0..self.num_vars() {
-            weight_vec.push(weights[&VarLabel::new(i as u64)]);
+            weight_vec.push(weights.get_var_weight(VarLabel::new(i as u64)));
         }
         for assgn in AssignmentIter::new(self.num_vars()) {
             if assgn.is_empty() {
@@ -477,7 +489,7 @@ impl Cnf {
                     .enumerate()
                     .fold(T::one(), |v, (idx, &polarity)| {
                         let (loww, highw) = weight_vec[idx];
-                        v.mul(if polarity { highw } else { loww })
+                        v.mul(if polarity { *highw } else { *loww })
                     });
                 total = total + assgn_w;
             }
@@ -487,7 +499,6 @@ impl Cnf {
 
     pub fn linear_order(&self) -> VarOrder {
         let v = (0..(self.num_vars))
-            .into_iter()
             .map(|x| VarLabel::new(x as u64))
             .collect();
         VarOrder::new(v)
@@ -615,6 +626,9 @@ impl Cnf {
             ord.push(ig[idx]);
             eliminate_node(&mut ig, idx);
         }
+        // assert that ord contains each variable exactly once.
+        debug_assert!((0..(self.num_vars())).all(|v| ord.contains(&VarLabel::new_usize(v))));
+        debug_assert!(ord.len() == self.num_vars);
         VarOrder::new(ord)
     }
 
@@ -642,10 +656,18 @@ impl Cnf {
     /// get a hasher for this CNF
     /// may be expensive on first call; future calls are amortized
     pub fn get_hasher(&self) -> &CnfHasher {
-        match self.hasher {
-            Some(ref v) => v,
-            None => panic!(),
+        &self.hasher
+    }
+
+    // Checks if v a variable is in the CNF
+    pub fn var_in_cnf(&self, v: VarLabel) -> bool {
+        let list_of_lits: Vec<Literal> = self.clauses.clone().into_iter().flatten().collect();
+        for l in &list_of_lits {
+            if l.get_label() == v {
+                return true;
+            }
         }
+        false
     }
 }
 
@@ -707,9 +729,16 @@ fn test_cnf_wmc() {
         Literal::new(VarLabel::new(1), false),
     ]];
     let cnf = Cnf::new(v);
-    let weights: HashMap<VarLabel, (FiniteField<1000001>, FiniteField<1000001>)> = hashmap! {
+    let weights: std::collections::HashMap<VarLabel, (FiniteField<1000001>, FiniteField<1000001>)> = hashmap! {
         VarLabel::new(0) => (FiniteField::new(1), FiniteField::new(1)),
         VarLabel::new(1) => (FiniteField::new(1), FiniteField::new(1)),
     };
-    assert_eq!(cnf.wmc(&weights), FiniteField::new(3));
+    assert_eq!(
+        cnf.wmc(&WmcParams::new_with_default(
+            FiniteField::zero(),
+            FiniteField::one(),
+            weights
+        )),
+        FiniteField::new(3)
+    );
 }

@@ -5,7 +5,7 @@ use crate::repr::var_label::VarLabel;
 use crate::util;
 use std::slice::Iter;
 
-use super::bdd::BddPtr;
+use super::robdd::BddPtr;
 
 #[derive(Debug, Clone)]
 pub struct VarOrder {
@@ -86,7 +86,7 @@ impl VarOrder {
 
     /// Returns the BddPtr whose top variable occurs first in a given
     /// ordering (ties broken by returning `a`)
-    pub fn first(&self, a: BddPtr, b: BddPtr) -> BddPtr {
+    pub fn first<'a>(&self, a: BddPtr<'a>, b: BddPtr<'a>) -> BddPtr<'a> {
         if a.is_const() {
             b
         } else if b.is_const() {
@@ -104,7 +104,7 @@ impl VarOrder {
 
     /// Returns a sorted pair where the BddPtr whose top variable is first
     /// occurs first in the pair.
-    pub fn sort(&self, a: BddPtr, b: BddPtr) -> (BddPtr, BddPtr) {
+    pub fn sort<'a>(&self, a: BddPtr<'a>, b: BddPtr<'a>) -> (BddPtr<'a>, BddPtr<'a>) {
         if a.is_const() {
             (b, a)
         } else if b.is_const() {

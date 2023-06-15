@@ -1,210 +1,101 @@
 //! Defines the internal representations for a trimmed and compressed SDD with
 //! complemented edges.
 
-use crate::repr::{
-    ddnnf::DDNNF,
-    var_label::{VarLabel, VarSet},
+pub mod binary_sdd;
+pub mod sdd_or;
+
+use crate::{
+    repr::{
+        ddnnf::DDNNF,
+        var_label::{VarLabel, VarSet},
+    },
+    util::semiring::FiniteField,
 };
-use bumpalo::Bump;
-use std::collections::HashSet;
 use std::fmt::Debug;
+use std::{collections::HashSet, ptr};
 use SddPtr::*;
 
+use std::hash::Hash;
+
+use self::binary_sdd::BinarySDD;
+use self::sdd_or::{SddAnd, SddNodeIter, SddOr};
+
 // This type is used a lot. Make sure it doesn't unintentionally get bigger.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Ord, PartialOrd, Copy)]
-pub enum SddPtr {
+#[derive(Debug, Clone, Eq, Ord, PartialOrd, Copy)]
+pub enum SddPtr<'a> {
     PtrTrue,
     PtrFalse,
-    BDD(*mut BinarySDD),
-    ComplBDD(*mut BinarySDD),
+    BDD(&'a BinarySDD<'a>),
+    ComplBDD(&'a BinarySDD<'a>),
     Var(VarLabel, bool),
-    Compl(*mut SddOr),
-    Reg(*mut SddOr),
+    Compl(&'a SddOr<'a>),
+    Reg(&'a SddOr<'a>),
 }
 
-/// Specialized SDD node for a right-linear sub-vtree
-/// SDDs for these fragments are binary decisions
-#[derive(Debug, Clone, Eq, Ord, PartialOrd, Copy)]
-pub struct BinarySDD {
-    label: VarLabel,
-    vtree: VTreeIndex,
-    low: SddPtr,
-    high: SddPtr,
-    scratch: usize,
-}
-
-impl BinarySDD {
-    pub fn new(label: VarLabel, low: SddPtr, high: SddPtr, vtree: VTreeIndex) -> BinarySDD {
-        BinarySDD {
-            label,
-            low,
-            high,
-            vtree,
-            scratch: 0,
-        }
-    }
-
-    pub fn vtree(&self) -> VTreeIndex {
-        self.vtree
-    }
-
-    pub fn low(&self) -> SddPtr {
-        self.low
-    }
-
-    pub fn high(&self) -> SddPtr {
-        self.high
-    }
-
-    pub fn label(&self) -> VarLabel {
-        self.label
-    }
-}
-
-impl Hash for BinarySDD {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.vtree.hash(state);
-        self.label.hash(state);
-        self.low.hash(state);
-        self.high.hash(state);
-    }
-}
-
-impl PartialEq for BinarySDD {
-    fn eq(&self, other: &Self) -> bool {
-        self.vtree == other.vtree
-            && self.low == other.low
-            && self.high == other.high
-            && self.label == other.label
-    }
-}
-
-/// Produces a node iterator for SDD or-nodes from an SDD pointer
-struct SddNodeIter {
-    sdd: SddPtr,
-    count: usize,
-}
-
-impl SddNodeIter {
-    pub fn new(sdd: SddPtr) -> SddNodeIter {
-        // println!("new iter, len: {}", if sdd.is_bdd() { 2 } else { sdd.num_nodes() });
-        SddNodeIter { sdd, count: 0 }
-    }
-}
-
-impl Iterator for SddNodeIter {
-    type Item = SddAnd;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.sdd.is_bdd() {
-            // if this is a binary SDD, produce the appropriate nodes
-            if self.count == 0 {
-                self.count += 1;
-                Some(SddAnd::new(
-                    SddPtr::var(self.sdd.topvar(), true),
-                    self.sdd.high_raw(),
-                ))
-            } else if self.count == 1 {
-                self.count += 1;
-                Some(SddAnd::new(
-                    SddPtr::var(self.sdd.topvar(), false),
-                    self.sdd.low_raw(),
-                ))
-            } else {
-                None
+impl<'a> Hash for SddPtr<'a> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        core::mem::discriminant(self).hash(state);
+        match self {
+            BDD(p) | ComplBDD(p) => ptr::hash(*p, state),
+            Var(l, p) => {
+                l.hash(state);
+                p.hash(state);
             }
-        } else {
-            let sdd = self.sdd.node_ref();
-            if self.count >= sdd.nodes.len() {
-                None
-            } else {
-                self.count += 1;
-                Some(sdd.nodes[self.count - 1])
-            }
-        }
+            Compl(p) | Reg(p) => ptr::hash(*p, state),
+            _ => (),
+        };
     }
 }
 
-#[derive(Debug, Clone, Hash, PartialEq, Eq, Ord, PartialOrd, Copy)]
-pub struct SddAnd {
-    prime: SddPtr,
-    sub: SddPtr,
-}
-
-impl SddAnd {
-    pub fn prime(&self) -> SddPtr {
-        self.prime
-    }
-    pub fn sub(&self) -> SddPtr {
-        self.sub
-    }
-    pub fn new(prime: SddPtr, sub: SddPtr) -> SddAnd {
-        SddAnd { prime, sub }
-    }
-}
-
-/// An SddOr node is a vector of (prime, sub) pairs.
-#[derive(Debug, Clone, Eq, Ord, PartialOrd)]
-pub struct SddOr {
-    index: VTreeIndex,
-    pub nodes: Vec<SddAnd>,
-    pub scratch: usize,
-}
-
-impl SddOr {
-    pub fn new(nodes: Vec<SddAnd>, index: VTreeIndex) -> SddOr {
-        SddOr {
-            nodes,
-            index,
-            scratch: 0,
-        }
-    }
-}
-
-impl PartialEq for SddOr {
+impl<'a> PartialEq for SddPtr<'a> {
     fn eq(&self, other: &Self) -> bool {
-        self.index == other.index && self.nodes == other.nodes
+        match (self, other) {
+            (Self::BDD(l0), Self::BDD(r0)) => std::ptr::eq(*l0, *r0),
+            (Self::ComplBDD(l0), Self::ComplBDD(r0)) => std::ptr::eq(*l0, *r0),
+            (Self::Var(l0, l1), Self::Var(r0, r1)) => l0 == r0 && l1 == r1,
+            (Self::Compl(l0), Self::Compl(r0)) => std::ptr::eq(*l0, *r0),
+            (Self::Reg(l0), Self::Reg(r0)) => std::ptr::eq(*l0, *r0),
+            _ => core::mem::discriminant(self) == core::mem::discriminant(other),
+        }
     }
 }
-
-use std::hash::{Hash, Hasher};
 
 use super::{
     ddnnf::DDNNFPtr,
-    var_label::Literal,
+    robdd::WmcParams,
     vtree::{VTreeIndex, VTreeManager},
 };
-impl Hash for SddOr {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.index.hash(state);
-        self.nodes.hash(state);
-    }
-}
 
-impl SddPtr {
-    pub fn or(ptr: *mut SddOr) -> SddPtr {
-        Reg(ptr)
-    }
-
-    pub fn bdd(ptr: *mut BinarySDD) -> SddPtr {
-        Self::BDD(ptr)
+impl<'a> SddPtr<'a> {
+    /// performs a semantic hash and caches the result on the node
+    pub fn cached_semantic_hash<const P: u128>(
+        &self,
+        vtree: &VTreeManager,
+        map: &WmcParams<FiniteField<P>>,
+    ) -> FiniteField<P> {
+        match self {
+            PtrTrue => FiniteField::new(1),
+            PtrFalse => FiniteField::new(0),
+            Var(label, polarity) => {
+                let (l_w, h_w) = map.get_var_weight(*label);
+                if *polarity {
+                    *h_w
+                } else {
+                    *l_w
+                }
+            }
+            BDD(bdd) => bdd.cached_semantic_hash(vtree, map),
+            Reg(or) => or.cached_semantic_hash(vtree, map),
+            ComplBDD(_) | Compl(_) => self.neg().cached_semantic_hash(vtree, map).negate(),
+        }
     }
 
     /// Gets the scratch value stored in `&self`
-    ///
-    /// Panics if not node.
-    pub fn get_scratch<T>(&self) -> Option<&T> {
-        unsafe {
-            let ptr = if self.is_bdd() {
-                self.mut_bdd_ref().scratch
-            } else {
-                self.node_ref().scratch
-            };
-            if ptr == 0 {
-                None
-            } else {
-                Some(&*(ptr as *const T))
-            }
+    pub fn get_scratch<T: ?Sized + Clone + 'static>(&self) -> Option<T> {
+        match self {
+            PtrTrue | PtrFalse | Var(_, _) => None,
+            BDD(bdd) | ComplBDD(bdd) => bdd.get_scratch(),
+            Reg(or) | Compl(or) => or.get_scratch(),
         }
     }
 
@@ -215,81 +106,47 @@ impl SddPtr {
     /// Invariant: values stored in `set_scratch` must not outlive
     /// the provided allocator `alloc` (i.e., calling `get_scratch`
     /// involves dereferencing a pointer stored in `alloc`)
-    pub fn set_scratch<T>(&self, alloc: &mut Bump, v: T) {
-        if self.is_bdd() {
-            self.mut_bdd_ref().scratch = (alloc.alloc(v) as *const T) as usize;
-        } else {
-            self.node_ref_mut().scratch = (alloc.alloc(v) as *const T) as usize;
-        }
+    pub fn set_scratch<T: 'static>(&self, v: T) {
+        match self {
+            PtrTrue | PtrFalse | Var(_, _) => panic!("attempting to store scratch on constant"),
+            BDD(bdd) | ComplBDD(bdd) => bdd.set_scratch(v),
+            Reg(or) | Compl(or) => or.set_scratch(v),
+        };
     }
 
     pub fn is_scratch_cleared(&self) -> bool {
-        if self.is_bdd() {
-            self.mut_bdd_ref().scratch == 0
-        } else if self.is_node() {
-            self.node_ref_mut().scratch == 0
-        } else {
-            true
+        match self {
+            PtrTrue | PtrFalse | Var(_, _) => true,
+            BDD(bdd) | ComplBDD(bdd) => bdd.is_scratch_cleared(),
+            Reg(or) | Compl(or) => or.scratch.borrow().is_none(),
         }
     }
 
     /// recursively traverses the SDD and clears all scratch
     pub fn clear_scratch(&self) {
-        if self.is_const() || self.is_var() {
-            return;
-        }
-        if self.is_bdd() {
-            if self.mut_bdd_ref().scratch == 0 {
-                return;
-            } else {
-                // clear children and return
-                self.mut_bdd_ref().scratch = 0;
-                self.high().clear_scratch();
-                self.low().clear_scratch();
-                return;
-            }
-        }
-
-        // node is an sdd
-        let n = self.node_ref_mut();
-        if n.scratch != 0 {
-            n.scratch = 0;
-            for a in &n.nodes {
-                a.prime().clear_scratch();
-                a.sub().clear_scratch();
-            }
+        match self {
+            PtrTrue | PtrFalse | Var(_, _) => {}
+            BDD(bdd) | ComplBDD(bdd) => bdd.clear_scratch(),
+            Reg(or) | Compl(or) => or.clear_scratch(),
         }
     }
 
-    pub fn is_or(&self) -> bool {
-        matches!(self, Compl(_) | Reg(_))
-    }
-
-    pub fn var(lbl: VarLabel, polarity: bool) -> SddPtr {
-        Var(lbl, polarity)
-    }
-
-    /// uncomplement a pointer
-    pub fn to_reg(&self) -> SddPtr {
-        match &self {
-            Compl(x) => Reg(*x),
-            ComplBDD(x) => BDD(*x),
-            _ => *self,
-        }
-    }
-
+    #[inline]
     pub fn is_const(&self) -> bool {
         matches!(self, PtrTrue | PtrFalse)
     }
 
+    #[inline]
     pub fn is_var(&self) -> bool {
         matches!(self, Var(_, _))
     }
 
+    #[inline]
     pub fn is_neg_var(&self) -> bool {
         matches!(self, Var(_, false))
     }
 
+    #[inline]
     pub fn is_pos_var(&self) -> bool {
         matches!(self, Var(_, true))
     }
@@ -301,119 +158,62 @@ impl SddPtr {
         }
     }
 
-    pub fn get_var(&self) -> Literal {
-        match &self {
-            Var(v, b) => Literal::new(*v, *b),
-            _ => panic!("called get_var on non var"),
-        }
-    }
-
+    #[inline]
     pub fn is_bdd(&self) -> bool {
         matches!(self, BDD(_) | ComplBDD(_))
     }
 
-    pub fn is_node(&self) -> bool {
-        matches!(self, Compl(_) | Reg(_))
-    }
-
-    /// Get a mutable reference to the node that &self points to
-    ///
-    /// Panics if not a bdd pointer
-    #[allow(clippy::mut_from_ref)]
-    pub fn mut_bdd_ref(&self) -> &mut BinarySDD {
-        unsafe {
-            match &self {
-                BDD(x) => &mut (**x),
-                ComplBDD(x) => &mut (**x),
-                _ => panic!("Dereferencing constant in deref_or_panic"),
-            }
-        }
-    }
-
-    /// gets the top variable of a BDD
-    ///
-    /// panics if not a bdd pointer
-    pub fn topvar(&self) -> VarLabel {
-        self.mut_bdd_ref().label
-    }
-
     /// gets the low pointer of a BDD
     /// negates the returned pointer if the root is negated
     ///
     /// panics if not a bdd pointer
-    pub fn low(&self) -> SddPtr {
-        if self.is_neg() {
-            self.mut_bdd_ref().low.neg()
-        } else {
-            self.mut_bdd_ref().low
+    pub fn low(&self) -> SddPtr<'a> {
+        match self {
+            BDD(bdd) => bdd.low(),
+            ComplBDD(bdd) => bdd.low().neg(),
+            _ => panic!("Called low() on a pointer to a non-BinarySDD"),
         }
-    }
-
-    /// gets the low pointer of a BDD
-    ///
-    /// panics if not a bdd pointer
-    pub fn low_raw(&self) -> SddPtr {
-        self.mut_bdd_ref().low
     }
 
     /// gets the high pointer of a BDD
     /// negates the returned pointer if the root is negated
     ///
     /// panics if not a bdd pointer
-    pub fn high(&self) -> SddPtr {
-        if self.is_neg() {
-            self.mut_bdd_ref().high.neg()
-        } else {
-            self.mut_bdd_ref().high
+    pub fn high(&self) -> SddPtr<'a> {
+        match self {
+            BDD(bdd) => bdd.high(),
+            ComplBDD(bdd) => bdd.high().neg(),
+            _ => panic!("Called high() on a pointer to a non-BinarySDD"),
         }
-    }
-
-    /// gets the high pointer of a BDD
-    ///
-    /// panics if not a bdd pointer
-    pub fn high_raw(&self) -> SddPtr {
-        self.mut_bdd_ref().high
     }
 
     /// get an iterator to all the (prime, sub) pairs this node points to
     /// panics if not an or-node
-    pub fn node_iter(&self) -> impl Iterator<Item = SddAnd> {
+    pub fn node_iter(&self) -> impl Iterator<Item = SddAnd<'a>> {
         SddNodeIter::new(*self)
     }
 
     /// returns number of (prime, sub) pairs this node points to
-    /// panics if not an or-node
+    /// panics if not an or-node or const
     pub fn num_nodes(&self) -> usize {
-        if self.is_bdd() {
-            2
-        } else {
-            self.node_ref().nodes.len()
+        match self {
+            PtrTrue | PtrFalse | Var(_, _) => 1,
+            BDD(_) | ComplBDD(_) => 2,
+            Reg(or) | Compl(or) => or.nodes.len(),
         }
     }
 
-    /// Get an immutable reference to the node that &self points to
-    ///
-    /// Panics if not a node pointer
-    pub fn node_ref(&self) -> &SddOr {
-        unsafe {
-            match &self {
-                Reg(x) => &(**x),
-                Compl(x) => &(**x),
-                _ => panic!("Called node_ref on non-node {:?}", self),
-            }
-        }
-    }
-
-    /// Get a mutable reference to the node that &self points to
-    ///
-    /// Panics if not a node pointer
-    #[allow(clippy::mut_from_ref)]
-    pub fn node_ref_mut(&self) -> &mut SddOr {
-        unsafe {
-            match &self {
-                Reg(x) => &mut (**x),
-                Compl(x) => &mut (**x),
-                _ => panic!("Called node_ref on non-node {:?}", self),
+    /// gets the total number of nodes that are a child to this SDD
+    pub fn num_child_nodes(&self) -> usize {
+        match &self {
+            PtrTrue | PtrFalse | Var(_, _) => 1,
+            BDD(or) | ComplBDD(or) => 1 + or.low().num_child_nodes() + or.high().num_child_nodes(),
+            Compl(or) | Reg(or) => {
+                1 + or
+                    .nodes
+                    .iter()
+                    .map(|n| 1 + n.prime.num_child_nodes() + n.sub.num_child_nodes())
+                    .sum::<usize>()
             }
         }
     }
@@ -422,80 +222,62 @@ impl SddPtr {
     ///
     /// panics if this is not a node
     pub fn vtree(&self) -> VTreeIndex {
-        if self.is_bdd() {
-            self.mut_bdd_ref().vtree()
-        } else {
-            self.node_ref().index
+        match self {
+            BDD(bdd) | ComplBDD(bdd) => bdd.vtree(),
+            Reg(or) | Compl(or) => or.index(),
+            _ => panic!("called vtree() on a constant"),
         }
     }
 
-    fn is_canonical_h(&self) -> bool {
-        self.is_compressed() && self.is_trimmed()
-    }
-
     pub fn is_canonical(&self) -> bool {
-        self.is_canonical_h()
+        self.is_compressed() && self.is_trimmed()
     }
 
     // predicate that returns if an SDD is compressed;
     // see https://www.ijcai.org/Proceedings/11/Papers/143.pdf
     // definition 8
     pub fn is_compressed(&self) -> bool {
-        self.is_compressed_h()
-    }
-
-    fn is_compressed_h(&self) -> bool {
         match &self {
-            PtrTrue => true,
-            PtrFalse => true,
-            Var(_, _) => true,
-            BDD(_) | ComplBDD(_) => {
-                let low = self.low();
-                let high = self.high();
+            PtrTrue | PtrFalse | Var(_, _) => true,
+            BDD(or) | ComplBDD(or) => {
+                let low = or.low();
+                let high = or.high();
 
                 (low != high) && low.is_compressed() && high.is_compressed()
             }
-            Reg(_) | Compl(_) => {
+            Reg(or) | Compl(or) => {
                 let mut visited_sdds: HashSet<SddPtr> = HashSet::new();
-                for and in self.node_iter() {
+                for and in or.nodes.iter() {
                     if visited_sdds.contains(&and.sub) {
                         return false;
                     }
                     visited_sdds.insert(and.sub);
                 }
 
-                self.node_iter().all(|and| and.prime.is_compressed())
+                or.nodes.iter().all(|and| and.prime.is_compressed())
             }
         }
     }
 
     pub fn is_trimmed(&self) -> bool {
-        self.is_trimmed_h()
-    }
-
-    fn is_trimmed_h(&self) -> bool {
         match &self {
-            PtrTrue => true,
-            PtrFalse => true,
-            Var(_, _) => true,
-            BDD(_) => {
+            PtrTrue | PtrFalse | Var(_, _) => true,
+            BDD(bdd) | ComplBDD(bdd) => {
                 // core assumption: in binary SDD, the prime is always x and not x
                 // so, we only check low/high being flipped versions
-                if !self.low().is_const() || !self.high().is_const() {
-                    return self.low().is_trimmed() && self.high().is_trimmed();
+                if !bdd.low().is_const() || !bdd.high().is_const() {
+                    return bdd.low().is_trimmed() && bdd.high().is_trimmed();
                 }
 
                 // both low and high are constants; need to check for (a,T) and (~a, F) case
-                self.low() != self.high()
+                bdd.low() != bdd.high()
             }
-            ComplBDD(_) => self.neg().is_trimmed(),
-            Reg(_) | Compl(_) => {
-                // TODO(mattxwang): significantly optimize this
+            Reg(or) | Compl(or) => {
                 // this next part is an O(n^2) (i.e., pairwise) comparison of each SDD
                 // and an arbitrary prime. we are looking for untrimmed decomposition pairs of the form (a, T) and (~a, F)
                 let mut visited_primes: HashSet<SddPtr> = HashSet::new();
 
-                for and in self.node_iter() {
+                for and in or.nodes.iter() {
                     let prime = and.prime;
 
                     // decomposition of the form (T, a)
@@ -516,7 +298,7 @@ impl SddPtr {
                     visited_primes.insert(prime.neg());
                 }
 
-                self.node_iter().all(|s| s.prime.is_trimmed())
+                or.nodes.iter().all(|s| s.prime.is_trimmed())
             }
         }
     }
@@ -524,21 +306,18 @@ impl SddPtr {
 
 type DDNNFCache<T> = (Option<T>, Option<T>);
 
-impl DDNNFPtr for SddPtr {
+impl<'a> DDNNFPtr<'a> for SddPtr<'a> {
     type Order = VTreeManager;
 
-    // TODO: we should be able to remove this; e.g. replace v.clone() with *v
-    #[allow(clippy::clone_on_copy)]
-    fn fold<T: Clone + Copy + std::fmt::Debug, F: Fn(super::ddnnf::DDNNF<T>) -> T>(
+    fn fold<T: 'static + Clone + Copy + std::fmt::Debug, F: Fn(super::ddnnf::DDNNF<T>) -> T>(
         &self,
         _v: &VTreeManager,
         f: F,
     ) -> T {
         debug_assert!(self.is_scratch_cleared());
-        fn bottomup_pass_h<T: Clone + Copy + Debug, F: Fn(DDNNF<T>) -> T>(
+        fn bottomup_pass_h<T: 'static + Clone + Copy + Debug, F: Fn(DDNNF<T>) -> T>(
             ptr: SddPtr,
             f: &F,
-            alloc: &mut Bump,
         ) -> T {
             match ptr {
                 PtrTrue => f(DDNNF::True),
@@ -547,51 +326,59 @@ impl DDNNFPtr for SddPtr {
                 Compl(_) | Reg(_) | ComplBDD(_) | BDD(_) => {
                     // inside the cache, store a (compl, non_compl) pair corresponding to the
                     // complemented and uncomplemented pass over this node
-                    if ptr.get_scratch::<DDNNFCache<T>>().is_none() {
-                        ptr.set_scratch::<DDNNFCache<T>>(alloc, (None, None));
-                    }
-                    match ptr.get_scratch::<DDNNFCache<T>>() {
-                        Some((Some(v), _)) if ptr.is_neg() => v.clone(),
-                        Some((_, Some(v))) if !ptr.is_neg() => v.clone(),
-                        Some((None, cached)) | Some((cached, None)) => {
-                            // no cached value found, compute it
-                            let mut or_v = f(DDNNF::False);
-                            for and in ptr.node_iter() {
-                                let s = if ptr.is_neg() {
-                                    and.sub().neg()
-                                } else {
-                                    and.sub()
-                                };
-                                let p_sub = bottomup_pass_h(and.prime(), f, alloc);
-                                let s_sub = bottomup_pass_h(s, f, alloc);
-                                let a = f(DDNNF::And(p_sub, s_sub));
-                                let v = VarSet::new();
-                                or_v = f(DDNNF::Or(or_v, a, v));
-                            }
 
-                            // cache and return or_v
-                            if ptr.is_neg() {
-                                ptr.set_scratch::<DDNNFCache<T>>(alloc, (Some(or_v), *cached));
+                    // helper performs actual fold-and-cache work
+                    let bottomup_helper = |cached| {
+                        let mut or_v = f(DDNNF::False);
+                        for and in ptr.node_iter() {
+                            let s = if ptr.is_neg() {
+                                and.sub().neg()
                             } else {
-                                ptr.set_scratch::<DDNNFCache<T>>(alloc, (*cached, Some(or_v)));
-                            }
-                            or_v
+                                and.sub()
+                            };
+                            let p_sub = bottomup_pass_h(and.prime(), f);
+                            let s_sub = bottomup_pass_h(s, f);
+                            let a = f(DDNNF::And(p_sub, s_sub));
+                            let v = VarSet::new();
+                            or_v = f(DDNNF::Or(or_v, a, v));
                         }
-                        _ => panic!("unreachable"),
+
+                        // cache and return or_v
+                        if ptr.is_neg() {
+                            ptr.set_scratch::<DDNNFCache<T>>((Some(or_v), cached));
+                        } else {
+                            ptr.set_scratch::<DDNNFCache<T>>((cached, Some(or_v)));
+                        }
+                        or_v
+                    };
+
+                    match ptr.get_scratch::<DDNNFCache<T>>() {
+                        // first, check if cached; explicit arms here for clarity
+                        Some((Some(l), Some(h))) => {
+                            if ptr.is_neg() {
+                                l
+                            } else {
+                                h
+                            }
+                        }
+                        Some((Some(v), None)) if ptr.is_neg() => v,
+                        Some((None, Some(v))) if !ptr.is_neg() => v,
+                        // no cached value found, compute it
+                        Some((None, cached)) | Some((cached, None)) => bottomup_helper(cached),
+                        None => bottomup_helper(None),
                     }
                 }
             }
         }
 
-        let mut alloc = Bump::new();
-        let r = bottomup_pass_h(*self, &f, &mut alloc);
+        let r = bottomup_pass_h(*self, &f);
         self.clear_scratch();
         r
     }
 
     fn count_nodes(&self) -> usize {
         debug_assert!(self.is_scratch_cleared());
-        fn count_h(ptr: SddPtr, alloc: &mut Bump) -> usize {
+        fn count_h(ptr: SddPtr) -> usize {
             if ptr.is_const() || ptr.is_var() {
                 return 0;
             }
@@ -599,27 +386,27 @@ impl DDNNFPtr for SddPtr {
                 Some(_) => 0,
                 None => {
                     // found a new node
-                    ptr.set_scratch::<usize>(alloc, 0);
+                    ptr.set_scratch::<usize>(0);
                     let mut c = 0;
                     for a in ptr.node_iter() {
-                        c += count_h(a.sub(), alloc);
-                        c += count_h(a.prime(), alloc);
+                        c += count_h(a.sub());
+                        c += count_h(a.prime());
                         c += 1;
                     }
                     c
                 }
             }
         }
-        let r = count_h(*self, &mut Bump::new());
+        let r = count_h(*self);
         self.clear_scratch();
-        return r;
+        r
     }
 
-    fn false_ptr() -> SddPtr {
+    fn false_ptr() -> SddPtr<'a> {
         PtrFalse
     }
 
-    fn true_ptr() -> SddPtr {
+    fn true_ptr() -> SddPtr<'a> {
         PtrTrue
     }
 
@@ -641,10 +428,10 @@ impl DDNNFPtr for SddPtr {
             PtrTrue => PtrFalse,
             PtrFalse => PtrTrue,
             Var(x, p) => Var(*x, !p),
-            Compl(x) => Reg(*x),
-            Reg(x) => Compl(*x),
-            BDD(x) => ComplBDD(*x),
-            ComplBDD(x) => BDD(*x),
+            Compl(x) => Reg(x),
+            Reg(x) => Compl(x),
+            BDD(x) => ComplBDD(x),
+            ComplBDD(x) => BDD(x),
         }
     }
 }
@@ -664,8 +451,8 @@ fn is_compressed_simple_bdd() {
         1,
     );
     let vtree_manager = VTreeManager::new(vtree);
-    let a = SddPtr::var(VarLabel::new(0), true);
-    let b = SddPtr::var(VarLabel::new(1), false);
+    let a = SddPtr::Var(VarLabel::new(0), true);
+    let b = SddPtr::Var(VarLabel::new(1), false);
     let mut binary_sdd = BinarySDD::new(
         VarLabel::new(2),
         a,
@@ -673,7 +460,7 @@ fn is_compressed_simple_bdd() {
         vtree_manager.get_varlabel_idx(VarLabel::new(2)),
     );
     let binary_sdd_ptr = &mut binary_sdd;
-    let bdd_ptr = SddPtr::bdd(binary_sdd_ptr);
+    let bdd_ptr = SddPtr::BDD(binary_sdd_ptr);
     assert_ne!(a, b);
     assert!(bdd_ptr.is_compressed());
 }
@@ -685,7 +472,7 @@ fn is_compressed_simple_bdd_duplicate() {
         1,
     );
     let vtree_manager = VTreeManager::new(vtree);
-    let a = SddPtr::var(VarLabel::new(0), true);
+    let a = SddPtr::Var(VarLabel::new(0), true);
     let mut binary_sdd = BinarySDD::new(
         VarLabel::new(2),
         a,
@@ -693,7 +480,7 @@ fn is_compressed_simple_bdd_duplicate() {
         vtree_manager.get_varlabel_idx(VarLabel::new(2)),
     );
     let binary_sdd_ptr = &mut binary_sdd;
-    let bdd_ptr = SddPtr::bdd(binary_sdd_ptr);
+    let bdd_ptr = SddPtr::BDD(binary_sdd_ptr);
 
     assert!(!bdd_ptr.is_compressed())
 }
@@ -708,26 +495,27 @@ fn is_trimmed_trivial() {
 
 #[test]
 fn is_trimmed_simple_demorgan() {
-    let mut man =
-        crate::builder::sdd_builder::SddManager::new(crate::repr::vtree::VTree::even_split(
-            &[
-                VarLabel::new(0),
-                VarLabel::new(1),
-                VarLabel::new(2),
-                VarLabel::new(3),
-                VarLabel::new(4),
-            ],
-            1,
-        ));
+    use crate::builder::sdd_builder::*;
+    let man = CompressionSddManager::new(crate::repr::vtree::VTree::even_split(
+        &[
+            VarLabel::new(0),
+            VarLabel::new(1),
+            VarLabel::new(2),
+            VarLabel::new(3),
+            VarLabel::new(4),
+        ],
+        1,
+    ));
 
-    let x = SddPtr::var(VarLabel::new(0), true);
-    let y = SddPtr::var(VarLabel::new(3), true);
+    let x = SddPtr::Var(VarLabel::new(0), true);
+    let y = SddPtr::Var(VarLabel::new(3), true);
     let res = man.or(x, y).neg();
     let expected = man.and(x.neg(), y.neg());
 
     assert!(expected.is_trimmed());
     assert!(res.is_trimmed());
 }
+
 #[test]
 fn is_canonical_trivial() {
     assert!(PtrTrue.is_canonical());
@@ -738,19 +526,19 @@ fn is_canonical_trivial() {
 
 #[test]
 fn is_canonical_simple_demorgan() {
-    let mut man =
-        crate::builder::sdd_builder::SddManager::new(crate::repr::vtree::VTree::even_split(
-            &[
-                VarLabel::new(0),
-                VarLabel::new(1),
-                VarLabel::new(2),
-                VarLabel::new(3),
-                VarLabel::new(4),
-            ],
-            1,
-        ));
-    let x = SddPtr::var(VarLabel::new(0), true);
-    let y = SddPtr::var(VarLabel::new(3), true);
+    use crate::builder::sdd_builder::*;
+    let man = CompressionSddManager::new(crate::repr::vtree::VTree::even_split(
+        &[
+            VarLabel::new(0),
+            VarLabel::new(1),
+            VarLabel::new(2),
+            VarLabel::new(3),
+            VarLabel::new(4),
+        ],
+        1,
+    ));
+    let x = SddPtr::Var(VarLabel::new(0), true);
+    let y = SddPtr::Var(VarLabel::new(3), true);
     let res = man.or(x, y).neg();
     let expected = man.and(x.neg(), y.neg());
     assert!(expected.is_canonical());

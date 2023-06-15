@@ -1,50 +1,90 @@
 //! Top-down decision DNNF compiler and manipulator
 
+use std::{cell::RefCell, collections::HashSet};
+
 use crate::{
     backing_store::*,
     repr::{
         ddnnf::DDNNFPtr,
+        robdd::create_semantic_hash_map,
         unit_prop::{DecisionResult, SATSolver},
     },
 };
-use bumpalo::Bump;
-
 use rustc_hash::FxHashMap;
 
 use crate::{
     backing_store::bump_table::BackedRobinhoodTable,
     repr::{
-        bdd::{BddNode, BddPtr},
         cnf::*,
+        robdd::{BddNode, BddPtr},
         var_label::{Literal, VarLabel},
         var_order::VarOrder,
     },
 };
 
-pub struct DecisionNNFBuilder {
-    compute_table: BackedRobinhoodTable<BddNode>,
+// pub struct BddSemanticUniqueTableHasher<const P: u128> {
+//     map: WmcParams<FiniteField<P>>,
+//     order: VarOrder,
+// }
+
+// impl<const P: u128> BddSemanticUniqueTableHasher<P> {
+//     pub fn new(order: VarOrder, map: WmcParams<FiniteField<P>>) -> Self {
+//         Self { order, map }
+//     }
+// }
+
+// impl<'a, const P: u128> UniqueTableHasher<BddNode<'a>> for BddSemanticUniqueTableHasher<P> {
+//     fn u64hash(&self, elem: &BddNode) -> u64 {
+//         let mut hasher = FxHasher::default();
+
+//         let (low_w, high_w) = self.map.get_var_weight(elem.var);
+
+//         let raw = elem.low.semantic_hash(&self.order, &self.map).value() * low_w.value()
+//             + elem.high.semantic_hash(&self.order, &self.map).value() * high_w.value();
+
+//         raw.hash(&mut hasher);
+//         hasher.finish()
+//     }
+// }
+
+pub struct DecisionNNFBuilder<'a> {
+    compute_table: RefCell<BackedRobinhoodTable<'a, BddNode<'a>>>,
+    // avoid hard-coding primes into impl
+    // hasher: BddSemanticUniqueTableHasher<100000049>,
+    // hasher: DefaultUniqueTableHasher,
+    order: VarOrder,
 }
 
-impl DecisionNNFBuilder {
-    pub fn new() -> DecisionNNFBuilder {
+impl<'a> DecisionNNFBuilder<'a> {
+    pub fn new(order: VarOrder) -> DecisionNNFBuilder<'a> {
         DecisionNNFBuilder {
-            compute_table: BackedRobinhoodTable::new(),
+            order,
+            compute_table: RefCell::new(BackedRobinhoodTable::new()),
+            // hasher: DefaultUniqueTableHasher::default(),
+            // hasher: BddSemanticUniqueTableHasher {
+            //     map: create_semantic_hash_map(order.num_vars()),
+            //     order,
+            // },
         }
     }
 
     /// Normalizes and fetches a node from the store
-    fn get_or_insert(&mut self, bdd: BddNode) -> BddPtr {
-        if bdd.high.is_neg() {
-            let bdd = BddNode::new(bdd.var, bdd.low.neg(), bdd.high.neg());
-            BddPtr::new_compl(self.compute_table.get_or_insert(bdd))
-        } else {
-            let bdd = BddNode::new(bdd.var, bdd.low, bdd.high);
-            BddPtr::new_reg(self.compute_table.get_or_insert(bdd))
+    fn get_or_insert(&'a self, bdd: BddNode<'a>) -> BddPtr<'a> {
+        // TODO make this safe
+        unsafe {
+            let tbl = &mut *self.compute_table.as_ptr();
+            if bdd.high.is_neg() {
+                let bdd = BddNode::new(bdd.var, bdd.low.neg(), bdd.high.neg());
+                BddPtr::new_compl(tbl.get_or_insert(bdd))
+            } else {
+                let bdd = BddNode::new(bdd.var, bdd.low, bdd.high);
+                BddPtr::new_reg(tbl.get_or_insert(bdd))
+            }
         }
     }
 
     /// Get a pointer to the variable with label `lbl` and polarity `polarity`
-    pub fn var(&mut self, lbl: VarLabel, polarity: bool) -> BddPtr {
+    pub fn var(&'a self, lbl: VarLabel, polarity: bool) -> BddPtr<'a> {
         let bdd = BddNode::new(lbl, BddPtr::false_ptr(), BddPtr::true_ptr());
         let r = self.get_or_insert(bdd);
         if polarity {
@@ -54,7 +94,11 @@ impl DecisionNNFBuilder {
         }
     }
 
-    fn conjoin_implied(&mut self, literals: impl Iterator<Item = Literal>, nnf: BddPtr) -> BddPtr {
+    fn conjoin_implied(
+        &'a self,
+        literals: impl Iterator<Item = Literal>,
+        nnf: BddPtr<'a>,
+    ) -> BddPtr<'a> {
         if nnf.is_false() {
             return BddPtr::false_ptr();
         }
@@ -75,23 +119,22 @@ impl DecisionNNFBuilder {
     /// We need both of these BDDs for sound CNF caching
     /// `cache`: a map from hashed CNFs to their compiled BDDs
     fn topdown_h(
-        &mut self,
+        &'a self,
         cnf: &Cnf,
         sat: &mut SATSolver,
         level: usize,
-        order: &VarOrder,
-        cache: &mut FxHashMap<u128, BddPtr>,
-    ) -> BddPtr {
+        cache: &mut FxHashMap<u128, BddPtr<'a>>,
+    ) -> BddPtr<'a> {
         // check for base case
         if level >= cnf.num_vars() || sat.is_sat() {
             return BddPtr::true_ptr();
         }
-        let cur_v = order.var_at_level(level);
+        let cur_v = self.order.var_at_level(level);
 
         // check if this literal is currently set in unit propagation; if
         // it is, skip it
         if sat.is_set(cur_v) {
-            return self.topdown_h(cnf, sat, level + 1, order, cache);
+            return self.topdown_h(cnf, sat, level + 1, cache);
         }
 
         // check cache
@@ -113,7 +156,7 @@ impl DecisionNNFBuilder {
                 r
             }
             DecisionResult::Unknown => {
-                let sub = self.topdown_h(cnf, sat, level + 1, order, cache);
+                let sub = self.topdown_h(cnf, sat, level + 1, cache);
                 let new_assgn = sat.get_difference().filter(|x| x.get_label() != cur_v);
                 let r = self.conjoin_implied(new_assgn, sub);
                 sat.pop();
@@ -129,7 +172,7 @@ impl DecisionNNFBuilder {
                 r
             }
             DecisionResult::Unknown => {
-                let sub = self.topdown_h(cnf, sat, level + 1, order, cache);
+                let sub = self.topdown_h(cnf, sat, level + 1, cache);
                 let new_assgn = sat.get_difference().filter(|x| x.get_label() != cur_v);
                 let r = self.conjoin_implied(new_assgn, sub);
                 sat.pop();
@@ -147,15 +190,14 @@ impl DecisionNNFBuilder {
         r
     }
 
-    /// compile a decision DNNF top-down from a CNF with the searching order
-    /// specified by `order`
-    pub fn from_cnf_topdown(&mut self, order: &VarOrder, cnf: &Cnf) -> BddPtr {
+    /// compile a decision DNNF top-down from a CNF
+    pub fn from_cnf_topdown(&'a self, cnf: &Cnf) -> BddPtr<'a> {
         let mut sat = match SATSolver::new(cnf.clone()) {
             Some(v) => v,
             None => return BddPtr::false_ptr(),
         };
 
-        let mut r = self.topdown_h(cnf, &mut sat, 0, order, &mut FxHashMap::default());
+        let mut r = self.topdown_h(cnf, &mut sat, 0, &mut FxHashMap::default());
 
         // conjoin in any initially implied literals
         for l in sat.get_difference() {
@@ -170,18 +212,17 @@ impl DecisionNNFBuilder {
     }
 
     /// Compute the Boolean function `f | var = value`
-    pub fn condition(&mut self, bdd: BddPtr, lbl: VarLabel, value: bool) -> BddPtr {
-        let r = self.cond_helper(bdd, lbl, value, &mut Bump::new());
+    pub fn condition(&'a self, bdd: BddPtr<'a>, lbl: VarLabel, value: bool) -> BddPtr<'a> {
+        let r = self.cond_helper(bdd, lbl, value);
         bdd.clear_scratch();
         r
     }
 
-    fn cond_helper(&mut self, bdd: BddPtr, lbl: VarLabel, value: bool, alloc: &mut Bump) -> BddPtr {
+    fn cond_helper(&'a self, bdd: BddPtr<'a>, lbl: VarLabel, value: bool) -> BddPtr<'a> {
         if bdd.is_const() {
             bdd
         } else if bdd.var() == lbl {
-            let node = bdd.into_node();
-            let r = if value { node.high } else { node.low };
+            let r = if value { bdd.high() } else { bdd.low() };
             if bdd.is_neg() {
                 r.neg()
             } else {
@@ -189,15 +230,13 @@ impl DecisionNNFBuilder {
             }
         } else {
             // check cache
-            let _idx = match bdd.get_scratch::<BddPtr>() {
-                None => (),
-                Some(v) => return if bdd.is_neg() { v.neg() } else { *v },
-            };
+            if let Some(v) = bdd.get_scratch::<BddPtr>() {
+                return if bdd.is_neg() { v.neg() } else { v };
+            }
 
             // recurse on the children
-            let n = bdd.into_node();
-            let l = self.cond_helper(n.low, lbl, value, alloc);
-            let h = self.cond_helper(n.high, lbl, value, alloc);
+            let l = self.cond_helper(bdd.low(), lbl, value);
+            let h = self.cond_helper(bdd.high(), lbl, value);
             if l == h {
                 if bdd.is_neg() {
                     return l.neg();
@@ -205,7 +244,7 @@ impl DecisionNNFBuilder {
                     return l;
                 };
             };
-            let res = if l != n.low || h != n.high {
+            let res = if l != bdd.low() || h != bdd.high() {
                 // cache and return the new BDD
                 let new_bdd = BddNode::new(bdd.var(), l, h);
                 let r = self.get_or_insert(new_bdd);
@@ -218,9 +257,25 @@ impl DecisionNNFBuilder {
                 // nothing changed
                 bdd
             };
-            bdd.set_scratch(alloc, if bdd.is_neg() { res.neg() } else { res });
+            // TODO: fix scratch lifetime issue
+            // bdd.set_scratch(if bdd.is_neg() { res.neg() } else { res });
             res
         }
+    }
+
+    pub fn num_logically_redundant(&self) -> usize {
+        let mut num_collisions = 0;
+        let mut seen_hashes = HashSet::new();
+        let map = create_semantic_hash_map::<10000000049>(self.order.num_vars());
+        for bdd in self.compute_table.borrow().iter() {
+            let h = BddPtr::new_reg(bdd).semantic_hash(&self.order, &map);
+            if seen_hashes.contains(&(h.value())) {
+                num_collisions += 1;
+            } else {
+                seen_hashes.insert(h.value());
+            }
+        }
+        num_collisions
     }
 }
 

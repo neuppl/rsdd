@@ -1,6 +1,6 @@
 //! A generic data structure for tracking variable labels throughout the library
 use serde::Serialize;
-use std::fmt;
+use std::fmt::{self, Display};
 
 extern crate quickcheck;
 use bit_set::BitSet;
@@ -103,6 +103,12 @@ impl Serialize for VarSet {
     }
 }
 
+impl Display for VarSet {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_fmt(format_args!("{:?}", self.b.iter().collect::<Vec<usize>>()))
+    }
+}
+
 impl VarSet {
     pub fn new() -> VarSet {
         VarSet { b: BitSet::new() }
@@ -150,12 +156,12 @@ impl VarSet {
         self.b.intersection(&other.b)
     }
 
-    pub fn remove(&mut self, v: VarLabel) -> () {
+    pub fn remove(&mut self, v: VarLabel) {
         self.b.remove(v.value_usize());
     }
 
     pub fn difference<'a>(&'a self, other: &'a VarSet) -> impl Iterator<Item = VarLabel> + 'a {
-        self.b.difference(&other.b).map(|x| VarLabel::new_usize(x))
+        self.b.difference(&other.b).map(VarLabel::new_usize)
     }
 
     pub fn intersect_varset<'a>(&'a self, other: &'a VarSet) -> VarSet {
@@ -166,6 +172,10 @@ impl VarSet {
 
     pub fn is_empty(&self) -> bool {
         self.b.is_empty()
+    }
+
+    pub fn len(&self) -> usize {
+        self.b.len()
     }
 }
 

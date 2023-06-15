@@ -2,13 +2,15 @@
 
 use std::collections::HashSet;
 
+use super::var_label::VarSet;
 use super::{sdd::SddPtr, var_label::VarLabel};
 use crate::quickcheck::{Arbitrary, Gen};
 use crate::repr::dtree::DTree;
 use crate::util::btree::{BTree, LeastCommonAncestor};
 use rand::rngs::SmallRng;
 use rand::seq::SliceRandom;
-use rand::SeedableRng;
+use rand::{Rng, SeedableRng};
+use rand_chacha::ChaCha8Rng;
 
 pub type VTree = BTree<(), VarLabel>;
 
@@ -39,6 +41,33 @@ impl VTree {
         }
     }
 
+    /// panics if the vtree contains redundant variables; used for debug assertions
+    fn check_redundant_vars(&self, s: &mut HashSet<usize>) -> bool {
+        match self {
+            BTree::Leaf(v) => {
+                if s.contains(&v.value_usize()) {
+                    return true;
+                }
+                s.insert(v.value_usize());
+                false
+            }
+            BTree::Node((), l, r) => l.check_redundant_vars(s) || r.check_redundant_vars(s),
+        }
+    }
+
+    /// produces a left-linear vtree with the variable order given by `order`
+    pub fn left_linear(order: &[VarLabel]) -> VTree {
+        match order {
+            [x] => BTree::Leaf(*x),
+            [cur, rest @ ..] => {
+                let l_tree = Self::left_linear(rest);
+                let r_tree = BTree::Leaf(*cur);
+                BTree::Node((), Box::new(l_tree), Box::new(r_tree))
+            }
+            [] => panic!("invalid left_linear on empty list"),
+        }
+    }
+
     /// produces a right-linear vtree with the variable order given by `order`
     pub fn right_linear(order: &[VarLabel]) -> VTree {
         match order {
@@ -49,6 +78,14 @@ impl VTree {
                 BTree::Node((), Box::new(l_tree), Box::new(r_tree))
             }
             [] => panic!("invalid right_linear on empty list"),
+        }
+    }
+
+    /// true if this vtree is a left-linear fragment
+    pub fn is_left_linear(&self) -> bool {
+        match &self {
+            BTree::Node((), _, r) => r.is_leaf(),
+            _ => false,
         }
     }
 
@@ -132,6 +169,49 @@ impl VTree {
             BTree::Node((), Box::new(l_tree), Box::new(r_tree))
         }
     }
+
+    /// rightness_bias 0 is a random even split; rightness
+    pub fn rand_split(order: &[VarLabel], rightness_bias: f64) -> VTree {
+        match order.len() {
+            0 => panic!("invalid label order passed; expects at least one VarLabel"),
+            1 => VTree::new_leaf(order[0]),
+            2 => VTree::new_node(
+                Box::new(VTree::new_leaf(order[0])),
+                Box::new(VTree::new_leaf(order[1])),
+            ),
+            len => {
+                // clamps so we're guaranteed at least one item in l_s, r_s
+                let mut rng = ChaCha8Rng::from_entropy();
+
+                // let mut split_index = rng.gen_range(1..(len/2+1));
+                let weighted_index =
+                    (rng.gen_range(0..len - 1) as f64 * (1.0 - rightness_bias)) as usize;
+                let split_index = weighted_index + 1;
+
+                let (l_s, r_s) = order.split_at(split_index);
+                VTree::new_node(
+                    Box::new(Self::rand_split(l_s, rightness_bias)),
+                    Box::new(Self::rand_split(r_s, rightness_bias)),
+                )
+            }
+        }
+    }
+
+    pub fn flatten_vtree(vtree: &VTree) -> Vec<&VarLabel> {
+        match vtree {
+            BTree::Leaf(v) => vec![v],
+            BTree::Node((), l, r) => [Self::flatten_vtree(l), Self::flatten_vtree(r)].concat(),
+        }
+    }
+
+    pub fn is_valid_vtree(vtree: &VTree) -> bool {
+        let flat = Self::flatten_vtree(vtree);
+        let mut varset = VarSet::new();
+        for var in flat.iter() {
+            varset.insert(**var);
+        }
+        flat.len() == varset.len()
+    }
 }
 
 impl Arbitrary for VTree {
@@ -189,17 +269,21 @@ pub struct VTreeManager {
     bfs_to_dfs: Vec<usize>,
     /// maps an Sdd VarLabel into its vtree index in the depth-first order
     vtree_idx: Vec<usize>,
-    #[allow(clippy::vec_box)] // TODO: fix this, but requires some refactoring
-    index_lookup: Vec<Box<VTree>>,
+    index_lookup: Vec<VTree>,
     lca: LeastCommonAncestor,
 }
 
 impl VTreeManager {
     pub fn new(tree: VTree) -> VTreeManager {
+        debug_assert!(
+            !tree.check_redundant_vars(&mut HashSet::new()),
+            "VTree contains redundant variables: {:#?}",
+            tree
+        );
         let mut vtree_lookup = vec![0; tree.num_vars()];
         let mut index_lookup = Vec::new();
         for (idx, v) in tree.inorder_dfs_iter().enumerate() {
-            index_lookup.push(Box::new(v.clone()));
+            index_lookup.push(v.clone());
             if v.is_leaf() {
                 vtree_lookup[v.extract_leaf().value_usize()] = idx;
             }
@@ -240,15 +324,13 @@ impl VTreeManager {
     /// true if a is prime to b
     /// panics if either is constant
     pub fn is_prime(&self, a: SddPtr, b: SddPtr) -> bool {
-        let a_vtree = if a.is_var() {
-            self.get_varlabel_idx(a.get_var_label())
-        } else {
-            a.vtree()
+        let a_vtree = match a {
+            SddPtr::Var(label, _) => self.get_varlabel_idx(label),
+            _ => a.vtree(),
         };
-        let b_vtree = if b.is_var() {
-            self.get_varlabel_idx(b.get_var_label())
-        } else {
-            b.vtree()
+        let b_vtree = match b {
+            SddPtr::Var(label, _) => self.get_varlabel_idx(label),
+            _ => b.vtree(),
         };
         self.is_prime_index(a_vtree, b_vtree)
     }
@@ -271,4 +353,18 @@ impl VTreeManager {
     pub fn num_vars(&self) -> usize {
         self.vtree_root().get_all_vars().into_iter().max().unwrap()
     }
+}
+
+#[test]
+fn from_dtree_is_valid_vtree() {
+    let cnf_input = "p cnf 3 6
+    1 2 3 4 0
+    -2 -3 4 5 0
+    -4 -5 6 6 0"
+        .to_string();
+    let cnf = super::cnf::Cnf::from_file(cnf_input);
+    let dtree = DTree::from_cnf(&cnf, &cnf.min_fill_order());
+    let vtree = VTree::from_dtree(&dtree).unwrap();
+    println!("{:?}", VTree::flatten_vtree(&vtree));
+    assert!(VTree::is_valid_vtree(&vtree));
 }

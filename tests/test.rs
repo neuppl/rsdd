@@ -8,8 +8,8 @@ use crate::repr::cnf::Cnf;
 use crate::repr::var_label::VarLabel;
 use rsdd::builder::bdd_builder::BddManager;
 use rsdd::builder::cache::all_app::AllTable;
-use rsdd::builder::sdd_builder::SddManager;
-use rsdd::repr::bdd::BddPtr;
+use rsdd::builder::sdd_builder::{CompressionSddManager, SddBuilder};
+use rsdd::repr::robdd::BddPtr;
 use rsdd::repr::vtree::VTree;
 use rsdd::*;
 extern crate rand;
@@ -253,11 +253,11 @@ fn get_canonical_forms() -> Vec<(Cnf, Cnf)> {
 #[test]
 fn test_bdd_canonicity() {
     for (cnf1, cnf2) in get_canonical_forms().into_iter() {
-        let mut man = BddManager::<AllTable<BddPtr>>::new_default_order(cnf1.num_vars());
+        let man = BddManager::<AllTable<BddPtr>>::new_default_order(cnf1.num_vars());
         let r1 = man.from_cnf(&cnf1);
         let r2 = man.from_cnf(&cnf2);
         assert!(
-            man.eq_bdd(r1, r2),
+            builder::bdd_builder::BddBuilder::eq_bdd(&man, r1, r2),
             "Not eq\nCNF 1: {:?}\nCNF 2: {:?}\nBDD 1:{}\n BDD 2: {}",
             cnf1,
             cnf2,
@@ -274,7 +274,7 @@ fn test_sdd_canonicity() {
             .map(|x| VarLabel::new(x as u64))
             .collect();
         let vtree = VTree::even_split(&v, 1);
-        let mut man = SddManager::new(vtree);
+        let man = CompressionSddManager::new(vtree);
         let r1 = man.from_cnf(&cnf1);
         let r2 = man.from_cnf(&cnf2);
         assert!(
@@ -295,7 +295,7 @@ fn test_sdd_is_canonical() {
             .map(|x| VarLabel::new(x as u64))
             .collect();
         let vtree = VTree::even_split(&v, 1);
-        let mut man = SddManager::new(vtree);
+        let man = CompressionSddManager::new(vtree);
         let r1 = man.from_cnf(&cnf1);
         let r2 = man.from_cnf(&cnf2);
         assert!(
@@ -318,24 +318,26 @@ mod test_bdd_manager {
     use crate::builder::decision_nnf_builder::DecisionNNFBuilder;
     use crate::repr::cnf::Cnf;
     use crate::repr::var_label::VarLabel;
-    use num::abs;
+    use crate::rsdd::builder::BottomUpBuilder;
     use quickcheck::TestResult;
+    use rand::Rng;
     use rsdd::builder::cache::all_app::AllTable;
     use rsdd::builder::cache::lru_app::BddApplyTable;
-
-    use rsdd::repr::bdd::BddPtr;
+    use rsdd::builder::sdd_builder::SddBuilder;
     use rsdd::repr::ddnnf::{create_semantic_hash_map, DDNNFPtr};
+    use rsdd::repr::dtree::DTree;
     use rsdd::repr::model::PartialModel;
+    use rsdd::repr::robdd::BddPtr;
     use rsdd::repr::var_order::VarOrder;
     use rsdd::repr::vtree::VTree;
     use rsdd::repr::wmc::WmcParams;
-    use rsdd::util::semiring::{RealSemiring, Semiring};
+    use rsdd::util::semiring::{ExpectedUtility, RealSemiring, Semiring};
     use std::collections::HashMap;
     use std::iter::FromIterator;
 
     quickcheck! {
         fn test_cond_and(c: Cnf) -> bool {
-            let mut mgr = super::BddManager::<AllTable<BddPtr>>::new_default_order(16);
+            let mgr = super::BddManager::<AllTable<BddPtr>>::new_default_order(16);
             let cnf = mgr.from_cnf(&c);
             let v1 = VarLabel::new(0);
             let bdd1 = mgr.exists(cnf, v1);
@@ -349,7 +351,7 @@ mod test_bdd_manager {
 
     quickcheck! {
         fn test_ite_and(c1: Cnf, c2: Cnf) -> bool {
-            let mut mgr = super::BddManager::<AllTable<BddPtr>>::new_default_order(16);
+            let mgr = super::BddManager::<AllTable<BddPtr>>::new_default_order(16);
             let cnf1 = mgr.from_cnf(&c1);
             let cnf2 = mgr.from_cnf(&c2);
 
@@ -364,7 +366,7 @@ mod test_bdd_manager {
         fn bdd_ite_iff(c1: Cnf, c2: Cnf) -> TestResult {
             if c1.num_vars() == 0 || c1.num_vars() > 8 { return TestResult::discard() }
             if c1.clauses().len() > 12 { return TestResult::discard() }
-            let mut mgr = super::BddManager::<AllTable<BddPtr>>::new_default_order(16);
+            let mgr = super::BddManager::<AllTable<BddPtr>>::new_default_order(16);
             let cnf1 = mgr.from_cnf(&c1);
             let cnf2 = mgr.from_cnf(&c2);
             let iff1 = mgr.iff(cnf1, cnf2);
@@ -386,7 +388,7 @@ mod test_bdd_manager {
         fn compile_with_assignments(c1: Cnf) -> TestResult {
             if c1.num_vars() < 3 || c1.num_vars() > 8 { return TestResult::discard() }
             if c1.clauses().len() > 12 { return TestResult::discard() }
-            let mut mgr = super::BddManager::<AllTable<BddPtr>>::new_default_order(c1.num_vars());
+            let mgr = super::BddManager::<AllTable<BddPtr>>::new_default_order(c1.num_vars());
             let mut pm = PartialModel::from_litvec(&Vec::new(), c1.num_vars());
             pm.set(VarLabel::new(0), true);
             pm.set(VarLabel::new(1), true);
@@ -400,28 +402,42 @@ mod test_bdd_manager {
     }
 
     quickcheck! {
-        /// test that an SDD and BDD both compiled from the same CNF compute identical WMC
+        /// test that an BDD and CNF compute identical WMC
         fn wmc_eq(c1: Cnf) -> TestResult {
             // constrain the size
             if c1.num_vars() == 0 || c1.num_vars() > 8 { return TestResult::discard() }
             if c1.clauses().len() > 16 { return TestResult::discard() }
 
-            let mut mgr = super::BddManager::<AllTable<BddPtr>>::new_default_order(c1.num_vars());
-            let weight_map : HashMap<VarLabel, (RealSemiring, RealSemiring)> = HashMap::from_iter(
-                (0..16).map(|x| (VarLabel::new(x as u64), (RealSemiring(0.2), RealSemiring(0.8)))));
+            let mgr = super::BddManager::<AllTable<BddPtr>>::new_default_order(c1.num_vars());
+            let weight = create_semantic_hash_map::<{crate::BIG_PRIME}>(c1.num_vars());
             let cnf1 = mgr.from_cnf(&c1);
-            let bddwmc = super::repr::wmc::WmcParams::new_with_default(RealSemiring(0.0), RealSemiring(1.0), weight_map.clone());
-            let bddres = cnf1.wmc(mgr.get_order(), &bddwmc);
-            let cnfres = c1.wmc(&weight_map);
-            TestResult::from_bool(abs(bddres.0 - cnfres.0) < 0.00001)
+            let bddres = cnf1.wmc(mgr.get_order(), &weight);
+            let cnfres = c1.wmc(&weight);
+            TestResult::from_bool(bddres == cnfres)
         }
     }
 
     quickcheck! {
         /// test that an SDD and BDD both have the same semantic hash
         fn sdd_semantic_eq_bdd(c1: Cnf, vtree: VTree) -> bool {
-            let mut bdd_mgr = super::BddManager::<AllTable<BddPtr>>::new_default_order(c1.num_vars());
-            let mut sdd_mgr = super::SddManager::new(vtree);
+            let bdd_mgr = super::BddManager::<AllTable<BddPtr>>::new_default_order(c1.num_vars());
+            let sdd_mgr = super::CompressionSddManager::new(vtree);
+            let map : WmcParams<rsdd::util::semiring::FiniteField<{ crate::BIG_PRIME }>>= create_semantic_hash_map(c1.num_vars());
+            let bdd = bdd_mgr.from_cnf(&c1);
+            let sdd = sdd_mgr.from_cnf(&c1);
+            bdd.semantic_hash(bdd_mgr.get_order(), &map) == sdd.semantic_hash(sdd_mgr.get_vtree_manager(), &map)
+        }
+    }
+
+    quickcheck! {
+        /// test that an SDD and BDD both have the same semantic hash with min-fill order
+        fn sdd_semantic_eq_bdd_dtree(c1: Cnf) -> bool {
+            let bdd_mgr = super::BddManager::<AllTable<BddPtr>>::new_default_order(c1.num_vars());
+            let min_fill_order = c1.min_fill_order();
+            let dtree = DTree::from_cnf(&c1, &min_fill_order);
+            let vtree = VTree::from_dtree(&dtree).unwrap();
+
+            let sdd_mgr = super::CompressionSddManager::new(vtree);
             let map : WmcParams<rsdd::util::semiring::FiniteField<{ crate::BIG_PRIME }>>= create_semantic_hash_map(c1.num_vars());
             let bdd = bdd_mgr.from_cnf(&c1);
             let sdd = sdd_mgr.from_cnf(&c1);
@@ -435,13 +451,14 @@ mod test_bdd_manager {
             if c1.num_vars() == 0 || c1.num_vars() > 8 { return TestResult::discard() }
             if c1.clauses().len() > 16 { return TestResult::discard() }
 
-            let mut mgr = super::BddManager::<AllTable<BddPtr>>::new_default_order(c1.num_vars());
+            let mgr = super::BddManager::<AllTable<BddPtr>>::new_default_order(c1.num_vars());
             let weight_map : HashMap<VarLabel, (RealSemiring, RealSemiring)> = HashMap::from_iter(
                 (0..16).map(|x| (VarLabel::new(x as u64), (RealSemiring(0.3), RealSemiring(0.7)))));
+            let order = VarOrder::linear_order(c1.num_vars());
             let cnf1 = mgr.from_cnf(&c1);
 
-            let mut mgr2 = DecisionNNFBuilder::new();
-            let dnnf = mgr2.from_cnf_topdown(&VarOrder::linear_order(c1.num_vars()), &c1);
+            let mgr2 = DecisionNNFBuilder::new(order);
+            let dnnf = mgr2.from_cnf_topdown(&c1);
 
             let bddwmc = super::repr::wmc::WmcParams::new_with_default(RealSemiring::zero(), RealSemiring::one(), weight_map);
             let bddres = cnf1.wmc(mgr.get_order(),  &bddwmc);
@@ -458,8 +475,8 @@ mod test_bdd_manager {
     quickcheck! {
         /// test if the lru cache and the all cache give the same results
         fn bdd_lru(c1: Cnf) -> TestResult {
-            let mut mgr1 = super::BddManager::<AllTable<BddPtr>>::new_default_order(16);
-            let mut mgr2 = super::BddManager::<BddApplyTable<BddPtr>>::new_default_order_lru(16);
+            let mgr1 = super::BddManager::<AllTable<BddPtr>>::new_default_order(16);
+            let mgr2 = super::BddManager::<BddApplyTable<BddPtr>>::new_default_order_lru(16);
 
             let weight_map : HashMap<VarLabel, (RealSemiring, RealSemiring)> = HashMap::from_iter(
                 (0..16).map(|x| (VarLabel::new(x as u64), (RealSemiring(0.3), RealSemiring(0.7)))));
@@ -480,13 +497,20 @@ mod test_bdd_manager {
             if c1.num_vars() < 5 || c1.num_vars() > 8 { return TestResult::discard() }
             if c1.clauses().len() > 14 { return TestResult::discard() }
 
-            let mut mgr = super::BddManager::<AllTable<BddPtr>>::new_default_order(c1.num_vars());
+            let mgr = super::BddManager::<AllTable<BddPtr>>::new_default_order(c1.num_vars());
             let weight_map : HashMap<VarLabel, (RealSemiring, RealSemiring)> = HashMap::from_iter(
                 (0..16).map(|x| (VarLabel::new(x as u64), (RealSemiring(0.3), RealSemiring(0.7)))));
             let cnf = mgr.from_cnf(&c1);
             let vars = vec![VarLabel::new(0), VarLabel::new(2), VarLabel::new(4)];
+            if !c1.var_in_cnf(VarLabel::new(0))
+               || !c1.var_in_cnf(VarLabel::new(2))
+               || !c1.var_in_cnf(VarLabel::new(4)) {
+                return TestResult::discard()
+            }
             let wmc = WmcParams::new_with_default(RealSemiring::zero(), RealSemiring::one(), weight_map);
-            let (marg_prob, _marg_assgn) = cnf.marginal_map(&vars, mgr.num_vars(), &wmc);
+
+            let (marg_prob, marg_assgn) = cnf.marginal_map(&vars, mgr.num_vars(), &wmc);
+            let (marg_prob_bb, marg_assgn_bb) = cnf.bb(&vars, mgr.num_vars(), &wmc);
             let assignments = vec![(true, true, true), (true, true, false), (true, false, true), (true, false, false),
                                    (false, true, true), (false, true, false), (false, false, true), (false, false, false)];
 
@@ -507,11 +531,159 @@ mod test_bdd_manager {
                     max_assgn.set(VarLabel::new(4), *v3);
                 }
             }
-            if f64::abs(max - marg_prob) > 0.00001 {
-                println!("cnf: {}", c1);
-                println!("true map probability: {max}\nGot map probability: {marg_prob} with assignment {:?}", _marg_assgn);
+
+            // the below tests (specifically, the bool pm_check)
+            // check that the partial models evaluate to the correct margmap.
+            // these pms can be different b/c of symmetries/dead literals in the CNF.
+            let mut pm_check = true;
+            let extract = |ob : Option<bool>| -> bool {
+                match ob {
+                    Some(b) => b,
+                    None => panic!("none encountered")
+                }
+            };
+            let v : Vec<bool> = (0..3).map(|x| extract(marg_assgn.get(vars[x]))).collect();
+            let w : Vec<bool> = (0..3).map(|x| extract(marg_assgn_bb.get(vars[x]))).collect();
+            // if v != w {
+            //     println!("{:?},{:?}",v,w);
+            // }
+            let v0 = mgr.var(vars[0], v[0]);
+            let v1 = mgr.var(vars[1], v[1]);
+            let v2 = mgr.var(vars[2], v[2]);
+            let mut conj = mgr.and(v0, v1);
+            conj = mgr.and(conj, v2);
+            conj = mgr.and(conj, cnf);
+            let poss_max = conj.wmc(mgr.get_order(), &wmc);
+            if f64::abs(poss_max.0 - max) > 0.0001 {
+                pm_check = false;
             }
-            TestResult::from_bool(f64::abs(max - marg_prob) < 0.00001)
+            let w0 = mgr.var(vars[0], w[0]);
+            let w1 = mgr.var(vars[1], w[1]);
+            let w2 = mgr.var(vars[2], w[2]);
+            let mut conj2 = mgr.and(w0, w1);
+            conj2 = mgr.and(conj2, w2);
+            mgr.and(conj2, cnf);
+            let poss_max2 = conj.wmc(mgr.get_order(), &wmc);
+            if f64::abs(poss_max2.0 - max) > 0.0001 {
+                pm_check = false;
+            }
+
+            TestResult::from_bool(f64::abs(max - marg_prob) < 0.00001
+                                  && f64::abs(marg_prob_bb.0 - marg_prob) < 0.00001
+                                  && pm_check)
+        }
+    }
+
+    quickcheck! {
+        fn meu(c1: Cnf) -> TestResult {
+            use rsdd::repr::model::PartialModel;
+            let n = c1.num_vars();
+            // constrain the size, make BDD
+            if !(5..=8).contains(&n) { return TestResult::discard() }
+            if c1.clauses().len() > 14 { return TestResult::discard() }
+            let mgr = super::BddManager::<AllTable<BddPtr>>::new_default_order(n);
+            let cnf = mgr.from_cnf(&c1);
+
+            // randomizing the decisions
+            let mut rng = rand::thread_rng();
+            let decisions : Vec<VarLabel> = (0..3).map(|_| VarLabel::new(rng.gen_range(0..(n-2)) as u64)).collect();
+            if decisions[0] == decisions[1] || decisions[1] == decisions[2] || decisions[0] == decisions[2] {
+                return TestResult::discard()
+            }
+            if !c1.var_in_cnf(decisions[0])
+               || !c1.var_in_cnf(decisions[1])
+               || !c1.var_in_cnf(decisions[2]) {
+                return TestResult::discard()
+            }
+
+            // weight function and weight map
+            let probs : Vec<f64> = (0..n).map(|_| rng.gen_range(0.0..1.0)).collect();
+            let weight_fn = |x : usize| -> (VarLabel, (ExpectedUtility, ExpectedUtility)) {
+                let vx = VarLabel::new(x as u64);
+                if vx == decisions[0] || vx == decisions[1] || vx == decisions[2] {
+                    return (VarLabel::new(x as u64),
+                    (ExpectedUtility::one(), ExpectedUtility::one()))
+                }
+                if x == n-1 || x == n-2 {
+                    return (VarLabel::new(x as u64),
+                    (ExpectedUtility::one(), ExpectedUtility(1.0, 10.0)))
+                }
+                let pr = probs[x];
+                (vx, (ExpectedUtility(pr, 0.0), ExpectedUtility(1.0-pr, 0.0)))
+            };
+            let weight_map : HashMap<VarLabel, (ExpectedUtility, ExpectedUtility)> = HashMap::from_iter(
+                (0..n).map(&weight_fn));
+
+            // set up wmc, run meu
+            let vars = decisions.clone();
+            let wmc = WmcParams::new_with_default(ExpectedUtility::zero(), ExpectedUtility::one(), weight_map);
+
+            let (meu , meu_assgn) = cnf.meu(&vars, mgr.num_vars(), &wmc);
+            let (meu_bb, meu_assgn_bb) = cnf.bb(&vars, mgr.num_vars(), &wmc);
+
+            // brute-force meu
+            let assignments = vec![(true, true, true), (true, true, false), (true, false, true), (true, false, false),
+                                   (false, true, true), (false, true, false), (false, false, true), (false, false, false)];
+            let mut max : f64 = -10000.0;
+            let mut max_assgn : PartialModel = PartialModel::from_litvec(&[], c1.num_vars());
+            for (v1, v2, v3) in assignments.iter() {
+                let x = mgr.var(decisions[0], *v1);
+                let y = mgr.var(decisions[1], *v2);
+                let z = mgr.var(decisions[2], *v3);
+                let mut conj = mgr.and(x, y);
+                conj = mgr.and(conj, z);
+                conj = mgr.and(conj, cnf);
+                let poss_max = conj.wmc(mgr.get_order(), &wmc);
+                if poss_max.1 > max {
+                    max = poss_max.1;
+                    max_assgn.set(decisions[0], *v1);
+                    max_assgn.set(decisions[1], *v2);
+                    max_assgn.set(decisions[2], *v3);
+                }
+            }
+
+            // and the actual checks.
+            // these checks test that the meus coincide.
+            let pr_check1 = f64::abs(meu.1 - meu_bb.1) < 0.00001;
+            let pr_check2 = f64::abs(max - meu.1)< 0.00001;
+
+            // the below tests (specifically, the bool pm_check)
+            // check that the partial models evaluate to the correct meu.
+            // these pms can be different b/c of symmetries/dead literals in the CNF.
+            let mut pm_check = true;
+            let extract = |ob : Option<bool>| -> bool {
+                match ob {
+                    Some(b) => b,
+                    None => panic!("none encountered")
+                }
+            };
+            let v : Vec<bool> = (0..3).map(|x| extract(meu_assgn.get(decisions[x]))).collect();
+            let w : Vec<bool> = (0..3).map(|x| extract(meu_assgn_bb.get(decisions[x]))).collect();
+            // if v != w {
+            //     println!("{:?},{:?}",v,w);
+            // }
+            let v0 = mgr.var(decisions[0], v[0]);
+            let v1 = mgr.var(decisions[1], v[1]);
+            let v2 = mgr.var(decisions[2], v[2]);
+            let mut conj = mgr.and(v0, v1);
+            conj = mgr.and(conj, v2);
+            conj = mgr.and(conj, cnf);
+            let poss_max = conj.wmc(mgr.get_order(), &wmc);
+            if f64::abs(poss_max.1 - max) > 0.0001 {
+                pm_check = false;
+            }
+            let w0 = mgr.var(decisions[0], w[0]);
+            let w1 = mgr.var(decisions[1], w[1]);
+            let w2 = mgr.var(decisions[2], w[2]);
+            let mut conj2 = mgr.and(w0, w1);
+            conj2 = mgr.and(conj2, w2);
+            mgr.and(conj2, cnf);
+            let poss_max2 = conj.wmc(mgr.get_order(), &wmc);
+            if f64::abs(poss_max2.1 - max) > 0.0001 {
+                pm_check = false;
+            }
+
+            TestResult::from_bool(pr_check1 && pr_check2 && pm_check)
         }
     }
 }
@@ -521,21 +693,27 @@ mod test_sdd_manager {
     use crate::builder::bdd_builder::BddManager;
     use crate::repr::cnf::Cnf;
     use crate::repr::var_label::{Literal, VarLabel};
-    use quickcheck::TestResult;
+    use crate::rsdd::builder::BottomUpBuilder;
+    use quickcheck::{Arbitrary, TestResult};
+    use rand::rngs::SmallRng;
+    use rand::seq::SliceRandom;
+    use rand::SeedableRng;
     use rsdd::builder::cache::all_app::AllTable;
-    use rsdd::repr::bdd::BddPtr;
+    use rsdd::builder::sdd_builder::{CompressionSddManager, SddBuilder, SemanticSddManager};
     use rsdd::repr::ddnnf::{create_semantic_hash_map, DDNNFPtr};
+    use rsdd::repr::dtree::DTree;
+    use rsdd::repr::robdd::BddPtr;
     use rsdd::repr::sdd::SddPtr;
+    use rsdd::repr::var_order::VarOrder;
     use rsdd::repr::vtree::VTree;
     use rsdd::repr::wmc::WmcParams;
-    use rsdd::util::semiring::{FiniteField, RealSemiring};
+    use rsdd::util::semiring::FiniteField;
     use std::collections::HashMap;
-    use std::iter::FromIterator;
 
     quickcheck! {
         fn test_cond_and(c: Cnf) -> bool {
             let order : Vec<VarLabel> = (0..16).map(VarLabel::new).collect();
-            let mut mgr = super::SddManager::new(VTree::even_split(&order, 4));
+            let mgr = super::CompressionSddManager::new(VTree::even_split(&order, 4));
             let cnf = mgr.from_cnf(&c);
             let v1 = VarLabel::new(0);
             let bdd1 = mgr.exists(cnf, v1);
@@ -553,7 +731,7 @@ mod test_sdd_manager {
             let order : Vec<VarLabel> = (0..16).map(VarLabel::new).collect();
             // let vtree = VTree::even_split(&order, 4);
             let vtree = VTree::right_linear(&order);
-            let mut mgr = super::SddManager::new(vtree);
+            let mgr = super::CompressionSddManager::new(vtree);
             let cnf1 = mgr.from_cnf(&c1);
             let cnf2 = mgr.from_cnf(&c2);
             let iff1 = mgr.iff(cnf1, cnf2);
@@ -574,7 +752,7 @@ mod test_sdd_manager {
         fn ite_iff_split(c1: Cnf, c2: Cnf) -> bool {
             let order : Vec<VarLabel> = (0..16).map(VarLabel::new).collect();
             let vtree = VTree::even_split(&order, 4);
-            let mut mgr = super::SddManager::new(vtree);
+            let mgr = super::CompressionSddManager::new(vtree);
             let cnf1 = mgr.from_cnf(&c1);
             let cnf2 = mgr.from_cnf(&c2);
             let iff1 = mgr.iff(cnf1, cnf2);
@@ -592,33 +770,80 @@ mod test_sdd_manager {
     }
 
     quickcheck! {
-        fn sdd_wmc_eq(clauses: Vec<Vec<Literal>>) -> TestResult {
-
+        /// test that the same CNF compiled by both an SDD and BDD have the same weighted model count
+        /// with an even_split ordering
+        fn sdd_wmc_eq_even_split(clauses: Vec<Vec<Literal>>) -> TestResult {
             let cnf = Cnf::new(clauses);
-            if cnf.num_vars() < 9 || cnf.num_vars() > 16 { return TestResult::discard() }
+            if cnf.num_vars() < 8 || cnf.num_vars() > 16 { return TestResult::discard() }
             if cnf.clauses().len() > 16 { return TestResult::discard() }
 
-           let weight_map : HashMap<VarLabel, (RealSemiring, RealSemiring)> = HashMap::from_iter(
-                (0..cnf.num_vars()).map(|x| (VarLabel::new(x as u64), (RealSemiring(0.5), RealSemiring(0.5)))));
-
-            let order : Vec<VarLabel> = (0..cnf.num_vars()).map(|x| VarLabel::new(x as u64)).collect();
-            let mut mgr = super::SddManager::new(VTree::even_split(&order, 3));
-            let cnf_sdd = mgr.from_cnf(&cnf);
-            let sdd_wmc = WmcParams::new_with_default(RealSemiring(0.0), RealSemiring(1.0), weight_map);
-            let sdd_res = cnf_sdd.wmc(mgr.get_vtree_manager(), &sdd_wmc);
+           let weight_map = create_semantic_hash_map::< {crate::BIG_PRIME} >(cnf.num_vars());
+           let order : Vec<VarLabel> = (0..cnf.num_vars()).map(|x| VarLabel::new(x as u64)).collect();
+           let mgr = super::CompressionSddManager::new(VTree::even_split(&order, 3));
+           let cnf_sdd = mgr.from_cnf(&cnf);
+           let sdd_res = cnf_sdd.semantic_hash(mgr.get_vtree_manager(), &weight_map);
 
 
-            let mut bddmgr = BddManager::<AllTable<BddPtr>>::new_default_order(cnf.num_vars());
+            let bddmgr = BddManager::<AllTable<BddPtr>>::new_default_order(cnf.num_vars());
             let cnf_bdd = bddmgr.from_cnf(&cnf);
-            let bdd_res = cnf_bdd.wmc(bddmgr.get_order(), &sdd_wmc);
+            let bdd_res = cnf_bdd.semantic_hash(bddmgr.get_order(), &weight_map);
+            assert_eq!(bdd_res, sdd_res);
+            TestResult::passed()
+        }
+    }
 
-            if f64::abs(sdd_res.0 - bdd_res.0) > 0.00001 {
-                println!("not equal for cnf {}: sdd_res:{sdd_res}, bdd_res: {bdd_res}", cnf);
-                println!("sdd: {}", mgr.print_sdd(cnf_sdd));
-                TestResult::from_bool(false)
-            } else {
-                TestResult::from_bool(true)
-            }
+    quickcheck! {
+        /// test that the same CNF compiled by both an SDD and BDD have the same weighted model count
+        /// with a dtree ordering
+        fn sdd_wmc_eq(clauses: Vec<Vec<Literal>>) -> TestResult {
+            let cnf = Cnf::new(clauses);
+            if cnf.num_vars() < 8 || cnf.num_vars() > 16 { return TestResult::discard() }
+            if cnf.clauses().len() > 16 { return TestResult::discard() }
+
+            let dtree = DTree::from_cnf(&cnf, &VarOrder::linear_order(cnf.num_vars()));
+            let vtree = VTree::from_dtree(&dtree).unwrap();
+
+            let weight_map = create_semantic_hash_map::< {crate::BIG_PRIME} >(cnf.num_vars());
+            let mgr = super::CompressionSddManager::new(vtree);
+            let cnf_sdd = mgr.from_cnf(&cnf);
+            let sdd_res = cnf_sdd.semantic_hash(mgr.get_vtree_manager(), &weight_map);
+
+
+            let bddmgr = BddManager::<AllTable<BddPtr>>::new_default_order(cnf.num_vars());
+            let cnf_bdd = bddmgr.from_cnf(&cnf);
+            let bdd_res = cnf_bdd.semantic_hash(bddmgr.get_order(), &weight_map);
+            assert_eq!(bdd_res, sdd_res);
+            TestResult::passed()
+        }
+    }
+
+    // why does this exist?
+    // well, I wasn't able to figure out how to generate a random permutation of vectors from 0..16 with quickcheck
+    #[derive(Clone, Debug)]
+    struct SixteenVarLabels {
+        order: Vec<VarLabel>,
+    }
+
+    impl Arbitrary for SixteenVarLabels {
+        fn arbitrary(g: &mut quickcheck::Gen) -> Self {
+            let mut rng = SmallRng::seed_from_u64(u64::arbitrary(g));
+            let mut order: Vec<VarLabel> = (0..16).map(VarLabel::new).collect();
+            order.shuffle(&mut rng);
+            SixteenVarLabels { order }
+        }
+    }
+
+    quickcheck! {
+        fn sdd_left_linear_predicate(s: SixteenVarLabels) -> bool {
+            let vtree = VTree::left_linear(&s.order);
+            vtree.is_left_linear()
+        }
+    }
+
+    quickcheck! {
+        fn sdd_right_linear_predicate(s: SixteenVarLabels) -> bool {
+            let vtree = VTree::right_linear(&s.order);
+            vtree.is_right_linear()
         }
     }
 
@@ -626,7 +851,7 @@ mod test_sdd_manager {
         fn sdd_compressed_right_linear(c: Cnf) -> bool {
             let order : Vec<VarLabel> = (0..16).map(VarLabel::new).collect();
             let vtree = VTree::right_linear(&order);
-            let mut mgr = super::SddManager::new(vtree);
+            let mgr = super::CompressionSddManager::new(vtree);
             let cnf = mgr.from_cnf(&c);
             cnf.is_compressed()
         }
@@ -636,7 +861,7 @@ mod test_sdd_manager {
         fn sdd_trimmed_right_linear(c: Cnf) -> bool {
             let order : Vec<VarLabel> = (0..16).map(VarLabel::new).collect();
             let vtree = VTree::right_linear(&order);
-            let mut mgr = super::SddManager::new(vtree);
+            let mgr = super::CompressionSddManager::new(vtree);
             let cnf = mgr.from_cnf(&c);
 
             cnf.is_trimmed()
@@ -645,7 +870,7 @@ mod test_sdd_manager {
 
     quickcheck! {
         fn sdd_compressed_arbitrary_vtree(c: Cnf, vtree: VTree) -> bool {
-            let mut mgr = super::SddManager::new(vtree);
+            let mgr = super::CompressionSddManager::new(vtree);
             let cnf = mgr.from_cnf(&c);
             cnf.is_compressed()
         }
@@ -653,7 +878,7 @@ mod test_sdd_manager {
 
     quickcheck! {
         fn sdd_trimmed_arbitrary_vtree(c: Cnf, vtree: VTree) -> bool {
-            let mut mgr = super::SddManager::new(vtree);
+            let mgr = super::CompressionSddManager::new(vtree);
             let cnf = mgr.from_cnf(&c);
             cnf.is_trimmed()
         }
@@ -661,13 +886,14 @@ mod test_sdd_manager {
 
     quickcheck! {
         fn prob_equiv_trivial(c: Cnf, vtree:VTree) -> bool {
-            let mut mgr1 = super::SddManager::new(vtree.clone());
+            let mgr1 = CompressionSddManager::new(vtree.clone());
             let c1 = mgr1.from_cnf(&c);
 
-            let mut mgr2 = super::SddManager::new(vtree);
+            // in this test, compression is still enabled; c2 should be identical to c1
+            let mgr2 = SemanticSddManager::<{ crate::BIG_PRIME }>::new(vtree);
             let c2 = mgr2.from_cnf(&c);
 
-            let map : WmcParams<FiniteField<1123>> = create_semantic_hash_map(mgr1.num_vars());
+            let map : WmcParams<FiniteField<{ crate::BIG_PRIME }>> = create_semantic_hash_map(mgr1.num_vars());
 
             let h1 = c1.semantic_hash(mgr1.get_vtree_manager(), &map);
             let h2 = c2.semantic_hash(mgr2.get_vtree_manager(), &map);
@@ -677,16 +903,15 @@ mod test_sdd_manager {
     }
 
     quickcheck! {
-        fn prob_equiv_sdd_identity_uncompressed(c: Cnf, vtree:VTree) -> TestResult {
-            let mut compr_mgr = super::SddManager::new(vtree.clone());
+        fn prob_equiv_sdd_identity_uncompressed_depr(c: Cnf, vtree:VTree) -> TestResult {
+            let compr_mgr = super::CompressionSddManager::new(vtree.clone());
             let compr_cnf = compr_mgr.from_cnf(&c);
 
-            let mut uncompr_mgr = super::SddManager::new(vtree);
+            let mut uncompr_mgr = super::CompressionSddManager::new(vtree);
             uncompr_mgr.set_compression(false);
             let uncompr_cnf = uncompr_mgr.from_cnf(&c);
 
-
-            let map : WmcParams<FiniteField<4391>> = create_semantic_hash_map(compr_mgr.num_vars());
+            let map : WmcParams<FiniteField<{ crate::BIG_PRIME }>> = create_semantic_hash_map(compr_mgr.num_vars());
 
             let compr_h = compr_cnf.semantic_hash(compr_mgr.get_vtree_manager(), &map);
             let uncompr_h = uncompr_cnf.semantic_hash(uncompr_mgr.get_vtree_manager(), &map);
@@ -704,8 +929,28 @@ mod test_sdd_manager {
     }
 
     quickcheck! {
+        fn prob_equiv_sdd_identity_uncompressed(c: Cnf, vtree:VTree) -> TestResult {
+            let compr_mgr = CompressionSddManager::new(vtree.clone());
+            let compr_cnf = compr_mgr.from_cnf(&c);
+
+            let uncompr_mgr = SemanticSddManager::<{ crate::BIG_PRIME }>::new(vtree);
+            let uncompr_cnf = uncompr_mgr.from_cnf(&c);
+
+            if !uncompr_mgr.sdd_eq(compr_cnf, uncompr_cnf) {
+                println!("not equal!");
+                println!("compr sdd: {}", compr_mgr.print_sdd(compr_cnf));
+                println!("uncompr sdd: {}", uncompr_mgr.print_sdd(uncompr_cnf));
+                TestResult::from_bool(false)
+            } else {
+                TestResult::from_bool(true)
+            }
+        }
+    }
+
+    quickcheck! {
         fn prob_equiv_sdd_inequality(c1: Cnf, c2: Cnf, vtree:VTree) -> TestResult {
-            let mut mgr = super::SddManager::new(vtree);
+            let mut mgr = SemanticSddManager::<{ crate::BIG_PRIME }>::new(vtree);
+            mgr.set_compression(true); // necessary to make sure we don't generate two uncompressed SDDs that canonicalize to the same SDD
             let cnf_1 = mgr.from_cnf(&c1);
             let cnf_2 = mgr.from_cnf(&c2);
 
@@ -713,39 +958,45 @@ mod test_sdd_manager {
                 return TestResult::discard();
             }
 
-            // running iteratively, taking majority
-
-            let mut num_collisions = 0;
-
-            for _ in 1 .. 5 {
-
-                let map : WmcParams<FiniteField<4391>> = create_semantic_hash_map(mgr.num_vars());
-
-                let h1 = cnf_1.semantic_hash(mgr.get_vtree_manager(), &map);
-                let h2 = cnf_2.semantic_hash(mgr.get_vtree_manager(), &map);
-
-                if h1 == h2 {
-                    println!("collision! h1: {h1}, h2: {h2}");
-                    println!("map: {:?}", map);
-                    println!("sdd1: {}", mgr.print_sdd(cnf_1));
-                    println!("sdd2: {}", mgr.print_sdd(cnf_2));
-                    num_collisions += 1;
-                }
+            if mgr.sdd_eq(cnf_1, cnf_2) {
+                println!("collision!");
+                println!("sdd 1: {}", mgr.print_sdd(cnf_1));
+                println!("sdd 2: {}", mgr.print_sdd(cnf_2));
+                TestResult::from_bool(false)
+            } else {
+                TestResult::from_bool(true)
             }
-            TestResult::from_bool(num_collisions < 2) // less than half
         }
     }
 
     quickcheck! {
-        /// verify that every node in the SDD has a unique semantic hash
-        fn qc_sdd_canonicity(c1: Cnf, vtree:VTree) -> TestResult {
-            let mut mgr = super::SddManager::new(vtree);
-            let _ = mgr.from_cnf(&c1);
-            // take a large prime to make collisions impossible
-            // useful site: http://compoasso.free.fr/primelistweb/page/prime/liste_online_en.php
+        fn prob_equiv_sdd_eq_vs_prob_eq(c1: Cnf, c2: Cnf, vtree:VTree) -> TestResult {
+            let mut mgr = SemanticSddManager::<{ crate::BIG_PRIME }>::new(vtree);
+            mgr.set_compression(true); // necessary to make sure we don't generate two uncompressed SDDs that canonicalize to the same SDD
+            let cnf_1 = mgr.from_cnf(&c1);
+            let cnf_2 = mgr.from_cnf(&c2);
 
-            // running iteratively, taking majority
-            let map : WmcParams<FiniteField<100000000069>>= create_semantic_hash_map(mgr.num_vars());
+            let h_eq = mgr.sdd_eq(cnf_1, cnf_2);
+
+            if h_eq != (cnf_1 == cnf_2) {
+                println!("disagreement!");
+                println!("ptr eq: {}, mgr_eq: {}", cnf_1 == cnf_2, h_eq);
+                println!("sdd 1: {}", mgr.print_sdd(cnf_1));
+                println!("sdd 2: {}", mgr.print_sdd(cnf_2));
+                TestResult::from_bool(false)
+            } else {
+                TestResult::from_bool(true)
+            }
+        }
+    }
+
+    quickcheck! {
+        /// verify that every node in the SDD compression canonicalizer has a unique semantic hash, using CompressionCanonicalizer
+        fn qc_sdd_canonicity(c1: Cnf, vtree:VTree) -> TestResult {
+            let mgr = super::CompressionSddManager::new(vtree);
+            let _ = mgr.from_cnf(&c1);
+
+            let map : WmcParams<FiniteField<{ crate::BIG_PRIME }>>= create_semantic_hash_map(mgr.num_vars());
             let mut seen_hashes : HashMap<u128, SddPtr> = HashMap::new();
             for sdd in mgr.node_iter() {
                 let hash = sdd.semantic_hash(mgr.get_vtree_manager(), &map);
@@ -761,6 +1012,81 @@ mod test_sdd_manager {
                 seen_hashes.insert(hash.value(), sdd);
             }
             TestResult::from_bool(true)
+        }
+    }
+
+    quickcheck! {
+        /// verify that every node in the SDD with the semantic canonicalizer a unique semantic hash w.r.t negations
+        /// using SemanticCanonicalizer
+        fn qc_semantic_sdd_canonicity(c1: Cnf, vtree:VTree) -> TestResult {
+            let mgr = SemanticSddManager::< {crate::BIG_PRIME} >::new(vtree);
+            let _ = mgr.from_cnf(&c1);
+
+            let map : WmcParams<FiniteField<{ crate::BIG_PRIME }>>= create_semantic_hash_map(mgr.num_vars());
+            let mut seen_hashes : HashMap<u128, SddPtr> = HashMap::new();
+            for sdd in mgr.node_iter() {
+                let hash = sdd.semantic_hash(mgr.get_vtree_manager(), &map);
+
+                // see the hash itself
+                if seen_hashes.contains_key(&hash.value()) {
+                    let c = seen_hashes.get(&hash.value()).unwrap();
+                    println!("cnf: {}", c1);
+                    println!("probmap: {:?}", map);
+                    println!("collision found for hash value {}", hash);
+                    println!("sdd a: {}\n", mgr.print_sdd(sdd));
+                    println!("sdd b: {}\n", mgr.print_sdd(*c));
+                    return TestResult::from_bool(false);
+                }
+
+                // see the hash's negation
+                if seen_hashes.contains_key(&hash.negate().value()) {
+                    let c = seen_hashes.get(&hash.negate().value()).unwrap();
+                    println!("cnf: {}", c1);
+                    println!("probmap: {:?}", map);
+                    println!("collision found for negated hash value {}", hash.negate());
+                    println!("sdd a: {}\n", mgr.print_sdd(sdd));
+                    println!("sdd b: {}\n", mgr.print_sdd(*c));
+                    return TestResult::from_bool(false);
+                }
+                seen_hashes.insert(hash.value(), sdd);
+            }
+            TestResult::from_bool(true)
+        }
+    }
+
+    quickcheck! {
+        fn vtree_validity_arbitrary(vtree: VTree) -> bool {
+            VTree::is_valid_vtree(&vtree)
+        }
+    }
+
+    quickcheck! {
+        fn vtree_validity_from_dtree(cnf: Cnf) -> bool {
+            let dtree = rsdd::repr::dtree::DTree::from_cnf(&cnf, &cnf.min_fill_order());
+            let vtree = VTree::from_dtree(&dtree).unwrap();
+            VTree::is_valid_vtree(&vtree)
+        }
+    }
+
+    quickcheck! {
+        /// verify that the semantic hash of an SDDPtr + its compl is always equal to 1
+        fn semantic_reg_plus_compl_eq_one(c1: Cnf, vtree:VTree) -> bool {
+            let mgr = SemanticSddManager::<{ crate::BIG_PRIME }>::new(vtree);
+            let map : WmcParams<FiniteField<{ crate::BIG_PRIME }>>= create_semantic_hash_map(mgr.num_vars());
+
+            let sdd = mgr.from_cnf(&c1);
+            let compl = sdd.neg();
+
+            let sdd_hash = sdd.semantic_hash(mgr.get_vtree_manager(), &map);
+            let compl_hash = compl.semantic_hash(mgr.get_vtree_manager(), &map);
+
+            let sum = (sdd_hash + compl_hash).value();
+
+            if sum != 1 {
+                println!("hashes do not sum to one; Reg: {}, Compl: {}", sdd_hash, compl_hash);
+            }
+
+            sum == 1
         }
     }
 }

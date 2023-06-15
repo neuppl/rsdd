@@ -10,14 +10,17 @@ use rand_chacha::ChaCha8Rng;
 /// the constant `P` denotes the size of the field over which the semantic hash will
 /// be computed. For more info, see <https://tr.inf.unibe.ch/pdf/iam-06-001.pdf>
 pub fn create_semantic_hash_map<const P: u128>(num_vars: usize) -> WmcParams<FiniteField<P>> {
-    let vars: Vec<VarLabel> = (0..num_vars).map(|x| VarLabel::new_usize(x)).collect();
+    let vars: Vec<VarLabel> = (0..num_vars).map(VarLabel::new_usize).collect();
 
     // theoretical guarantee from paper; need to verify more!
-    assert!((2 * vars.len() as u128) < P);
+    // in "theory", this should be a 0.1% fail rate in one-shot for a BDD.
+    // not sure how to extend to SDDs (and this does not happen in practice)
+    assert!(((vars.len() * 1000) as u128) < P);
 
     // seed the RNG deterministically for reproducible weights across
     // different calls to `create_semantic_hash_map`
     let mut rng = ChaCha8Rng::seed_from_u64(101249);
+    // let mut rng = ChaCha8Rng::from_entropy();
 
     let value_range: Vec<(FiniteField<P>, FiniteField<P>)> = (0..vars.len() as u128)
         .map(|_| {
@@ -52,7 +55,7 @@ pub enum DDNNF<T> {
     False,
 }
 
-pub trait DDNNFPtr: Clone + Debug + PartialEq + Eq + Hash + Copy {
+pub trait DDNNFPtr<'a>: Clone + Debug + PartialEq + Eq + Hash + Copy {
     /// A generic Ordering type
     /// For BDDs, this is a VarOrder
     /// For SDDs, this is a VTree
@@ -60,14 +63,19 @@ pub trait DDNNFPtr: Clone + Debug + PartialEq + Eq + Hash + Copy {
     type Order;
 
     /// performs a memoized bottom-up pass with aggregating function `f` calls
-    fn fold<T: Semiring, F: Fn(DDNNF<T>) -> T>(&self, o: &Self::Order, f: F) -> T;
+    fn fold<T: Semiring, F: Fn(DDNNF<T>) -> T>(&self, o: &Self::Order, f: F) -> T
+    where
+        T: 'static;
 
     /// Weighted-model count
     fn wmc<T: Semiring + std::ops::Add<Output = T> + std::ops::Mul<Output = T>>(
         &self,
         o: &Self::Order,
         params: &WmcParams<T>,
-    ) -> T {
+    ) -> T
+    where
+        T: 'static,
+    {
         self.fold(o, |ddnnf| {
             use DDNNF::*;
             match ddnnf {

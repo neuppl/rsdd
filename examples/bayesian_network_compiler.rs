@@ -2,13 +2,14 @@
 extern crate rsdd;
 extern crate rsgm;
 
+use crate::rsdd::builder::BottomUpBuilder;
 use clap::Parser;
 use rsdd::builder::cache::all_app::AllTable;
 use rsdd::builder::decision_nnf_builder::DecisionNNFBuilder;
-use rsdd::builder::sdd_builder;
-use rsdd::repr::bdd::BddPtr;
+use rsdd::builder::sdd_builder::{self, SddBuilder};
 use rsdd::repr::ddnnf::DDNNFPtr;
 use rsdd::repr::dtree::DTree;
+use rsdd::repr::robdd::BddPtr;
 use rsdd::repr::var_order::VarOrder;
 use rsdd::repr::vtree::VTree;
 use rsdd::util::semiring::{RealSemiring, Semiring};
@@ -127,7 +128,6 @@ struct Args {
 }
 
 /// construct a CNF for the two TERMS (i.e., conjunctions of literals) t1 => t2
-#[allow(clippy::ptr_arg)]
 fn implies(t1: &Vec<Literal>, t2: &Vec<Literal>) -> Vec<Vec<Literal>> {
     let mut r: Vec<Vec<Literal>> = Vec::new();
     // negate the lhs
@@ -162,7 +162,7 @@ fn exactly_one(lits: Vec<Literal>) -> Vec<Vec<Literal>> {
 
 fn compile_bdd_cnf(args: &Args, network: BayesianNetwork) {
     let bn = BayesianNetworkCNF::new(&network);
-    let mut compiler = BddManager::<AllTable<BddPtr>>::new_default_order(bn.cnf.num_vars());
+    let compiler = BddManager::<AllTable<BddPtr>>::new_default_order(bn.cnf.num_vars());
 
     println!("Compiling...");
     let start = Instant::now();
@@ -197,7 +197,7 @@ fn compile_bdd_cnf(args: &Args, network: BayesianNetwork) {
 }
 
 fn compile_bdd(_args: &Args, network: BayesianNetwork) {
-    let mut compiler = BddManager::<AllTable<BddPtr>>::new_default_order(1);
+    let compiler = BddManager::<AllTable<BddPtr>>::new_default_order(1);
 
     // let mut clauses : Vec<Vec<Literal>> = Vec::new();
     let mut wmc_params: HashMap<VarLabel, (f64, f64)> = HashMap::new();
@@ -287,7 +287,7 @@ fn compile_sdd_cnf(network: BayesianNetwork) {
     println!("Dtree built\nNumber of variables: {}\n\tNumber of clauses: {}\n\tWidth: {}\n\tElapsed dtree time: {:?}",
         bn.cnf.num_vars(), bn.cnf.clauses().len(), dtree.cutwidth(), duration);
 
-    let mut compiler = sdd_builder::SddManager::new(VTree::from_dtree(&dtree).unwrap());
+    let compiler = sdd_builder::CompressionSddManager::new(VTree::from_dtree(&dtree).unwrap());
 
     println!("Compiling");
     let start = Instant::now();
@@ -300,11 +300,12 @@ fn compile_sdd_cnf(network: BayesianNetwork) {
 fn compile_topdown(network: BayesianNetwork) {
     println!("############################\n\tCompiling topdown\n############################");
     let bn = BayesianNetworkCNF::new(&network);
-    let mut compiler = DecisionNNFBuilder::new();
+    let order = VarOrder::linear_order(bn.cnf.num_vars());
+    let compiler = DecisionNNFBuilder::new(order);
 
     println!("Compiling");
     let start = Instant::now();
-    let r = compiler.from_cnf_topdown(&VarOrder::linear_order(bn.cnf.num_vars()), &bn.cnf);
+    let r = compiler.from_cnf_topdown(&bn.cnf);
     let duration = start.elapsed();
     let sz = r.count_nodes();
     println!("Compiled\n\tCompile time: {:?}\n\tSize: {sz}", duration);

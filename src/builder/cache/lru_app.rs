@@ -1,21 +1,19 @@
 //! Apply cache for ITEs that uses a dynamically-expanding LRU cache
-use std::hash::Hasher;
-
-use rustc_hash::FxHasher;
-
 use crate::{repr::ddnnf::DDNNFPtr, util::lru::*};
+use rustc_hash::FxHasher;
+use std::hash::{Hash, Hasher};
 
 use super::{ite::Ite, LruTable};
 
 const INITIAL_CAPACITY: usize = 16; // given as a power of two
 
 /// The top-level data structure that caches applications
-pub struct BddApplyTable<T: DDNNFPtr> {
+pub struct BddApplyTable<T: Eq + PartialEq + Clone + Hash + std::fmt::Debug> {
     /// a vector of applications, indexed by the top label of the first pointer.
     table: Lru<(T, T, T), T>,
 }
 
-impl<T: DDNNFPtr> LruTable<T> for BddApplyTable<T> {
+impl<'a, T: DDNNFPtr<'a>> LruTable<'a, T> for BddApplyTable<T> {
     /// Insert an ite (f, g, h) into the apply table
     fn insert(&mut self, ite: Ite<T>, res: T, hash: u64) {
         match ite {
@@ -28,7 +26,7 @@ impl<T: DDNNFPtr> LruTable<T> for BddApplyTable<T> {
         }
     }
 
-    fn get(&mut self, ite: Ite<T>, hash: u64) -> Option<T> {
+    fn get(&self, ite: Ite<T>, hash: u64) -> Option<T> {
         match ite {
             Ite::IteChoice { f, g, h } | Ite::IteComplChoice { f, g, h } => {
                 let r = self.table.get((f, g, h), hash);
@@ -57,7 +55,7 @@ impl<T: DDNNFPtr> LruTable<T> for BddApplyTable<T> {
     }
 }
 
-impl<T: DDNNFPtr> BddApplyTable<T> {
+impl<'a, T: DDNNFPtr<'a>> BddApplyTable<T> {
     pub fn new(_num_vars: usize) -> BddApplyTable<T> {
         BddApplyTable {
             table: Lru::new(INITIAL_CAPACITY),
