@@ -2,7 +2,7 @@
 name = "rsdd"
 version = "0.1.0"
 edition = "2021"
-authors = ["Steven Holtzen <sholtzen@gmail.com>"]
+authors = ["Steven Holtzen <s.holtzen@northeastern.edu>"]
 license = "MIT"
 repository = "https://github.com/neuppl/rsdd"
 description = "Rust decision diagrams."
