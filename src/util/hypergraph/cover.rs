@@ -1,8 +1,8 @@
 use crate::util::hypergraph::calculate_hash;
 use crate::util::hypergraph::Edge;
 use core::fmt::Debug;
+use indexmap::set::IndexSet;
 use itertools::{Either, Itertools};
-use std::collections::HashSet;
 use std::hash::{Hash, Hasher};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -10,9 +10,10 @@ pub struct Cover<V>
 where
     V: Clone + Eq + Hash,
 {
-    pub(in crate::util::hypergraph) cover: HashSet<V>,
-    pub(in crate::util::hypergraph) edges: HashSet<Edge<V>>,
+    pub(in crate::util::hypergraph) cover: IndexSet<V>,
+    pub(in crate::util::hypergraph) edges: IndexSet<Edge<V>>,
 }
+
 impl<V> Hash for Cover<V>
 where
     V: Clone + Eq + Hash,
@@ -52,19 +53,19 @@ where
     }
     pub fn singleton(v: V) -> Self {
         Self {
-            cover: HashSet::from([v.clone()]),
-            edges: HashSet::from([Edge::from([v.clone()])]),
+            cover: IndexSet::from([v.clone()]),
+            edges: IndexSet::from([Edge::from([v.clone()])]),
         }
     }
     pub fn from_edge(e: &Edge<V>) -> Self {
-        Self::from_edges(HashSet::from([e.clone()]))
+        Self::from_edges(IndexSet::from([e.clone()]))
     }
-    pub fn from_edges(es: HashSet<Edge<V>>) -> Self {
+    pub fn from_edges(es: IndexSet<Edge<V>>) -> Self {
         let edges = es.clone();
         let cover = Edge::cover(&es);
         Self { cover, edges }
     }
-    pub fn merge(cs: HashSet<Cover<V>>) -> Self {
+    pub fn merge(cs: IndexSet<Cover<V>>) -> Self {
         let ret = cs.into_iter().fold(Self::empty(), |mut ret, cover| {
             ret.cover.extend(cover.cover);
             ret.edges.extend(cover.edges);
@@ -79,42 +80,35 @@ pub struct AllCovers<V>
 where
     V: Clone + Eq + Hash,
 {
-    pub(in crate::util::hypergraph) covers: HashSet<Cover<V>>,
-}
-
-impl<V> IntoIterator for AllCovers<V>
-where
-    V: Clone + Eq + Hash,
-{
-    type Item = Cover<V>;
-    type IntoIter = std::collections::hash_set::IntoIter<Cover<V>>;
-    fn into_iter(self) -> <Self as IntoIterator>::IntoIter {
-        self.covers.into_iter()
-    }
+    pub(in crate::util::hypergraph) covers: IndexSet<Cover<V>>,
 }
 
 impl<V> AllCovers<V>
 where
     V: Clone + Eq + Hash + Debug,
 {
+    pub fn from_vec(vs: Vec<Cover<V>>) -> AllCovers<V> {
+        let covers: IndexSet<Cover<V>> = vs.into_iter().collect();
+        AllCovers { covers }
+    }
     pub fn size(&self) -> usize {
         self.covers.len()
     }
-    pub fn cover(&self) -> HashSet<V> {
+    pub fn cover(&self) -> IndexSet<V> {
         self.covers
             .iter()
             .map(|c| c.cover.clone())
             .flatten()
             .collect()
     }
-    pub fn new(covers: HashSet<Cover<V>>) -> Self {
+    pub fn new(covers: IndexSet<Cover<V>>) -> Self {
         AllCovers { covers }
     }
     pub fn from_edges(es: impl Iterator<Item = Edge<V>>) -> Self {
         let empty = AllCovers {
             covers: Default::default(),
         };
-        let seen: HashSet<V> = HashSet::new();
+        let seen: IndexSet<V> = IndexSet::new();
         es.fold((empty, seen), |(mut all, mut seen), edge| {
             let e = Cover::from_edge(&edge);
             if seen.is_disjoint(&e.cover) {
@@ -122,7 +116,7 @@ where
                 all.covers.insert(e);
                 (all, seen)
             } else {
-                let (mut to_merge, mut rest): (HashSet<Cover<V>>, HashSet<Cover<V>>) =
+                let (mut to_merge, mut rest): (IndexSet<Cover<V>>, IndexSet<Cover<V>>) =
                     all.covers.into_iter().partition_map(|cover| {
                         if cover.cover.is_disjoint(&e.cover) {
                             Either::Right(cover)
@@ -139,17 +133,17 @@ where
         .0
     }
     pub fn remove_edge(&mut self, e: &Edge<V>) {
-        self.remove_edges(&HashSet::from([e.clone()]));
+        self.remove_edges(&IndexSet::from([e.clone()]));
     }
-    pub fn remove_edges(&mut self, edges: &HashSet<Edge<V>>) {
-        let to_split: HashSet<_> = self
+    pub fn remove_edges(&mut self, edges: &IndexSet<Edge<V>>) {
+        let to_split: IndexSet<_> = self
             .covers
             .iter()
             .filter(|c| !c.edges.is_disjoint(&edges))
             .cloned()
             .collect();
         for c in &to_split {
-            self.covers.remove(&c);
+            self.covers.remove(c);
         }
         let new_covers = to_split
             .into_iter()
@@ -168,11 +162,11 @@ where
         self.covers.extend(new_covers);
     }
     // remove edges, but turn uncovered vertices into singleton edges
-    pub fn _remove_edges_with_singletons(&mut self, edges: &HashSet<Edge<V>>) {
+    pub fn _remove_edges_with_singletons(&mut self, edges: &IndexSet<Edge<V>>) {
         let cover = self.cover(); // compare before and after
         self.remove_edges(edges);
         let next_cover = self.cover(); // compare before and after
-        let remainder: HashSet<Cover<V>> = cover
+        let remainder: IndexSet<Cover<V>> = cover
             .difference(&next_cover)
             .cloned()
             .map(|v| Cover::singleton(v))
@@ -180,11 +174,12 @@ where
         self.covers.extend(remainder);
     }
 }
+
 pub struct PartitionIter<'a, V>
 where
     V: Clone + Eq + Hash + Debug,
 {
-    over: Box<dyn Iterator<Item = (HashSet<Edge<V>>, AllCovers<V>, usize)> + 'a>,
+    over: Box<dyn Iterator<Item = (IndexSet<Edge<V>>, AllCovers<V>, usize)> + 'a>,
 
     last_cutset_size: usize,
     completed: bool,
@@ -197,10 +192,10 @@ where
         covers: AllCovers<V>,
         npartitions: usize,
         with_singletons: bool,
-    ) -> impl Fn(Vec<Edge<V>>) -> (HashSet<Edge<V>>, AllCovers<V>, usize) {
+    ) -> impl Fn(Vec<Edge<V>>) -> (IndexSet<Edge<V>>, AllCovers<V>, usize) {
         move |cutset: Vec<Edge<V>>| {
-            let mut sim = covers.clone();
-            let cutset: HashSet<Edge<V>> = cutset.into_iter().map(|x| x.clone()).collect();
+            let mut sim: AllCovers<V> = covers.clone();
+            let cutset: IndexSet<Edge<V>> = cutset.into_iter().map(|x| x.clone()).collect();
             if with_singletons {
                 sim._remove_edges_with_singletons(&cutset);
             } else {
@@ -212,7 +207,7 @@ where
 
     /// brute-force partitioning
     pub fn new(covers: &AllCovers<V>, npartitions: usize, with_singletons: bool) -> Self {
-        let edges: HashSet<_> = covers
+        let edges: IndexSet<_> = covers
             .covers
             .iter()
             .map(|c| c.edges.clone())
@@ -237,7 +232,7 @@ impl<'a, V> Iterator for PartitionIter<'a, V>
 where
     V: Clone + Eq + Hash + Debug,
 {
-    type Item = (HashSet<Edge<V>>, AllCovers<V>);
+    type Item = (IndexSet<Edge<V>>, AllCovers<V>);
     fn next(&mut self) -> Option<<Self as Iterator>::Item> {
         if !self.completed {
             let (cutset, sim, _) = self
@@ -258,7 +253,7 @@ where
 pub fn partitions<V: Debug + Eq + Hash + Clone + 'static>(
     covers: &AllCovers<V>,
     npartitions: usize,
-) -> impl Iterator<Item = (HashSet<Edge<V>>, AllCovers<V>)> {
+) -> impl Iterator<Item = (IndexSet<Edge<V>>, AllCovers<V>)> {
     PartitionIter::new(covers, npartitions, false)
 }
 #[cfg(test)]
@@ -271,17 +266,17 @@ mod test {
         let e2 = Edge::from([2, 4]);
         let e3 = Edge::from([3, 4]);
         let e4 = Edge::from([4]);
-        let cover = HashSet::from([1, 2, 3, 4]);
-        let edges = HashSet::from([e1.clone(), e2.clone(), e3.clone(), e4.clone()]);
+        let cover = IndexSet::from([1, 2, 3, 4]);
+        let edges = IndexSet::from([e1.clone(), e2.clone(), e3.clone(), e4.clone()]);
         let cover = Cover { cover, edges };
         let allcs = AllCovers {
-            covers: HashSet::from([cover]),
+            covers: IndexSet::from([cover]),
         };
         let mut rm1 = allcs.clone();
-        rm1.remove_edges(&HashSet::from([e1.clone()]));
+        rm1.remove_edges(&IndexSet::from([e1.clone()]));
         assert_eq!(rm1.size(), 1);
         let mut rm23 = allcs.clone();
-        rm23.remove_edges(&HashSet::from([e2.clone(), e3.clone()]));
+        rm23.remove_edges(&IndexSet::from([e2.clone(), e3.clone()]));
         assert_eq!(rm23.size(), 2); // should be cover over singleton 1 and 2 3 4
     }
 
@@ -299,15 +294,15 @@ mod test {
         let e9 = Edge::from([9]);
         let es = [&e1, &e2, &e3, &e4, &e5, &e6, &e7, &e8, &e9];
 
-        let cover = HashSet::from([1, 2, 3, 4, 5, 6, 7, 8, 9]);
-        let edges: HashSet<Edge<usize>> = es.iter().map(|x| x.clone()).cloned().collect();
+        let cover = IndexSet::from([1, 2, 3, 4, 5, 6, 7, 8, 9]);
+        let edges: IndexSet<Edge<usize>> = es.iter().map(|x| x.clone()).cloned().collect();
         let cover = Cover { cover, edges };
         let allcs = AllCovers {
-            covers: HashSet::from([cover]),
+            covers: IndexSet::from([cover]),
         };
         for cutset in es.iter().powerset() {
             let mut sim = allcs.clone();
-            let cutset: HashSet<Edge<usize>> =
+            let cutset: IndexSet<Edge<usize>> =
                 cutset.into_iter().map(|x| x.clone()).cloned().collect();
             sim.remove_edges(&cutset);
             let show_cutset = cutset.into_iter().map(|e| e.show_compact()).join(", ");
@@ -343,6 +338,6 @@ mod test {
         }
         cuts_for_2.sort_by(|(_, a), (_, b)| a.total_cmp(b));
         println!("{:?}", cuts_for_2);
-        assert_eq!(cuts_for_2[0].0, HashSet::from([e2, e3]));
+        assert_eq!(cuts_for_2[0].0, IndexSet::from([e2, e3]));
     }
 }

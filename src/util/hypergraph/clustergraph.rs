@@ -1,13 +1,14 @@
 use super::hgraph::HGraph;
 use super::*;
 use core::fmt::Debug;
+use indexmap::set::IndexSet;
 use itertools::{max, Itertools};
 use std::collections::{HashMap, HashSet};
 use std::fmt;
 use std::hash::{Hash, Hasher};
 
 #[derive(Clone, PartialEq, Eq)]
-pub struct Cluster<V>(pub HashSet<V>)
+pub struct Cluster<V>(pub IndexSet<V>)
 where
     V: Eq + Hash;
 impl<V> Hash for Cluster<V>
@@ -40,7 +41,7 @@ where
     T: Eq + Hash,
 {
     fn from(arr: [T; N]) -> Self {
-        Cluster(HashSet::from(arr))
+        Cluster(IndexSet::from(arr))
     }
 }
 
@@ -50,8 +51,8 @@ where
     V: Clone + Debug + PartialEq + Eq + Hash,
 {
     pub graph: HGraph<Cluster<V>>,
-    pub intersections_inv: HashMap<Edge<Cluster<V>>, HashSet<V>>,
-    pub intersections: HashMap<V, HashSet<Edge<Cluster<V>>>>,
+    pub intersections_inv: HashMap<Edge<Cluster<V>>, IndexSet<V>>,
+    pub intersections: HashMap<V, IndexSet<Edge<Cluster<V>>>>,
 }
 impl<V> Default for ClusterGraph<V>
 where
@@ -70,14 +71,14 @@ where
     V: Clone + Debug + PartialEq + Eq + Hash,
 {
     type Vertex = Cluster<V>;
-    fn new(vertices: HashSet<Cluster<V>>, hyperedges: HashSet<Edge<Cluster<V>>>) -> Self {
+    fn new(vertices: IndexSet<Cluster<V>>, hyperedges: IndexSet<Edge<Cluster<V>>>) -> Self {
         Self {
             graph: HGraph::new(vertices, hyperedges),
             ..Default::default()
         }
     }
 
-    fn vertices(&self) -> &HashSet<Self::Vertex> {
+    fn vertices(&self) -> &IndexSet<Self::Vertex> {
         self.graph.vertices()
     }
 
@@ -110,7 +111,7 @@ where
         common.iter().nth(0).unwrap().clone()
     }
 
-    pub fn common_variables(clusters: &HashSet<Cluster<V>>) -> HashSet<V>
+    pub fn common_variables(clusters: &IndexSet<Cluster<V>>) -> IndexSet<V>
     where
         V: Debug + PartialEq + Clone + Eq + Hash,
     {
@@ -125,7 +126,7 @@ where
         common
     }
     pub fn rebuild_intersections(&mut self) {
-        let ret: HashMap<Edge<Cluster<V>>, HashSet<V>> = self
+        let ret: HashMap<Edge<Cluster<V>>, IndexSet<V>> = self
             .hyperedges()
             .map(|edge| (edge.clone(), Self::common_variables(&edge.0)))
             .collect();
@@ -137,7 +138,7 @@ where
                 for v in vs {
                     match inv.get_mut(&v) {
                         None => {
-                            inv.insert(v.clone(), HashSet::from([e.clone()]));
+                            inv.insert(v.clone(), IndexSet::from([e.clone()]));
                         }
                         Some(es) => {
                             es.insert(e.clone());
@@ -178,9 +179,9 @@ impl<V> ADTree<Cluster<V>>
 where
     V: Eq + Hash + Clone + Debug,
 {
-    pub fn cutset(&self) -> HashSet<V> {
+    pub fn cutset(&self) -> IndexSet<V> {
         match &self {
-            Self::Leaf { .. } => HashSet::new(),
+            Self::Leaf { .. } => IndexSet::new(),
             Self::Node { l, r, .. } => {
                 let lvs = l.vars();
                 let rvs = r.vars();
@@ -188,7 +189,7 @@ where
             }
         }
     }
-    pub fn vars(&self) -> HashSet<V> {
+    pub fn vars(&self) -> IndexSet<V> {
         match &self {
             Self::Leaf { vars, .. } => vars
                 .clone()
@@ -228,7 +229,7 @@ mod test {
         let e2 = Edge::from([n2.clone(), n4.clone()]);
         let e3 = Edge::from([n3.clone(), n4.clone()]);
         let e4 = Edge::from([n4.clone()]);
-        g.insert_edges(HashSet::from([
+        g.insert_edges(IndexSet::from([
             e1.clone(),
             e2.clone(),
             e3.clone(),
@@ -236,7 +237,7 @@ mod test {
         ]));
         let dt = hg2dt(&g);
         let cs = dt.cutset();
-        assert_eq!(cs, HashSet::from([3, 2]));
+        assert_eq!(cs, IndexSet::from([3, 2]));
     }
 
     #[test]
@@ -260,7 +261,7 @@ mod test {
         let e3 = Edge::from([n3.clone(), n4.clone()]);
         let e4 = Edge::from([n4.clone(), n5.clone()]);
         let e5 = Edge::from([n5.clone()]);
-        g.insert_edges(HashSet::from([
+        g.insert_edges(IndexSet::from([
             e1.clone(),
             e2.clone(),
             e3.clone(),
@@ -269,7 +270,7 @@ mod test {
         ]));
         let dt = hg2dt(&g);
         let cs = dt.cutset();
-        assert_eq!(cs, HashSet::from([4]));
+        assert_eq!(cs, IndexSet::from([4]));
     }
 
     #[test]
@@ -302,7 +303,7 @@ mod test {
         let e7 = Edge::from([n7.clone(), n9.clone()]);
         let e8 = Edge::from([n8.clone(), n9.clone()]);
         let e9 = Edge::from([n9.clone()]);
-        g.insert_edges(HashSet::from([
+        g.insert_edges(IndexSet::from([
             e1.clone(),
             e2.clone(),
             e3.clone(),
@@ -315,6 +316,6 @@ mod test {
         ]));
         let dt = hg2dt(&g);
         let cs = dt.cutset();
-        assert_eq!(cs, HashSet::from([3, 2]));
+        assert_eq!(cs, IndexSet::from([3, 2]));
     }
 }

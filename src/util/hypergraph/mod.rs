@@ -1,6 +1,7 @@
 // use super::btree::BTree;
 use crate::util::hypergraph::cover::partitions;
 use core::fmt::Debug;
+use indexmap::set::IndexSet;
 use itertools::Itertools;
 use std::collections::hash_map::DefaultHasher;
 use std::collections::HashSet;
@@ -24,7 +25,7 @@ fn calculate_hash<T: Hash>(t: &T) -> u64 {
 }
 
 #[derive(Clone, PartialEq, Eq)]
-pub struct Edge<V>(pub HashSet<V>)
+pub struct Edge<V>(pub IndexSet<V>)
 where
     V: Eq + Hash;
 
@@ -55,7 +56,7 @@ where
     T: Eq + Hash,
 {
     fn from(arr: [T; N]) -> Self {
-        Edge(HashSet::from(arr))
+        Edge(IndexSet::from(arr))
     }
 }
 impl<V> Edge<V>
@@ -66,7 +67,7 @@ where
         self.0.iter().map(|x| format!("{:?}", x)).join("")
     }
 
-    pub fn cover(edges: &HashSet<Edge<V>>) -> HashSet<V> {
+    pub fn cover(edges: &IndexSet<Edge<V>>) -> IndexSet<V> {
         edges.iter().map(|x| x.0.clone()).flatten().collect()
     }
 }
@@ -79,18 +80,18 @@ where
     <Self as Hypergraph>::Vertex: Clone + Debug + Eq + Hash,
 {
     type Vertex;
-    fn new(vs: HashSet<Self::Vertex>, es: HashSet<Edge<Self::Vertex>>) -> Self;
-    fn vertices(&self) -> &HashSet<Self::Vertex>;
+    fn new(vs: IndexSet<Self::Vertex>, es: IndexSet<Edge<Self::Vertex>>) -> Self;
+    fn vertices(&self) -> &IndexSet<Self::Vertex>;
     fn hyperedges(&self) -> std::vec::IntoIter<Edge<Self::Vertex>>;
     fn insert_edge(&mut self, edge: Edge<Self::Vertex>) -> bool;
-    fn insert_edges(&mut self, es: HashSet<Edge<Self::Vertex>>) {
+    fn insert_edges(&mut self, es: IndexSet<Edge<Self::Vertex>>) {
         for e in es {
             self.insert_edge(e);
         }
     }
 
     fn insert_vertex(&mut self, v: Self::Vertex) -> bool;
-    fn insert_vertices(&mut self, vs: HashSet<Self::Vertex>) {
+    fn insert_vertices(&mut self, vs: IndexSet<Self::Vertex>) {
         for v in vs {
             self.insert_vertex(v);
         }
@@ -126,6 +127,7 @@ where
     fn size(&self) -> usize {
         self.hyperedges().count()
     }
+
     fn order(&self) -> usize {
         self.vertices().len()
     }
@@ -147,7 +149,7 @@ where
     // TODO: all following commented code comes from the pre-trait implementation:
     // -------------------------------------------------------------------------------------
     // /// finds all edges that are in both part1 and part2
-    // pub fn get_cut_edges(&self, part1: &Vec<T>, part2: &Vec<T>) -> Vec<HashSet<T>> {
+    // pub fn get_cut_edges(&self, part1: &Vec<T>, part2: &Vec<T>) -> Vec<IndexSet<T>> {
     //     let mut r = Vec::new();
     //     for e in self.hyperedges.iter() {
     //         let contains_part1 = part1.iter().any(|i| e.contains(i));
@@ -169,7 +171,7 @@ where
     //             let v_in_edge = self.hyperedges[*ix].remove(v); // FIXME: this can leave empty and duplicate edges! Probably Vec is the wrong datastructure.
     //             assert!(v_in_edge, "A vertex was removed that was not in the edgeset?? Impossible! Definitely, file this as a bug");
     //         }
-    //         let new_edges = dedupe_hashsets(self.hyperedges.clone())
+    //         let new_edges = dedupe_indexsets(self.hyperedges.clone())
     //             .into_iter()
     //             .filter(|s| !s.is_empty())
     //             .collect();
@@ -203,17 +205,17 @@ where
     Node {
         l: Box<ADTree<V>>,
         r: Box<ADTree<V>>,
-        edges: HashSet<Edge<V>>,
+        edges: IndexSet<Edge<V>>,
     },
     Leaf {
-        vars: HashSet<V>,
+        vars: IndexSet<V>,
     },
 }
 impl<V> ADTree<V>
 where
     V: Eq + Hash + Clone,
 {
-    pub fn leaf(vars: HashSet<V>) -> Self {
+    pub fn leaf(vars: IndexSet<V>) -> Self {
         Self::Leaf { vars }
     }
     pub fn left(&self) -> Option<&ADTree<V>> {
@@ -230,14 +232,15 @@ where
     }
 }
 
-fn difference<T: Hash + Eq + Clone>(l: &HashSet<T>, r: &HashSet<T>) -> HashSet<T> {
+fn difference<T: Hash + Eq + Clone>(l: &IndexSet<T>, r: &IndexSet<T>) -> IndexSet<T> {
     l.difference(r).map(|x| x.clone()).collect()
 }
 pub fn smallest_partition_of<H: Hypergraph<Vertex = V>, V: Eq + Hash + Clone + Debug + 'static>(
     nparts: usize,
     covers: AllCovers<V>,
-    e: &HashSet<Edge<V>>,
-) -> Option<(H, HashSet<Edge<V>>, H)> {
+    e: &IndexSet<Edge<V>>,
+) -> Option<(H, IndexSet<Edge<V>>, H)> {
+    // println!("{:?}", covers);
     let mut estar = vec![];
     for (cutset, sim) in partitions(&covers, nparts) {
         if cutset.is_disjoint(e) {
@@ -248,6 +251,10 @@ pub fn smallest_partition_of<H: Hypergraph<Vertex = V>, V: Eq + Hash + Clone + D
                 .iter()
                 .map(|x| (1.0 / n) * (((*x as f64) / total) - (total / n)).powf(2.0))
                 .sum::<f64>();
+            // println!("psize: {:?}", partition_sizes);
+            // println!("total: {:?}", total);
+            // println!("n    : {:?}", n);
+            // println!("var  : {:?}", var);
             estar.push((cutset, sim, var));
         }
     }
@@ -261,8 +268,8 @@ pub fn smallest_partition_of<H: Hypergraph<Vertex = V>, V: Eq + Hash + Clone + D
             let mut right = <H as Hypergraph>::from_cover(cright.clone());
 
             // anything missing has to go somewhere, just set this as the right side for now.
-            let all_vtxs: HashSet<V> = covers.cover();
-            let cvr_vtxs: HashSet<V> = sim
+            let all_vtxs: IndexSet<V> = covers.cover();
+            let cvr_vtxs: IndexSet<V> = sim
                 .covers
                 .iter()
                 .map(|c| c.cover.clone())
@@ -278,17 +285,17 @@ pub fn smallest_partition_of<H: Hypergraph<Vertex = V>, V: Eq + Hash + Clone + D
 
 pub fn remaining_cover_over<H: Hypergraph<Vertex = V>, V: Eq + Hash + Clone + Debug + 'static>(
     h: &H,
-    seen_edges: &HashSet<Edge<V>>,
-) -> (H, HashSet<Edge<V>>, H) {
+    seen_edges: &IndexSet<Edge<V>>,
+) -> (H, IndexSet<Edge<V>>, H) {
     let nodes = h.vertices();
-    let all_edges = h.hyperedges().collect::<HashSet<_>>();
+    let all_edges = h.hyperedges().collect::<IndexSet<_>>();
     let remaining_edges = difference(&all_edges, seen_edges);
     // do a best-effort for finding a cover with the remaining edges
-    let mut cuts = HashSet::new();
+    let mut cuts = IndexSet::new();
     for edge in &remaining_edges {
         cuts.insert(edge.clone());
         let cover = Edge::cover(&cuts);
-        let diff: HashSet<_> = nodes.difference(&cover).collect();
+        let diff: IndexSet<_> = nodes.difference(&cover).collect();
         if diff.is_empty() {
             break;
         }
@@ -297,14 +304,14 @@ pub fn remaining_cover_over<H: Hypergraph<Vertex = V>, V: Eq + Hash + Clone + De
 
     // ultimately, just split the vars between left and right
     let left_nodes = nodes.iter().take(n / 2).cloned().collect();
-    let left_edges: HashSet<_> = difference(&remaining_edges, &cuts)
+    let left_edges: IndexSet<_> = difference(&remaining_edges, &cuts)
         .into_iter()
         .take(n / 2)
         .collect();
     let left = <H as Hypergraph>::new(left_nodes, left_edges);
 
     let right_nodes = nodes.iter().skip(n / 2).cloned().collect();
-    let right_edges: HashSet<_> = difference(&remaining_edges, &cuts)
+    let right_edges: IndexSet<_> = difference(&remaining_edges, &cuts)
         .into_iter()
         .skip(n / 2)
         .collect();
@@ -315,34 +322,36 @@ pub fn remaining_cover_over<H: Hypergraph<Vertex = V>, V: Eq + Hash + Clone + De
 
 pub fn hg2dt_h<H: Hypergraph<Vertex = V> + Debug, V: Eq + Hash + Clone + Debug + 'static>(
     h: H,
-    seen_edges: HashSet<Edge<V>>,
+    seen_edges: IndexSet<Edge<V>>,
+    depth: usize,
 ) -> ADTree<V> {
-    let vertices: HashSet<V> = h.vertices().clone();
-    let all_edges: HashSet<Edge<V>> = h.hyperedges().map(|x| x.clone()).collect();
-    println!("");
-    println!("> vertices: {:?}", vertices);
-    println!("> edges    : {:?}", all_edges);
+    let indent = " ".repeat(depth * 2);
+    let vertices: IndexSet<V> = h.vertices().clone();
+    let all_edges: IndexSet<Edge<V>> = h.hyperedges().map(|x| x.clone()).collect();
+    // println!("{}", "-".repeat(depth*3));
+    // println!("{}> vertices: {:?}", indent, vertices);
+    println!("{}> edges    : {:?}", indent, all_edges);
 
     if vertices.len() == 1 {
-        let vars: HashSet<V> = vertices;
-        println!("==> leaf: {:?}", vars);
+        let vars: IndexSet<V> = vertices;
+        // println!("{}==> leaf: {:?}", indent, vars);
         ADTree::Leaf { vars }
     } else {
         let candidates = AllCovers::from_edges(all_edges.difference(&seen_edges).cloned());
-        println!("");
-        println!("candidates: {:?}", candidates);
+        // println!("");
+        // println!("candidates: {:?}", candidates);
         let (left, estar, right) = match smallest_partition_of::<H, V>(2, candidates, &seen_edges) {
             Some(xs) => xs,
             None => remaining_cover_over(&h, &seen_edges),
         };
-        println!("estar: {:?}", estar);
-        println!("left : {:?}", left);
-        println!("right: {:?}", right);
+        // println!("{}estar: {:?}", indent, estar);
+        // println!("{}left : {:?}", indent, left);
+        // println!("{}right: {:?}", indent, right);
 
         let mut next_seen = seen_edges.clone();
         next_seen.extend(estar.clone());
-        let tleft = hg2dt_h(left, next_seen.clone());
-        let tright = hg2dt_h(right, next_seen);
+        let tleft = hg2dt_h(left, next_seen.clone(), depth + 1);
+        let tright = hg2dt_h(right, next_seen, depth + 1);
         ADTree::Node {
             l: Box::new(tleft),
             r: Box::new(tright),
@@ -355,5 +364,5 @@ pub fn hg2dt<H: Hypergraph<Vertex = V> + Debug + Clone, V: Eq + Hash + Clone + D
     h: &H,
 ) -> ADTree<V> {
     let howned: H = h.clone();
-    hg2dt_h(howned, Default::default())
+    hg2dt_h(howned, Default::default(), 0)
 }

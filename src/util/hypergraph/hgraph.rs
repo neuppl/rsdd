@@ -1,5 +1,6 @@
 use crate::util::hypergraph::{Edge, Hypergraph};
 use core::fmt::Debug;
+use indexmap::set::IndexSet;
 use itertools::Itertools;
 use std::collections::HashSet;
 use std::hash::Hash;
@@ -9,8 +10,8 @@ pub struct HGraph<V>
 where
     V: Clone + Debug + PartialEq + Eq + Hash,
 {
-    vertices: HashSet<V>,
-    hyperedges: HashSet<Edge<V>>,
+    vertices: IndexSet<V>,
+    hyperedges: IndexSet<Edge<V>>,
 }
 impl<V> Default for HGraph<V>
 where
@@ -28,14 +29,14 @@ where
     V: Clone + Debug + PartialEq + Eq + Hash,
 {
     type Vertex = V;
-    fn new(vertices: HashSet<V>, hyperedges: HashSet<Edge<V>>) -> Self {
+    fn new(vertices: IndexSet<V>, hyperedges: IndexSet<Edge<V>>) -> Self {
         Self {
             vertices,
             hyperedges,
         }
     }
 
-    fn vertices(&self) -> &HashSet<V> {
+    fn vertices(&self) -> &IndexSet<V> {
         &self.vertices
     }
 
@@ -134,23 +135,23 @@ mod hgraph_test {
     fn hg2dt_1() {
         // add a precise graph of a 2x2 grid with clusters
         let mut g: HGraph<usize> = Default::default();
-        g.insert_vertices(HashSet::from([1]));
+        g.insert_vertices(IndexSet::from([1]));
         let e1 = Edge::from([1]);
-        g.insert_edges(HashSet::from([e1.clone()]));
+        g.insert_edges(IndexSet::from([e1.clone()]));
         let dt = hg2dt(&g);
-        assert_eq!(dt, ADTree::leaf(HashSet::from([1])));
+        assert_eq!(dt, ADTree::leaf(IndexSet::from([1])));
     }
     #[test]
     fn hg2dt_2() {
         // add a precise graph of a 2x2 grid with clusters
         let mut g: HGraph<usize> = Default::default();
-        g.insert_vertices(HashSet::from([1, 2]));
+        g.insert_vertices(IndexSet::from([1, 2]));
         let e1 = Edge::from([1]);
         let e2 = Edge::from([1, 2]);
-        g.insert_edges(HashSet::from([e1.clone(), e2.clone()]));
+        g.insert_edges(IndexSet::from([e1.clone(), e2.clone()]));
         let dt = hg2dt(&g);
-        let leaf1 = ADTree::leaf(HashSet::from([1]));
-        let leaf2 = ADTree::leaf(HashSet::from([2]));
+        let leaf1 = ADTree::leaf(IndexSet::from([1]));
+        let leaf2 = ADTree::leaf(IndexSet::from([2]));
         let leaves = vec![Some(&leaf1), Some(&leaf2)];
         assert!(leaves.contains(&dt.left()));
         assert!(leaves.contains(&dt.right()));
@@ -164,8 +165,8 @@ mod hgraph_test {
         let e2 = Edge::from([2, 4]);
         let e3 = Edge::from([3, 4]);
         let e4 = Edge::from([4]);
-        g.insert_vertices(HashSet::from([1, 2, 3, 4]));
-        g.insert_edges(HashSet::from([
+        g.insert_vertices(IndexSet::from([1, 2, 3, 4]));
+        g.insert_edges(IndexSet::from([
             e1.clone(),
             e2.clone(),
             e3.clone(),
@@ -205,7 +206,7 @@ mod hgraph_test {
         let e7 = Edge::from([n7.clone(), n9.clone()]);
         let e8 = Edge::from([n8.clone(), n9.clone()]);
         let e9 = Edge::from([n9.clone()]);
-        g.insert_edges(HashSet::from([
+        g.insert_edges(IndexSet::from([
             e1.clone(),
             e2.clone(),
             e3.clone(),
@@ -223,8 +224,8 @@ mod hgraph_test {
 }
 
 // pub fn from_cnf(cnf: &Cnf) -> Hypergraph<VarLabel> {
-//     let mut vars: HashSet<VarLabel> = HashSet::new();
-//     let mut hedges: Vec<HashSet<VarLabel>> = vec![];
+//     let mut vars: IndexSet<VarLabel> = IndexSet::new();
+//     let mut hedges: Vec<IndexSet<VarLabel>> = vec![];
 
 //     for clause in cnf.clauses() {
 //         let hedge = clause
@@ -234,11 +235,11 @@ mod hgraph_test {
 //                 vars.insert(var);
 //                 var
 //             })
-//             .collect::<HashSet<VarLabel>>();
+//             .collect::<IndexSet<VarLabel>>();
 //         hedges.push(hedge);
 //     }
 
-//     Hypergraph::new(vars, dedupe_hashsets(hedges))
+//     Hypergraph::new(vars, dedupe_indexsets(hedges))
 // }
 
 // mod test {
@@ -279,12 +280,12 @@ mod hgraph_test {
 //         fn var(x: u64) -> VarLabel {
 //             VarLabel::new(x)
 //         }
-//         let expected: Vec<HashSet<VarLabel>> = vec![
-//             HashSet::from([var(5)]),
-//             HashSet::from([var(1), var(2)]),
-//             HashSet::from([var(0), var(1), var(2)]),
-//             HashSet::from([var(2), var(3)]),
-//             HashSet::from([var(2), var(4)]),
+//         let expected: Vec<IndexSet<VarLabel>> = vec![
+//             IndexSet::from([var(5)]),
+//             IndexSet::from([var(1), var(2)]),
+//             IndexSet::from([var(0), var(1), var(2)]),
+//             IndexSet::from([var(2), var(3)]),
+//             IndexSet::from([var(2), var(4)]),
 //         ];
 
 //         let g = from_cnf(&cnf);
@@ -309,16 +310,16 @@ mod hgraph_test {
 
 //     #[test]
 //     fn insert_edge_cut_vertex() {
-//         let mut hg: Hypergraph<u64> = Hypergraph::new(HashSet::new(), Vec::new());
+//         let mut hg: Hypergraph<u64> = Hypergraph::new(IndexSet::new(), Vec::new());
 //         #[rustfmt::skip]
-//         let e1 = HashSet::from([   3,       0, 1]);
-//         let e2 = HashSet::from([2, 3, 5, 7]);
-//         let e3 = HashSet::from([2]);
+//         let e1 = IndexSet::from([   3,       0, 1]);
+//         let e2 = IndexSet::from([2, 3, 5, 7]);
+//         let e3 = IndexSet::from([2]);
 
 //         for e in &[e1.clone(), e2.clone(), e3.clone()] {
 //             hg.insert_edge(e);
 //         }
-//         assert_eq!(hg.vertices, HashSet::from([0, 1, 3, 5, 7, 2]));
+//         assert_eq!(hg.vertices, IndexSet::from([0, 1, 3, 5, 7, 2]));
 //         assert_eq!(
 //             hg.hyperedges,
 //             Vec::from([e1.clone(), e2.clone(), e3.clone()])
@@ -330,38 +331,38 @@ mod hgraph_test {
 //             Vec::from([e1.clone(), e2.clone(), e3.clone()])
 //         );
 
-//         hg.cut_vertex(&1); // order gets messed up by dedupe_hashsets
-//         for s in [HashSet::from([0, 3]), e2.clone(), e3.clone()] {
+//         hg.cut_vertex(&1); // order gets messed up by dedupe_indexsets
+//         for s in [IndexSet::from([0, 3]), e2.clone(), e3.clone()] {
 //             assert!(hg.hyperedges.iter().any(|e| e == &s));
 //         }
 
-//         hg.cut_vertex(&3); // order gets messed up by dedupe_hashsets
-//         for s in [HashSet::from([0]), HashSet::from([2, 5, 7]), e3.clone()] {
+//         hg.cut_vertex(&3); // order gets messed up by dedupe_indexsets
+//         for s in [IndexSet::from([0]), IndexSet::from([2, 5, 7]), e3.clone()] {
 //             assert!(hg.hyperedges.iter().any(|e| e == &s));
 //         }
 
-//         hg.cut_vertex(&0); // order gets messed up by dedupe_hashsets
-//         for s in [HashSet::from([2, 5, 7]), HashSet::from([2])] {
+//         hg.cut_vertex(&0); // order gets messed up by dedupe_indexsets
+//         for s in [IndexSet::from([2, 5, 7]), IndexSet::from([2])] {
 //             assert!(hg.hyperedges.iter().any(|e| e == &s));
 //         }
-//         assert_eq!(hg.vertices, HashSet::from([2, 5, 7]));
+//         assert_eq!(hg.vertices, IndexSet::from([2, 5, 7]));
 
 //         let _edges_api = hg.edges();
-//         for s in [HashSet::from([2, 5, 7]), HashSet::from([2])] {
+//         for s in [IndexSet::from([2, 5, 7]), IndexSet::from([2])] {
 //             assert!(hg.hyperedges.iter().any(|e| e == &s));
 //         }
 //         hg.cut_vertex(&5);
 //         hg.cut_vertex(&7);
-//         assert_eq!(hg.hyperedges, Vec::from([HashSet::from([2])]));
-//         assert_eq!(hg.vertices, HashSet::from([2]));
+//         assert_eq!(hg.hyperedges, Vec::from([IndexSet::from([2])]));
+//         assert_eq!(hg.vertices, IndexSet::from([2]));
 //     }
 
 //     #[test]
 //     fn test_width() {
-//         let mut hg: Hypergraph<u64> = Hypergraph::new(HashSet::new(), Vec::new());
+//         let mut hg: Hypergraph<u64> = Hypergraph::new(IndexSet::new(), Vec::new());
 //         // cover 1
 //         #[rustfmt::skip]
-//         let e1 = HashSet::from([          3, 1, 0]);
+//         let e1 = IndexSet::from([          3, 1, 0]);
 //         let e2 = HashSet::from([21, 5, 7, 3]);
 //         let e3 = HashSet::from([21]);
 //         let e4 = HashSet::from([21, 5]);
