@@ -9,8 +9,9 @@ pub use super::{
 };
 use crate::{
     repr::var_label::VarSet,
-    util::semiring::RealSemiring,
-    util::semiring::{BBAlgebra, ExpectedUtility, JoinSemilattice},
+    util::semirings::realsemiring::RealSemiring,
+    util::semirings::semiring_traits::{BBAlgebra, JoinSemilattice},
+    util::semirings::expectation::ExpectedUtility
 };
 use bit_set::BitSet;
 use core::fmt::Debug;

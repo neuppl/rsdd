@@ -22,7 +22,7 @@ use crate::repr::sdd::sdd_or::{SddAnd, SddOr};
 use crate::repr::sdd::SddPtr;
 use crate::repr::vtree::{VTree, VTreeIndex, VTreeManager};
 use crate::repr::wmc::WmcParams;
-use crate::util::semiring::FiniteField;
+use crate::util::semirings::finitefield::FiniteField;
 use crate::{repr::cnf::Cnf, repr::logical_expr::LogicalExpr, repr::var_label::VarLabel};
 
 pub trait SddBuilder<'a>: BottomUpBuilder<'a, SddPtr<'a>> {
@@ -1307,7 +1307,7 @@ fn sdd_circuit2() {
 
 #[test]
 fn sdd_wmc1() {
-    use crate::util::semiring::RealSemiring;
+    use crate::util::semirings::realsemiring::RealSemiring;
     // modeling the formula (x<=>fx) && (y<=>fy), with f weight of 0.5
 
     // let vtree = VTree::right_linear(
@@ -1357,7 +1357,7 @@ fn sdd_wmc1() {
 fn prob_equiv_sdd_demorgan() {
     use crate::repr::robdd::create_semantic_hash_map;
     use crate::repr::robdd::WmcParams;
-    use crate::util::semiring::FiniteField;
+    use crate::util::semirings::finitefield::FiniteField;
 
     let mut man = SemanticSddManager::<100000049>::new(VTree::even_split(
         &[

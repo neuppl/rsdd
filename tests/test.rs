@@ -331,7 +331,9 @@ mod test_bdd_manager {
     use rsdd::repr::var_order::VarOrder;
     use rsdd::repr::vtree::VTree;
     use rsdd::repr::wmc::WmcParams;
-    use rsdd::util::semiring::{ExpectedUtility, RealSemiring, Semiring};
+    use rsdd::util::semirings::expectation::ExpectedUtility;
+    use rsdd::util::semirings::realsemiring::RealSemiring;
+    use rsdd::util::semirings::semiring_traits::Semiring;
     use std::collections::HashMap;
     use std::iter::FromIterator;
 
@@ -422,7 +424,7 @@ mod test_bdd_manager {
         fn sdd_semantic_eq_bdd(c1: Cnf, vtree: VTree) -> bool {
             let bdd_mgr = super::BddManager::<AllTable<BddPtr>>::new_default_order(c1.num_vars());
             let sdd_mgr = super::CompressionSddManager::new(vtree);
-            let map : WmcParams<rsdd::util::semiring::FiniteField<{ crate::BIG_PRIME }>>= create_semantic_hash_map(c1.num_vars());
+            let map : WmcParams<rsdd::util::semirings::finitefield::FiniteField<{ crate::BIG_PRIME }>>= create_semantic_hash_map(c1.num_vars());
             let bdd = bdd_mgr.from_cnf(&c1);
             let sdd = sdd_mgr.from_cnf(&c1);
             bdd.semantic_hash(bdd_mgr.get_order(), &map) == sdd.semantic_hash(sdd_mgr.get_vtree_manager(), &map)
@@ -438,7 +440,7 @@ mod test_bdd_manager {
             let vtree = VTree::from_dtree(&dtree).unwrap();
 
             let sdd_mgr = super::CompressionSddManager::new(vtree);
-            let map : WmcParams<rsdd::util::semiring::FiniteField<{ crate::BIG_PRIME }>>= create_semantic_hash_map(c1.num_vars());
+            let map : WmcParams<rsdd::util::semirings::finitefield::FiniteField<{ crate::BIG_PRIME }>>= create_semantic_hash_map(c1.num_vars());
             let bdd = bdd_mgr.from_cnf(&c1);
             let sdd = sdd_mgr.from_cnf(&c1);
             bdd.semantic_hash(bdd_mgr.get_order(), &map) == sdd.semantic_hash(sdd_mgr.get_vtree_manager(), &map)
@@ -707,7 +709,7 @@ mod test_sdd_manager {
     use rsdd::repr::var_order::VarOrder;
     use rsdd::repr::vtree::VTree;
     use rsdd::repr::wmc::WmcParams;
-    use rsdd::util::semiring::FiniteField;
+    use rsdd::util::semirings::finitefield::FiniteField;
     use std::collections::HashMap;
 
     quickcheck! {

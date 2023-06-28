@@ -195,69 +195,69 @@
 //     println!("BB Elapsed: {:.2?}", elapsed2);
 // }
 
-// // Uncomment and run test if you need a sanity check above code works.
-// // #[test]
-// // fn sanity_check() {
-// //     let (_, man, _) = network_gen(3);
-// //     let (decs, mut man2, _, _) = decisions(3, man);
+// Uncomment and run test if you need a sanity check above code works.
+// #[test]
+// fn sanity_check() {
+//     let (_, man, _) = network_gen(3);
+//     let (decs, mut man2, _, _) = decisions(3, man);
 
-// //     let st1 = man2.var(VarLabel::new(0), true);
-// //     let t1t2 = man2.var(VarLabel::new(1), true);
-// //     let t2t3 = man2.var(VarLabel::new(2), true);
-// //     let t3e = man2.var(VarLabel::new(3), true);
+//     let st1 = man2.var(VarLabel::new(0), true);
+//     let t1t2 = man2.var(VarLabel::new(1), true);
+//     let t2t3 = man2.var(VarLabel::new(2), true);
+//     let t3e = man2.var(VarLabel::new(3), true);
 
-// //     let sb1 = man2.var(VarLabel::new(4), true);
-// //     let b1b2 = man2.var(VarLabel::new(5), true);
-// //     let b2b3 = man2.var(VarLabel::new(6), true);
-// //     let b3e = man2.var(VarLabel::new(7), true);
+//     let sb1 = man2.var(VarLabel::new(4), true);
+//     let b1b2 = man2.var(VarLabel::new(5), true);
+//     let b2b3 = man2.var(VarLabel::new(6), true);
+//     let b3e = man2.var(VarLabel::new(7), true);
 
-// //     let t1 = man2.var(VarLabel::new(8), true);
-// //     let t2 = man2.var(VarLabel::new(9), true);
-// //     let t3 = man2.var(VarLabel::new(10), true);
+//     let t1 = man2.var(VarLabel::new(8), true);
+//     let t2 = man2.var(VarLabel::new(9), true);
+//     let t3 = man2.var(VarLabel::new(10), true);
 
-// //     let b1 = man2.var(VarLabel::new(11), true);
-// //     let b2 = man2.var(VarLabel::new(12), true);
-// //     let b3 = man2.var(VarLabel::new(13), true);
+//     let b1 = man2.var(VarLabel::new(11), true);
+//     let b2 = man2.var(VarLabel::new(12), true);
+//     let b3 = man2.var(VarLabel::new(13), true);
 
-// //     let r = man2.var(VarLabel::new(14), true);
+//     let r = man2.var(VarLabel::new(14), true);
 
-// //     let ig_t1 = man2.or(st1.neg(), t1t2.neg());
-// //     let ig_t2 = man2.or(t1t2.neg(), t2t3.neg());
-// //     let ig_t3 = man2.or(t2t3.neg(), t3e.neg());
+//     let ig_t1 = man2.or(st1.neg(), t1t2.neg());
+//     let ig_t2 = man2.or(t1t2.neg(), t2t3.neg());
+//     let ig_t3 = man2.or(t2t3.neg(), t3e.neg());
 
-// //     let ig_b1 = man2.or(sb1.neg(), b1b2.neg());
-// //     let ig_b2 = man2.or(b1b2.neg(), b2b3.neg());
-// //     let ig_b3 = man2.or(b2b3.neg(), b3e.neg());
+//     let ig_b1 = man2.or(sb1.neg(), b1b2.neg());
+//     let ig_b2 = man2.or(b1b2.neg(), b2b3.neg());
+//     let ig_b3 = man2.or(b2b3.neg(), b3e.neg());
 
-// //     let t1_ite = man2.ite(ig_t1, r, r.neg());
-// //     let t2_ite = man2.ite(ig_t2, r, r.neg());
-// //     let t3_ite = man2.ite(ig_t3, r, r.neg());
+//     let t1_ite = man2.ite(ig_t1, r, r.neg());
+//     let t2_ite = man2.ite(ig_t2, r, r.neg());
+//     let t3_ite = man2.ite(ig_t3, r, r.neg());
 
-// //     let b1_ite = man2.ite(ig_b1, r, r.neg());
-// //     let b2_ite = man2.ite(ig_b2, r, r.neg());
-// //     let b3_ite = man2.ite(ig_b3, r, r.neg());
+//     let b1_ite = man2.ite(ig_b1, r, r.neg());
+//     let b2_ite = man2.ite(ig_b2, r, r.neg());
+//     let b3_ite = man2.ite(ig_b3, r, r.neg());
 
-// //     let t1_d = man2.and_lst(
-// //                 &[t1_ite, t1, t2.neg(), t3.neg(), b1.neg(), b2.neg(), b3.neg()]
-// //                );
-// //     let t2_d = man2.and_lst(
-// //                 &[t2_ite, t1.neg(), t2, t3.neg(), b1.neg(), b2.neg(), b3.neg()]
-// //                );
-// //     let t3_d = man2.and_lst(
-// //                 &[t3_ite, t1.neg(), t2.neg(), t3, b1.neg(), b2.neg(), b3.neg()]
-// //                );
+//     let t1_d = man2.and_lst(
+//                 &[t1_ite, t1, t2.neg(), t3.neg(), b1.neg(), b2.neg(), b3.neg()]
+//                );
+//     let t2_d = man2.and_lst(
+//                 &[t2_ite, t1.neg(), t2, t3.neg(), b1.neg(), b2.neg(), b3.neg()]
+//                );
+//     let t3_d = man2.and_lst(
+//                 &[t3_ite, t1.neg(), t2.neg(), t3, b1.neg(), b2.neg(), b3.neg()]
+//                );
 
-// //     let b1_d = man2.and_lst(
-// //                 &[b1_ite, t1.neg(), t2.neg(), t3.neg(), b1, b2.neg(), b3.neg()]
-// //                );
-// //     let b2_d = man2.and_lst(
-// //                 &[b2_ite, t1.neg(), t2.neg(), t3.neg(), b1.neg(), b2, b3.neg()]
-// //                );
-// //     let b3_d = man2.and_lst(
-// //                 &[b3_ite, t1.neg(), t2.neg(), t3.neg(), b1.neg(), b2.neg(), b3]
-// //                );
+//     let b1_d = man2.and_lst(
+//                 &[b1_ite, t1.neg(), t2.neg(), t3.neg(), b1, b2.neg(), b3.neg()]
+//                );
+//     let b2_d = man2.and_lst(
+//                 &[b2_ite, t1.neg(), t2.neg(), t3.neg(), b1.neg(), b2, b3.neg()]
+//                );
+//     let b3_d = man2.and_lst(
+//                 &[b3_ite, t1.neg(), t2.neg(), t3.neg(), b1.neg(), b2.neg(), b3]
+//                );
 
-// //     let dec = man2.or_lst(&[t1_d, t2_d, t3_d, b1_d, b2_d, b3_d]);
+//     let dec = man2.or_lst(&[t1_d, t2_d, t3_d, b1_d, b2_d, b3_d]);
 
-// //     assert!(man2.eq_bdd(dec, decs));
-// // }
+//     assert!(man2.eq_bdd(dec, decs));
+// }

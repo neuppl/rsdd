@@ -9,7 +9,7 @@ use crate::{
         ddnnf::DDNNF,
         var_label::{VarLabel, VarSet},
     },
-    util::semiring::FiniteField,
+    util::semirings::finitefield::FiniteField,
 };
 use std::fmt::Debug;
 use std::{collections::HashSet, ptr};
