@@ -1,7 +1,7 @@
 // Expected Utility Semiring.
 
-use std::{fmt::Display, ops, cmp::Ordering};
 use super::semiring_traits::*;
+use std::{cmp::Ordering, fmt::Display, ops};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ExpectedUtility(pub f64, pub f64);
@@ -11,6 +11,14 @@ impl ops::Add<ExpectedUtility> for ExpectedUtility {
 
     fn add(self, rhs: ExpectedUtility) -> Self::Output {
         ExpectedUtility(self.0 + rhs.0, self.1 + rhs.1)
+    }
+}
+
+impl ops::Sub<ExpectedUtility> for ExpectedUtility {
+    type Output = ExpectedUtility;
+
+    fn sub(self, rhs: ExpectedUtility) -> Self::Output {
+        ExpectedUtility(self.0 - rhs.0, self.1 - rhs.1)
     }
 }
 
@@ -38,6 +46,8 @@ impl Semiring for ExpectedUtility {
     }
 }
 
+impl Ring for ExpectedUtility {}
+
 impl PartialOrd for ExpectedUtility {
     fn partial_cmp(&self, other: &ExpectedUtility) -> Option<Ordering> {
         if self.0 < other.0 && self.1 < other.1 {
@@ -58,7 +68,17 @@ impl JoinSemilattice for ExpectedUtility {
     }
 }
 
-impl BBAlgebra for ExpectedUtility {
+impl BBSemiring for ExpectedUtility {
+    fn choose(&self, arg: &ExpectedUtility) -> ExpectedUtility {
+        if self.1 > arg.1 {
+            *self
+        } else {
+            *arg
+        }
+    }
+}
+
+impl BBRing for ExpectedUtility {
     fn choose(&self, arg: &ExpectedUtility) -> ExpectedUtility {
         if self.1 > arg.1 {
             *self
@@ -75,3 +95,5 @@ impl MeetSemilattice for ExpectedUtility {
 }
 
 impl Lattice for ExpectedUtility {}
+
+impl EdgeboundingRing for ExpectedUtility {}

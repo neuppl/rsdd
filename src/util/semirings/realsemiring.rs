@@ -1,8 +1,5 @@
-use std::{fmt::Display, ops};
 use super::semiring_traits::*;
-
-
-
+use std::{fmt::Display, ops};
 
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub struct RealSemiring(pub f64);
@@ -47,13 +44,21 @@ impl Semiring for RealSemiring {
     }
 }
 
+impl Ring for RealSemiring {}
+
 impl JoinSemilattice for RealSemiring {
     fn join(&self, arg: &Self) -> Self {
         RealSemiring(f64::max(self.0, arg.0))
     }
 }
 
-impl BBAlgebra for RealSemiring {
+impl BBSemiring for RealSemiring {
+    fn choose(&self, arg: &RealSemiring) -> RealSemiring {
+        JoinSemilattice::join(self, arg)
+    }
+}
+
+impl BBRing for RealSemiring {
     fn choose(&self, arg: &RealSemiring) -> RealSemiring {
         JoinSemilattice::join(self, arg)
     }
@@ -64,4 +69,7 @@ impl MeetSemilattice for RealSemiring {
         RealSemiring(f64::min(self.0, arg.0))
     }
 }
+
 impl Lattice for RealSemiring {}
+
+impl EdgeboundingRing for RealSemiring {}
