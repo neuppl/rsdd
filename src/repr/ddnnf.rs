@@ -2,6 +2,7 @@
 //! (d-DNNF) pointer type
 use crate::util::semirings::semiring_traits::Semiring;
 use crate::util::semirings::{finitefield::FiniteField, semiring_traits::BBSemiring};
+use bit_set::BitSet;
 use core::fmt::Debug;
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha8Rng;
@@ -40,6 +41,7 @@ pub fn create_semantic_hash_map<const P: u128>(num_vars: usize) -> WmcParams<Fin
 }
 
 use super::model::PartialModel;
+use super::var_label::Literal;
 use super::{
     var_label::{VarLabel, VarSet},
     wmc::WmcParams,
@@ -122,7 +124,7 @@ pub trait DDNNFPtr<'a>: Clone + Debug + PartialEq + Eq + Hash + Copy {
     fn count_nodes(&self) -> usize;
 
     // upper-bound as seen in the branch-and-bound function
-    fn ub<T: BBSemiring + std::ops::Add<Output = T> + std::ops::Mul<Output = T>>(
+    fn ub<T: BBSemiring>(
         &self,
         o: &Self::Order,
         params: &WmcParams<T>,
@@ -145,8 +147,8 @@ pub trait DDNNFPtr<'a>: Clone + Debug + PartialEq + Eq + Hash + Copy {
             use DDNNF::*;
             match ddnnf {
                 Or(l, r, vars) => {
-                    // if C is associated with a MAP variable, 
-                    // take the join. 
+                    // if C is associated with a MAP variable,
+                    // take the join.
                     let int = join_vars.intersect_varset(&vars);
                     if int.is_empty() {
                         l + r
@@ -168,5 +170,105 @@ pub trait DDNNFPtr<'a>: Clone + Debug + PartialEq + Eq + Hash + Copy {
             }
         });
         partial_join_acc * v
+    }
+
+    fn bb_h<T: BBSemiring>(
+        &self,
+        o: &Self::Order,
+        cur_lb: T,
+        cur_best: PartialModel,
+        join_vars: &[VarLabel],
+        wmc: &WmcParams<T>,
+        cur_assgn: PartialModel,
+    ) -> (T, PartialModel)
+    where
+        T: 'static,
+    {
+        match join_vars {
+            // If all join variables are assigned,
+            [] => {
+                // Run the ub
+                let empty_join_vars = VarSet::new();
+                let possible_best = self.ub(o, wmc, &cur_assgn, &empty_join_vars);
+                // If it's a better lb, update.
+                let best = BBSemiring::choose(&cur_lb, &possible_best);
+                if cur_lb == best {
+                    (cur_lb, cur_best)
+                } else {
+                    (possible_best, cur_assgn)
+                }
+            }
+            // If there exists an unassigned decision variable,
+            [x, end @ ..] => {
+                let mut best_model = cur_best.clone();
+                let mut best_lb = cur_lb;
+                let join_vars_bits =
+                    VarSet::new_from_bitset(BitSet::from_iter(end.iter().map(|x| x.value_usize())));
+                // Consider the assignment of it to true...
+                let mut true_model = cur_assgn.clone();
+                true_model.set(*x, true);
+                // ... and false...
+                let mut false_model = cur_assgn;
+                false_model.set(*x, false);
+
+                // and calculate their respective upper bounds.
+                let true_ub = self.ub(o, wmc, &true_model, &join_vars_bits);
+                let false_ub = self.ub(o, wmc, &false_model, &join_vars_bits);
+
+                // arbitrarily order the T/F bounds
+                let order = if true_ub == BBSemiring::choose(&true_ub, &false_ub) {
+                    [(true_ub, true_model), (false_ub, false_model)]
+                } else {
+                    [(false_ub, false_model), (true_ub, true_model)]
+                };
+                // the actual branching and bounding
+                for (upper_bound, partialmodel) in order {
+                    // if upper_bound == BBAlgebra::choose(&upper_bound, &best_lb) {
+                    if !PartialOrd::le(&upper_bound, &cur_lb) {
+                        let (rec, rec_pm) = self.bb_h(
+                            o,
+                            best_lb,
+                            best_model.clone(),
+                            end,
+                            wmc,
+                            partialmodel.clone(),
+                        );
+                        let new_lb = BBSemiring::choose(&cur_lb, &rec);
+                        if new_lb == rec {
+                            (best_lb, best_model) = (rec, rec_pm);
+                        } else {
+                            (best_lb, best_model) = (cur_lb, cur_best.clone());
+                        }
+                    }
+                }
+                (best_lb, best_model)
+            }
+        }
+    }
+
+    /// branch and bound generic over T a BBAlgebra.
+    fn bb<T: BBSemiring>(
+        &self,
+        o: &Self::Order,
+        join_vars: &[VarLabel],
+        num_vars: usize,
+        wmc: &WmcParams<T>,
+    ) -> (T, PartialModel)
+    where
+        T: 'static,
+    {
+        // Initialize all the decision variables to be true, partially instantianted resp. to this
+        let all_true: Vec<Literal> = join_vars.iter().map(|x| Literal::new(*x, true)).collect();
+        let cur_assgn = PartialModel::from_litvec(&all_true, num_vars);
+        // Calculate bound wrt the partial instantiation.
+        let lower_bound = self.ub(o, wmc, &cur_assgn, &VarSet::new());
+        self.bb_h(
+            o,
+            lower_bound,
+            cur_assgn,
+            join_vars,
+            wmc,
+            PartialModel::from_litvec(&[], num_vars),
+        )
     }
 }

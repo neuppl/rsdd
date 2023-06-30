@@ -850,7 +850,7 @@ mod test_sdd_manager {
             let vtree = VTree::from_dtree(&dtree).unwrap();
             let mgr_sdd = super::CompressionSddManager::new(vtree);
             let cnf_sdd = mgr_sdd.from_cnf(&c1);
-            
+
             let pm = PartialModel::new(0);
             let join_vars_bits = BitSet::from_iter(vars.iter().map(|x| x.value_usize()));
             let join_vars_bits_clone = join_vars_bits.clone();

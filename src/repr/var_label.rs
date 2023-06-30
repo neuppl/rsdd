@@ -120,10 +120,8 @@ impl VarSet {
         }
     }
 
-    pub fn new_from_bitset(bs : BitSet) -> VarSet {
-      VarSet {
-        b : bs,
-      }
+    pub fn new_from_bitset(bs: BitSet) -> VarSet {
+        VarSet { b: bs }
     }
 
     /// unions self with other in-place
