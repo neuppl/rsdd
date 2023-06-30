@@ -696,6 +696,7 @@ mod test_sdd_manager {
     use crate::repr::cnf::Cnf;
     use crate::repr::var_label::{Literal, VarLabel};
     use crate::rsdd::builder::BottomUpBuilder;
+    use bit_set::BitSet;
     use quickcheck::{Arbitrary, TestResult};
     use rand::rngs::SmallRng;
     use rand::seq::SliceRandom;
@@ -706,10 +707,13 @@ mod test_sdd_manager {
     use rsdd::repr::dtree::DTree;
     use rsdd::repr::robdd::BddPtr;
     use rsdd::repr::sdd::SddPtr;
+    use rsdd::repr::var_label::VarSet;
     use rsdd::repr::var_order::VarOrder;
     use rsdd::repr::vtree::VTree;
     use rsdd::repr::wmc::WmcParams;
     use rsdd::util::semirings::finitefield::FiniteField;
+    use rsdd::util::semirings::realsemiring::RealSemiring;
+    use rsdd::util::semirings::semiring_traits::Semiring;
     use std::collections::HashMap;
 
     quickcheck! {
@@ -817,6 +821,46 @@ mod test_sdd_manager {
             assert_eq!(bdd_res, sdd_res);
             TestResult::passed()
         }
+    }
+
+    quickcheck! {
+      /// Test for correctness of Jinbo's upper bound algorithm on d-DNNFs is equal to the
+      /// BDD specialized one.
+      fn sdd_ub_eq (c1 : Cnf) -> TestResult {
+        use rsdd::repr::model::PartialModel;
+            // constrain the size
+            if c1.num_vars() < 5 || c1.num_vars() > 8 { return TestResult::discard() }
+            if c1.clauses().len() > 14 { return TestResult::discard() }
+
+            // Setting up BDD
+            let mgr_bdd = super::BddManager::<AllTable<BddPtr>>::new_default_order(c1.num_vars());
+            let weight_map : HashMap<VarLabel, (RealSemiring, RealSemiring)> = HashMap::from_iter(
+                (0..16).map(|x| (VarLabel::new(x as u64), (RealSemiring(0.3), RealSemiring(0.7)))));
+            let cnf_bdd = mgr_bdd.from_cnf(&c1);
+            let vars = vec![VarLabel::new(0), VarLabel::new(2), VarLabel::new(4)];
+            if !c1.var_in_cnf(VarLabel::new(0))
+               || !c1.var_in_cnf(VarLabel::new(2))
+               || !c1.var_in_cnf(VarLabel::new(4)) {
+                return TestResult::discard()
+            }
+            let wmc = WmcParams::new_with_default(RealSemiring::zero(), RealSemiring::one(), weight_map);
+
+            // Setting up SDD
+            let dtree = DTree::from_cnf(&c1, &VarOrder::linear_order(c1.num_vars()));
+            let vtree = VTree::from_dtree(&dtree).unwrap();
+            let mgr_sdd = super::CompressionSddManager::new(vtree);
+            let cnf_sdd = mgr_sdd.from_cnf(&c1);
+            
+            let pm = PartialModel::new(0);
+            let join_vars_bits = BitSet::from_iter(vars.iter().map(|x| x.value_usize()));
+            let join_vars_bits_clone = join_vars_bits.clone();
+            let join_vars_varset = VarSet::new_from_bitset(join_vars_bits);
+            let ub_bdd = cnf_bdd.bb_ub(&pm, &join_vars_bits_clone, &wmc);
+            let ub_sdd = cnf_sdd.ub(mgr_sdd.get_vtree_manager(), &wmc, &pm, &join_vars_varset);
+
+            TestResult::from_bool(ub_bdd <= ub_sdd || (ub_bdd.0 - ub_sdd.0).abs() <= 0.000000001)
+      }
+
     }
 
     // why does this exist?

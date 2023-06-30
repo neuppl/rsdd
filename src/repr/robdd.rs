@@ -676,7 +676,7 @@ impl<'a> BddPtr<'a> {
 
     /// Below is experimental code with a generic branch and bound for T a BBAlgebra.
     /// upper-bounding the expected utility, for meu_h
-    fn bb_ub<T: BBSemiring>(
+    pub fn bb_ub<T: BBSemiring>(
         &self,
         partial_join_assgn: &PartialModel,
         join_vars: &BitSet,

@@ -1,9 +1,8 @@
 //! Implementing of a generic decision decomposable deterministic negation normal form
 //! (d-DNNF) pointer type
-use core::fmt::Debug;
-
-use crate::util::semirings::finitefield::FiniteField;
 use crate::util::semirings::semiring_traits::Semiring;
+use crate::util::semirings::{finitefield::FiniteField, semiring_traits::BBSemiring};
+use core::fmt::Debug;
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha8Rng;
 
@@ -40,6 +39,7 @@ pub fn create_semantic_hash_map<const P: u128>(num_vars: usize) -> WmcParams<Fin
     WmcParams::new_with_default(FiniteField::zero(), FiniteField::one(), map)
 }
 
+use super::model::PartialModel;
 use super::{
     var_label::{VarLabel, VarSet},
     wmc::WmcParams,
@@ -120,4 +120,53 @@ pub trait DDNNFPtr<'a>: Clone + Debug + PartialEq + Eq + Hash + Copy {
 
     /// count the number of nodes in this representation
     fn count_nodes(&self) -> usize;
+
+    // upper-bound as seen in the branch-and-bound function
+    fn ub<T: BBSemiring + std::ops::Add<Output = T> + std::ops::Mul<Output = T>>(
+        &self,
+        o: &Self::Order,
+        params: &WmcParams<T>,
+        partial_join_assgn: &PartialModel,
+        join_vars: &VarSet,
+    ) -> T
+    where
+        T: 'static,
+    {
+        let mut partial_join_acc = T::one();
+        for lit in partial_join_assgn.assignment_iter() {
+            let (l, h) = params.get_var_weight(lit.get_label());
+            if lit.get_polarity() {
+                partial_join_acc = partial_join_acc * (*h);
+            } else {
+                partial_join_acc = partial_join_acc * (*l);
+            }
+        }
+        let v = self.fold(o, |ddnnf: DDNNF<T>| {
+            use DDNNF::*;
+            match ddnnf {
+                Or(l, r, vars) => {
+                    // if C is associated with a MAP variable, 
+                    // take the join. 
+                    let int = join_vars.intersect_varset(&vars);
+                    if int.is_empty() {
+                        l + r
+                    } else {
+                        T::join(&l, &r)
+                    }
+                }
+                And(l, r) => l * r,
+                True => params.one,
+                False => params.zero,
+                Lit(lbl, polarity) => {
+                    let (low_w, high_w) = params.get_var_weight(lbl);
+                    if polarity {
+                        *high_w
+                    } else {
+                        *low_w
+                    }
+                }
+            }
+        });
+        partial_join_acc * v
+    }
 }

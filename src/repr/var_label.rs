@@ -120,6 +120,12 @@ impl VarSet {
         }
     }
 
+    pub fn new_from_bitset(bs : BitSet) -> VarSet {
+      VarSet {
+        b : bs,
+      }
+    }
+
     /// unions self with other in-place
     pub fn union_with(&mut self, other: &VarSet) {
         self.b.union_with(&other.b);
