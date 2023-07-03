@@ -88,7 +88,7 @@ fn compile_topdown_nnf(str: String, _args: &Args) -> BenchResult {
 }
 
 fn compile_sdd_dtree(str: String, _args: &Args) -> BenchResult {
-    use rsdd::builder::sdd_builder::*;
+    use rsdd::builder::sdd::{builder::SddBuilder, compression::CompressionSddManager};
     let cnf = Cnf::from_file(str);
     let dtree = DTree::from_cnf(&cnf, &cnf.min_fill_order());
     let vtree = VTree::from_dtree(&dtree).unwrap();
@@ -117,7 +117,7 @@ fn compile_sdd_dtree(str: String, _args: &Args) -> BenchResult {
 }
 
 fn compile_sdd_rightlinear(str: String, _args: &Args) -> BenchResult {
-    use rsdd::builder::sdd_builder::*;
+    use rsdd::builder::sdd::{builder::SddBuilder, compression::CompressionSddManager};
     let cnf = Cnf::from_file(str);
     let o: Vec<VarLabel> = (0..cnf.num_vars())
         .map(|x| VarLabel::new(x as u64))

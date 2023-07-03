@@ -1,6 +1,7 @@
 use crate::builder::bdd_builder::{BddManager, BddPtr, DDNNFPtr};
 use crate::builder::cache::lru_app::BddApplyTable;
-use crate::builder::sdd_builder::{CompressionSddManager, SddBuilder};
+use crate::builder::sdd::builder::SddBuilder;
+use crate::builder::sdd::compression::CompressionSddManager;
 use crate::repr::dtree::DTree;
 use crate::repr::robdd::VarOrder;
 use crate::repr::wmc::WmcParams;
