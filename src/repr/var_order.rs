@@ -34,6 +34,11 @@ impl VarOrder {
     }
 
     /// Generate a linear variable ordering of size `num_var_to_pos`
+    /// ```
+    /// # use rsdd::repr::var_order::VarOrder;
+    /// let o = VarOrder::linear_order(10);
+    /// assert_eq!(o.num_vars(), 10);
+    /// ```
     pub fn linear_order(num_var_to_pos: usize) -> VarOrder {
         let mut v = Vec::new();
         for i in 0..num_var_to_pos {
@@ -80,6 +85,13 @@ impl VarOrder {
     }
 
     /// True if `a` is before or equal to `b` in the ordering
+    /// ```
+    /// # use rsdd::repr::var_order::VarOrder;
+    /// # use rsdd::repr::var_label::VarLabel;
+    /// let o = VarOrder::linear_order(10);
+    /// assert!(o.lte(VarLabel::new(3), VarLabel::new(4)));
+    /// assert!(o.lte(VarLabel::new(5), VarLabel::new(5)));
+    /// ```
     pub fn lte(&self, a: VarLabel, b: VarLabel) -> bool {
         self.var_to_pos[a.value() as usize] <= self.var_to_pos[b.value() as usize]
     }
@@ -176,11 +188,23 @@ impl VarOrder {
     }
 
     /// Gets the variable that occurs last in the order
+    /// ```
+    /// # use rsdd::repr::var_order::VarOrder;
+    /// let o = VarOrder::linear_order(10);
+    /// assert_eq!(o.last_var().value(), 9) // labels are 0-indexed
+    /// ```
     pub fn last_var(&self) -> VarLabel {
         VarLabel::new(*self.pos_to_var.last().unwrap() as u64)
     }
 
     /// Push a new variable to the end of the order
+    /// ```
+    /// # use rsdd::repr::var_order::VarOrder;
+    /// let mut o = VarOrder::linear_order(10);
+    /// o.new_last();
+    /// assert_eq!(o.num_vars(), 11);
+    /// assert_eq!(o.last_var().value(), 10)
+    /// ```
     pub fn new_last(&mut self) -> VarLabel {
         let pos = self.pos_to_var.len();
         self.var_to_pos.push(pos);
