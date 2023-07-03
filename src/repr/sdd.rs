@@ -523,7 +523,8 @@ fn is_trimmed_trivial() {
 
 #[test]
 fn is_trimmed_simple_demorgan() {
-    use crate::builder::sdd_builder::*;
+    use crate::builder::sdd::compression::CompressionSddManager;
+    use crate::builder::BottomUpBuilder;
     let man = CompressionSddManager::new(crate::repr::vtree::VTree::even_split(
         &[
             VarLabel::new(0),
@@ -554,7 +555,8 @@ fn is_canonical_trivial() {
 
 #[test]
 fn is_canonical_simple_demorgan() {
-    use crate::builder::sdd_builder::*;
+    use crate::builder::sdd::compression::CompressionSddManager;
+    use crate::builder::BottomUpBuilder;
     let man = CompressionSddManager::new(crate::repr::vtree::VTree::even_split(
         &[
             VarLabel::new(0),
