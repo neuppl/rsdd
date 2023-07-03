@@ -36,6 +36,7 @@ jobs:
         run: echo "<meta http-equiv=\"refresh\" content=\"0; url=rsdd\">" > target/doc/index.html
       - name: Force correct file permissions
         run: |
+          chmod -c +rX "target/doc/.lock" &
           chmod -c -R +rX "target/doc" |
           while read line; do
             echo "::warning title=Invalid file permissions automatically fixed::$line"
