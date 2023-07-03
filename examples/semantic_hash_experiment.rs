@@ -2,7 +2,9 @@ extern crate rsdd;
 
 use clap::Parser;
 use rsdd::{
-    builder::sdd_builder::{CompressionSddManager, SddBuilder, SemanticSddManager},
+    builder::sdd::{
+        builder::SddBuilder, compression::CompressionSddManager, semantic::SemanticSddManager,
+    },
     repr::{
         cnf::Cnf, dtree::DTree, sdd::SddPtr, var_label::VarLabel, var_order::VarOrder, vtree::VTree,
     },
