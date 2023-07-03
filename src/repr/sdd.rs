@@ -302,6 +302,33 @@ impl<'a> SddPtr<'a> {
             }
         }
     }
+
+    // Recursively traverses the pointer and returns relevant variables.
+    fn get_vars_h(&self, mut S : VarSet) -> VarSet {
+        match &self {
+            PtrTrue | PtrFalse => S,
+            Var(lbl, _) => {S.insert(*lbl); S}
+            BDD(bdd) | ComplBDD(bdd) => {
+                S.insert(bdd.label());
+                let x = bdd.low().get_vars_h(S);
+                let y = bdd.high().get_vars_h(x);
+                y
+            }
+            Reg(or) | Compl(or) => {
+                for elt in or.nodes.iter() {
+                    let x = elt.prime().get_vars_h(VarSet::new());
+                    let y = elt.sub().get_vars_h(VarSet::new());
+                    S.union_with(&x);
+                    S.union_with(&y);
+                }
+                S
+            }
+        }
+    }
+
+    pub fn get_vars(&self) -> VarSet {
+        self.get_vars_h(VarSet::new())
+    }
 }
 
 type DDNNFCache<T> = (Option<T>, Option<T>);
@@ -340,6 +367,7 @@ impl<'a> DDNNFPtr<'a> for SddPtr<'a> {
                             let s_sub = bottomup_pass_h(s, f);
                             let a = f(DDNNF::And(p_sub, s_sub));
                             let v = VarSet::new();
+                            
                             or_v = f(DDNNF::Or(or_v, a, v));
                         }
 

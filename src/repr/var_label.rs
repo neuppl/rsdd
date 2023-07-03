@@ -91,7 +91,7 @@ impl Arbitrary for Literal {
 /// A structure that contains sets of variables
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct VarSet {
-    b: BitSet,
+    pub b: BitSet,
 }
 
 impl Serialize for VarSet {
@@ -114,12 +114,14 @@ impl VarSet {
         VarSet { b: BitSet::new() }
     }
 
+    // Creates an empty VarSet with num_vars size
     pub fn new_with_num_vars(num_vars: usize) -> VarSet {
         VarSet {
             b: BitSet::with_capacity(num_vars),
         }
     }
 
+    // Creates a new VarSet with values in BitSet
     pub fn new_from_bitset(bs: BitSet) -> VarSet {
         VarSet { b: bs }
     }

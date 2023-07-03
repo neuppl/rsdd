@@ -700,21 +700,23 @@ mod test_sdd_manager {
     use quickcheck::{Arbitrary, TestResult};
     use rand::rngs::SmallRng;
     use rand::seq::SliceRandom;
-    use rand::SeedableRng;
+    use rand::{SeedableRng, Rng};
     use rsdd::builder::cache::all_app::AllTable;
     use rsdd::builder::sdd_builder::{CompressionSddManager, SddBuilder, SemanticSddManager};
     use rsdd::repr::ddnnf::{create_semantic_hash_map, DDNNFPtr};
     use rsdd::repr::dtree::DTree;
-    use rsdd::repr::robdd::BddPtr;
+    use rsdd::repr::robdd::{BddPtr};
     use rsdd::repr::sdd::SddPtr;
     use rsdd::repr::var_label::VarSet;
     use rsdd::repr::var_order::VarOrder;
     use rsdd::repr::vtree::VTree;
     use rsdd::repr::wmc::WmcParams;
+    use rsdd::util::semirings::expectation::ExpectedUtility;
     use rsdd::util::semirings::finitefield::FiniteField;
     use rsdd::util::semirings::realsemiring::RealSemiring;
     use rsdd::util::semirings::semiring_traits::Semiring;
     use std::collections::HashMap;
+    use rsdd::repr::model::PartialModel;
 
     quickcheck! {
         fn test_cond_and(c: Cnf) -> bool {
@@ -814,7 +816,6 @@ mod test_sdd_manager {
             let cnf_sdd = mgr.from_cnf(&cnf);
             let sdd_res = cnf_sdd.semantic_hash(mgr.get_vtree_manager(), &weight_map);
 
-
             let bddmgr = BddManager::<AllTable<BddPtr>>::new_default_order(cnf.num_vars());
             let cnf_bdd = bddmgr.from_cnf(&cnf);
             let bdd_res = cnf_bdd.semantic_hash(bddmgr.get_order(), &weight_map);
@@ -824,44 +825,100 @@ mod test_sdd_manager {
     }
 
     quickcheck! {
-      /// Test for correctness of Jinbo's upper bound algorithm on d-DNNFs is equal to the
+      /// Test for correctness of Jinbo's upper bound algorithm on d-DNNFs is the
       /// BDD specialized one.
-      fn sdd_ub_eq (c1 : Cnf) -> TestResult {
-        use rsdd::repr::model::PartialModel;
-            // constrain the size
-            if c1.num_vars() < 5 || c1.num_vars() > 8 { return TestResult::discard() }
-            if c1.clauses().len() > 14 { return TestResult::discard() }
+      fn sdd_ub_eq(clauses: Vec<Vec<Literal>>) -> TestResult {
+        let cnf = Cnf::new(clauses);
+        if cnf.num_vars() < 8 || cnf.num_vars() > 16 { return TestResult::discard() }
+        if cnf.clauses().len() > 16 { return TestResult::discard() }
 
-            // Setting up BDD
-            let mgr_bdd = super::BddManager::<AllTable<BddPtr>>::new_default_order(c1.num_vars());
-            let weight_map : HashMap<VarLabel, (RealSemiring, RealSemiring)> = HashMap::from_iter(
-                (0..16).map(|x| (VarLabel::new(x as u64), (RealSemiring(0.3), RealSemiring(0.7)))));
-            let cnf_bdd = mgr_bdd.from_cnf(&c1);
-            let vars = vec![VarLabel::new(0), VarLabel::new(2), VarLabel::new(4)];
-            if !c1.var_in_cnf(VarLabel::new(0))
-               || !c1.var_in_cnf(VarLabel::new(2))
-               || !c1.var_in_cnf(VarLabel::new(4)) {
-                return TestResult::discard()
-            }
-            let wmc = WmcParams::new_with_default(RealSemiring::zero(), RealSemiring::one(), weight_map);
+        let pm = PartialModel::new(0);
 
-            // Setting up SDD
-            let dtree = DTree::from_cnf(&c1, &VarOrder::linear_order(c1.num_vars()));
-            let vtree = VTree::from_dtree(&dtree).unwrap();
-            let mgr_sdd = super::CompressionSddManager::new(vtree);
-            let cnf_sdd = mgr_sdd.from_cnf(&c1);
+        let weight_map : HashMap<VarLabel, (RealSemiring, RealSemiring)> = HashMap::from_iter(
+            (0..16).map(|x| (VarLabel::new(x as u64), (RealSemiring(0.3), RealSemiring(0.7)))));
+        let vars = vec![VarLabel::new(0), VarLabel::new(2), VarLabel::new(4)];
+        if !cnf.var_in_cnf(VarLabel::new(0))
+           || !cnf.var_in_cnf(VarLabel::new(2))
+           || !cnf.var_in_cnf(VarLabel::new(4)) {
+            return TestResult::discard()
+        }
+        let join_vars = BitSet::from_iter(vars.iter().map(|x| x.value_usize()));
+        let wmc = WmcParams::new_with_default(RealSemiring::zero(), RealSemiring::one(), weight_map);
 
-            let pm = PartialModel::new(0);
-            let join_vars_bits = BitSet::from_iter(vars.iter().map(|x| x.value_usize()));
-            let join_vars_bits_clone = join_vars_bits.clone();
-            let join_vars_varset = VarSet::new_from_bitset(join_vars_bits);
-            let ub_bdd = cnf_bdd.bb_ub(&pm, &join_vars_bits_clone, &wmc);
-            let ub_sdd = cnf_sdd.ub(mgr_sdd.get_vtree_manager(), &wmc, &pm, &join_vars_varset);
+        let dtree = DTree::from_cnf(&cnf, &VarOrder::linear_order(cnf.num_vars()));
+        let vtree = VTree::from_dtree(&dtree).unwrap();
 
-            TestResult::from_bool(ub_bdd <= ub_sdd || (ub_bdd.0 - ub_sdd.0).abs() <= 0.000000001)
-      }
+        let mgr = super::CompressionSddManager::new(vtree);
+        let cnf_sdd = mgr.from_cnf(&cnf);
+        let sdd_res = cnf_sdd.ub(mgr.get_vtree_manager(), &wmc, &pm, &join_vars);
 
+        let bddmgr = BddManager::<AllTable<BddPtr>>::new_default_order(cnf.num_vars());
+        let cnf_bdd = bddmgr.from_cnf(&cnf);
+        let bdd_res = cnf_bdd.bb_ub(&pm, &join_vars, &wmc);
+
+        println!{"{:?}, {:?}", bdd_res, sdd_res};
+        TestResult::from_bool((bdd_res-sdd_res).0.abs() < 0.00001)
+        }
     }
+
+    // quickcheck! {
+    //     fn meu(c1: Cnf) -> TestResult {
+    //         let n = c1.num_vars();
+    //         // constrain the size, make BDD and SDD
+    //         if !(5..=8).contains(&n) { return TestResult::discard() }
+    //         if c1.clauses().len() > 14 { return TestResult::discard() }
+
+    //         let mgr_bdd = super::BddManager::<AllTable<BddPtr>>::new_default_order(n);
+    //         let cnf_bdd = mgr_bdd.from_cnf(&c1);
+
+    //         let dtree = DTree::from_cnf(&c1, &VarOrder::linear_order(c1.num_vars()));
+    //         let vtree = VTree::from_dtree(&dtree).unwrap();
+    //         let mgr_sdd = super::CompressionSddManager::new(vtree);
+    //         let cnf_sdd = mgr_sdd.from_cnf(&c1);
+
+    //         // randomizing the decisions
+    //         let mut rng = rand::thread_rng();
+    //         let decisions : Vec<VarLabel> = (0..3).map(|_| VarLabel::new(rng.gen_range(0..(n-2)) as u64)).collect();
+    //         if decisions[0] == decisions[1] || decisions[1] == decisions[2] || decisions[0] == decisions[2] {
+    //             return TestResult::discard()
+    //         }
+    //         if !c1.var_in_cnf(decisions[0])
+    //            || !c1.var_in_cnf(decisions[1])
+    //            || !c1.var_in_cnf(decisions[2]) {
+    //             return TestResult::discard()
+    //         }
+
+    //         // weight function and weight map
+    //         let probs : Vec<f64> = (0..n).map(|_| rng.gen_range(0.0..1.0)).collect();
+    //         let weight_fn = |x : usize| -> (VarLabel, (ExpectedUtility, ExpectedUtility)) {
+    //             let vx = VarLabel::new(x as u64);
+    //             if vx == decisions[0] || vx == decisions[1] || vx == decisions[2] {
+    //                 return (VarLabel::new(x as u64),
+    //                 (ExpectedUtility::one(), ExpectedUtility::one()))
+    //             }
+    //             if x == n-1 || x == n-2 {
+    //                 return (VarLabel::new(x as u64),
+    //                 (ExpectedUtility::one(), ExpectedUtility(1.0, 10.0)))
+    //             }
+    //             let pr = probs[x];
+    //             (vx, (ExpectedUtility(pr, 0.0), ExpectedUtility(1.0-pr, 0.0)))
+    //         };
+    //         let weight_map : HashMap<VarLabel, (ExpectedUtility, ExpectedUtility)> = HashMap::from_iter(
+    //             (0..n).map(&weight_fn));
+
+    //         // set up wmc, run meu on BDD
+    //         let vars = decisions.clone();
+    //         let wmc = WmcParams::new_with_default(ExpectedUtility::zero(), ExpectedUtility::one(), weight_map);
+    //         let (meu_bdd, _) = cnf_bdd.bb(&vars, n, &wmc);
+
+    //         // run meu on SDD
+    //         let vars2 = decisions.clone();
+    //         let (meu_sdd, _) = cnf_sdd.bb(mgr_sdd.get_vtree_manager(), &vars2, n, &wmc);
+            
+    //         println!("{}, {}", meu_bdd.1, meu_sdd.1);
+    //         TestResult::from_bool((meu_bdd.1 - meu_sdd.1).abs() <= 0.000000001)
+    //     }
+    // }
 
     // why does this exist?
     // well, I wasn't able to figure out how to generate a random permutation of vectors from 0..16 with quickcheck
