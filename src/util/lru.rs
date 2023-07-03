@@ -157,11 +157,3 @@ where
         r
     }
 }
-
-// #[test]
-// fn test_cache() {
-//     let mut c: Lru<u64, u64> = Lru::new(14);
-//     for i in 0..10000 {
-//         c.insert(i, i);
-//     }
-// }
