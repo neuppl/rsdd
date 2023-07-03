@@ -8,9 +8,15 @@ use crate::builder::BottomUpBuilder;
 use crate::repr::ddnnf::DDNNFPtr;
 use crate::repr::sdd::binary_sdd::BinarySDD;
 use crate::repr::sdd::sdd_or::{SddAnd, SddOr};
-use crate::repr::sdd::SddPtr;
+use crate::repr::sdd::SddPtr::{self, Var};
 use crate::repr::vtree::{VTree, VTreeIndex, VTreeManager};
 use crate::{repr::cnf::Cnf, repr::logical_expr::LogicalExpr, repr::var_label::VarLabel};
+
+#[derive(Default)]
+pub struct SddBuilderStats {
+    pub app_cache_hits: usize,
+    pub num_logically_redundant: usize,
+}
 
 pub trait SddBuilder<'a>: BottomUpBuilder<'a, SddPtr<'a>> {
     // internal data structures
@@ -106,10 +112,12 @@ pub trait SddBuilder<'a>: BottomUpBuilder<'a, SddPtr<'a>> {
         // check if this is a right-linear fragment and construct the relevant SDD type
         if self.get_vtree_manager().get_idx(lca).is_right_linear() {
             // a is a right-linear decision for b; construct a binary decision
-            let bdd = if a.is_neg_var() {
-                BinarySDD::new(a.get_var_label(), b, SddPtr::false_ptr(), lca)
-            } else {
-                BinarySDD::new(a.get_var_label(), SddPtr::false_ptr(), b, lca)
+            let bdd = match a {
+                Var(label, true) => BinarySDD::new(label, SddPtr::false_ptr(), b, lca),
+                Var(label, false) => BinarySDD::new(label, b, SddPtr::false_ptr(), lca),
+                _ => panic!(
+                    "Assumed that a is a right-linear decision for b, but a is not a variable"
+                ),
             };
             self.unique_bdd(bdd)
         } else {
@@ -131,7 +139,7 @@ pub trait SddBuilder<'a>: BottomUpBuilder<'a, SddPtr<'a>> {
             SddPtr::BDD(bdd) | SddPtr::ComplBDD(bdd) => {
                 let l = self.and(r.low(), d);
                 let h = self.and(r.high(), d);
-                self.unique_bdd(BinarySDD::new(bdd.label(), l, h, r.vtree()))
+                self.unique_bdd(BinarySDD::new(bdd.label(), l, h, bdd.vtree()))
             }
             SddPtr::Reg(or) | SddPtr::Compl(or) => {
                 let mut v: Vec<SddAnd> = Vec::with_capacity(or.nodes.len());
@@ -142,7 +150,7 @@ pub trait SddBuilder<'a>: BottomUpBuilder<'a, SddPtr<'a>> {
                     let new_s = self.and(root_s, d);
                     v.push(SddAnd::new(root_p, new_s));
                 }
-                self.canonicalize(v, r.vtree())
+                self.canonicalize(v, or.index())
             }
             _ => panic!("Called and_sub_desc() on a constant"),
         }
@@ -509,8 +517,7 @@ pub trait SddBuilder<'a>: BottomUpBuilder<'a, SddPtr<'a>> {
         String::from_utf8(w).unwrap()
     }
 
-    fn num_app_cache_hits(&self) -> usize;
-    fn num_logically_redundant(&self) -> usize;
+    fn stats(&self) -> SddBuilderStats;
 }
 
 impl<'a, T> BottomUpBuilder<'a, SddPtr<'a>> for T

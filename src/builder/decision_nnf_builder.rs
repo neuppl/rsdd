@@ -22,36 +22,8 @@ use crate::{
     },
 };
 
-// pub struct BddSemanticUniqueTableHasher<const P: u128> {
-//     map: WmcParams<FiniteField<P>>,
-//     order: VarOrder,
-// }
-
-// impl<const P: u128> BddSemanticUniqueTableHasher<P> {
-//     pub fn new(order: VarOrder, map: WmcParams<FiniteField<P>>) -> Self {
-//         Self { order, map }
-//     }
-// }
-
-// impl<'a, const P: u128> UniqueTableHasher<BddNode<'a>> for BddSemanticUniqueTableHasher<P> {
-//     fn u64hash(&self, elem: &BddNode) -> u64 {
-//         let mut hasher = FxHasher::default();
-
-//         let (low_w, high_w) = self.map.get_var_weight(elem.var);
-
-//         let raw = elem.low.semantic_hash(&self.order, &self.map).value() * low_w.value()
-//             + elem.high.semantic_hash(&self.order, &self.map).value() * high_w.value();
-
-//         raw.hash(&mut hasher);
-//         hasher.finish()
-//     }
-// }
-
 pub struct DecisionNNFBuilder<'a> {
     compute_table: RefCell<BackedRobinhoodTable<'a, BddNode<'a>>>,
-    // avoid hard-coding primes into impl
-    // hasher: BddSemanticUniqueTableHasher<100000049>,
-    // hasher: DefaultUniqueTableHasher,
     order: VarOrder,
 }
 
@@ -60,11 +32,6 @@ impl<'a> DecisionNNFBuilder<'a> {
         DecisionNNFBuilder {
             order,
             compute_table: RefCell::new(BackedRobinhoodTable::new()),
-            // hasher: DefaultUniqueTableHasher::default(),
-            // hasher: BddSemanticUniqueTableHasher {
-            //     map: create_semantic_hash_map(order.num_vars()),
-            //     order,
-            // },
         }
     }
 

@@ -14,7 +14,7 @@ use crate::repr::sdd::sdd_or::{SddAnd, SddOr};
 use crate::repr::sdd::SddPtr;
 use crate::repr::vtree::{VTree, VTreeIndex, VTreeManager};
 
-use super::builder::SddBuilder;
+use super::builder::{SddBuilder, SddBuilderStats};
 
 pub struct CompressionSddManager<'a> {
     vtree: VTreeManager,
@@ -131,14 +131,7 @@ impl<'a> SddBuilder<'a> for CompressionSddManager<'a> {
         bdds.chain(sdds).collect()
     }
 
-    // eventually, remove this
-    fn num_app_cache_hits(&self) -> usize {
-        self.bdd_tbl.borrow().hits() + self.sdd_tbl.borrow().hits()
-    }
-
-    /// computes the number of logically redundant nodes allocated by the
-    /// manager (nodes that have the same semantic hash)
-    fn num_logically_redundant(&self) -> usize {
+    fn stats(&self) -> super::builder::SddBuilderStats {
         let mut s: HashSet<u128> = HashSet::new();
         let hasher = create_semantic_hash_map::<100000000063>(self.num_vars() + 1000); // TODO FIX THIS BADNESS
         let mut num_collisions = 0;
@@ -149,7 +142,11 @@ impl<'a> SddBuilder<'a> for CompressionSddManager<'a> {
             }
             s.insert(h.value());
         }
-        num_collisions
+
+        SddBuilderStats {
+            app_cache_hits: self.bdd_tbl.borrow().hits() + self.sdd_tbl.borrow().hits(),
+            num_logically_redundant: num_collisions,
+        }
     }
 }
 

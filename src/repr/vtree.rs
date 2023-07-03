@@ -41,7 +41,7 @@ impl VTree {
         }
     }
 
-    /// panics if the vtree contains redundant variables; used for debug assertions
+    /// returns true if the vtree contains redundant variables
     fn check_redundant_vars(&self, s: &mut HashSet<usize>) -> bool {
         match self {
             BTree::Leaf(v) => {
@@ -56,12 +56,32 @@ impl VTree {
     }
 
     /// produces a left-linear vtree with the variable order given by `order`
+    /// ```
+    /// # use rsdd::repr::var_label::VarLabel;
+    /// # use rsdd::repr::var_order::VarOrder;
+    /// # use rsdd::repr::vtree::VTree;
+    ///
+    /// let v0 = VarLabel::new_usize(0);
+    /// let v1 = VarLabel::new_usize(1);
+    /// let v2 = VarLabel::new_usize(2);
+    ///
+    /// let v = VTree::new_node(
+    ///   Box::new(VTree::new_node(
+    ///     Box::new(VTree::new_leaf(v0)),
+    ///     Box::new(VTree::new_leaf(v1))
+    ///   )),
+    ///   Box::new(VTree::new_leaf(v2)),
+    /// );
+    ///
+    /// let t = VTree::left_linear(&[v0, v1, v2]);
+    /// assert_eq!(t, v);
+    /// ```
     pub fn left_linear(order: &[VarLabel]) -> VTree {
         match order {
             [x] => BTree::Leaf(*x),
-            [cur, rest @ ..] => {
+            [rest @ .., last] => {
                 let l_tree = Self::left_linear(rest);
-                let r_tree = BTree::Leaf(*cur);
+                let r_tree = BTree::Leaf(*last);
                 BTree::Node((), Box::new(l_tree), Box::new(r_tree))
             }
             [] => panic!("invalid left_linear on empty list"),
@@ -69,6 +89,26 @@ impl VTree {
     }
 
     /// produces a right-linear vtree with the variable order given by `order`
+    /// ```
+    /// # use rsdd::repr::var_label::VarLabel;
+    /// # use rsdd::repr::var_order::VarOrder;
+    /// # use rsdd::repr::vtree::VTree;
+    ///
+    /// let v0 = VarLabel::new_usize(0);
+    /// let v1 = VarLabel::new_usize(1);
+    /// let v2 = VarLabel::new_usize(2);
+    ///
+    /// let v = VTree::new_node(
+    ///   Box::new(VTree::new_leaf(v0)),
+    ///   Box::new(VTree::new_node(
+    ///     Box::new(VTree::new_leaf(v1)),
+    ///     Box::new(VTree::new_leaf(v2))
+    ///   ))
+    /// );
+    ///
+    /// let t = VTree::right_linear(&[v0, v1, v2]);
+    /// assert_eq!(t, v);
+    /// ```
     pub fn right_linear(order: &[VarLabel]) -> VTree {
         match order {
             [x] => BTree::Leaf(*x),
