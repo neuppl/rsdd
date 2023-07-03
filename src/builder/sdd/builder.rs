@@ -12,6 +12,12 @@ use crate::repr::sdd::SddPtr::{self, Var};
 use crate::repr::vtree::{VTree, VTreeIndex, VTreeManager};
 use crate::{repr::cnf::Cnf, repr::logical_expr::LogicalExpr, repr::var_label::VarLabel};
 
+#[derive(Default)]
+pub struct SddBuilderStats {
+    pub app_cache_hits: usize,
+    pub num_logically_redundant: usize,
+}
+
 pub trait SddBuilder<'a>: BottomUpBuilder<'a, SddPtr<'a>> {
     // internal data structures
     fn get_vtree_manager(&self) -> &VTreeManager;
@@ -511,8 +517,7 @@ pub trait SddBuilder<'a>: BottomUpBuilder<'a, SddPtr<'a>> {
         String::from_utf8(w).unwrap()
     }
 
-    fn num_app_cache_hits(&self) -> usize;
-    fn num_logically_redundant(&self) -> usize;
+    fn stats(&self) -> SddBuilderStats;
 }
 
 impl<'a, T> BottomUpBuilder<'a, SddPtr<'a>> for T

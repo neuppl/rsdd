@@ -16,7 +16,7 @@ use crate::repr::vtree::{VTree, VTreeIndex, VTreeManager};
 use crate::repr::wmc::WmcParams;
 use crate::util::semiring::FiniteField;
 
-use super::builder::SddBuilder;
+use super::builder::{SddBuilder, SddBuilderStats};
 
 pub struct SemanticSddManager<'a, const P: u128> {
     vtree: VTreeManager,
@@ -117,7 +117,7 @@ impl<'a, const P: u128> SddBuilder<'a> for SemanticSddManager<'a, P> {
         self.unique_or(node, table)
     }
 
-    fn num_logically_redundant(&self) -> usize {
+    fn stats(&self) -> SddBuilderStats {
         let mut s: HashSet<u128> = HashSet::new();
         let mut num_collisions = 0;
         for n in self.node_iter() {
@@ -127,12 +127,11 @@ impl<'a, const P: u128> SddBuilder<'a> for SemanticSddManager<'a, P> {
             }
             s.insert(h.value());
         }
-        num_collisions
-    }
 
-    // eventually, remove this
-    fn num_app_cache_hits(&self) -> usize {
-        self.bdd_tbl.borrow().hits() + self.sdd_tbl.borrow().hits()
+        SddBuilderStats {
+            app_cache_hits: self.bdd_tbl.borrow().hits() + self.sdd_tbl.borrow().hits(),
+            num_logically_redundant: num_collisions,
+        }
     }
 }
 
