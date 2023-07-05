@@ -85,8 +85,6 @@ impl BddManagerStats {
 }
 
 pub trait BddBuilder<'a>: BottomUpBuilder<'a, BddPtr<'a>> {
-    fn eq_bdd(&self, a: BddPtr, b: BddPtr) -> bool;
-
     fn get_or_insert(&'a self, bdd: BddNode<'a>) -> BddPtr<'a>;
 
     // implementation-dependent helper functions
@@ -212,10 +210,6 @@ pub struct BddManager<'a, T: LruTable<'a, BddPtr<'a>>> {
 }
 
 impl<'a, T: LruTable<'a, BddPtr<'a>>> BddBuilder<'a> for BddManager<'a, T> {
-    fn eq_bdd(&self, a: BddPtr, b: BddPtr) -> bool {
-        a == b
-    }
-
     /// Normalizes and fetches a node from the store
     fn get_or_insert(&'a self, bdd: BddNode<'a>) -> BddPtr<'a> {
         unsafe {
@@ -665,7 +659,7 @@ mod tests {
     use maplit::*;
 
     use crate::{
-        builder::bdd_builder::{BddBuilder, BddManager},
+        builder::bdd_builder::BddManager,
         repr::{cnf::Cnf, robdd::BddPtr, var_label::VarLabel},
     };
 
@@ -678,7 +672,7 @@ mod tests {
         let r1 = man.or(v1, v2);
         let r2 = man.and(r1, v1);
         assert!(
-            man.eq_bdd(v1, r2),
+            man.eq(v1, r2),
             "Not eq:\n {}\n{}",
             v1.to_string_debug(),
             r2.to_string_debug()
@@ -693,7 +687,7 @@ mod tests {
         let r1 = man.or(v1, v2);
         let r2 = man.ite(r1, v1, BddPtr::false_ptr());
         assert!(
-            man.eq_bdd(v1, r2),
+            man.eq(v1, r2),
             "Not eq:\n {}\n{}",
             v1.to_string_debug(),
             r2.to_string_debug()
@@ -710,7 +704,7 @@ mod tests {
         let r1 = man.or(v1, v2);
         let r2 = man.and(r1, v1);
         assert!(
-            man.eq_bdd(v1, r2),
+            man.eq(v1, r2),
             "Not eq:\n {}\n{}",
             v1.to_string_debug(),
             r2.to_string_debug()
@@ -738,7 +732,7 @@ mod tests {
         let v2 = man.var(VarLabel::new(1), true);
         let r1 = man.or(v1, v2);
         let r3 = man.condition(r1, VarLabel::new(1), false);
-        assert!(man.eq_bdd(r3, v1));
+        assert!(man.eq(r3, v1));
     }
 
     #[test]
@@ -749,7 +743,7 @@ mod tests {
         let r1 = man.and(v1, v2);
         let r3 = man.condition(r1, VarLabel::new(1), false);
         assert!(
-            man.eq_bdd(r3, v1),
+            man.eq(r3, v1),
             "Not eq:\nOne: {}\nTwo: {}",
             r3.to_string_debug(),
             v1.to_string_debug()
@@ -768,7 +762,7 @@ mod tests {
         let r_expected = man.and(v1, v3);
         let res = man.exists(r1, VarLabel::new(1));
         assert!(
-            man.eq_bdd(r_expected, res),
+            man.eq(r_expected, res),
             "Got:\nOne: {}\nExpected: {}",
             res.to_string_debug(),
             r_expected.to_string_debug()
@@ -788,7 +782,7 @@ mod tests {
         let res = man.exists(r1, VarLabel::new(1));
         // let res = r1;
         assert!(
-            man.eq_bdd(r_expected, res),
+            man.eq(r_expected, res),
             "Got:\n: {}\nExpected: {}",
             res.to_string_debug(),
             r_expected.to_string_debug()
@@ -805,7 +799,7 @@ mod tests {
         let v0_and_v2 = man.and(v0, v2);
         let res = man.compose(v0_and_v1, VarLabel::new(1), v2);
         assert!(
-            man.eq_bdd(res, v0_and_v2),
+            man.eq(res, v0_and_v2),
             "\nGot: {}\nExpected: {}",
             res.to_string_debug(),
             v0_and_v2.to_string_debug()
@@ -824,7 +818,7 @@ mod tests {
         let v0v2v3 = man.and(v0, v2_and_v3);
         let res = man.compose(v0_and_v1, VarLabel::new(1), v2_and_v3);
         assert!(
-            man.eq_bdd(res, v0v2v3),
+            man.eq(res, v0v2v3),
             "\nGot: {}\nExpected: {}",
             res.to_string_debug(),
             v0v2v3.to_string_debug()
@@ -841,7 +835,7 @@ mod tests {
         let res = man.compose(f, VarLabel::new(1), v2);
         let expected = man.ite(v0, BddPtr::false_ptr(), v2);
         assert!(
-            man.eq_bdd(res, expected),
+            man.eq(res, expected),
             "\nGot: {}\nExpected: {}",
             res.to_string_debug(),
             expected.to_string_debug()
@@ -858,7 +852,7 @@ mod tests {
         let res = man.compose(f, VarLabel::new(6), v0);
         let expected = man.ite(v1, BddPtr::false_ptr(), v0);
         assert!(
-            man.eq_bdd(res, expected),
+            man.eq(res, expected),
             "\nGot: {}\nExpected: {}",
             res.to_string_debug(),
             expected.to_string_debug()
@@ -875,7 +869,7 @@ mod tests {
         let r1 = man.and(v1, v2);
         let r3 = man.condition(r1, VarLabel::new(1), false);
         assert!(
-            man.eq_bdd(r3, v1),
+            man.eq(r3, v1),
             "Not eq:\nOne: {}\nTwo: {}",
             r3.to_string_debug(),
             v1.to_string_debug()
@@ -895,7 +889,7 @@ mod tests {
 
         let expected = man.and(x, yp);
         assert!(
-            man.eq_bdd(res, expected),
+            man.eq(res, expected),
             "Not eq:\nGot: {}\nExpected: {}",
             res.to_string_debug(),
             expected.to_string_debug()
@@ -915,7 +909,7 @@ mod tests {
         let res = man.condition(r2, VarLabel::new(1), true); // condition on y=T
         let expected = BddPtr::false_ptr();
         assert!(
-            man.eq_bdd(res, expected),
+            man.eq(res, expected),
             "\nOriginal BDD: {}\nNot eq:\nGot: {}\nExpected: {}",
             r2.to_string_debug(),
             res.to_string_debug(),

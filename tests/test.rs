@@ -257,7 +257,7 @@ fn test_bdd_canonicity() {
         let r1 = man.from_cnf(&cnf1);
         let r2 = man.from_cnf(&cnf2);
         assert!(
-            builder::bdd_builder::BddBuilder::eq_bdd(&man, r1, r2),
+            builder::BottomUpBuilder::eq(&man, r1, r2),
             "Not eq\nCNF 1: {:?}\nCNF 2: {:?}\nBDD 1:{}\n BDD 2: {}",
             cnf1,
             cnf2,

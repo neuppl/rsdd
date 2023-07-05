@@ -259,5 +259,5 @@
 
 //     let dec = man2.or_lst(&[t1_d, t2_d, t3_d, b1_d, b2_d, b3_d]);
 
-//     assert!(man2.eq_bdd(dec, decs));
+//     assert!(man2.eq(dec, decs));
 // }
