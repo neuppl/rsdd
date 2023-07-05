@@ -137,6 +137,10 @@ where
         }
     }
 
+    fn eq(&'a self, a: BddPtr<'a>, b: BddPtr<'a>) -> bool {
+        a == b
+    }
+
     /// Produce a new BDD that is the result of conjoining `f` and `g`
     /// ```
     /// # use rsdd::builder::bdd_builder::BddManager;
