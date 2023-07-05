@@ -18,6 +18,10 @@ pub trait BottomUpBuilder<'a, Ptr> {
     fn var(&'a self, label: VarLabel, polarity: bool) -> Ptr;
 
     // primitive operations
+
+    /// Test for *semantic equality* (not pointer/structural equality)
+    fn eq(&'a self, a: Ptr, b: Ptr) -> bool;
+
     fn and(&'a self, a: Ptr, b: Ptr) -> Ptr;
 
     /// Compute the Boolean function `f || g`

@@ -84,7 +84,7 @@ pub trait SddBuilder<'a>: BottomUpBuilder<'a, SddPtr<'a>> {
     }
 
     fn unique_bdd(&'a self, bdd: BinarySDD<'a>) -> SddPtr<'a> {
-        if bdd.high() == bdd.low() {
+        if self.sdd_eq(bdd.high(), bdd.low()) {
             return bdd.high();
         }
         if self.is_false(bdd.high()) && self.is_true(bdd.low()) {
@@ -542,6 +542,10 @@ where
     #[inline]
     fn negate(&'a self, f: SddPtr<'a>) -> SddPtr<'a> {
         f.neg()
+    }
+
+    fn eq(&'a self, a: SddPtr<'a>, b: SddPtr<'a>) -> bool {
+        self.sdd_eq(a, b)
     }
 
     fn and(&'a self, a: SddPtr<'a>, b: SddPtr<'a>) -> SddPtr<'a> {
