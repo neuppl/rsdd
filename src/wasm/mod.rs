@@ -9,7 +9,8 @@ use crate::repr::{cnf::Cnf, var_label::VarLabel, vtree::VTree};
 use crate::serialize::ser_sdd::SDDSerializer;
 use crate::serialize::ser_vtree::VTreeSerializer;
 use crate::serialize::{ser_bdd, ser_sdd, ser_vtree};
-use crate::util::semiring::{RealSemiring, Semiring};
+use crate::util::semirings::realsemiring::RealSemiring;
+use crate::util::semirings::semiring_traits::Semiring;
 use wasm_bindgen::prelude::*;
 
 #[derive(Serialize, Deserialize)]

@@ -9,8 +9,9 @@ pub use super::{
 };
 use crate::{
     repr::var_label::VarSet,
-    util::semiring::RealSemiring,
-    util::semiring::{BBAlgebra, ExpectedUtility, JoinSemilattice},
+    util::semirings::expectation::ExpectedUtility,
+    util::semirings::realsemiring::RealSemiring,
+    util::semirings::semiring_traits::{BBSemiring, JoinSemilattice},
 };
 use bit_set::BitSet;
 use core::fmt::Debug;
@@ -675,7 +676,7 @@ impl<'a> BddPtr<'a> {
 
     /// Below is experimental code with a generic branch and bound for T a BBAlgebra.
     /// upper-bounding the expected utility, for meu_h
-    fn bb_ub<T: BBAlgebra>(
+    fn bb_ub<T: BBSemiring>(
         &self,
         partial_join_assgn: &PartialModel,
         join_vars: &BitSet,
@@ -724,7 +725,7 @@ impl<'a> BddPtr<'a> {
         partial_join_acc * v
     }
 
-    fn bb_h<T: BBAlgebra>(
+    fn bb_h<T: BBSemiring>(
         &self,
         cur_lb: T,
         cur_best: PartialModel,
@@ -742,7 +743,7 @@ impl<'a> BddPtr<'a> {
                 let empty_join_vars = BitSet::new();
                 let possible_best = self.bb_ub(&cur_assgn, &empty_join_vars, wmc);
                 // If it's a better lb, update.
-                let best = BBAlgebra::choose(&cur_lb, &possible_best);
+                let best = BBSemiring::choose(&cur_lb, &possible_best);
                 if cur_lb == best {
                     (cur_lb, cur_best)
                 } else {
@@ -766,7 +767,7 @@ impl<'a> BddPtr<'a> {
                 let false_ub = self.bb_ub(&false_model, &join_vars_bits, wmc);
 
                 // arbitrarily order the T/F bounds
-                let order = if true_ub == BBAlgebra::choose(&true_ub, &false_ub) {
+                let order = if true_ub == BBSemiring::choose(&true_ub, &false_ub) {
                     [(true_ub, true_model), (false_ub, false_model)]
                 } else {
                     [(false_ub, false_model), (true_ub, true_model)]
@@ -777,7 +778,7 @@ impl<'a> BddPtr<'a> {
                     if !PartialOrd::le(&upper_bound, &cur_lb) {
                         let (rec, rec_pm) =
                             self.bb_h(best_lb, best_model.clone(), end, wmc, partialmodel.clone());
-                        let new_lb = BBAlgebra::choose(&cur_lb, &rec);
+                        let new_lb = BBSemiring::choose(&cur_lb, &rec);
                         if new_lb == rec {
                             (best_lb, best_model) = (rec, rec_pm);
                         } else {
@@ -791,7 +792,7 @@ impl<'a> BddPtr<'a> {
     }
 
     /// branch and bound generic over T a BBAlgebra.
-    pub fn bb<T: BBAlgebra>(
+    pub fn bb<T: BBSemiring>(
         &self,
         join_vars: &[VarLabel],
         num_vars: usize,

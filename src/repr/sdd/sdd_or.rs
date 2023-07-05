@@ -9,7 +9,7 @@ use crate::{
         vtree::{VTreeIndex, VTreeManager},
         wmc::WmcParams,
     },
-    util::semiring::FiniteField,
+    util::semirings::finitefield::FiniteField,
 };
 
 use super::SddPtr::{self, Compl, ComplBDD, PtrFalse, PtrTrue, Reg, Var, BDD};
