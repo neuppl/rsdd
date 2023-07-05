@@ -426,7 +426,7 @@ fn sdd_circuit2() {
 #[test]
 fn sdd_wmc1() {
     use crate::builder::bdd_builder::VarLabel;
-    use crate::util::semiring::RealSemiring;
+    use crate::util::semirings::realsemiring::RealSemiring;
     // modeling the formula (x<=>fx) && (y<=>fy), with f weight of 0.5
 
     // let vtree = VTree::right_linear(

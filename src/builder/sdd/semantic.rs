@@ -14,7 +14,7 @@ use crate::repr::sdd::sdd_or::{SddAnd, SddOr};
 use crate::repr::sdd::SddPtr;
 use crate::repr::vtree::{VTree, VTreeIndex, VTreeManager};
 use crate::repr::wmc::WmcParams;
-use crate::util::semiring::FiniteField;
+use crate::util::semirings::finitefield::FiniteField;
 
 use super::builder::{SddBuilder, SddBuilderStats};
 
@@ -213,7 +213,7 @@ fn prob_equiv_sdd_demorgan() {
     use crate::repr::robdd::create_semantic_hash_map;
     use crate::repr::robdd::WmcParams;
     use crate::repr::var_label::VarLabel;
-    use crate::util::semiring::FiniteField;
+    use crate::util::semirings::finitefield::FiniteField;
 
     let mut man = SemanticSddManager::<100000049>::new(VTree::even_split(
         &[
