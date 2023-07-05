@@ -8,7 +8,7 @@ use crate::repr::cnf::Cnf;
 use crate::repr::var_label::VarLabel;
 use rsdd::builder::bdd_builder::BddManager;
 use rsdd::builder::cache::all_app::AllTable;
-use rsdd::builder::sdd_builder::{CompressionSddManager, SddBuilder};
+use rsdd::builder::sdd::{builder::SddBuilder, compression::CompressionSddManager};
 use rsdd::repr::robdd::BddPtr;
 use rsdd::repr::vtree::VTree;
 use rsdd::*;
@@ -323,7 +323,7 @@ mod test_bdd_manager {
     use rand::Rng;
     use rsdd::builder::cache::all_app::AllTable;
     use rsdd::builder::cache::lru_app::BddApplyTable;
-    use rsdd::builder::sdd_builder::SddBuilder;
+    use rsdd::builder::sdd::builder::SddBuilder;
     use rsdd::repr::ddnnf::{create_semantic_hash_map, DDNNFPtr};
     use rsdd::repr::dtree::DTree;
     use rsdd::repr::model::PartialModel;
@@ -701,7 +701,9 @@ mod test_sdd_manager {
     use rand::seq::SliceRandom;
     use rand::SeedableRng;
     use rsdd::builder::cache::all_app::AllTable;
-    use rsdd::builder::sdd_builder::{CompressionSddManager, SddBuilder, SemanticSddManager};
+    use rsdd::builder::sdd::{
+        builder::SddBuilder, compression::CompressionSddManager, semantic::SemanticSddManager,
+    };
     use rsdd::repr::ddnnf::{create_semantic_hash_map, DDNNFPtr};
     use rsdd::repr::dtree::DTree;
     use rsdd::repr::robdd::BddPtr;

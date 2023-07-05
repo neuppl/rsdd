@@ -3,7 +3,7 @@ name: Deploy cargo doc to Pages
 
 on:
   push:
-    branches: ["master"]
+    branches: ["main"]
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
 
@@ -34,10 +34,17 @@ jobs:
         run: RUSTDOCFLAGS="-D warnings --cfg docsrs" cargo doc --workspace --no-deps --all-features
       - name: glue in an index
         run: echo "<meta http-equiv=\"refresh\" content=\"0; url=rsdd\">" > target/doc/index.html
+      - name: Force correct file permissions
+        run: |
+          chmod -c +rX "target/doc/.lock" &
+          chmod -c -R +rX "target/doc" |
+          while read line; do
+            echo "::warning title=Invalid file permissions automatically fixed::$line"
+          done
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v1
         with:
           path: 'target/doc'
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v1
+        uses: actions/deploy-pages@v2

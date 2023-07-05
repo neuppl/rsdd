@@ -8,7 +8,7 @@ pub mod cache;
 pub mod bdd_builder;
 pub mod bdd_plan;
 pub mod decision_nnf_builder;
-pub mod sdd_builder;
+pub mod sdd;
 
 pub trait BottomUpBuilder<'a, Ptr> {
     // constants --- can elide the input lifetimes

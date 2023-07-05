@@ -1307,7 +1307,7 @@ fn sdd_circuit2() {
 
 #[test]
 fn sdd_wmc1() {
-    use crate::util::semirings::realsemiring::RealSemiring;
+    use crate::util::semiring::RealSemiring;
     // modeling the formula (x<=>fx) && (y<=>fy), with f weight of 0.5
 
     // let vtree = VTree::right_linear(
@@ -1357,7 +1357,7 @@ fn sdd_wmc1() {
 fn prob_equiv_sdd_demorgan() {
     use crate::repr::robdd::create_semantic_hash_map;
     use crate::repr::robdd::WmcParams;
-    use crate::util::semirings::finitefield::FiniteField;
+    use crate::util::semiring::FiniteField;
 
     let mut man = SemanticSddManager::<100000049>::new(VTree::even_split(
         &[

@@ -151,13 +151,6 @@ impl<'a> SddPtr<'a> {
         matches!(self, Var(_, true))
     }
 
-    pub fn get_var_label(&self) -> VarLabel {
-        match &self {
-            Var(v, _b) => *v,
-            _ => panic!("called get_var on non var"),
-        }
-    }
-
     #[inline]
     pub fn is_bdd(&self) -> bool {
         matches!(self, BDD(_) | ComplBDD(_))
@@ -191,16 +184,6 @@ impl<'a> SddPtr<'a> {
     /// panics if not an or-node
     pub fn node_iter(&self) -> impl Iterator<Item = SddAnd<'a>> {
         SddNodeIter::new(*self)
-    }
-
-    /// returns number of (prime, sub) pairs this node points to
-    /// panics if not an or-node or const
-    pub fn num_nodes(&self) -> usize {
-        match self {
-            PtrTrue | PtrFalse | Var(_, _) => 1,
-            BDD(_) | ComplBDD(_) => 2,
-            Reg(or) | Compl(or) => or.nodes.len(),
-        }
     }
 
     /// gets the total number of nodes that are a child to this SDD
@@ -495,7 +478,8 @@ fn is_trimmed_trivial() {
 
 #[test]
 fn is_trimmed_simple_demorgan() {
-    use crate::builder::sdd_builder::*;
+    use crate::builder::sdd::compression::CompressionSddManager;
+    use crate::builder::BottomUpBuilder;
     let man = CompressionSddManager::new(crate::repr::vtree::VTree::even_split(
         &[
             VarLabel::new(0),
@@ -526,7 +510,8 @@ fn is_canonical_trivial() {
 
 #[test]
 fn is_canonical_simple_demorgan() {
-    use crate::builder::sdd_builder::*;
+    use crate::builder::sdd::compression::CompressionSddManager;
+    use crate::builder::BottomUpBuilder;
     let man = CompressionSddManager::new(crate::repr::vtree::VTree::even_split(
         &[
             VarLabel::new(0),
