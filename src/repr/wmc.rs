@@ -1,6 +1,8 @@
 use core::fmt::Debug;
 use std::collections::HashMap;
 
+pub use crate::util::semiring::FiniteField;
+pub use crate::util::semiring::RealSemiring;
 use crate::util::semiring::Semiring;
 
 use super::var_label::{Literal, VarLabel};
@@ -44,7 +46,7 @@ impl<T: Semiring + std::ops::Mul<Output = T> + std::ops::Add<Output = T>> WmcPar
         }
     }
 
-    /// get the weight of an asignment
+    /// get the weight of an assignment
     pub fn get_weight(&self, assgn: &[Literal]) -> T {
         let mut prod = self.one;
         for lit in assgn.iter() {

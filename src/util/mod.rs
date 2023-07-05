@@ -1,6 +1,7 @@
 //! Useful utilities and generic data structures used throughout the library
 
 pub mod btree;
+#[cfg(feature = "hypergraph")]
 pub mod hypergraph;
 pub mod lru;
 pub mod semiring;
