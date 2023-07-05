@@ -69,16 +69,16 @@ impl Assignment {
 
 /// An auxiliary data structure for tracking statistics about BDD manager
 /// performance (for fine-tuning)
-struct BddManagerStats {
+struct BddBuilderStats {
     /// For now, always track the number of recursive calls. In the future,
     /// this should probably be gated behind a debug build (since I suspect
     /// it may have non-trivial performance overhead and synchronization cost)
     num_recursive_calls: usize,
 }
 
-impl BddManagerStats {
-    pub fn new() -> BddManagerStats {
-        BddManagerStats {
+impl BddBuilderStats {
+    pub fn new() -> BddBuilderStats {
+        BddBuilderStats {
             num_recursive_calls: 0,
         }
     }
@@ -141,13 +141,13 @@ where
 
     /// Produce a new BDD that is the result of conjoining `f` and `g`
     /// ```
-    /// # use rsdd::builder::bdd_builder::BddManager;
+    /// # use rsdd::builder::bdd_builder::StandardBddBuilder;
     /// # use rsdd::builder::BottomUpBuilder;
     /// # use rsdd::repr::var_label::VarLabel;
-    /// # use crate::rsdd::repr::ddnnf::DDNNFPtr;
+    /// # use rsdd::repr::ddnnf::DDNNFPtr;
     /// # use rsdd::builder::cache::all_app::AllTable;
     /// # use rsdd::repr::robdd::BddPtr;
-    /// let mut man = BddManager::<AllTable<BddPtr>>::new_default_order(10);
+    /// let mut man = StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(10);
     /// let lbl_a = man.new_label();
     /// let a = man.var(lbl_a, true);
     /// let a_and_not_a = man.and(a, a.neg());
@@ -202,14 +202,14 @@ where
     }
 }
 
-pub struct BddManager<'a, T: LruTable<'a, BddPtr<'a>>> {
+pub struct StandardBddBuilder<'a, T: LruTable<'a, BddPtr<'a>>> {
     compute_table: RefCell<BackedRobinhoodTable<'a, BddNode<'a>>>,
     apply_table: RefCell<T>,
-    stats: RefCell<BddManagerStats>,
+    stats: RefCell<BddBuilderStats>,
     order: RefCell<VarOrder>,
 }
 
-impl<'a, T: LruTable<'a, BddPtr<'a>>> BddBuilder<'a> for BddManager<'a, T> {
+impl<'a, T: LruTable<'a, BddPtr<'a>>> BddBuilder<'a> for StandardBddBuilder<'a, T> {
     /// Normalizes and fetches a node from the store
     fn get_or_insert(&'a self, bdd: BddNode<'a>) -> BddPtr<'a> {
         unsafe {
@@ -277,25 +277,25 @@ impl<'a, T: LruTable<'a, BddPtr<'a>>> BddBuilder<'a> for BddManager<'a, T> {
     }
 }
 
-impl<'a, T: LruTable<'a, BddPtr<'a>>> BddManager<'a, T> {
+impl<'a, T: LruTable<'a, BddPtr<'a>>> StandardBddBuilder<'a, T> {
     /// Make a BDD manager with a default variable ordering
-    pub fn new_default_order(num_vars: usize) -> BddManager<'a, AllTable<BddPtr<'a>>> {
+    pub fn new_default_order(num_vars: usize) -> StandardBddBuilder<'a, AllTable<BddPtr<'a>>> {
         let default_order = VarOrder::linear_order(num_vars);
-        BddManager::new(default_order, AllTable::new())
+        StandardBddBuilder::new(default_order, AllTable::new())
     }
 
-    pub fn new_default_order_lru(num_vars: usize) -> BddManager<'a, BddApplyTable<BddPtr<'a>>> {
+    pub fn new_default_order_lru(num_vars: usize) -> StandardBddBuilder<'a, BddApplyTable<BddPtr<'a>>> {
         let default_order = VarOrder::linear_order(num_vars);
-        BddManager::new(default_order, BddApplyTable::new(21))
+        StandardBddBuilder::new(default_order, BddApplyTable::new(21))
     }
 
     /// Creates a new variable manager with the specified order
-    pub fn new(order: VarOrder, table: T) -> BddManager<'a, T> {
-        BddManager {
+    pub fn new(order: VarOrder, table: T) -> StandardBddBuilder<'a, T> {
+        StandardBddBuilder {
             compute_table: RefCell::new(BackedRobinhoodTable::new()),
             order: RefCell::new(order),
             apply_table: RefCell::new(table),
-            stats: RefCell::new(BddManagerStats::new()),
+            stats: RefCell::new(BddBuilderStats::new()),
         }
     }
 
@@ -544,7 +544,7 @@ impl<'a, T: LruTable<'a, BddPtr<'a>>> BddManager<'a, T> {
         // now cvec has a list of all the clauses; collapse it down
         fn helper<'a, T: LruTable<'a, BddPtr<'a>>>(
             vec: &[BddPtr<'a>],
-            man: &'a BddManager<'a, T>,
+            man: &'a StandardBddBuilder<'a, T>,
         ) -> Option<BddPtr<'a>> {
             if vec.is_empty() {
                 None
@@ -639,7 +639,7 @@ impl<'a, T: LruTable<'a, BddPtr<'a>>> BddManager<'a, T> {
         }
     }
 
-    /// Prints the total number of recursive calls executed so far by the BddManager
+    /// Prints the total number of recursive calls executed so far by the StandardBddBuilder
     /// This is a stable way to track performance
     pub fn num_recursive_calls(&self) -> usize {
         self.stats.borrow().num_recursive_calls
@@ -659,14 +659,14 @@ mod tests {
     use maplit::*;
 
     use crate::{
-        builder::bdd_builder::BddManager,
+        builder::bdd_builder::StandardBddBuilder,
         repr::{cnf::Cnf, robdd::BddPtr, var_label::VarLabel},
     };
 
     // check that (a \/ b) /\ a === a
     #[test]
     fn simple_equality() {
-        let man = BddManager::<AllTable<BddPtr>>::new_default_order(3);
+        let man = StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(3);
         let v1 = man.var(VarLabel::new(0), true);
         let v2 = man.var(VarLabel::new(1), true);
         let r1 = man.or(v1, v2);
@@ -681,7 +681,7 @@ mod tests {
 
     #[test]
     fn simple_ite1() {
-        let man = BddManager::<AllTable<BddPtr>>::new_default_order(3);
+        let man = StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(3);
         let v1 = man.var(VarLabel::new(0), true);
         let v2 = man.var(VarLabel::new(1), true);
         let r1 = man.or(v1, v2);
@@ -696,7 +696,7 @@ mod tests {
 
     #[test]
     fn test_newvar() {
-        let man = BddManager::<AllTable<BddPtr>>::new_default_order(0);
+        let man = StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(0);
         let l1 = man.new_label();
         let l2 = man.new_label();
         let v1 = man.var(l1, true);
@@ -713,7 +713,7 @@ mod tests {
 
     #[test]
     fn test_wmc() {
-        let man = BddManager::<AllTable<BddPtr>>::new_default_order(2);
+        let man = StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(2);
         let v1 = man.var(VarLabel::new(0), true);
         let v2 = man.var(VarLabel::new(1), true);
         let r1 = man.or(v1, v2);
@@ -727,7 +727,7 @@ mod tests {
 
     #[test]
     fn test_condition() {
-        let man = BddManager::<AllTable<BddPtr>>::new_default_order(3);
+        let man = StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(3);
         let v1 = man.var(VarLabel::new(0), true);
         let v2 = man.var(VarLabel::new(1), true);
         let r1 = man.or(v1, v2);
@@ -737,7 +737,7 @@ mod tests {
 
     #[test]
     fn test_condition_compl() {
-        let man = BddManager::<AllTable<BddPtr>>::new_default_order(3);
+        let man = StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(3);
         let v1 = man.var(VarLabel::new(0), false);
         let v2 = man.var(VarLabel::new(1), false);
         let r1 = man.and(v1, v2);
@@ -752,7 +752,7 @@ mod tests {
 
     #[test]
     fn test_exist() {
-        let man = BddManager::<AllTable<BddPtr>>::new_default_order(3);
+        let man = StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(3);
         // 1 /\ 2 /\ 3
         let v1 = man.var(VarLabel::new(0), true);
         let v2 = man.var(VarLabel::new(1), true);
@@ -771,7 +771,7 @@ mod tests {
 
     #[test]
     fn test_exist_compl() {
-        let man = BddManager::<AllTable<BddPtr>>::new_default_order(3);
+        let man = StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(3);
         // 1 /\ 2 /\ 3
         let v1 = man.var(VarLabel::new(0), false);
         let v2 = man.var(VarLabel::new(1), false);
@@ -791,7 +791,7 @@ mod tests {
 
     #[test]
     fn test_compose() {
-        let man = BddManager::<AllTable<BddPtr>>::new_default_order(3);
+        let man = StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(3);
         let v0 = man.var(VarLabel::new(0), true);
         let v1 = man.var(VarLabel::new(1), true);
         let v2 = man.var(VarLabel::new(2), true);
@@ -808,7 +808,7 @@ mod tests {
 
     #[test]
     fn test_compose_2() {
-        let man = BddManager::<AllTable<BddPtr>>::new_default_order(4);
+        let man = StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(4);
         let v0 = man.var(VarLabel::new(0), true);
         let v1 = man.var(VarLabel::new(1), true);
         let v2 = man.var(VarLabel::new(2), true);
@@ -827,7 +827,7 @@ mod tests {
 
     #[test]
     fn test_compose_3() {
-        let man = BddManager::<AllTable<BddPtr>>::new_default_order(4);
+        let man = StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(4);
         let v0 = man.var(VarLabel::new(0), true);
         let v1 = man.var(VarLabel::new(1), true);
         let v2 = man.var(VarLabel::new(2), true);
@@ -844,7 +844,7 @@ mod tests {
 
     #[test]
     fn test_compose_4() {
-        let man = BddManager::<AllTable<BddPtr>>::new_default_order(20);
+        let man = StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(20);
         let v0 = man.var(VarLabel::new(4), true);
         let v1 = man.var(VarLabel::new(5), true);
         let v2 = man.var(VarLabel::new(6), true);
@@ -861,7 +861,7 @@ mod tests {
 
     #[test]
     fn test_new_label() {
-        let man = BddManager::<AllTable<BddPtr>>::new_default_order(0);
+        let man = StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(0);
         let vlbl1 = man.new_label();
         let vlbl2 = man.new_label();
         let v1 = man.var(vlbl1, false);
@@ -878,7 +878,7 @@ mod tests {
 
     #[test]
     fn circuit1() {
-        let man = BddManager::<AllTable<BddPtr>>::new_default_order(3);
+        let man = StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(3);
         let x = man.var(VarLabel::new(0), false);
         let y = man.var(VarLabel::new(1), true);
         let delta = man.and(x, y);
@@ -898,7 +898,7 @@ mod tests {
 
     #[test]
     fn simple_cond() {
-        let man = BddManager::<AllTable<BddPtr>>::new_default_order(3);
+        let man = StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(3);
         let x = man.var(VarLabel::new(0), true);
         let y = man.var(VarLabel::new(1), false);
         let z = man.var(VarLabel::new(2), false);
@@ -919,7 +919,7 @@ mod tests {
 
     #[test]
     fn wmc_test_2() {
-        let man = BddManager::<AllTable<BddPtr>>::new_default_order(4);
+        let man = StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(4);
         let x = man.var(VarLabel::new(0), true);
         let y = man.var(VarLabel::new(1), true);
         let f1 = man.var(VarLabel::new(2), true);
@@ -943,7 +943,7 @@ mod tests {
     #[allow(clippy::assertions_on_constants)] // TODO: why does this test have assert!(true) ?
     #[test]
     fn iff_regression() {
-        let man = BddManager::<AllTable<BddPtr>>::new_default_order(0);
+        let man = StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(0);
         let mut ptrvec = Vec::new();
         for _ in 0..40 {
             let vlab = man.new_label();
@@ -961,7 +961,7 @@ mod tests {
 
     #[test]
     fn test_ite_1() {
-        let man = BddManager::<AllTable<BddPtr>>::new_default_order(16);
+        let man = StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(16);
         let c1 = Cnf::from_string(String::from("(1 || 2) && (0 || -2)"));
         let c2 = Cnf::from_string(String::from("(0 || 1) && (-4 || -7)"));
         let cnf1 = man.from_cnf(&c1);

@@ -14,7 +14,7 @@ use rsdd::repr::var_order::VarOrder;
 use rsdd::repr::vtree::VTree;
 use rsdd::util::semirings::realsemiring::RealSemiring;
 use rsdd::util::semirings::semiring_traits::Semiring;
-use rsdd::{builder::bdd_builder::BddManager, repr::wmc::WmcParams};
+use rsdd::{builder::bdd_builder::StandardBddBuilder, repr::wmc::WmcParams};
 
 use std::collections::HashMap;
 use std::time::Instant;
@@ -163,7 +163,7 @@ fn exactly_one(lits: Vec<Literal>) -> Vec<Vec<Literal>> {
 
 fn compile_bdd_cnf(args: &Args, network: BayesianNetwork) {
     let bn = BayesianNetworkCNF::new(&network);
-    let compiler = BddManager::<AllTable<BddPtr>>::new_default_order(bn.cnf.num_vars());
+    let compiler = StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(bn.cnf.num_vars());
 
     println!("Compiling...");
     let start = Instant::now();
@@ -198,7 +198,7 @@ fn compile_bdd_cnf(args: &Args, network: BayesianNetwork) {
 }
 
 fn compile_bdd(_args: &Args, network: BayesianNetwork) {
-    let compiler = BddManager::<AllTable<BddPtr>>::new_default_order(1);
+    let compiler = StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(1);
 
     // let mut clauses : Vec<Vec<Literal>> = Vec::new();
     let mut wmc_params: HashMap<VarLabel, (f64, f64)> = HashMap::new();

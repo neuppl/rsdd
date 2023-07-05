@@ -5,7 +5,7 @@ use std::{collections::HashMap, fs};
 use clap::Parser;
 use rand::Rng;
 use rsdd::{
-    builder::{bdd_builder::BddManager, cache::all_app::AllTable},
+    builder::{bdd_builder::StandardBddBuilder, cache::all_app::AllTable},
     repr::{cnf::Cnf, robdd::BddPtr, var_label::VarLabel, wmc::WmcParams},
     util::semirings::realsemiring::RealSemiring,
     util::semirings::semiring_traits::Semiring,
@@ -61,7 +61,7 @@ fn main() {
     println!("num vars: {}", cnf.num_vars());
 
     // TODO: allow user to pick varorder
-    let mgr = BddManager::<AllTable<BddPtr>>::new_default_order(cnf.num_vars());
+    let mgr = StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(cnf.num_vars());
 
     let bdd = mgr.from_cnf(&cnf);
 

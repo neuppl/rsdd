@@ -150,7 +150,7 @@ fn compile_sdd_rightlinear(str: String, _args: &Args) -> BenchResult {
 fn compile_bdd(str: String, _args: &Args) -> BenchResult {
     use rsdd::builder::bdd_builder::*;
     let cnf = Cnf::from_file(str);
-    let man = BddManager::<BddApplyTable<BddPtr>>::new_default_order_lru(cnf.num_vars());
+    let man = StandardBddBuilder::<BddApplyTable<BddPtr>>::new_default_order_lru(cnf.num_vars());
     let _bdd = man.from_cnf(&cnf);
 
     if let Some(path) = &_args.dump_bdd {
@@ -171,7 +171,7 @@ fn compile_bdd_dtree(str: String, _args: &Args) -> BenchResult {
     let cnf = Cnf::from_file(str);
     let order = cnf.min_fill_order();
     let dtree = DTree::from_cnf(&cnf, &order);
-    let man = BddManager::<BddApplyTable<BddPtr>>::new(order, BddApplyTable::new(cnf.num_vars()));
+    let man = StandardBddBuilder::<BddApplyTable<BddPtr>>::new(order, BddApplyTable::new(cnf.num_vars()));
     let plan = BddPlan::from_dtree(&dtree);
     let _bdd = man.compile_plan(&plan);
 
