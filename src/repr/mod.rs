@@ -4,7 +4,6 @@
 //!
 //! (i.e., conjunctive normal forms, arbitrary logical formulae, etc.)
 
-pub mod bdd;
 pub mod cnf;
 pub mod ddnnf;
 pub mod dtree;
