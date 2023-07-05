@@ -18,7 +18,7 @@ use crate::util::semirings::finitefield::FiniteField;
 
 use super::builder::{SddBuilder, SddBuilderStats};
 
-pub struct SemanticSddManager<'a, const P: u128> {
+pub struct SemanticSddBuilder<'a, const P: u128> {
     vtree: VTreeManager,
     should_compress: bool,
     // tables
@@ -31,7 +31,7 @@ pub struct SemanticSddManager<'a, const P: u128> {
     map: WmcParams<FiniteField<P>>,
 }
 
-impl<'a, const P: u128> SddBuilder<'a> for SemanticSddManager<'a, P> {
+impl<'a, const P: u128> SddBuilder<'a> for SemanticSddBuilder<'a, P> {
     #[inline]
     fn get_vtree_manager(&self) -> &VTreeManager {
         &self.vtree
@@ -135,11 +135,11 @@ impl<'a, const P: u128> SddBuilder<'a> for SemanticSddManager<'a, P> {
     }
 }
 
-impl<'a, const P: u128> SemanticSddManager<'a, P> {
+impl<'a, const P: u128> SemanticSddBuilder<'a, P> {
     pub fn new(vtree: VTree) -> Self {
         let vtree_man = VTreeManager::new(vtree.clone());
         let map = create_semantic_hash_map(vtree.num_vars());
-        SemanticSddManager {
+        SemanticSddBuilder {
             should_compress: false,
             vtree: vtree_man,
             // ite_cache: RefCell::new(AllTable::new()),
@@ -215,7 +215,7 @@ fn prob_equiv_sdd_demorgan() {
     use crate::repr::var_label::VarLabel;
     use crate::util::semirings::finitefield::FiniteField;
 
-    let mut man = SemanticSddManager::<100000049>::new(VTree::even_split(
+    let mut man = SemanticSddBuilder::<100000049>::new(VTree::even_split(
         &[
             VarLabel::new(0),
             VarLabel::new(1),

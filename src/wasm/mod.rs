@@ -1,7 +1,7 @@
 use crate::builder::bdd_builder::{BddManager, BddPtr, DDNNFPtr};
 use crate::builder::cache::lru_app::BddApplyTable;
 use crate::builder::sdd::builder::SddBuilder;
-use crate::builder::sdd::compression::CompressionSddManager;
+use crate::builder::sdd::compression::CompressionSddBuilder;
 use crate::repr::dtree::DTree;
 use crate::repr::robdd::VarOrder;
 use crate::repr::wmc::WmcParams;
@@ -80,7 +80,7 @@ pub fn sdd(cnf_input: String, vtree_type_input: JsValue) -> Result<JsValue, JsVa
 
     let vtree = build_vtree(&cnf, vtree_type);
 
-    let man = CompressionSddManager::new(vtree);
+    let man = CompressionSddBuilder::new(vtree);
     let sdd = man.from_cnf(&cnf);
 
     let serialized = ser_sdd::SDDSerializer::from_sdd(sdd);
@@ -95,7 +95,7 @@ pub fn demo_model_count_sdd(cnf_input: String) -> Result<JsValue, JsValue> {
 
     let vtree = build_vtree(&cnf, VTreeType::FromDTreeLinear);
 
-    let man = CompressionSddManager::new(vtree.clone());
+    let man = CompressionSddBuilder::new(vtree.clone());
     let sdd = man.from_cnf(&cnf);
 
     let mut params = WmcParams::new(RealSemiring::zero(), RealSemiring::one());

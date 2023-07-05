@@ -16,7 +16,7 @@ use crate::repr::vtree::{VTree, VTreeIndex, VTreeManager};
 
 use super::builder::{SddBuilder, SddBuilderStats};
 
-pub struct CompressionSddManager<'a> {
+pub struct CompressionSddBuilder<'a> {
     vtree: VTreeManager,
     should_compress: bool,
     // tables
@@ -27,7 +27,7 @@ pub struct CompressionSddManager<'a> {
     app_cache: RefCell<HashMap<SddAnd<'a>, SddPtr<'a>>>,
 }
 
-impl<'a> SddBuilder<'a> for CompressionSddManager<'a> {
+impl<'a> SddBuilder<'a> for CompressionSddBuilder<'a> {
     #[inline]
     fn get_vtree_manager(&self) -> &VTreeManager {
         &self.vtree
@@ -150,10 +150,10 @@ impl<'a> SddBuilder<'a> for CompressionSddManager<'a> {
     }
 }
 
-impl<'a> CompressionSddManager<'a> {
-    pub fn new(vtree: VTree) -> CompressionSddManager<'a> {
+impl<'a> CompressionSddBuilder<'a> {
+    pub fn new(vtree: VTree) -> CompressionSddBuilder<'a> {
         let vtree_man = VTreeManager::new(vtree);
-        CompressionSddManager {
+        CompressionSddBuilder {
             ite_cache: RefCell::new(AllTable::new()),
             app_cache: RefCell::new(HashMap::new()),
             bdd_tbl: RefCell::new(BackedRobinhoodTable::new()),
@@ -192,7 +192,7 @@ impl<'a> CompressionSddManager<'a> {
 #[test]
 fn simple_equality() {
     use crate::builder::bdd_builder::VarLabel;
-    let man = CompressionSddManager::new(VTree::even_split(
+    let man = CompressionSddBuilder::new(VTree::even_split(
         &[
             VarLabel::new(0),
             VarLabel::new(1),
@@ -214,7 +214,7 @@ fn simple_equality() {
 #[test]
 fn sdd_simple_cond() {
     use crate::builder::bdd_builder::VarLabel;
-    let man = CompressionSddManager::new(VTree::even_split(
+    let man = CompressionSddBuilder::new(VTree::even_split(
         &[
             VarLabel::new(0),
             VarLabel::new(1),
@@ -241,7 +241,7 @@ fn sdd_simple_cond() {
 #[test]
 fn sdd_test_exist() {
     use crate::builder::bdd_builder::VarLabel;
-    let man = CompressionSddManager::new(VTree::even_split(
+    let man = CompressionSddBuilder::new(VTree::even_split(
         &[
             VarLabel::new(0),
             VarLabel::new(1),
@@ -270,7 +270,7 @@ fn sdd_test_exist() {
 #[test]
 fn sdd_bigand() {
     use crate::builder::bdd_builder::VarLabel;
-    let man = CompressionSddManager::new(VTree::right_linear(&[
+    let man = CompressionSddBuilder::new(VTree::right_linear(&[
         VarLabel::new(0),
         VarLabel::new(1),
         VarLabel::new(2),
@@ -278,7 +278,7 @@ fn sdd_bigand() {
         VarLabel::new(4),
     ]));
 
-    // let man = CompressionSddManager::new(VTree::even_split(
+    // let man = CompressionSddBuilder::new(VTree::even_split(
     //     &[
     //         VarLabel::new(0),
     //         VarLabel::new(1),
@@ -307,7 +307,7 @@ fn sdd_bigand() {
 #[test]
 fn sdd_ite1() {
     use crate::builder::bdd_builder::VarLabel;
-    let man = CompressionSddManager::new(VTree::even_split(
+    let man = CompressionSddBuilder::new(VTree::even_split(
         &[
             VarLabel::new(0),
             VarLabel::new(1),
@@ -337,7 +337,7 @@ fn sdd_ite1() {
 #[test]
 fn sdd_demorgan() {
     use crate::builder::bdd_builder::VarLabel;
-    let man = CompressionSddManager::new(VTree::even_split(
+    let man = CompressionSddBuilder::new(VTree::even_split(
         &[
             VarLabel::new(0),
             VarLabel::new(1),
@@ -362,7 +362,7 @@ fn sdd_demorgan() {
 #[test]
 fn sdd_circuit1() {
     use crate::builder::bdd_builder::VarLabel;
-    let man = CompressionSddManager::new(VTree::even_split(
+    let man = CompressionSddBuilder::new(VTree::even_split(
         &[
             VarLabel::new(0),
             VarLabel::new(1),
@@ -396,7 +396,7 @@ fn sdd_circuit1() {
 fn sdd_circuit2() {
     use crate::builder::bdd_builder::VarLabel;
     // same as circuit1, but with a different variable order
-    let man = CompressionSddManager::new(VTree::even_split(
+    let man = CompressionSddBuilder::new(VTree::even_split(
         &[
             VarLabel::new(0),
             VarLabel::new(1),
@@ -447,7 +447,7 @@ fn sdd_wmc1() {
         ],
         1,
     );
-    let man = CompressionSddManager::new(vtree);
+    let man = CompressionSddBuilder::new(vtree);
     let mut wmc_map = crate::repr::wmc::WmcParams::new(RealSemiring(0.0), RealSemiring(1.0));
     let x = SddPtr::Var(VarLabel::new(0), true);
     wmc_map.set_weight(VarLabel::new(0), RealSemiring(1.0), RealSemiring(1.0));
