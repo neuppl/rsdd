@@ -92,7 +92,7 @@ impl<'a> SddBuilder<'a> for CompressionSddManager<'a> {
             // see if we can compress i
             let mut j = i + 1;
             while j < node.len() {
-                if self.sdd_eq(node[i].sub(), node[j].sub()) {
+                if self.eq(node[i].sub(), node[j].sub()) {
                     // compress j into i and remove j from the node list
                     node[i] = SddAnd::new(self.or(node[i].prime(), node[j].prime()), node[i].sub());
                     node.swap_remove(j);
@@ -260,7 +260,7 @@ fn sdd_test_exist() {
     let r_expected = man.and(v1, v3);
     let res = man.exists(r1, VarLabel::new(1));
     assert!(
-        man.sdd_eq(r_expected, res),
+        man.eq(r_expected, res),
         "Got:\n{}\nExpected:\n{}",
         man.print_sdd(res),
         man.print_sdd(r_expected)
@@ -327,7 +327,7 @@ fn sdd_ite1() {
     let r2 = man.and(r1, v1);
     // r2: (0 \/ 1) && 1
     assert!(
-        man.sdd_eq(v1, r2),
+        man.eq(v1, r2),
         "Not eq:\n {}\n{}",
         man.print_sdd(v1),
         man.print_sdd(r2)
@@ -352,7 +352,7 @@ fn sdd_demorgan() {
     let res = man.or(x, y).neg();
     let expected = man.and(x.neg(), y.neg());
     assert!(
-        man.sdd_eq(res, expected),
+        man.eq(res, expected),
         "Not eq:\nGot: {}\nExpected: {}",
         man.print_sdd(res),
         man.print_sdd(expected)
@@ -385,7 +385,7 @@ fn sdd_circuit1() {
 
     let expected = man.and(x, yp);
     assert!(
-        man.sdd_eq(res, expected),
+        man.eq(res, expected),
         "Not eq:\nGot: {}\nExpected: {}",
         man.print_sdd(res),
         man.print_sdd(expected)
@@ -416,7 +416,7 @@ fn sdd_circuit2() {
 
     let expected = man.and(x, yp);
     assert!(
-        man.sdd_eq(res, expected),
+        man.eq(res, expected),
         "Not eq:\nGot: {}\nExpected: {}",
         man.print_sdd(res),
         man.print_sdd(expected)

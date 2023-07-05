@@ -2,8 +2,11 @@ extern crate rsdd;
 
 use clap::Parser;
 use rsdd::{
-    builder::sdd::{
-        builder::SddBuilder, compression::CompressionSddManager, semantic::SemanticSddManager,
+    builder::{
+        sdd::{
+            builder::SddBuilder, compression::CompressionSddManager, semantic::SemanticSddManager,
+        },
+        BottomUpBuilder,
     },
     repr::{
         cnf::Cnf, dtree::DTree, sdd::SddPtr, var_label::VarLabel, var_order::VarOrder, vtree::VTree,
@@ -205,7 +208,7 @@ fn run_canonicalizer_experiment(c: Cnf, vtree: VTree, verbose: bool) {
         BenchStats::from_run("s".to_owned(), start.elapsed(), &sem_cnf, &sem_mgr)
     );
 
-    if !sem_mgr.sdd_eq(compr_cnf, sem_cnf) {
+    if !sem_mgr.eq(compr_cnf, sem_cnf) {
         println!(" ");
         println!("not equal! test is broken...");
         if verbose {

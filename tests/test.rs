@@ -278,7 +278,7 @@ fn test_sdd_canonicity() {
         let r1 = man.from_cnf(&cnf1);
         let r2 = man.from_cnf(&cnf2);
         assert!(
-            man.sdd_eq(r1, r2),
+            builder::BottomUpBuilder::eq(&man, r1, r2),
             "Not eq\nCNF 1: {:?}\nCNF 2: {:?}\nSDD 1:{}\n SDD 2: {}",
             cnf1,
             cnf2,
@@ -940,7 +940,7 @@ mod test_sdd_manager {
             let uncompr_mgr = SemanticSddManager::<{ crate::BIG_PRIME }>::new(vtree);
             let uncompr_cnf = uncompr_mgr.from_cnf(&c);
 
-            if !uncompr_mgr.sdd_eq(compr_cnf, uncompr_cnf) {
+            if !uncompr_mgr.eq(compr_cnf, uncompr_cnf) {
                 println!("not equal!");
                 println!("compr sdd: {}", compr_mgr.print_sdd(compr_cnf));
                 println!("uncompr sdd: {}", uncompr_mgr.print_sdd(uncompr_cnf));
@@ -962,7 +962,7 @@ mod test_sdd_manager {
                 return TestResult::discard();
             }
 
-            if mgr.sdd_eq(cnf_1, cnf_2) {
+            if mgr.eq(cnf_1, cnf_2) {
                 println!("collision!");
                 println!("sdd 1: {}", mgr.print_sdd(cnf_1));
                 println!("sdd 2: {}", mgr.print_sdd(cnf_2));
@@ -980,7 +980,7 @@ mod test_sdd_manager {
             let cnf_1 = mgr.from_cnf(&c1);
             let cnf_2 = mgr.from_cnf(&c2);
 
-            let h_eq = mgr.sdd_eq(cnf_1, cnf_2);
+            let h_eq = mgr.eq(cnf_1, cnf_2);
 
             if h_eq != (cnf_1 == cnf_2) {
                 println!("disagreement!");
