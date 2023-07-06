@@ -2,8 +2,11 @@ extern crate rsdd;
 
 use clap::Parser;
 use rsdd::{
-    builder::sdd::{
-        builder::SddBuilder, compression::CompressionSddManager, semantic::SemanticSddManager,
+    builder::{
+        sdd::{
+            builder::SddBuilder, compression::CompressionSddBuilder, semantic::SemanticSddBuilder,
+        },
+        BottomUpBuilder,
     },
     repr::{
         cnf::Cnf, dtree::DTree, sdd::SddPtr, var_label::VarLabel, var_order::VarOrder, vtree::VTree,
@@ -71,17 +74,17 @@ impl BenchStats {
         label: String,
         time: Duration,
         sdd: &SddPtr,
-        mgr: &impl SddBuilder<'a>,
+        builder: &impl SddBuilder<'a>,
     ) -> BenchStats {
-        // let stats = mgr.stats();
+        // let stats = builder.stats();
         BenchStats {
             label,
             time,
             num_nodes_cnf: sdd.num_child_nodes(),
-            num_nodes_alloc: mgr.node_iter().len(),
+            num_nodes_alloc: builder.node_iter().len(),
             // num_rec: stats.num_rec,
             // num_get_or_insert: stats.num_get_or_insert,
-            // brt_cache_rate: (mgr.num_app_cache_hits()) as f32 / (stats.num_get_or_insert as f32)
+            // brt_cache_rate: (builder.num_app_cache_hits()) as f32 / (stats.num_get_or_insert as f32)
             //     * 100.0,
             // app_cache_rate: stats.num_app_cache_hits as f32 / stats.num_rec as f32 * 100.0,
             // num_compr: stats.num_compr,
@@ -115,14 +118,14 @@ impl Display for BenchStats {
 
 fn run_compr_sem(cnf: &Cnf, vtree: &VTree) -> (BenchStats, BenchStats) {
     let start = Instant::now();
-    let compr_mgr = CompressionSddManager::new(vtree.clone());
-    let compr_cnf = compr_mgr.from_cnf(cnf);
-    let compr = BenchStats::from_run("c".to_owned(), start.elapsed(), &compr_cnf, &compr_mgr);
+    let compr_builder = CompressionSddBuilder::new(vtree.clone());
+    let compr_cnf = compr_builder.compile_cnf(cnf);
+    let compr = BenchStats::from_run("c".to_owned(), start.elapsed(), &compr_cnf, &compr_builder);
 
     let start = Instant::now();
-    let sem_mgr = SemanticSddManager::<479001599>::new(vtree.clone());
-    let sem_cnf = sem_mgr.from_cnf(cnf);
-    let sem = BenchStats::from_run("s".to_owned(), start.elapsed(), &sem_cnf, &sem_mgr);
+    let sem_builder = SemanticSddBuilder::<479001599>::new(vtree.clone());
+    let sem_cnf = sem_builder.compile_cnf(cnf);
+    let sem = BenchStats::from_run("s".to_owned(), start.elapsed(), &sem_cnf, &sem_builder);
 
     (compr, sem)
 }
@@ -184,35 +187,35 @@ fn run_random_comparisons(cnf: Cnf, order: &[VarLabel], num: usize, bias: f64) {
 fn run_canonicalizer_experiment(c: Cnf, vtree: VTree, verbose: bool) {
     let start = Instant::now();
 
-    let compr_mgr = CompressionSddManager::new(vtree.clone());
-    let compr_cnf = compr_mgr.from_cnf(&c);
+    let compr_builder = CompressionSddBuilder::new(vtree.clone());
+    let compr_cnf = compr_builder.compile_cnf(&c);
 
     println!(" ");
 
     println!(
         "{}",
-        BenchStats::from_run("c".to_owned(), start.elapsed(), &compr_cnf, &compr_mgr)
+        BenchStats::from_run("c".to_owned(), start.elapsed(), &compr_cnf, &compr_builder)
     );
 
     let start = Instant::now();
 
     // other primes: 100000049, 18_446_744_073_709_551_591
-    let sem_mgr = SemanticSddManager::<18_446_744_073_709_551_591>::new(vtree);
-    let sem_cnf = sem_mgr.from_cnf(&c);
+    let sem_builder = SemanticSddBuilder::<18_446_744_073_709_551_591>::new(vtree);
+    let sem_cnf = sem_builder.compile_cnf(&c);
 
     println!(
         "{}\n",
-        BenchStats::from_run("s".to_owned(), start.elapsed(), &sem_cnf, &sem_mgr)
+        BenchStats::from_run("s".to_owned(), start.elapsed(), &sem_cnf, &sem_builder)
     );
 
-    if !sem_mgr.sdd_eq(compr_cnf, sem_cnf) {
+    if !sem_builder.eq(compr_cnf, sem_cnf) {
         println!(" ");
         println!("not equal! test is broken...");
         if verbose {
             eprintln!("=== COMPRESSED CNF ===");
-            eprintln!("{}", sem_mgr.print_sdd(compr_cnf));
+            eprintln!("{}", sem_builder.print_sdd(compr_cnf));
             eprintln!("=== SEMANTIC CNF ===");
-            eprintln!("{}", sem_mgr.print_sdd(sem_cnf));
+            eprintln!("{}", sem_builder.print_sdd(sem_cnf));
         }
     }
 }

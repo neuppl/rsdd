@@ -1,8 +1,9 @@
 extern crate rsdd;
 
 use clap::Parser;
-use rsdd::builder::bdd_plan::BddPlan;
+use rsdd::builder::bdd::builder::BddBuilder;
 use rsdd::builder::cache::lru_app::BddApplyTable;
+use rsdd::plan::bdd_plan::BddPlan;
 use rsdd::repr::cnf::Cnf;
 use rsdd::repr::ddnnf::DDNNFPtr;
 use rsdd::repr::dtree::DTree;
@@ -77,10 +78,10 @@ struct BenchResult {
 fn compile_topdown_nnf(str: String, _args: &Args) -> BenchResult {
     let cnf = Cnf::from_file(str);
     let order = VarOrder::linear_order(cnf.num_vars());
-    let man = rsdd::builder::decision_nnf_builder::DecisionNNFBuilder::new(order);
+    let builder = rsdd::builder::decision_nnf_builder::DecisionNNFBuilder::new(order);
     // let order = cnf.force_order();
-    let ddnnf = man.from_cnf_topdown(&cnf);
-    println!("num redundant: {}", man.num_logically_redundant());
+    let ddnnf = builder.compile_cnf_topdown(&cnf);
+    println!("num redundant: {}", builder.num_logically_redundant());
     BenchResult {
         num_recursive: 0,
         size: ddnnf.count_nodes(),
@@ -88,15 +89,15 @@ fn compile_topdown_nnf(str: String, _args: &Args) -> BenchResult {
 }
 
 fn compile_sdd_dtree(str: String, _args: &Args) -> BenchResult {
-    use rsdd::builder::sdd::{builder::SddBuilder, compression::CompressionSddManager};
+    use rsdd::builder::sdd::{builder::SddBuilder, compression::CompressionSddBuilder};
     let cnf = Cnf::from_file(str);
     let dtree = DTree::from_cnf(&cnf, &cnf.min_fill_order());
     let vtree = VTree::from_dtree(&dtree).unwrap();
-    let man = CompressionSddManager::new(vtree.clone());
-    let _sdd = man.from_cnf(&cnf);
+    let builder = CompressionSddBuilder::new(vtree.clone());
+    let sdd = builder.compile_cnf(&cnf);
 
     if let Some(path) = &_args.dump_sdd {
-        let json = ser_sdd::SDDSerializer::from_sdd(_sdd);
+        let json = ser_sdd::SDDSerializer::from_sdd(sdd);
         let mut file = File::create(path).unwrap();
         let r = file.write_all(serde_json::to_string(&json).unwrap().as_bytes());
         assert!(r.is_ok(), "Error writing file");
@@ -110,24 +111,24 @@ fn compile_sdd_dtree(str: String, _args: &Args) -> BenchResult {
     }
 
     BenchResult {
-        // num_recursive: man.stats().num_rec,
+        // num_recursive: builder.stats().num_rec,
         num_recursive: 0, // TODO: fix
-        size: _sdd.count_nodes(),
+        size: sdd.count_nodes(),
     }
 }
 
 fn compile_sdd_rightlinear(str: String, _args: &Args) -> BenchResult {
-    use rsdd::builder::sdd::{builder::SddBuilder, compression::CompressionSddManager};
+    use rsdd::builder::sdd::{builder::SddBuilder, compression::CompressionSddBuilder};
     let cnf = Cnf::from_file(str);
     let o: Vec<VarLabel> = (0..cnf.num_vars())
         .map(|x| VarLabel::new(x as u64))
         .collect();
     let vtree = VTree::right_linear(&o);
-    let man = CompressionSddManager::new(vtree.clone());
-    let _sdd = man.from_cnf(&cnf);
+    let builder = CompressionSddBuilder::new(vtree.clone());
+    let sdd = builder.compile_cnf(&cnf);
 
     if let Some(path) = &_args.dump_sdd {
-        let json = ser_sdd::SDDSerializer::from_sdd(_sdd);
+        let json = ser_sdd::SDDSerializer::from_sdd(sdd);
         let mut file = File::create(path).unwrap();
         let r = file.write_all(serde_json::to_string(&json).unwrap().as_bytes());
         assert!(r.is_ok(), "Error writing file");
@@ -141,50 +142,55 @@ fn compile_sdd_rightlinear(str: String, _args: &Args) -> BenchResult {
     }
 
     BenchResult {
-        // num_recursive: man.stats().num_rec,
+        // num_recursive: builder.stats().num_rec,
         num_recursive: 0, // TODO: fix
-        size: _sdd.count_nodes(),
+        size: sdd.count_nodes(),
     }
 }
 
 fn compile_bdd(str: String, _args: &Args) -> BenchResult {
-    use rsdd::builder::bdd_builder::*;
+    use rsdd::builder::bdd::robdd::RobddBuilder;
+    use rsdd::repr::bdd::BddPtr;
+
     let cnf = Cnf::from_file(str);
-    let man = BddManager::<BddApplyTable<BddPtr>>::new_default_order_lru(cnf.num_vars());
-    let _bdd = man.from_cnf(&cnf);
+    let builder = RobddBuilder::<BddApplyTable<BddPtr>>::new_default_order_lru(cnf.num_vars());
+    let bdd = builder.compile_cnf(&cnf);
 
     if let Some(path) = &_args.dump_bdd {
-        let json = ser_bdd::BDDSerializer::from_bdd(_bdd);
+        let json = ser_bdd::BDDSerializer::from_bdd(bdd);
         let mut file = File::create(path).unwrap();
         let r = file.write_all(serde_json::to_string(&json).unwrap().as_bytes());
         assert!(r.is_ok(), "Error writing file");
     }
 
     BenchResult {
-        num_recursive: man.num_recursive_calls(),
-        size: _bdd.count_nodes(),
+        num_recursive: builder.num_recursive_calls(),
+        size: bdd.count_nodes(),
     }
 }
 
 fn compile_bdd_dtree(str: String, _args: &Args) -> BenchResult {
-    use rsdd::builder::bdd_builder::*;
+    use rsdd::builder::bdd::robdd::RobddBuilder;
+    use rsdd::repr::bdd::BddPtr;
+
     let cnf = Cnf::from_file(str);
     let order = cnf.min_fill_order();
     let dtree = DTree::from_cnf(&cnf, &order);
-    let man = BddManager::<BddApplyTable<BddPtr>>::new(order, BddApplyTable::new(cnf.num_vars()));
+    let builder =
+        RobddBuilder::<BddApplyTable<BddPtr>>::new(order, BddApplyTable::new(cnf.num_vars()));
     let plan = BddPlan::from_dtree(&dtree);
-    let _bdd = man.compile_plan(&plan);
+    let bdd = builder.compile_plan(&plan);
 
     if let Some(path) = &_args.dump_bdd {
-        let json = ser_bdd::BDDSerializer::from_bdd(_bdd);
+        let json = ser_bdd::BDDSerializer::from_bdd(bdd);
         let mut file = File::create(path).unwrap();
         let r = file.write_all(serde_json::to_string(&json).unwrap().as_bytes());
         assert!(r.is_ok(), "Error writing file");
     }
 
     BenchResult {
-        num_recursive: man.num_recursive_calls(),
-        size: _bdd.count_nodes(),
+        num_recursive: builder.num_recursive_calls(),
+        size: bdd.count_nodes(),
     }
 }
 

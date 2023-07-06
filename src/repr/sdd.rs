@@ -61,8 +61,8 @@ impl<'a> PartialEq for SddPtr<'a> {
 }
 
 use super::{
+    bdd::WmcParams,
     ddnnf::DDNNFPtr,
-    robdd::WmcParams,
     vtree::{VTreeIndex, VTreeManager},
 };
 
@@ -478,9 +478,9 @@ fn is_trimmed_trivial() {
 
 #[test]
 fn is_trimmed_simple_demorgan() {
-    use crate::builder::sdd::compression::CompressionSddManager;
+    use crate::builder::sdd::compression::CompressionSddBuilder;
     use crate::builder::BottomUpBuilder;
-    let man = CompressionSddManager::new(crate::repr::vtree::VTree::even_split(
+    let builder = CompressionSddBuilder::new(crate::repr::vtree::VTree::even_split(
         &[
             VarLabel::new(0),
             VarLabel::new(1),
@@ -493,8 +493,8 @@ fn is_trimmed_simple_demorgan() {
 
     let x = SddPtr::Var(VarLabel::new(0), true);
     let y = SddPtr::Var(VarLabel::new(3), true);
-    let res = man.or(x, y).neg();
-    let expected = man.and(x.neg(), y.neg());
+    let res = builder.or(x, y).neg();
+    let expected = builder.and(x.neg(), y.neg());
 
     assert!(expected.is_trimmed());
     assert!(res.is_trimmed());
@@ -510,9 +510,9 @@ fn is_canonical_trivial() {
 
 #[test]
 fn is_canonical_simple_demorgan() {
-    use crate::builder::sdd::compression::CompressionSddManager;
+    use crate::builder::sdd::compression::CompressionSddBuilder;
     use crate::builder::BottomUpBuilder;
-    let man = CompressionSddManager::new(crate::repr::vtree::VTree::even_split(
+    let builder = CompressionSddBuilder::new(crate::repr::vtree::VTree::even_split(
         &[
             VarLabel::new(0),
             VarLabel::new(1),
@@ -524,8 +524,8 @@ fn is_canonical_simple_demorgan() {
     ));
     let x = SddPtr::Var(VarLabel::new(0), true);
     let y = SddPtr::Var(VarLabel::new(3), true);
-    let res = man.or(x, y).neg();
-    let expected = man.and(x.neg(), y.neg());
+    let res = builder.or(x, y).neg();
+    let expected = builder.and(x.neg(), y.neg());
     assert!(expected.is_canonical());
     assert!(res.is_canonical());
 }

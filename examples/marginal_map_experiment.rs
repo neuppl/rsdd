@@ -5,8 +5,11 @@ use std::{collections::HashMap, fs};
 use clap::Parser;
 use rand::Rng;
 use rsdd::{
-    builder::{bdd_builder::BddManager, cache::all_app::AllTable},
-    repr::{cnf::Cnf, robdd::BddPtr, var_label::VarLabel, wmc::WmcParams},
+    builder::{
+        bdd::{builder::BddBuilder, robdd::RobddBuilder},
+        cache::all_app::AllTable,
+    },
+    repr::{bdd::BddPtr, cnf::Cnf, var_label::VarLabel, wmc::WmcParams},
     util::semirings::realsemiring::RealSemiring,
     util::semirings::semiring_traits::Semiring,
 };
@@ -61,9 +64,9 @@ fn main() {
     println!("num vars: {}", cnf.num_vars());
 
     // TODO: allow user to pick varorder
-    let mgr = BddManager::<AllTable<BddPtr>>::new_default_order(cnf.num_vars());
+    let builder = RobddBuilder::<AllTable<BddPtr>>::new_default_order(cnf.num_vars());
 
-    let bdd = mgr.from_cnf(&cnf);
+    let bdd = builder.compile_cnf(&cnf);
 
     if args.vars.is_empty() {
         panic!("No vars provided. Please provide at least one with -v")
@@ -75,11 +78,11 @@ fn main() {
         .map(|v| VarLabel::new(*v as u64))
         .collect::<Vec<VarLabel>>();
 
-    let var_to_val = gen_all_weights(&args.weights, mgr.num_vars());
+    let var_to_val = gen_all_weights(&args.weights, builder.num_vars());
 
     let wmc = WmcParams::new_with_default(RealSemiring::zero(), RealSemiring::one(), var_to_val);
 
-    let (probability, partial) = bdd.marginal_map(&vars, mgr.num_vars(), &wmc);
+    let (probability, partial) = bdd.marginal_map(&vars, builder.num_vars(), &wmc);
 
     println!("MAP: {:.2}%", probability * 100.0);
     println!("{}", partial);

@@ -5,8 +5,8 @@ use std::{cell::RefCell, collections::HashSet};
 use crate::{
     backing_store::*,
     repr::{
+        bdd::create_semantic_hash_map,
         ddnnf::DDNNFPtr,
-        robdd::create_semantic_hash_map,
         unit_prop::{DecisionResult, SATSolver},
     },
 };
@@ -15,8 +15,8 @@ use rustc_hash::FxHashMap;
 use crate::{
     backing_store::bump_table::BackedRobinhoodTable,
     repr::{
+        bdd::{BddNode, BddPtr},
         cnf::*,
-        robdd::{BddNode, BddPtr},
         var_label::{Literal, VarLabel},
         var_order::VarOrder,
     },
@@ -158,7 +158,7 @@ impl<'a> DecisionNNFBuilder<'a> {
     }
 
     /// compile a decision DNNF top-down from a CNF
-    pub fn from_cnf_topdown(&'a self, cnf: &Cnf) -> BddPtr<'a> {
+    pub fn compile_cnf_topdown(&'a self, cnf: &Cnf) -> BddPtr<'a> {
         let mut sat = match SATSolver::new(cnf.clone()) {
             Some(v) => v,
             None => return BddPtr::false_ptr(),
@@ -259,8 +259,8 @@ impl<'a> DecisionNNFBuilder<'a> {
 //         // ]
 //     ];
 //     let cnf = Cnf::new(clauses);
-//     let mut mgr = DecisionNNFBuilder::new();
-//     let c2 = mgr.from_cnf_topdown(&VarOrder::linear_order(cnf.num_vars()), &cnf);
+//     let mut builder = DecisionNNFBuilder::new();
+//     let c2 = builder.from_cnf_topdown(&VarOrder::linear_order(cnf.num_vars()), &cnf);
 //     println!("c2: {}", c2.to_string_debug());
 //     assert!(false)
 // }

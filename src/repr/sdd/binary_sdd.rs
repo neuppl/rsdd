@@ -5,8 +5,8 @@ use std::{
 };
 
 use crate::{
-    builder::bdd_builder::VarLabel,
     repr::{
+        var_label::VarLabel,
         vtree::{VTreeIndex, VTreeManager},
         wmc::WmcParams,
     },

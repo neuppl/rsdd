@@ -7,8 +7,8 @@ use rustc_hash::FxHasher;
 use crate::backing_store::bump_table::BackedRobinhoodTable;
 use crate::backing_store::UniqueTable;
 use crate::builder::cache::ite::Ite;
+use crate::repr::bdd::create_semantic_hash_map;
 use crate::repr::ddnnf::DDNNFPtr;
-use crate::repr::robdd::create_semantic_hash_map;
 use crate::repr::sdd::binary_sdd::BinarySDD;
 use crate::repr::sdd::sdd_or::{SddAnd, SddOr};
 use crate::repr::sdd::SddPtr;
@@ -18,7 +18,7 @@ use crate::util::semirings::finitefield::FiniteField;
 
 use super::builder::{SddBuilder, SddBuilderStats};
 
-pub struct SemanticSddManager<'a, const P: u128> {
+pub struct SemanticSddBuilder<'a, const P: u128> {
     vtree: VTreeManager,
     should_compress: bool,
     // tables
@@ -31,7 +31,7 @@ pub struct SemanticSddManager<'a, const P: u128> {
     map: WmcParams<FiniteField<P>>,
 }
 
-impl<'a, const P: u128> SddBuilder<'a> for SemanticSddManager<'a, P> {
+impl<'a, const P: u128> SddBuilder<'a> for SemanticSddBuilder<'a, P> {
     #[inline]
     fn get_vtree_manager(&self) -> &VTreeManager {
         &self.vtree
@@ -135,11 +135,11 @@ impl<'a, const P: u128> SddBuilder<'a> for SemanticSddManager<'a, P> {
     }
 }
 
-impl<'a, const P: u128> SemanticSddManager<'a, P> {
+impl<'a, const P: u128> SemanticSddBuilder<'a, P> {
     pub fn new(vtree: VTree) -> Self {
         let vtree_man = VTreeManager::new(vtree.clone());
         let map = create_semantic_hash_map(vtree.num_vars());
-        SemanticSddManager {
+        SemanticSddBuilder {
             should_compress: false,
             vtree: vtree_man,
             // ite_cache: RefCell::new(AllTable::new()),
@@ -210,12 +210,12 @@ impl<'a, const P: u128> SemanticSddManager<'a, P> {
 #[test]
 fn prob_equiv_sdd_demorgan() {
     use crate::builder::BottomUpBuilder;
-    use crate::repr::robdd::create_semantic_hash_map;
-    use crate::repr::robdd::WmcParams;
+    use crate::repr::bdd::create_semantic_hash_map;
+    use crate::repr::bdd::WmcParams;
     use crate::repr::var_label::VarLabel;
     use crate::util::semirings::finitefield::FiniteField;
 
-    let mut man = SemanticSddManager::<100000049>::new(VTree::even_split(
+    let mut builder = SemanticSddBuilder::<100000049>::new(VTree::even_split(
         &[
             VarLabel::new(0),
             VarLabel::new(1),
@@ -225,16 +225,16 @@ fn prob_equiv_sdd_demorgan() {
         ],
         1,
     ));
-    man.set_compression(false);
+    builder.set_compression(false);
     let x = SddPtr::Var(VarLabel::new(0), true);
     let y = SddPtr::Var(VarLabel::new(3), true);
-    let res = man.or(x, y).neg();
-    let expected = man.and(x.neg(), y.neg());
+    let res = builder.or(x, y).neg();
+    let expected = builder.and(x.neg(), y.neg());
 
-    let map: WmcParams<FiniteField<100000049>> = create_semantic_hash_map(man.num_vars());
+    let map: WmcParams<FiniteField<100000049>> = create_semantic_hash_map(builder.num_vars());
 
-    let sh1 = res.cached_semantic_hash(man.get_vtree_manager(), &map);
-    let sh2 = expected.cached_semantic_hash(man.get_vtree_manager(), &map);
+    let sh1 = res.cached_semantic_hash(builder.get_vtree_manager(), &map);
+    let sh2 = expected.cached_semantic_hash(builder.get_vtree_manager(), &map);
 
     assert!(sh1 == sh2, "Not eq:\nGot: {:?}\nExpected: {:?}", sh1, sh2);
 }

@@ -3,8 +3,8 @@
 use std::collections::HashMap;
 
 use crate::repr::{
+    bdd::{BddNode, BddPtr},
     ddnnf::DDNNFPtr,
-    robdd::{BddNode, BddPtr},
 };
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -36,36 +36,35 @@ impl BDDSerializer {
         table: &mut HashMap<&'a BddNode<'a>, usize>,
         nodes: &mut Vec<SerBDD>,
     ) -> SerBDDPtr {
-        if bdd.is_true() {
-            return SerBDDPtr::True;
-        }
-        if bdd.is_false() {
-            return SerBDDPtr::False;
-        }
-        if table.contains_key(&bdd.bdd_node_ref()) {
-            let index = *table.get(&bdd.bdd_node_ref()).unwrap();
-            return SerBDDPtr::Ptr {
-                index,
-                compl: bdd.is_neg(),
-            };
-        }
+        match bdd {
+            BddPtr::PtrTrue => SerBDDPtr::True,
+            BddPtr::PtrFalse => SerBDDPtr::False,
+            BddPtr::Reg(node) | BddPtr::Compl(node) => {
+                if table.contains_key(&node) {
+                    return SerBDDPtr::Ptr {
+                        index: *table.get(&node).unwrap(),
+                        compl: bdd.is_neg(),
+                    };
+                }
 
-        // new node, recurse
-        let l = BDDSerializer::serialize_helper(bdd.low_raw(), table, nodes);
-        let h = BDDSerializer::serialize_helper(bdd.high_raw(), table, nodes);
-        let new_node = SerBDD {
-            topvar: bdd.var().value_usize(),
-            low: l,
-            high: h,
-        };
-        nodes.push(new_node);
-        let index = nodes.len() - 1;
-        let new_ptr = SerBDDPtr::Ptr {
-            index,
-            compl: bdd.is_neg(),
-        };
-        table.insert(bdd.bdd_node_ref(), index);
-        new_ptr
+                // new node, recurse
+                let l = BDDSerializer::serialize_helper(bdd.low_raw(), table, nodes);
+                let h = BDDSerializer::serialize_helper(bdd.high_raw(), table, nodes);
+                let new_node = SerBDD {
+                    topvar: bdd.var().value_usize(),
+                    low: l,
+                    high: h,
+                };
+                nodes.push(new_node);
+                let index = nodes.len() - 1;
+                let new_ptr = SerBDDPtr::Ptr {
+                    index,
+                    compl: bdd.is_neg(),
+                };
+                table.insert(node, index);
+                new_ptr
+            }
+        }
     }
 
     pub fn from_bdd(bdd: BddPtr) -> BDDSerializer {

@@ -37,11 +37,11 @@ pub trait SddBuilder<'a>: BottomUpBuilder<'a, SddPtr<'a>> {
     fn sdd_eq(&'a self, a: SddPtr<'a>, b: SddPtr<'a>) -> bool;
 
     fn is_true(&'a self, a: SddPtr<'a>) -> bool {
-        self.sdd_eq(a, SddPtr::PtrTrue)
+        self.eq(a, SddPtr::PtrTrue)
     }
 
     fn is_false(&'a self, a: SddPtr<'a>) -> bool {
-        self.sdd_eq(a, SddPtr::PtrFalse)
+        self.eq(a, SddPtr::PtrFalse)
     }
 
     // compression & canonicalization
@@ -84,7 +84,7 @@ pub trait SddBuilder<'a>: BottomUpBuilder<'a, SddPtr<'a>> {
     }
 
     fn unique_bdd(&'a self, bdd: BinarySDD<'a>) -> SddPtr<'a> {
-        if self.sdd_eq(bdd.high(), bdd.low()) {
+        if self.eq(bdd.high(), bdd.low()) {
             return bdd.high();
         }
         if self.is_false(bdd.high()) && self.is_true(bdd.low()) {
@@ -262,7 +262,7 @@ pub trait SddBuilder<'a>: BottomUpBuilder<'a, SddPtr<'a>> {
             let p1 = a1.prime();
             let s1 = a1.sub();
             // // check if there exists an equal prime
-            let eq_itm = b.node_iter().find(|a| self.sdd_eq(a.prime(), p1));
+            let eq_itm = b.node_iter().find(|a| self.eq(a.prime(), p1));
             let s1 = if a.is_neg() { s1.neg() } else { s1 };
 
             match eq_itm {
@@ -299,7 +299,7 @@ pub trait SddBuilder<'a>: BottomUpBuilder<'a, SddPtr<'a>> {
                 // check if p1 => p2 (which is true iff (p1 && p2) == p1); if it
                 // does we can stop early because the rest of the primes will be
                 // false
-                if self.sdd_eq(p1, p) {
+                if self.eq(p1, p) {
                     break;
                 }
             }
@@ -339,8 +339,7 @@ pub trait SddBuilder<'a>: BottomUpBuilder<'a, SddPtr<'a>> {
     }
 
     /// compile an SDD from an input CNF
-    #[allow(clippy::wrong_self_convention)] // this is a naming thing; consider renaming in the future
-    fn from_cnf(&'a self, cnf: &Cnf) -> SddPtr<'a> {
+    fn compile_cnf(&'a self, cnf: &Cnf) -> SddPtr<'a> {
         let mut cvec: Vec<SddPtr> = Vec::with_capacity(cnf.clauses().len());
         if cnf.clauses().is_empty() {
             return SddPtr::true_ptr();
@@ -556,8 +555,8 @@ where
             (a, b) if self.is_true(b) => return a,
             (a, _) if self.is_false(a) => return SddPtr::false_ptr(),
             (_, b) if self.is_false(b) => return SddPtr::false_ptr(),
-            (a, b) if self.sdd_eq(a, b) => return a,
-            (a, b) if self.sdd_eq(a, b.neg()) => return SddPtr::false_ptr(),
+            (a, b) if self.eq(a, b) => return a,
+            (a, b) if self.eq(a, b.neg()) => return SddPtr::false_ptr(),
             _ => (),
         };
 

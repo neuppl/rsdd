@@ -1,9 +1,12 @@
-use crate::builder::bdd_builder::{BddManager, BddPtr, DDNNFPtr};
+use crate::builder::bdd::builder::BddBuilder;
+use crate::builder::bdd::robdd::RobddBuilder;
 use crate::builder::cache::lru_app::BddApplyTable;
 use crate::builder::sdd::builder::SddBuilder;
-use crate::builder::sdd::compression::CompressionSddManager;
+use crate::builder::sdd::compression::CompressionSddBuilder;
+use crate::repr::bdd::BddPtr;
+use crate::repr::ddnnf::DDNNFPtr;
 use crate::repr::dtree::DTree;
-use crate::repr::robdd::VarOrder;
+use crate::repr::var_order::VarOrder;
 use crate::repr::wmc::WmcParams;
 use crate::repr::{cnf::Cnf, var_label::VarLabel, vtree::VTree};
 use crate::serialize::ser_sdd::SDDSerializer;
@@ -48,8 +51,8 @@ pub fn vtree(cnf_input: String, vtree_type_input: JsValue) -> Result<JsValue, Js
 pub fn bdd(cnf_input: String) -> String {
     let cnf = Cnf::from_file(cnf_input);
 
-    let man = BddManager::<BddApplyTable<BddPtr>>::new_default_order_lru(cnf.num_vars());
-    let bdd = man.from_cnf(&cnf);
+    let builder = RobddBuilder::<BddApplyTable<BddPtr>>::new_default_order_lru(cnf.num_vars());
+    let bdd = builder.compile_cnf(&cnf);
 
     let json = ser_bdd::BDDSerializer::from_bdd(bdd);
 
@@ -63,8 +66,8 @@ pub fn bdd_with_var_order(cnf_input: String, order: &[u64]) -> String {
 
     let var_order = VarOrder::new(order.iter().map(|v| VarLabel::new(*v)).collect());
 
-    let man = BddManager::new(var_order, BddApplyTable::new(21));
-    let bdd = man.from_cnf(&cnf);
+    let builder = RobddBuilder::new(var_order, BddApplyTable::new(21));
+    let bdd = builder.compile_cnf(&cnf);
 
     let json = ser_bdd::BDDSerializer::from_bdd(bdd);
 
@@ -80,8 +83,8 @@ pub fn sdd(cnf_input: String, vtree_type_input: JsValue) -> Result<JsValue, JsVa
 
     let vtree = build_vtree(&cnf, vtree_type);
 
-    let man = CompressionSddManager::new(vtree);
-    let sdd = man.from_cnf(&cnf);
+    let builder = CompressionSddBuilder::new(vtree);
+    let sdd = builder.compile_cnf(&cnf);
 
     let serialized = ser_sdd::SDDSerializer::from_sdd(sdd);
 
@@ -95,12 +98,12 @@ pub fn demo_model_count_sdd(cnf_input: String) -> Result<JsValue, JsValue> {
 
     let vtree = build_vtree(&cnf, VTreeType::FromDTreeLinear);
 
-    let man = CompressionSddManager::new(vtree.clone());
-    let sdd = man.from_cnf(&cnf);
+    let builder = CompressionSddBuilder::new(vtree.clone());
+    let sdd = builder.compile_cnf(&cnf);
 
     let mut params = WmcParams::new(RealSemiring::zero(), RealSemiring::one());
 
-    for v in 0..man.get_vtree_manager().num_vars() + 1 {
+    for v in 0..builder.get_vtree_manager().num_vars() + 1 {
         params.set_weight(
             VarLabel::new_usize(v),
             RealSemiring::zero(),
@@ -108,7 +111,7 @@ pub fn demo_model_count_sdd(cnf_input: String) -> Result<JsValue, JsValue> {
         )
     }
 
-    let model_count = sdd.wmc(man.get_vtree_manager(), &params);
+    let model_count = sdd.wmc(builder.get_vtree_manager(), &params);
 
     let res = SddModelCountResult {
         model_count: model_count.0,
