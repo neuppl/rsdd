@@ -94,10 +94,10 @@ fn compile_sdd_dtree(str: String, _args: &Args) -> BenchResult {
     let dtree = DTree::from_cnf(&cnf, &cnf.min_fill_order());
     let vtree = VTree::from_dtree(&dtree).unwrap();
     let builder = CompressionSddBuilder::new(vtree.clone());
-    let _sdd = builder.compile_cnf(&cnf);
+    let sdd = builder.compile_cnf(&cnf);
 
     if let Some(path) = &_args.dump_sdd {
-        let json = ser_sdd::SDDSerializer::from_sdd(_sdd);
+        let json = ser_sdd::SDDSerializer::from_sdd(sdd);
         let mut file = File::create(path).unwrap();
         let r = file.write_all(serde_json::to_string(&json).unwrap().as_bytes());
         assert!(r.is_ok(), "Error writing file");
@@ -113,7 +113,7 @@ fn compile_sdd_dtree(str: String, _args: &Args) -> BenchResult {
     BenchResult {
         // num_recursive: builder.stats().num_rec,
         num_recursive: 0, // TODO: fix
-        size: _sdd.count_nodes(),
+        size: sdd.count_nodes(),
     }
 }
 
@@ -125,10 +125,10 @@ fn compile_sdd_rightlinear(str: String, _args: &Args) -> BenchResult {
         .collect();
     let vtree = VTree::right_linear(&o);
     let builder = CompressionSddBuilder::new(vtree.clone());
-    let _sdd = builder.compile_cnf(&cnf);
+    let sdd = builder.compile_cnf(&cnf);
 
     if let Some(path) = &_args.dump_sdd {
-        let json = ser_sdd::SDDSerializer::from_sdd(_sdd);
+        let json = ser_sdd::SDDSerializer::from_sdd(sdd);
         let mut file = File::create(path).unwrap();
         let r = file.write_all(serde_json::to_string(&json).unwrap().as_bytes());
         assert!(r.is_ok(), "Error writing file");
@@ -144,7 +144,7 @@ fn compile_sdd_rightlinear(str: String, _args: &Args) -> BenchResult {
     BenchResult {
         // num_recursive: builder.stats().num_rec,
         num_recursive: 0, // TODO: fix
-        size: _sdd.count_nodes(),
+        size: sdd.count_nodes(),
     }
 }
 
@@ -154,10 +154,10 @@ fn compile_bdd(str: String, _args: &Args) -> BenchResult {
 
     let cnf = Cnf::from_file(str);
     let builder = RobddBuilder::<BddApplyTable<BddPtr>>::new_default_order_lru(cnf.num_vars());
-    let _bdd = builder.compile_cnf(&cnf);
+    let bdd = builder.compile_cnf(&cnf);
 
     if let Some(path) = &_args.dump_bdd {
-        let json = ser_bdd::BDDSerializer::from_bdd(_bdd);
+        let json = ser_bdd::BDDSerializer::from_bdd(bdd);
         let mut file = File::create(path).unwrap();
         let r = file.write_all(serde_json::to_string(&json).unwrap().as_bytes());
         assert!(r.is_ok(), "Error writing file");
@@ -165,7 +165,7 @@ fn compile_bdd(str: String, _args: &Args) -> BenchResult {
 
     BenchResult {
         num_recursive: builder.num_recursive_calls(),
-        size: _bdd.count_nodes(),
+        size: bdd.count_nodes(),
     }
 }
 

@@ -1001,7 +1001,7 @@ mod test_sdd_builder {
         /// verify that every node in the SDD compression canonicalizer has a unique semantic hash, using CompressionCanonicalizer
         fn qc_sdd_canonicity(c1: Cnf, vtree:VTree) -> TestResult {
             let builder = super::CompressionSddBuilder::new(vtree);
-            let _ = builder.compile_cnf(&c1);
+            builder.compile_cnf(&c1);
 
             let map : WmcParams<FiniteField<{ crate::BIG_PRIME }>>= create_semantic_hash_map(builder.num_vars());
             let mut seen_hashes : HashMap<u128, SddPtr> = HashMap::new();
@@ -1027,7 +1027,7 @@ mod test_sdd_builder {
         /// using SemanticCanonicalizer
         fn qc_semantic_sdd_canonicity(c1: Cnf, vtree:VTree) -> TestResult {
             let builder = SemanticSddBuilder::< {crate::BIG_PRIME} >::new(vtree);
-            let _ = builder.compile_cnf(&c1);
+            builder.compile_cnf(&c1);
 
             let map : WmcParams<FiniteField<{ crate::BIG_PRIME }>>= create_semantic_hash_map(builder.num_vars());
             let mut seen_hashes : HashMap<u128, SddPtr> = HashMap::new();

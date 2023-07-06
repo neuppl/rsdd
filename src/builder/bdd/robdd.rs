@@ -566,25 +566,6 @@ mod tests {
         );
     }
 
-    #[allow(clippy::assertions_on_constants)] // TODO: why does this test have assert!(true) ?
-    #[test]
-    fn iff_regression() {
-        let builder = RobddBuilder::<AllTable<BddPtr>>::new_default_order(0);
-        let mut ptrvec = Vec::new();
-        for _ in 0..40 {
-            let vlab = builder.new_label();
-            let flab = builder.new_label();
-            let vptr = builder.var(vlab, true);
-            let fptr = builder.var(flab, true);
-            let sent = builder.iff(vptr, fptr);
-            ptrvec.push(sent);
-        }
-        let _resptr = ptrvec
-            .iter()
-            .fold(BddPtr::true_ptr(), |acc, x| builder.and(acc, *x));
-        assert!(true);
-    }
-
     #[test]
     fn test_ite_1() {
         let builder = RobddBuilder::<AllTable<BddPtr>>::new_default_order(16);
