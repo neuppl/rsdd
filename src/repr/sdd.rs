@@ -61,8 +61,8 @@ impl<'a> PartialEq for SddPtr<'a> {
 }
 
 use super::{
+    bdd::WmcParams,
     ddnnf::DDNNFPtr,
-    robdd::WmcParams,
     vtree::{VTreeIndex, VTreeManager},
 };
 

@@ -2,16 +2,16 @@ use std::cmp::Ordering;
 use std::collections::BinaryHeap;
 
 use crate::plan::bdd_plan::BddPlan;
+use crate::repr::bdd::BddNode;
 use crate::repr::cnf::Cnf;
 use crate::repr::logical_expr::LogicalExpr;
 use crate::repr::model::PartialModel;
-use crate::repr::robdd::BddNode;
 
 use crate::builder::BottomUpBuilder;
 
 pub use crate::builder::cache::LruTable;
+pub use crate::repr::bdd::BddPtr;
 pub use crate::repr::ddnnf::DDNNFPtr;
-pub use crate::repr::robdd::BddPtr;
 pub use crate::repr::var_label::VarLabel;
 
 use super::CompiledCNF;
@@ -267,7 +267,7 @@ where
     /// # use rsdd::repr::var_label::VarLabel;
     /// # use rsdd::repr::ddnnf::DDNNFPtr;
     /// # use rsdd::builder::cache::all_app::AllTable;
-    /// # use rsdd::repr::robdd::BddPtr;
+    /// # use rsdd::repr::bdd::BddPtr;
     /// let mut builder = RobddBuilder::<AllTable<BddPtr>>::new_default_order(10);
     /// let lbl_a = builder.new_label();
     /// let a = builder.var(lbl_a, true);

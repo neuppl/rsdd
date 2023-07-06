@@ -7,8 +7,8 @@ use rustc_hash::FxHasher;
 use crate::backing_store::bump_table::BackedRobinhoodTable;
 use crate::backing_store::UniqueTable;
 use crate::builder::cache::ite::Ite;
+use crate::repr::bdd::create_semantic_hash_map;
 use crate::repr::ddnnf::DDNNFPtr;
-use crate::repr::robdd::create_semantic_hash_map;
 use crate::repr::sdd::binary_sdd::BinarySDD;
 use crate::repr::sdd::sdd_or::{SddAnd, SddOr};
 use crate::repr::sdd::SddPtr;
@@ -210,8 +210,8 @@ impl<'a, const P: u128> SemanticSddBuilder<'a, P> {
 #[test]
 fn prob_equiv_sdd_demorgan() {
     use crate::builder::BottomUpBuilder;
-    use crate::repr::robdd::create_semantic_hash_map;
-    use crate::repr::robdd::WmcParams;
+    use crate::repr::bdd::create_semantic_hash_map;
+    use crate::repr::bdd::WmcParams;
     use crate::repr::var_label::VarLabel;
     use crate::util::semirings::finitefield::FiniteField;
 

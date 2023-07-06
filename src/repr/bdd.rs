@@ -128,8 +128,8 @@ impl<'a, T: Clone, U> Fold<'a, T, U> {
     ///
     /// ```rust
     /// use rsdd::repr::var_label::VarLabel;
-    /// use rsdd::repr::robdd::BddPtr;
-    /// use rsdd::repr::robdd::Fold;
+    /// use rsdd::repr::bdd::BddPtr;
+    /// use rsdd::repr::bdd::Fold;
     ///
     /// pub fn variables(bdd: BddPtr) -> Vec<VarLabel> {
     ///     Fold::new(

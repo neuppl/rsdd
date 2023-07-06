@@ -9,7 +9,7 @@ use rsdd::{
         bdd::{builder::BddBuilder, robdd::RobddBuilder},
         cache::all_app::AllTable,
     },
-    repr::{cnf::Cnf, robdd::BddPtr, var_label::VarLabel, wmc::WmcParams},
+    repr::{bdd::BddPtr, cnf::Cnf, var_label::VarLabel, wmc::WmcParams},
     util::semirings::realsemiring::RealSemiring,
     util::semirings::semiring_traits::Semiring,
 };

@@ -2,8 +2,8 @@ use crate::backing_store::bump_table::BackedRobinhoodTable;
 use crate::builder::cache::all_app::AllTable;
 use crate::builder::cache::ite::Ite;
 use crate::builder::cache::lru_app::BddApplyTable;
+use crate::repr::bdd::BddNode;
 use crate::repr::model::PartialModel;
-use crate::repr::robdd::BddNode;
 use crate::repr::var_order::VarOrder;
 
 use crate::backing_store::*;
@@ -11,8 +11,8 @@ use crate::builder::BottomUpBuilder;
 use std::cell::RefCell;
 
 pub use crate::builder::cache::LruTable;
+pub use crate::repr::bdd::BddPtr;
 pub use crate::repr::ddnnf::DDNNFPtr;
-pub use crate::repr::robdd::BddPtr;
 pub use crate::repr::var_label::VarLabel;
 
 use super::builder::BddBuilder;
@@ -286,7 +286,7 @@ mod tests {
 
     use crate::{
         builder::bdd::robdd::RobddBuilder,
-        repr::{cnf::Cnf, robdd::BddPtr, var_label::VarLabel},
+        repr::{bdd::BddPtr, cnf::Cnf, var_label::VarLabel},
     };
 
     // check that (a \/ b) /\ a === a

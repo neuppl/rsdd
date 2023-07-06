@@ -10,7 +10,7 @@ use rsdd::builder::bdd::builder::BddBuilder;
 use rsdd::builder::bdd::robdd::RobddBuilder;
 use rsdd::builder::cache::all_app::AllTable;
 use rsdd::builder::sdd::{builder::SddBuilder, compression::CompressionSddBuilder};
-use rsdd::repr::robdd::BddPtr;
+use rsdd::repr::bdd::BddPtr;
 use rsdd::repr::vtree::VTree;
 use rsdd::*;
 extern crate rand;
@@ -326,10 +326,10 @@ mod test_bdd_builder {
     use rsdd::builder::cache::all_app::AllTable;
     use rsdd::builder::cache::lru_app::BddApplyTable;
     use rsdd::builder::sdd::builder::SddBuilder;
+    use rsdd::repr::bdd::BddPtr;
     use rsdd::repr::ddnnf::{create_semantic_hash_map, DDNNFPtr};
     use rsdd::repr::dtree::DTree;
     use rsdd::repr::model::PartialModel;
-    use rsdd::repr::robdd::BddPtr;
     use rsdd::repr::var_order::VarOrder;
     use rsdd::repr::vtree::VTree;
     use rsdd::repr::wmc::WmcParams;
@@ -707,9 +707,9 @@ mod test_sdd_builder {
     use rsdd::builder::sdd::{
         builder::SddBuilder, compression::CompressionSddBuilder, semantic::SemanticSddBuilder,
     };
+    use rsdd::repr::bdd::BddPtr;
     use rsdd::repr::ddnnf::{create_semantic_hash_map, DDNNFPtr};
     use rsdd::repr::dtree::DTree;
-    use rsdd::repr::robdd::BddPtr;
     use rsdd::repr::sdd::SddPtr;
     use rsdd::repr::var_order::VarOrder;
     use rsdd::repr::vtree::VTree;

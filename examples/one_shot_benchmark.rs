@@ -150,7 +150,7 @@ fn compile_sdd_rightlinear(str: String, _args: &Args) -> BenchResult {
 
 fn compile_bdd(str: String, _args: &Args) -> BenchResult {
     use rsdd::builder::bdd::robdd::RobddBuilder;
-    use rsdd::repr::robdd::BddPtr;
+    use rsdd::repr::bdd::BddPtr;
 
     let cnf = Cnf::from_file(str);
     let builder = RobddBuilder::<BddApplyTable<BddPtr>>::new_default_order_lru(cnf.num_vars());
@@ -171,7 +171,7 @@ fn compile_bdd(str: String, _args: &Args) -> BenchResult {
 
 fn compile_bdd_dtree(str: String, _args: &Args) -> BenchResult {
     use rsdd::builder::bdd::robdd::RobddBuilder;
-    use rsdd::repr::robdd::BddPtr;
+    use rsdd::repr::bdd::BddPtr;
 
     let cnf = Cnf::from_file(str);
     let order = cnf.min_fill_order();

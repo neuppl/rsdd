@@ -5,8 +5,8 @@ use std::{cell::RefCell, collections::HashSet};
 use crate::{
     backing_store::*,
     repr::{
+        bdd::create_semantic_hash_map,
         ddnnf::DDNNFPtr,
-        robdd::create_semantic_hash_map,
         unit_prop::{DecisionResult, SATSolver},
     },
 };
@@ -15,8 +15,8 @@ use rustc_hash::FxHashMap;
 use crate::{
     backing_store::bump_table::BackedRobinhoodTable,
     repr::{
+        bdd::{BddNode, BddPtr},
         cnf::*,
-        robdd::{BddNode, BddPtr},
         var_label::{Literal, VarLabel},
         var_order::VarOrder,
     },

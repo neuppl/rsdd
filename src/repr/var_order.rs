@@ -5,7 +5,7 @@ use crate::repr::var_label::VarLabel;
 use crate::util;
 use std::slice::Iter;
 
-use super::robdd::BddPtr;
+use super::bdd::BddPtr;
 
 #[derive(Debug, Clone)]
 pub struct VarOrder {

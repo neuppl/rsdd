@@ -15,7 +15,7 @@ use self::quickcheck::{Arbitrary, Gen};
 use crate::repr::model::PartialModel;
 use petgraph::graph::NodeIndex;
 
-use super::robdd::WmcParams;
+use super::wmc::WmcParams;
 
 // TODO: resolve unused
 #[allow(unused)]

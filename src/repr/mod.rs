@@ -4,12 +4,12 @@
 //!
 //! (i.e., conjunctive normal forms, arbitrary logical formulae, etc.)
 
+pub mod bdd;
 pub mod cnf;
 pub mod ddnnf;
 pub mod dtree;
 pub mod logical_expr;
 pub mod model;
-pub mod robdd;
 pub mod sdd;
 pub mod unit_prop;
 pub mod var_label;
