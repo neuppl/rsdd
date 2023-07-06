@@ -6,7 +6,7 @@ extern crate rsdd;
 extern crate quickcheck;
 use crate::repr::cnf::Cnf;
 use crate::repr::var_label::VarLabel;
-use rsdd::builder::bdd_builder::StandardBddBuilder;
+use rsdd::builder::bdd::robdd::RobddBuilder;
 use rsdd::builder::cache::all_app::AllTable;
 use rsdd::builder::sdd::{builder::SddBuilder, compression::CompressionSddBuilder};
 use rsdd::repr::robdd::BddPtr;
@@ -253,7 +253,7 @@ fn get_canonical_forms() -> Vec<(Cnf, Cnf)> {
 #[test]
 fn test_bdd_canonicity() {
     for (cnf1, cnf2) in get_canonical_forms().into_iter() {
-        let builder = StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(cnf1.num_vars());
+        let builder = RobddBuilder::<AllTable<BddPtr>>::new_default_order(cnf1.num_vars());
         let r1 = builder.from_cnf(&cnf1);
         let r2 = builder.from_cnf(&cnf2);
         assert!(
@@ -339,7 +339,7 @@ mod test_bdd_builder {
 
     quickcheck! {
         fn test_cond_and(c: Cnf) -> bool {
-            let builder = super::StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(16);
+            let builder = super::RobddBuilder::<AllTable<BddPtr>>::new_default_order(16);
             let cnf = builder.from_cnf(&c);
             let v1 = VarLabel::new(0);
             let bdd1 = builder.exists(cnf, v1);
@@ -353,7 +353,7 @@ mod test_bdd_builder {
 
     quickcheck! {
         fn test_ite_and(c1: Cnf, c2: Cnf) -> bool {
-            let builder = super::StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(16);
+            let builder = super::RobddBuilder::<AllTable<BddPtr>>::new_default_order(16);
             let cnf1 = builder.from_cnf(&c1);
             let cnf2 = builder.from_cnf(&c2);
 
@@ -368,7 +368,7 @@ mod test_bdd_builder {
         fn bdd_ite_iff(c1: Cnf, c2: Cnf) -> TestResult {
             if c1.num_vars() == 0 || c1.num_vars() > 8 { return TestResult::discard() }
             if c1.clauses().len() > 12 { return TestResult::discard() }
-            let builder = super::StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(16);
+            let builder = super::RobddBuilder::<AllTable<BddPtr>>::new_default_order(16);
             let cnf1 = builder.from_cnf(&c1);
             let cnf2 = builder.from_cnf(&c2);
             let iff1 = builder.iff(cnf1, cnf2);
@@ -390,7 +390,7 @@ mod test_bdd_builder {
         fn compile_with_assignments(c1: Cnf) -> TestResult {
             if c1.num_vars() < 3 || c1.num_vars() > 8 { return TestResult::discard() }
             if c1.clauses().len() > 12 { return TestResult::discard() }
-            let builder = super::StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(c1.num_vars());
+            let builder = super::RobddBuilder::<AllTable<BddPtr>>::new_default_order(c1.num_vars());
             let mut pm = PartialModel::from_litvec(&Vec::new(), c1.num_vars());
             pm.set(VarLabel::new(0), true);
             pm.set(VarLabel::new(1), true);
@@ -410,7 +410,7 @@ mod test_bdd_builder {
             if c1.num_vars() == 0 || c1.num_vars() > 8 { return TestResult::discard() }
             if c1.clauses().len() > 16 { return TestResult::discard() }
 
-            let builder = super::StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(c1.num_vars());
+            let builder = super::RobddBuilder::<AllTable<BddPtr>>::new_default_order(c1.num_vars());
             let weight = create_semantic_hash_map::<{crate::BIG_PRIME}>(c1.num_vars());
             let cnf1 = builder.from_cnf(&c1);
             let bddres = cnf1.wmc(builder.get_order(), &weight);
@@ -422,7 +422,7 @@ mod test_bdd_builder {
     quickcheck! {
         /// test that an SDD and BDD both have the same semantic hash
         fn sdd_semantic_eq_bdd(c1: Cnf, vtree: VTree) -> bool {
-            let bdd_builder = super::StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(c1.num_vars());
+            let bdd_builder = super::RobddBuilder::<AllTable<BddPtr>>::new_default_order(c1.num_vars());
             let sdd_builder = super::CompressionSddBuilder::new(vtree);
             let map : WmcParams<rsdd::util::semirings::finitefield::FiniteField<{ crate::BIG_PRIME }>>= create_semantic_hash_map(c1.num_vars());
             let bdd = bdd_builder.from_cnf(&c1);
@@ -434,7 +434,7 @@ mod test_bdd_builder {
     quickcheck! {
         /// test that an SDD and BDD both have the same semantic hash with min-fill order
         fn sdd_semantic_eq_bdd_dtree(c1: Cnf) -> bool {
-            let bdd_builder = super::StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(c1.num_vars());
+            let bdd_builder = super::RobddBuilder::<AllTable<BddPtr>>::new_default_order(c1.num_vars());
             let min_fill_order = c1.min_fill_order();
             let dtree = DTree::from_cnf(&c1, &min_fill_order);
             let vtree = VTree::from_dtree(&dtree).unwrap();
@@ -453,7 +453,7 @@ mod test_bdd_builder {
             if c1.num_vars() == 0 || c1.num_vars() > 8 { return TestResult::discard() }
             if c1.clauses().len() > 16 { return TestResult::discard() }
 
-            let builder = super::StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(c1.num_vars());
+            let builder = super::RobddBuilder::<AllTable<BddPtr>>::new_default_order(c1.num_vars());
             let weight_map : HashMap<VarLabel, (RealSemiring, RealSemiring)> = HashMap::from_iter(
                 (0..16).map(|x| (VarLabel::new(x as u64), (RealSemiring(0.3), RealSemiring(0.7)))));
             let order = VarOrder::linear_order(c1.num_vars());
@@ -477,8 +477,8 @@ mod test_bdd_builder {
     quickcheck! {
         /// test if the lru cache and the all cache give the same results
         fn bdd_lru(c1: Cnf) -> TestResult {
-            let builder1 = super::StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(16);
-            let builder2 = super::StandardBddBuilder::<BddApplyTable<BddPtr>>::new_default_order_lru(16);
+            let builder1 = super::RobddBuilder::<AllTable<BddPtr>>::new_default_order(16);
+            let builder2 = super::RobddBuilder::<BddApplyTable<BddPtr>>::new_default_order_lru(16);
 
             let weight_map : HashMap<VarLabel, (RealSemiring, RealSemiring)> = HashMap::from_iter(
                 (0..16).map(|x| (VarLabel::new(x as u64), (RealSemiring(0.3), RealSemiring(0.7)))));
@@ -499,7 +499,7 @@ mod test_bdd_builder {
             if c1.num_vars() < 5 || c1.num_vars() > 8 { return TestResult::discard() }
             if c1.clauses().len() > 14 { return TestResult::discard() }
 
-            let builder = super::StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(c1.num_vars());
+            let builder = super::RobddBuilder::<AllTable<BddPtr>>::new_default_order(c1.num_vars());
             let weight_map : HashMap<VarLabel, (RealSemiring, RealSemiring)> = HashMap::from_iter(
                 (0..16).map(|x| (VarLabel::new(x as u64), (RealSemiring(0.3), RealSemiring(0.7)))));
             let cnf = builder.from_cnf(&c1);
@@ -583,7 +583,7 @@ mod test_bdd_builder {
             // constrain the size, make BDD
             if !(5..=8).contains(&n) { return TestResult::discard() }
             if c1.clauses().len() > 14 { return TestResult::discard() }
-            let builder = super::StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(n);
+            let builder = super::RobddBuilder::<AllTable<BddPtr>>::new_default_order(n);
             let cnf = builder.from_cnf(&c1);
 
             // randomizing the decisions
@@ -692,7 +692,7 @@ mod test_bdd_builder {
 
 #[cfg(test)]
 mod test_sdd_builder {
-    use crate::builder::bdd_builder::StandardBddBuilder;
+    use crate::builder::bdd::robdd::RobddBuilder;
     use crate::repr::cnf::Cnf;
     use crate::repr::var_label::{Literal, VarLabel};
     use crate::rsdd::builder::BottomUpBuilder;
@@ -788,7 +788,7 @@ mod test_sdd_builder {
            let sdd_res = cnf_sdd.semantic_hash(builder.get_vtree_manager(), &weight_map);
 
 
-            let bddbuilder = StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(cnf.num_vars());
+            let bddbuilder = RobddBuilder::<AllTable<BddPtr>>::new_default_order(cnf.num_vars());
             let cnf_bdd = bddbuilder.from_cnf(&cnf);
             let bdd_res = cnf_bdd.semantic_hash(bddbuilder.get_order(), &weight_map);
             assert_eq!(bdd_res, sdd_res);
@@ -813,7 +813,7 @@ mod test_sdd_builder {
             let sdd_res = cnf_sdd.semantic_hash(builder.get_vtree_manager(), &weight_map);
 
 
-            let bddbuilder = StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(cnf.num_vars());
+            let bddbuilder = RobddBuilder::<AllTable<BddPtr>>::new_default_order(cnf.num_vars());
             let cnf_bdd = bddbuilder.from_cnf(&cnf);
             let bdd_res = cnf_bdd.semantic_hash(bddbuilder.get_order(), &weight_map);
             assert_eq!(bdd_res, sdd_res);

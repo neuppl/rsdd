@@ -1,14 +1,14 @@
 //! Contains the core datastructures for constructing and maintaining decision
 //! diagrams.
 
-use self::bdd_builder::VarLabel;
-
 pub mod cache;
 
-pub mod bdd_builder;
+pub mod bdd;
 pub mod bdd_plan;
 pub mod decision_nnf_builder;
 pub mod sdd;
+
+use crate::repr::var_label::VarLabel;
 
 pub trait BottomUpBuilder<'a, Ptr> {
     // constants --- can elide the input lifetimes

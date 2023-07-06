@@ -1,7 +1,7 @@
-//! Primary interface for manipulating and constructing BDDs. Contains the BDD
-//! manager, which manages the global state necessary for constructing canonical
-//! binary decision diagrams.
-
+use crate::builder::bdd_plan::BddPlan;
+use crate::builder::cache::all_app::AllTable;
+use crate::builder::cache::ite::Ite;
+use crate::builder::cache::lru_app::BddApplyTable;
 use crate::repr::model::PartialModel;
 use crate::repr::robdd::BddNode;
 use crate::repr::var_order::VarOrder;
@@ -10,206 +10,29 @@ use crate::{
     repr::model,
 };
 
-use super::cache::all_app::AllTable;
-use super::cache::ite::Ite;
-use super::cache::lru_app::BddApplyTable;
-use super::BottomUpBuilder;
 use crate::backing_store::*;
+use crate::builder::BottomUpBuilder;
 use std::cell::RefCell;
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
-use std::fmt::Debug;
-
-use super::bdd_plan::BddPlan;
 
 pub use crate::builder::cache::LruTable;
 pub use crate::repr::ddnnf::DDNNFPtr;
 pub use crate::repr::robdd::BddPtr;
 pub use crate::repr::var_label::VarLabel;
 
-#[derive(Eq, PartialEq, Debug)]
-struct CompiledCNF<'a> {
-    ptr: BddPtr<'a>,
-    sz: usize,
-}
+use super::builder::BddBuilder;
+use super::stats::BddBuilderStats;
+use super::CompiledCNF;
 
-// The priority queue depends on `Ord`.
-// Explicitly implement the trait so the queue becomes a min-heap
-// instead of a max-heap.
-impl<'a> Ord for CompiledCNF<'a> {
-    fn cmp(&self, other: &Self) -> Ordering {
-        // Notice that the we flip the ordering on costs.
-        // In case of a tie we compare positions - this step is necessary
-        // to make implementations of `PartialEq` and `Ord` consistent.
-        other.sz.cmp(&self.sz)
-    }
-}
-
-// `PartialOrd` needs to be implemented as well.
-impl<'a> PartialOrd for CompiledCNF<'a> {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-#[derive(Debug)]
-pub struct Assignment {
-    assignments: Vec<bool>,
-}
-
-impl Assignment {
-    pub fn new(assignments: Vec<bool>) -> Assignment {
-        Assignment { assignments }
-    }
-
-    pub fn get_assignment(&self, var: VarLabel) -> bool {
-        self.assignments[var.value() as usize]
-    }
-}
-
-/// An auxiliary data structure for tracking statistics about BDD manager
-/// performance (for fine-tuning)
-struct BddBuilderStats {
-    /// For now, always track the number of recursive calls. In the future,
-    /// this should probably be gated behind a debug build (since I suspect
-    /// it may have non-trivial performance overhead and synchronization cost)
-    num_recursive_calls: usize,
-}
-
-impl BddBuilderStats {
-    pub fn new() -> BddBuilderStats {
-        BddBuilderStats {
-            num_recursive_calls: 0,
-        }
-    }
-}
-
-pub trait BddBuilder<'a>: BottomUpBuilder<'a, BddPtr<'a>> {
-    fn get_or_insert(&'a self, bdd: BddNode<'a>) -> BddPtr<'a>;
-
-    // implementation-dependent helper functions
-
-    fn ite_helper(&'a self, f: BddPtr<'a>, g: BddPtr<'a>, h: BddPtr<'a>) -> BddPtr<'a>;
-    fn cond_helper(&'a self, bdd: BddPtr<'a>, lbl: VarLabel, value: bool) -> BddPtr<'a>;
-
-    // convenience utilities
-    /// disjoins a list of BDDs
-    fn or_lst(&'a self, f: &[BddPtr<'a>]) -> BddPtr<'a> {
-        let mut cur_bdd = BddPtr::false_ptr();
-        for &itm in f {
-            cur_bdd = self.or(cur_bdd, itm);
-        }
-        cur_bdd
-    }
-
-    /// disjoins a list of BDDs
-    fn and_lst(&'a self, f: &[BddPtr<'a>]) -> BddPtr<'a> {
-        let mut cur_bdd = BddPtr::true_ptr();
-        for &itm in f {
-            cur_bdd = self.and(cur_bdd, itm);
-        }
-        cur_bdd
-    }
-}
-
-impl<'a, T> BottomUpBuilder<'a, BddPtr<'a>> for T
-where
-    T: BddBuilder<'a>,
-{
-    fn true_ptr(&self) -> BddPtr<'a> {
-        BddPtr::true_ptr()
-    }
-
-    fn false_ptr(&self) -> BddPtr<'a> {
-        BddPtr::false_ptr()
-    }
-
-    /// Get a pointer to the variable with label `lbl` and polarity `polarity`
-    fn var(&'a self, label: VarLabel, polarity: bool) -> BddPtr<'a> {
-        let bdd = BddNode::new(label, BddPtr::false_ptr(), BddPtr::true_ptr());
-        let r = self.get_or_insert(bdd);
-        if polarity {
-            r
-        } else {
-            r.neg()
-        }
-    }
-
-    fn eq(&'a self, a: BddPtr<'a>, b: BddPtr<'a>) -> bool {
-        a == b
-    }
-
-    /// Produce a new BDD that is the result of conjoining `f` and `g`
-    /// ```
-    /// # use rsdd::builder::bdd_builder::StandardBddBuilder;
-    /// # use rsdd::builder::BottomUpBuilder;
-    /// # use rsdd::repr::var_label::VarLabel;
-    /// # use rsdd::repr::ddnnf::DDNNFPtr;
-    /// # use rsdd::builder::cache::all_app::AllTable;
-    /// # use rsdd::repr::robdd::BddPtr;
-    /// let mut builder = StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(10);
-    /// let lbl_a = builder.new_label();
-    /// let a = builder.var(lbl_a, true);
-    /// let a_and_not_a = builder.and(a, a.neg());
-    /// assert!(a_and_not_a.is_false());
-    /// ```
-    fn and(&'a self, f: BddPtr<'a>, g: BddPtr<'a>) -> BddPtr<'a> {
-        self.ite(f, g, BddPtr::false_ptr())
-    }
-
-    fn negate(&'a self, f: BddPtr<'a>) -> BddPtr<'a> {
-        f.neg()
-    }
-
-    /// if f then g else h
-    fn ite(&'a self, f: BddPtr<'a>, g: BddPtr<'a>, h: BddPtr<'a>) -> BddPtr<'a> {
-        self.ite_helper(f, g, h)
-    }
-
-    /// Compute the Boolean function `f iff g`
-    fn iff(&'a self, f: BddPtr<'a>, g: BddPtr<'a>) -> BddPtr<'a> {
-        self.ite(f, g, g.neg())
-    }
-
-    fn xor(&'a self, f: BddPtr<'a>, g: BddPtr<'a>) -> BddPtr<'a> {
-        self.ite(f, g.neg(), g)
-    }
-
-    /// Existentially quantifies out the variable `lbl` from `f`
-    fn exists(&'a self, bdd: BddPtr<'a>, lbl: VarLabel) -> BddPtr<'a> {
-        // TODO this can be optimized by specializing it
-        let v1 = self.condition(bdd, lbl, true);
-        let v2 = self.condition(bdd, lbl, false);
-        self.or(v1, v2)
-    }
-
-    /// Compute the Boolean function `f | var = value`
-    fn condition(&'a self, bdd: BddPtr<'a>, lbl: VarLabel, value: bool) -> BddPtr<'a> {
-        let r = self.cond_helper(bdd, lbl, value);
-        bdd.clear_scratch();
-        r
-    }
-
-    /// Compose `g` into `f` by substituting for `lbl`
-    fn compose(&'a self, f: BddPtr<'a>, lbl: VarLabel, g: BddPtr<'a>) -> BddPtr<'a> {
-        // TODO this can be optimized with a specialized implementation to make
-        // it a single traversal
-        let var = self.var(lbl, true);
-        let iff = self.iff(var, g);
-        let a = self.and(iff, f);
-
-        self.exists(a, lbl)
-    }
-}
-
-pub struct StandardBddBuilder<'a, T: LruTable<'a, BddPtr<'a>>> {
+pub struct RobddBuilder<'a, T: LruTable<'a, BddPtr<'a>>> {
     compute_table: RefCell<BackedRobinhoodTable<'a, BddNode<'a>>>,
     apply_table: RefCell<T>,
     stats: RefCell<BddBuilderStats>,
     order: RefCell<VarOrder>,
 }
 
-impl<'a, T: LruTable<'a, BddPtr<'a>>> BddBuilder<'a> for StandardBddBuilder<'a, T> {
+impl<'a, T: LruTable<'a, BddPtr<'a>>> BddBuilder<'a> for RobddBuilder<'a, T> {
     /// Normalizes and fetches a node from the store
     fn get_or_insert(&'a self, bdd: BddNode<'a>) -> BddPtr<'a> {
         unsafe {
@@ -277,23 +100,21 @@ impl<'a, T: LruTable<'a, BddPtr<'a>>> BddBuilder<'a> for StandardBddBuilder<'a, 
     }
 }
 
-impl<'a, T: LruTable<'a, BddPtr<'a>>> StandardBddBuilder<'a, T> {
+impl<'a, T: LruTable<'a, BddPtr<'a>>> RobddBuilder<'a, T> {
     /// Make a BDD manager with a default variable ordering
-    pub fn new_default_order(num_vars: usize) -> StandardBddBuilder<'a, AllTable<BddPtr<'a>>> {
+    pub fn new_default_order(num_vars: usize) -> RobddBuilder<'a, AllTable<BddPtr<'a>>> {
         let default_order = VarOrder::linear_order(num_vars);
-        StandardBddBuilder::new(default_order, AllTable::new())
+        RobddBuilder::new(default_order, AllTable::new())
     }
 
-    pub fn new_default_order_lru(
-        num_vars: usize,
-    ) -> StandardBddBuilder<'a, BddApplyTable<BddPtr<'a>>> {
+    pub fn new_default_order_lru(num_vars: usize) -> RobddBuilder<'a, BddApplyTable<BddPtr<'a>>> {
         let default_order = VarOrder::linear_order(num_vars);
-        StandardBddBuilder::new(default_order, BddApplyTable::new(21))
+        RobddBuilder::new(default_order, BddApplyTable::new(21))
     }
 
     /// Creates a new variable manager with the specified order
-    pub fn new(order: VarOrder, table: T) -> StandardBddBuilder<'a, T> {
-        StandardBddBuilder {
+    pub fn new(order: VarOrder, table: T) -> RobddBuilder<'a, T> {
+        RobddBuilder {
             compute_table: RefCell::new(BackedRobinhoodTable::new()),
             order: RefCell::new(order),
             apply_table: RefCell::new(table),
@@ -546,7 +367,7 @@ impl<'a, T: LruTable<'a, BddPtr<'a>>> StandardBddBuilder<'a, T> {
         // now cvec has a list of all the clauses; collapse it down
         fn helper<'a, T: LruTable<'a, BddPtr<'a>>>(
             vec: &[BddPtr<'a>],
-            builder: &'a StandardBddBuilder<'a, T>,
+            builder: &'a RobddBuilder<'a, T>,
         ) -> Option<BddPtr<'a>> {
             if vec.is_empty() {
                 None
@@ -641,7 +462,7 @@ impl<'a, T: LruTable<'a, BddPtr<'a>>> StandardBddBuilder<'a, T> {
         }
     }
 
-    /// Prints the total number of recursive calls executed so far by the StandardBddBuilder
+    /// Prints the total number of recursive calls executed so far by the RobddBuilder
     /// This is a stable way to track performance
     pub fn num_recursive_calls(&self) -> usize {
         self.stats.borrow().num_recursive_calls
@@ -661,14 +482,14 @@ mod tests {
     use maplit::*;
 
     use crate::{
-        builder::bdd_builder::StandardBddBuilder,
+        builder::bdd::robdd::RobddBuilder,
         repr::{cnf::Cnf, robdd::BddPtr, var_label::VarLabel},
     };
 
     // check that (a \/ b) /\ a === a
     #[test]
     fn simple_equality() {
-        let builder = StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(3);
+        let builder = RobddBuilder::<AllTable<BddPtr>>::new_default_order(3);
         let v1 = builder.var(VarLabel::new(0), true);
         let v2 = builder.var(VarLabel::new(1), true);
         let r1 = builder.or(v1, v2);
@@ -683,7 +504,7 @@ mod tests {
 
     #[test]
     fn simple_ite1() {
-        let builder = StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(3);
+        let builder = RobddBuilder::<AllTable<BddPtr>>::new_default_order(3);
         let v1 = builder.var(VarLabel::new(0), true);
         let v2 = builder.var(VarLabel::new(1), true);
         let r1 = builder.or(v1, v2);
@@ -698,7 +519,7 @@ mod tests {
 
     #[test]
     fn test_newvar() {
-        let builder = StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(0);
+        let builder = RobddBuilder::<AllTable<BddPtr>>::new_default_order(0);
         let l1 = builder.new_label();
         let l2 = builder.new_label();
         let v1 = builder.var(l1, true);
@@ -715,7 +536,7 @@ mod tests {
 
     #[test]
     fn test_wmc() {
-        let builder = StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(2);
+        let builder = RobddBuilder::<AllTable<BddPtr>>::new_default_order(2);
         let v1 = builder.var(VarLabel::new(0), true);
         let v2 = builder.var(VarLabel::new(1), true);
         let r1 = builder.or(v1, v2);
@@ -729,7 +550,7 @@ mod tests {
 
     #[test]
     fn test_condition() {
-        let builder = StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(3);
+        let builder = RobddBuilder::<AllTable<BddPtr>>::new_default_order(3);
         let v1 = builder.var(VarLabel::new(0), true);
         let v2 = builder.var(VarLabel::new(1), true);
         let r1 = builder.or(v1, v2);
@@ -739,7 +560,7 @@ mod tests {
 
     #[test]
     fn test_condition_compl() {
-        let builder = StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(3);
+        let builder = RobddBuilder::<AllTable<BddPtr>>::new_default_order(3);
         let v1 = builder.var(VarLabel::new(0), false);
         let v2 = builder.var(VarLabel::new(1), false);
         let r1 = builder.and(v1, v2);
@@ -754,7 +575,7 @@ mod tests {
 
     #[test]
     fn test_exist() {
-        let builder = StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(3);
+        let builder = RobddBuilder::<AllTable<BddPtr>>::new_default_order(3);
         // 1 /\ 2 /\ 3
         let v1 = builder.var(VarLabel::new(0), true);
         let v2 = builder.var(VarLabel::new(1), true);
@@ -773,7 +594,7 @@ mod tests {
 
     #[test]
     fn test_exist_compl() {
-        let builder = StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(3);
+        let builder = RobddBuilder::<AllTable<BddPtr>>::new_default_order(3);
         // 1 /\ 2 /\ 3
         let v1 = builder.var(VarLabel::new(0), false);
         let v2 = builder.var(VarLabel::new(1), false);
@@ -793,7 +614,7 @@ mod tests {
 
     #[test]
     fn test_compose() {
-        let builder = StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(3);
+        let builder = RobddBuilder::<AllTable<BddPtr>>::new_default_order(3);
         let v0 = builder.var(VarLabel::new(0), true);
         let v1 = builder.var(VarLabel::new(1), true);
         let v2 = builder.var(VarLabel::new(2), true);
@@ -810,7 +631,7 @@ mod tests {
 
     #[test]
     fn test_compose_2() {
-        let builder = StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(4);
+        let builder = RobddBuilder::<AllTable<BddPtr>>::new_default_order(4);
         let v0 = builder.var(VarLabel::new(0), true);
         let v1 = builder.var(VarLabel::new(1), true);
         let v2 = builder.var(VarLabel::new(2), true);
@@ -829,7 +650,7 @@ mod tests {
 
     #[test]
     fn test_compose_3() {
-        let builder = StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(4);
+        let builder = RobddBuilder::<AllTable<BddPtr>>::new_default_order(4);
         let v0 = builder.var(VarLabel::new(0), true);
         let v1 = builder.var(VarLabel::new(1), true);
         let v2 = builder.var(VarLabel::new(2), true);
@@ -846,7 +667,7 @@ mod tests {
 
     #[test]
     fn test_compose_4() {
-        let builder = StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(20);
+        let builder = RobddBuilder::<AllTable<BddPtr>>::new_default_order(20);
         let v0 = builder.var(VarLabel::new(4), true);
         let v1 = builder.var(VarLabel::new(5), true);
         let v2 = builder.var(VarLabel::new(6), true);
@@ -863,7 +684,7 @@ mod tests {
 
     #[test]
     fn test_new_label() {
-        let builder = StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(0);
+        let builder = RobddBuilder::<AllTable<BddPtr>>::new_default_order(0);
         let vlbl1 = builder.new_label();
         let vlbl2 = builder.new_label();
         let v1 = builder.var(vlbl1, false);
@@ -880,7 +701,7 @@ mod tests {
 
     #[test]
     fn circuit1() {
-        let builder = StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(3);
+        let builder = RobddBuilder::<AllTable<BddPtr>>::new_default_order(3);
         let x = builder.var(VarLabel::new(0), false);
         let y = builder.var(VarLabel::new(1), true);
         let delta = builder.and(x, y);
@@ -900,7 +721,7 @@ mod tests {
 
     #[test]
     fn simple_cond() {
-        let builder = StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(3);
+        let builder = RobddBuilder::<AllTable<BddPtr>>::new_default_order(3);
         let x = builder.var(VarLabel::new(0), true);
         let y = builder.var(VarLabel::new(1), false);
         let z = builder.var(VarLabel::new(2), false);
@@ -921,7 +742,7 @@ mod tests {
 
     #[test]
     fn wmc_test_2() {
-        let builder = StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(4);
+        let builder = RobddBuilder::<AllTable<BddPtr>>::new_default_order(4);
         let x = builder.var(VarLabel::new(0), true);
         let y = builder.var(VarLabel::new(1), true);
         let f1 = builder.var(VarLabel::new(2), true);
@@ -945,7 +766,7 @@ mod tests {
     #[allow(clippy::assertions_on_constants)] // TODO: why does this test have assert!(true) ?
     #[test]
     fn iff_regression() {
-        let builder = StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(0);
+        let builder = RobddBuilder::<AllTable<BddPtr>>::new_default_order(0);
         let mut ptrvec = Vec::new();
         for _ in 0..40 {
             let vlab = builder.new_label();
@@ -963,7 +784,7 @@ mod tests {
 
     #[test]
     fn test_ite_1() {
-        let builder = StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(16);
+        let builder = RobddBuilder::<AllTable<BddPtr>>::new_default_order(16);
         let c1 = Cnf::from_string(String::from("(1 || 2) && (0 || -2)"));
         let c2 = Cnf::from_string(String::from("(0 || 1) && (-4 || -7)"));
         let cnf1 = builder.from_cnf(&c1);

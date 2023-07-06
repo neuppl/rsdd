@@ -1,4 +1,4 @@
-use crate::builder::bdd_builder::{BddPtr, DDNNFPtr, StandardBddBuilder};
+use crate::builder::bdd_builder::{BddPtr, DDNNFPtr, RobddBuilder};
 use crate::builder::cache::lru_app::BddApplyTable;
 use crate::builder::sdd::builder::SddBuilder;
 use crate::builder::sdd::compression::CompressionSddBuilder;
@@ -48,8 +48,7 @@ pub fn vtree(cnf_input: String, vtree_type_input: JsValue) -> Result<JsValue, Js
 pub fn bdd(cnf_input: String) -> String {
     let cnf = Cnf::from_file(cnf_input);
 
-    let builder =
-        StandardBddBuilder::<BddApplyTable<BddPtr>>::new_default_order_lru(cnf.num_vars());
+    let builder = RobddBuilder::<BddApplyTable<BddPtr>>::new_default_order_lru(cnf.num_vars());
     let bdd = builder.from_cnf(&cnf);
 
     let json = ser_bdd::BDDSerializer::from_bdd(bdd);
@@ -64,7 +63,7 @@ pub fn bdd_with_var_order(cnf_input: String, order: &[u64]) -> String {
 
     let var_order = VarOrder::new(order.iter().map(|v| VarLabel::new(*v)).collect());
 
-    let builder = StandardBddBuilder::new(var_order, BddApplyTable::new(21));
+    let builder = RobddBuilder::new(var_order, BddApplyTable::new(21));
     let bdd = builder.from_cnf(&cnf);
 
     let json = ser_bdd::BDDSerializer::from_bdd(bdd);

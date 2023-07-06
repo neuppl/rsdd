@@ -148,10 +148,11 @@ fn compile_sdd_rightlinear(str: String, _args: &Args) -> BenchResult {
 }
 
 fn compile_bdd(str: String, _args: &Args) -> BenchResult {
-    use rsdd::builder::bdd_builder::*;
+    use rsdd::builder::bdd::robdd::RobddBuilder;
+    use rsdd::repr::robdd::BddPtr;
+
     let cnf = Cnf::from_file(str);
-    let builder =
-        StandardBddBuilder::<BddApplyTable<BddPtr>>::new_default_order_lru(cnf.num_vars());
+    let builder = RobddBuilder::<BddApplyTable<BddPtr>>::new_default_order_lru(cnf.num_vars());
     let _bdd = builder.from_cnf(&cnf);
 
     if let Some(path) = &_args.dump_bdd {
@@ -168,12 +169,14 @@ fn compile_bdd(str: String, _args: &Args) -> BenchResult {
 }
 
 fn compile_bdd_dtree(str: String, _args: &Args) -> BenchResult {
-    use rsdd::builder::bdd_builder::*;
+    use rsdd::builder::bdd::robdd::RobddBuilder;
+    use rsdd::repr::robdd::BddPtr;
+
     let cnf = Cnf::from_file(str);
     let order = cnf.min_fill_order();
     let dtree = DTree::from_cnf(&cnf, &order);
     let builder =
-        StandardBddBuilder::<BddApplyTable<BddPtr>>::new(order, BddApplyTable::new(cnf.num_vars()));
+        RobddBuilder::<BddApplyTable<BddPtr>>::new(order, BddApplyTable::new(cnf.num_vars()));
     let plan = BddPlan::from_dtree(&dtree);
     let bdd = builder.compile_plan(&plan);
 
