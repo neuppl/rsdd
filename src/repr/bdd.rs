@@ -176,15 +176,6 @@ impl<'a> BddPtr<'a> {
         }
     }
 
-    /// get a pointer to the node that this BDD points to
-    /// panics if not a node
-    pub fn bdd_node_ref(&self) -> &'a BddNode<'a> {
-        match self {
-            Compl(x) | Reg(x) => x,
-            _ => panic!("Attempting to deref non-node BDD pointer"),
-        }
-    }
-
     #[inline]
     pub fn new_compl(n: &'a BddNode) -> BddPtr<'a> {
         Compl(n)
