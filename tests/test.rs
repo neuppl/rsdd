@@ -253,11 +253,11 @@ fn get_canonical_forms() -> Vec<(Cnf, Cnf)> {
 #[test]
 fn test_bdd_canonicity() {
     for (cnf1, cnf2) in get_canonical_forms().into_iter() {
-        let man = StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(cnf1.num_vars());
-        let r1 = man.from_cnf(&cnf1);
-        let r2 = man.from_cnf(&cnf2);
+        let builder = StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(cnf1.num_vars());
+        let r1 = builder.from_cnf(&cnf1);
+        let r2 = builder.from_cnf(&cnf2);
         assert!(
-            builder::BottomUpBuilder::eq(&man, r1, r2),
+            builder::BottomUpBuilder::eq(&builder, r1, r2),
             "Not eq\nCNF 1: {:?}\nCNF 2: {:?}\nBDD 1:{}\n BDD 2: {}",
             cnf1,
             cnf2,
@@ -274,16 +274,16 @@ fn test_sdd_canonicity() {
             .map(|x| VarLabel::new(x as u64))
             .collect();
         let vtree = VTree::even_split(&v, 1);
-        let man = CompressionSddBuilder::new(vtree);
-        let r1 = man.from_cnf(&cnf1);
-        let r2 = man.from_cnf(&cnf2);
+        let builder = CompressionSddBuilder::new(vtree);
+        let r1 = builder.from_cnf(&cnf1);
+        let r2 = builder.from_cnf(&cnf2);
         assert!(
-            builder::BottomUpBuilder::eq(&man, r1, r2),
+            builder::BottomUpBuilder::eq(&builder, r1, r2),
             "Not eq\nCNF 1: {:?}\nCNF 2: {:?}\nSDD 1:{}\n SDD 2: {}",
             cnf1,
             cnf2,
-            man.print_sdd(r1),
-            man.print_sdd(r2)
+            builder.print_sdd(r1),
+            builder.print_sdd(r2)
         );
     }
 }
@@ -295,20 +295,20 @@ fn test_sdd_is_canonical() {
             .map(|x| VarLabel::new(x as u64))
             .collect();
         let vtree = VTree::even_split(&v, 1);
-        let man = CompressionSddBuilder::new(vtree);
-        let r1 = man.from_cnf(&cnf1);
-        let r2 = man.from_cnf(&cnf2);
+        let builder = CompressionSddBuilder::new(vtree);
+        let r1 = builder.from_cnf(&cnf1);
+        let r2 = builder.from_cnf(&cnf2);
         assert!(
             r1.is_canonical(),
             "Not canonical\nCNF 1: {:?}\nSDD 1:{}",
             cnf1,
-            man.print_sdd(r1),
+            builder.print_sdd(r1),
         );
         assert!(
             r2.is_canonical(),
             "Not canonical\nCNF 2: {:?}\nSDD 2:{}",
             cnf2,
-            man.print_sdd(r2),
+            builder.print_sdd(r2),
         );
     }
 }
@@ -339,26 +339,26 @@ mod test_bdd_builder {
 
     quickcheck! {
         fn test_cond_and(c: Cnf) -> bool {
-            let mgr = super::StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(16);
-            let cnf = mgr.from_cnf(&c);
+            let builder = super::StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(16);
+            let cnf = builder.from_cnf(&c);
             let v1 = VarLabel::new(0);
-            let bdd1 = mgr.exists(cnf, v1);
+            let bdd1 = builder.exists(cnf, v1);
 
-            let bdd2 = mgr.condition(cnf, v1, true);
-            let bdd3 = mgr.condition(cnf, v1, false);
-            let bdd4 = mgr.or(bdd2, bdd3);
+            let bdd2 = builder.condition(cnf, v1, true);
+            let bdd3 = builder.condition(cnf, v1, false);
+            let bdd4 = builder.or(bdd2, bdd3);
             bdd4 == bdd1
         }
     }
 
     quickcheck! {
         fn test_ite_and(c1: Cnf, c2: Cnf) -> bool {
-            let mgr = super::StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(16);
-            let cnf1 = mgr.from_cnf(&c1);
-            let cnf2 = mgr.from_cnf(&c2);
+            let builder = super::StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(16);
+            let cnf1 = builder.from_cnf(&c1);
+            let cnf2 = builder.from_cnf(&c2);
 
-            let itebdd = mgr.ite(cnf1, cnf2, BddPtr::false_ptr());
-            let andbdd = mgr.and(cnf1, cnf2);
+            let itebdd = builder.ite(cnf1, cnf2, BddPtr::false_ptr());
+            let andbdd = builder.and(cnf1, cnf2);
 
             andbdd == itebdd
         }
@@ -368,14 +368,14 @@ mod test_bdd_builder {
         fn bdd_ite_iff(c1: Cnf, c2: Cnf) -> TestResult {
             if c1.num_vars() == 0 || c1.num_vars() > 8 { return TestResult::discard() }
             if c1.clauses().len() > 12 { return TestResult::discard() }
-            let mgr = super::StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(16);
-            let cnf1 = mgr.from_cnf(&c1);
-            let cnf2 = mgr.from_cnf(&c2);
-            let iff1 = mgr.iff(cnf1, cnf2);
+            let builder = super::StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(16);
+            let cnf1 = builder.from_cnf(&c1);
+            let cnf2 = builder.from_cnf(&c2);
+            let iff1 = builder.iff(cnf1, cnf2);
 
-            let clause1 = mgr.and(cnf1, cnf2);
-            let clause2 = mgr.and(cnf1.neg(), cnf2.neg());
-            let and = mgr.or(clause1, clause2);
+            let clause1 = builder.and(cnf1, cnf2);
+            let clause2 = builder.and(cnf1.neg(), cnf2.neg());
+            let and = builder.or(clause1, clause2);
 
             if and != iff1 {
                 println!("cnf1: {}", c1);
@@ -390,14 +390,14 @@ mod test_bdd_builder {
         fn compile_with_assignments(c1: Cnf) -> TestResult {
             if c1.num_vars() < 3 || c1.num_vars() > 8 { return TestResult::discard() }
             if c1.clauses().len() > 12 { return TestResult::discard() }
-            let mgr = super::StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(c1.num_vars());
+            let builder = super::StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(c1.num_vars());
             let mut pm = PartialModel::from_litvec(&Vec::new(), c1.num_vars());
             pm.set(VarLabel::new(0), true);
             pm.set(VarLabel::new(1), true);
-            let cnf1 = mgr.from_cnf_with_assignments(&c1, &pm);
-            let mut cnf2 = mgr.from_cnf(&c1);
-            cnf2 = mgr.condition(cnf2, VarLabel::new(0), true);
-            cnf2 = mgr.condition(cnf2, VarLabel::new(1), true);
+            let cnf1 = builder.from_cnf_with_assignments(&c1, &pm);
+            let mut cnf2 = builder.from_cnf(&c1);
+            cnf2 = builder.condition(cnf2, VarLabel::new(0), true);
+            cnf2 = builder.condition(cnf2, VarLabel::new(1), true);
             assert_eq!(cnf1, cnf2);
             TestResult::from_bool(cnf1 == cnf2)
         }
@@ -410,10 +410,10 @@ mod test_bdd_builder {
             if c1.num_vars() == 0 || c1.num_vars() > 8 { return TestResult::discard() }
             if c1.clauses().len() > 16 { return TestResult::discard() }
 
-            let mgr = super::StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(c1.num_vars());
+            let builder = super::StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(c1.num_vars());
             let weight = create_semantic_hash_map::<{crate::BIG_PRIME}>(c1.num_vars());
-            let cnf1 = mgr.from_cnf(&c1);
-            let bddres = cnf1.wmc(mgr.get_order(), &weight);
+            let cnf1 = builder.from_cnf(&c1);
+            let bddres = cnf1.wmc(builder.get_order(), &weight);
             let cnfres = c1.wmc(&weight);
             TestResult::from_bool(bddres == cnfres)
         }
@@ -422,28 +422,28 @@ mod test_bdd_builder {
     quickcheck! {
         /// test that an SDD and BDD both have the same semantic hash
         fn sdd_semantic_eq_bdd(c1: Cnf, vtree: VTree) -> bool {
-            let bdd_mgr = super::StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(c1.num_vars());
-            let sdd_mgr = super::CompressionSddBuilder::new(vtree);
+            let bdd_builder = super::StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(c1.num_vars());
+            let sdd_builder = super::CompressionSddBuilder::new(vtree);
             let map : WmcParams<rsdd::util::semirings::finitefield::FiniteField<{ crate::BIG_PRIME }>>= create_semantic_hash_map(c1.num_vars());
-            let bdd = bdd_mgr.from_cnf(&c1);
-            let sdd = sdd_mgr.from_cnf(&c1);
-            bdd.semantic_hash(bdd_mgr.get_order(), &map) == sdd.semantic_hash(sdd_mgr.get_vtree_manager(), &map)
+            let bdd = bdd_builder.from_cnf(&c1);
+            let sdd = sdd_builder.from_cnf(&c1);
+            bdd.semantic_hash(bdd_builder.get_order(), &map) == sdd.semantic_hash(sdd_builder.get_vtree_manager(), &map)
         }
     }
 
     quickcheck! {
         /// test that an SDD and BDD both have the same semantic hash with min-fill order
         fn sdd_semantic_eq_bdd_dtree(c1: Cnf) -> bool {
-            let bdd_mgr = super::StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(c1.num_vars());
+            let bdd_builder = super::StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(c1.num_vars());
             let min_fill_order = c1.min_fill_order();
             let dtree = DTree::from_cnf(&c1, &min_fill_order);
             let vtree = VTree::from_dtree(&dtree).unwrap();
 
-            let sdd_mgr = super::CompressionSddBuilder::new(vtree);
+            let sdd_builder = super::CompressionSddBuilder::new(vtree);
             let map : WmcParams<rsdd::util::semirings::finitefield::FiniteField<{ crate::BIG_PRIME }>>= create_semantic_hash_map(c1.num_vars());
-            let bdd = bdd_mgr.from_cnf(&c1);
-            let sdd = sdd_mgr.from_cnf(&c1);
-            bdd.semantic_hash(bdd_mgr.get_order(), &map) == sdd.semantic_hash(sdd_mgr.get_vtree_manager(), &map)
+            let bdd = bdd_builder.from_cnf(&c1);
+            let sdd = sdd_builder.from_cnf(&c1);
+            bdd.semantic_hash(bdd_builder.get_order(), &map) == sdd.semantic_hash(sdd_builder.get_vtree_manager(), &map)
         }
     }
 
@@ -453,18 +453,18 @@ mod test_bdd_builder {
             if c1.num_vars() == 0 || c1.num_vars() > 8 { return TestResult::discard() }
             if c1.clauses().len() > 16 { return TestResult::discard() }
 
-            let mgr = super::StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(c1.num_vars());
+            let builder = super::StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(c1.num_vars());
             let weight_map : HashMap<VarLabel, (RealSemiring, RealSemiring)> = HashMap::from_iter(
                 (0..16).map(|x| (VarLabel::new(x as u64), (RealSemiring(0.3), RealSemiring(0.7)))));
             let order = VarOrder::linear_order(c1.num_vars());
-            let cnf1 = mgr.from_cnf(&c1);
+            let cnf1 = builder.from_cnf(&c1);
 
-            let mgr2 = DecisionNNFBuilder::new(order);
-            let dnnf = mgr2.from_cnf_topdown(&c1);
+            let builder2 = DecisionNNFBuilder::new(order);
+            let dnnf = builder2.from_cnf_topdown(&c1);
 
             let bddwmc = super::repr::wmc::WmcParams::new_with_default(RealSemiring::zero(), RealSemiring::one(), weight_map);
-            let bddres = cnf1.wmc(mgr.get_order(),  &bddwmc);
-            let dnnfres = dnnf.wmc(mgr.get_order(), &bddwmc);
+            let bddres = cnf1.wmc(builder.get_order(),  &bddwmc);
+            let dnnfres = dnnf.wmc(builder.get_order(), &bddwmc);
             let eps = f64::abs(bddres.0 - dnnfres.0) < 0.0001;
             if !eps {
               println!("error on input {}: bddres {}, cnfres {}\n topdown bdd: {}\nbottom-up bdd: {}",
@@ -477,17 +477,17 @@ mod test_bdd_builder {
     quickcheck! {
         /// test if the lru cache and the all cache give the same results
         fn bdd_lru(c1: Cnf) -> TestResult {
-            let mgr1 = super::StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(16);
-            let mgr2 = super::StandardBddBuilder::<BddApplyTable<BddPtr>>::new_default_order_lru(16);
+            let builder1 = super::StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(16);
+            let builder2 = super::StandardBddBuilder::<BddApplyTable<BddPtr>>::new_default_order_lru(16);
 
             let weight_map : HashMap<VarLabel, (RealSemiring, RealSemiring)> = HashMap::from_iter(
                 (0..16).map(|x| (VarLabel::new(x as u64), (RealSemiring(0.3), RealSemiring(0.7)))));
 
             let bddwmc = super::repr::wmc::WmcParams::new_with_default(RealSemiring::zero(), RealSemiring::one(), weight_map);
-            let cnf1 = mgr1.from_cnf(&c1);
-            let cnf2 = mgr2.from_cnf(&c1);
-            let wmc1 = cnf1.wmc(mgr1.get_order(), &bddwmc);
-            let wmc2 = cnf2.wmc(mgr2.get_order(), &bddwmc);
+            let cnf1 = builder1.from_cnf(&c1);
+            let cnf2 = builder2.from_cnf(&c1);
+            let wmc1 = cnf1.wmc(builder1.get_order(), &bddwmc);
+            let wmc2 = cnf2.wmc(builder2.get_order(), &bddwmc);
             TestResult::from_bool(f64::abs(wmc1.0 - wmc2.0) < 0.00001)
         }
     }
@@ -499,10 +499,10 @@ mod test_bdd_builder {
             if c1.num_vars() < 5 || c1.num_vars() > 8 { return TestResult::discard() }
             if c1.clauses().len() > 14 { return TestResult::discard() }
 
-            let mgr = super::StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(c1.num_vars());
+            let builder = super::StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(c1.num_vars());
             let weight_map : HashMap<VarLabel, (RealSemiring, RealSemiring)> = HashMap::from_iter(
                 (0..16).map(|x| (VarLabel::new(x as u64), (RealSemiring(0.3), RealSemiring(0.7)))));
-            let cnf = mgr.from_cnf(&c1);
+            let cnf = builder.from_cnf(&c1);
             let vars = vec![VarLabel::new(0), VarLabel::new(2), VarLabel::new(4)];
             if !c1.var_in_cnf(VarLabel::new(0))
                || !c1.var_in_cnf(VarLabel::new(2))
@@ -511,21 +511,21 @@ mod test_bdd_builder {
             }
             let wmc = WmcParams::new_with_default(RealSemiring::zero(), RealSemiring::one(), weight_map);
 
-            let (marg_prob, marg_assgn) = cnf.marginal_map(&vars, mgr.num_vars(), &wmc);
-            let (marg_prob_bb, marg_assgn_bb) = cnf.bb(&vars, mgr.num_vars(), &wmc);
+            let (marg_prob, marg_assgn) = cnf.marginal_map(&vars, builder.num_vars(), &wmc);
+            let (marg_prob_bb, marg_assgn_bb) = cnf.bb(&vars, builder.num_vars(), &wmc);
             let assignments = vec![(true, true, true), (true, true, false), (true, false, true), (true, false, false),
                                    (false, true, true), (false, true, false), (false, false, true), (false, false, false)];
 
             let mut max : f64 = -10.0;
             let mut max_assgn : PartialModel = PartialModel::from_litvec(&[], c1.num_vars());
             for (v1, v2, v3) in assignments.iter() {
-                let x = mgr.var(VarLabel::new(0), *v1);
-                let y = mgr.var(VarLabel::new(2), *v2);
-                let z = mgr.var(VarLabel::new(4), *v3);
-                let mut conj = mgr.and(x, y);
-                conj = mgr.and(conj, z);
-                conj = mgr.and(conj, cnf);
-                let poss_max = conj.wmc(mgr.get_order(), &wmc);
+                let x = builder.var(VarLabel::new(0), *v1);
+                let y = builder.var(VarLabel::new(2), *v2);
+                let z = builder.var(VarLabel::new(4), *v3);
+                let mut conj = builder.and(x, y);
+                conj = builder.and(conj, z);
+                conj = builder.and(conj, cnf);
+                let poss_max = conj.wmc(builder.get_order(), &wmc);
                 if poss_max.0 > max {
                     max = poss_max.0;
                     max_assgn.set(VarLabel::new(0), *v1);
@@ -549,23 +549,23 @@ mod test_bdd_builder {
             // if v != w {
             //     println!("{:?},{:?}",v,w);
             // }
-            let v0 = mgr.var(vars[0], v[0]);
-            let v1 = mgr.var(vars[1], v[1]);
-            let v2 = mgr.var(vars[2], v[2]);
-            let mut conj = mgr.and(v0, v1);
-            conj = mgr.and(conj, v2);
-            conj = mgr.and(conj, cnf);
-            let poss_max = conj.wmc(mgr.get_order(), &wmc);
+            let v0 = builder.var(vars[0], v[0]);
+            let v1 = builder.var(vars[1], v[1]);
+            let v2 = builder.var(vars[2], v[2]);
+            let mut conj = builder.and(v0, v1);
+            conj = builder.and(conj, v2);
+            conj = builder.and(conj, cnf);
+            let poss_max = conj.wmc(builder.get_order(), &wmc);
             if f64::abs(poss_max.0 - max) > 0.0001 {
                 pm_check = false;
             }
-            let w0 = mgr.var(vars[0], w[0]);
-            let w1 = mgr.var(vars[1], w[1]);
-            let w2 = mgr.var(vars[2], w[2]);
-            let mut conj2 = mgr.and(w0, w1);
-            conj2 = mgr.and(conj2, w2);
-            mgr.and(conj2, cnf);
-            let poss_max2 = conj.wmc(mgr.get_order(), &wmc);
+            let w0 = builder.var(vars[0], w[0]);
+            let w1 = builder.var(vars[1], w[1]);
+            let w2 = builder.var(vars[2], w[2]);
+            let mut conj2 = builder.and(w0, w1);
+            conj2 = builder.and(conj2, w2);
+            builder.and(conj2, cnf);
+            let poss_max2 = conj.wmc(builder.get_order(), &wmc);
             if f64::abs(poss_max2.0 - max) > 0.0001 {
                 pm_check = false;
             }
@@ -583,8 +583,8 @@ mod test_bdd_builder {
             // constrain the size, make BDD
             if !(5..=8).contains(&n) { return TestResult::discard() }
             if c1.clauses().len() > 14 { return TestResult::discard() }
-            let mgr = super::StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(n);
-            let cnf = mgr.from_cnf(&c1);
+            let builder = super::StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(n);
+            let cnf = builder.from_cnf(&c1);
 
             // randomizing the decisions
             let mut rng = rand::thread_rng();
@@ -620,8 +620,8 @@ mod test_bdd_builder {
             let vars = decisions.clone();
             let wmc = WmcParams::new_with_default(ExpectedUtility::zero(), ExpectedUtility::one(), weight_map);
 
-            let (meu , meu_assgn) = cnf.meu(&vars, mgr.num_vars(), &wmc);
-            let (meu_bb, meu_assgn_bb) = cnf.bb(&vars, mgr.num_vars(), &wmc);
+            let (meu , meu_assgn) = cnf.meu(&vars, builder.num_vars(), &wmc);
+            let (meu_bb, meu_assgn_bb) = cnf.bb(&vars, builder.num_vars(), &wmc);
 
             // brute-force meu
             let assignments = vec![(true, true, true), (true, true, false), (true, false, true), (true, false, false),
@@ -629,13 +629,13 @@ mod test_bdd_builder {
             let mut max : f64 = -10000.0;
             let mut max_assgn : PartialModel = PartialModel::from_litvec(&[], c1.num_vars());
             for (v1, v2, v3) in assignments.iter() {
-                let x = mgr.var(decisions[0], *v1);
-                let y = mgr.var(decisions[1], *v2);
-                let z = mgr.var(decisions[2], *v3);
-                let mut conj = mgr.and(x, y);
-                conj = mgr.and(conj, z);
-                conj = mgr.and(conj, cnf);
-                let poss_max = conj.wmc(mgr.get_order(), &wmc);
+                let x = builder.var(decisions[0], *v1);
+                let y = builder.var(decisions[1], *v2);
+                let z = builder.var(decisions[2], *v3);
+                let mut conj = builder.and(x, y);
+                conj = builder.and(conj, z);
+                conj = builder.and(conj, cnf);
+                let poss_max = conj.wmc(builder.get_order(), &wmc);
                 if poss_max.1 > max {
                     max = poss_max.1;
                     max_assgn.set(decisions[0], *v1);
@@ -664,23 +664,23 @@ mod test_bdd_builder {
             // if v != w {
             //     println!("{:?},{:?}",v,w);
             // }
-            let v0 = mgr.var(decisions[0], v[0]);
-            let v1 = mgr.var(decisions[1], v[1]);
-            let v2 = mgr.var(decisions[2], v[2]);
-            let mut conj = mgr.and(v0, v1);
-            conj = mgr.and(conj, v2);
-            conj = mgr.and(conj, cnf);
-            let poss_max = conj.wmc(mgr.get_order(), &wmc);
+            let v0 = builder.var(decisions[0], v[0]);
+            let v1 = builder.var(decisions[1], v[1]);
+            let v2 = builder.var(decisions[2], v[2]);
+            let mut conj = builder.and(v0, v1);
+            conj = builder.and(conj, v2);
+            conj = builder.and(conj, cnf);
+            let poss_max = conj.wmc(builder.get_order(), &wmc);
             if f64::abs(poss_max.1 - max) > 0.0001 {
                 pm_check = false;
             }
-            let w0 = mgr.var(decisions[0], w[0]);
-            let w1 = mgr.var(decisions[1], w[1]);
-            let w2 = mgr.var(decisions[2], w[2]);
-            let mut conj2 = mgr.and(w0, w1);
-            conj2 = mgr.and(conj2, w2);
-            mgr.and(conj2, cnf);
-            let poss_max2 = conj.wmc(mgr.get_order(), &wmc);
+            let w0 = builder.var(decisions[0], w[0]);
+            let w1 = builder.var(decisions[1], w[1]);
+            let w2 = builder.var(decisions[2], w[2]);
+            let mut conj2 = builder.and(w0, w1);
+            conj2 = builder.and(conj2, w2);
+            builder.and(conj2, cnf);
+            let poss_max2 = conj.wmc(builder.get_order(), &wmc);
             if f64::abs(poss_max2.1 - max) > 0.0001 {
                 pm_check = false;
             }
@@ -717,14 +717,14 @@ mod test_sdd_builder {
     quickcheck! {
         fn test_cond_and(c: Cnf) -> bool {
             let order : Vec<VarLabel> = (0..16).map(VarLabel::new).collect();
-            let mgr = super::CompressionSddBuilder::new(VTree::even_split(&order, 4));
-            let cnf = mgr.from_cnf(&c);
+            let builder = super::CompressionSddBuilder::new(VTree::even_split(&order, 4));
+            let cnf = builder.from_cnf(&c);
             let v1 = VarLabel::new(0);
-            let bdd1 = mgr.exists(cnf, v1);
+            let bdd1 = builder.exists(cnf, v1);
 
-            let bdd2 = mgr.condition(cnf, v1, true);
-            let bdd3 = mgr.condition(cnf, v1, false);
-            let bdd4 = mgr.or(bdd2, bdd3);
+            let bdd2 = builder.condition(cnf, v1, true);
+            let bdd3 = builder.condition(cnf, v1, false);
+            let bdd4 = builder.or(bdd2, bdd3);
             bdd4 == bdd1
         }
     }
@@ -735,17 +735,17 @@ mod test_sdd_builder {
             let order : Vec<VarLabel> = (0..16).map(VarLabel::new).collect();
             // let vtree = VTree::even_split(&order, 4);
             let vtree = VTree::right_linear(&order);
-            let mgr = super::CompressionSddBuilder::new(vtree);
-            let cnf1 = mgr.from_cnf(&c1);
-            let cnf2 = mgr.from_cnf(&c2);
-            let iff1 = mgr.iff(cnf1, cnf2);
+            let builder = super::CompressionSddBuilder::new(vtree);
+            let cnf1 = builder.from_cnf(&c1);
+            let cnf2 = builder.from_cnf(&c2);
+            let iff1 = builder.iff(cnf1, cnf2);
 
-            let clause1 = mgr.and(cnf1, cnf2);
-            let clause2 = mgr.and(cnf1.neg(), cnf2.neg());
-            let and = mgr.or(clause1, clause2);
+            let clause1 = builder.and(cnf1, cnf2);
+            let clause2 = builder.and(cnf1.neg(), cnf2.neg());
+            let and = builder.or(clause1, clause2);
 
             if and != iff1 {
-                println!("Not equal:\n{}\n{}", mgr.print_sdd(and), mgr.print_sdd(iff1));
+                println!("Not equal:\n{}\n{}", builder.print_sdd(and), builder.print_sdd(iff1));
             }
 
             and == iff1
@@ -756,17 +756,17 @@ mod test_sdd_builder {
         fn ite_iff_split(c1: Cnf, c2: Cnf) -> bool {
             let order : Vec<VarLabel> = (0..16).map(VarLabel::new).collect();
             let vtree = VTree::even_split(&order, 4);
-            let mgr = super::CompressionSddBuilder::new(vtree);
-            let cnf1 = mgr.from_cnf(&c1);
-            let cnf2 = mgr.from_cnf(&c2);
-            let iff1 = mgr.iff(cnf1, cnf2);
+            let builder = super::CompressionSddBuilder::new(vtree);
+            let cnf1 = builder.from_cnf(&c1);
+            let cnf2 = builder.from_cnf(&c2);
+            let iff1 = builder.iff(cnf1, cnf2);
 
-            let clause1 = mgr.and(cnf1, cnf2);
-            let clause2 = mgr.and(cnf1.neg(), cnf2.neg());
-            let and = mgr.or(clause1, clause2);
+            let clause1 = builder.and(cnf1, cnf2);
+            let clause2 = builder.and(cnf1.neg(), cnf2.neg());
+            let and = builder.or(clause1, clause2);
 
             if and != iff1 {
-                println!("Not equal:\n{}\n{}", mgr.print_sdd(and), mgr.print_sdd(iff1));
+                println!("Not equal:\n{}\n{}", builder.print_sdd(and), builder.print_sdd(iff1));
             }
 
             and == iff1
@@ -783,14 +783,14 @@ mod test_sdd_builder {
 
            let weight_map = create_semantic_hash_map::< {crate::BIG_PRIME} >(cnf.num_vars());
            let order : Vec<VarLabel> = (0..cnf.num_vars()).map(|x| VarLabel::new(x as u64)).collect();
-           let mgr = super::CompressionSddBuilder::new(VTree::even_split(&order, 3));
-           let cnf_sdd = mgr.from_cnf(&cnf);
-           let sdd_res = cnf_sdd.semantic_hash(mgr.get_vtree_manager(), &weight_map);
+           let builder = super::CompressionSddBuilder::new(VTree::even_split(&order, 3));
+           let cnf_sdd = builder.from_cnf(&cnf);
+           let sdd_res = cnf_sdd.semantic_hash(builder.get_vtree_manager(), &weight_map);
 
 
-            let bddmgr = StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(cnf.num_vars());
-            let cnf_bdd = bddmgr.from_cnf(&cnf);
-            let bdd_res = cnf_bdd.semantic_hash(bddmgr.get_order(), &weight_map);
+            let bddbuilder = StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(cnf.num_vars());
+            let cnf_bdd = bddbuilder.from_cnf(&cnf);
+            let bdd_res = cnf_bdd.semantic_hash(bddbuilder.get_order(), &weight_map);
             assert_eq!(bdd_res, sdd_res);
             TestResult::passed()
         }
@@ -808,14 +808,14 @@ mod test_sdd_builder {
             let vtree = VTree::from_dtree(&dtree).unwrap();
 
             let weight_map = create_semantic_hash_map::< {crate::BIG_PRIME} >(cnf.num_vars());
-            let mgr = super::CompressionSddBuilder::new(vtree);
-            let cnf_sdd = mgr.from_cnf(&cnf);
-            let sdd_res = cnf_sdd.semantic_hash(mgr.get_vtree_manager(), &weight_map);
+            let builder = super::CompressionSddBuilder::new(vtree);
+            let cnf_sdd = builder.from_cnf(&cnf);
+            let sdd_res = cnf_sdd.semantic_hash(builder.get_vtree_manager(), &weight_map);
 
 
-            let bddmgr = StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(cnf.num_vars());
-            let cnf_bdd = bddmgr.from_cnf(&cnf);
-            let bdd_res = cnf_bdd.semantic_hash(bddmgr.get_order(), &weight_map);
+            let bddbuilder = StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(cnf.num_vars());
+            let cnf_bdd = bddbuilder.from_cnf(&cnf);
+            let bdd_res = cnf_bdd.semantic_hash(bddbuilder.get_order(), &weight_map);
             assert_eq!(bdd_res, sdd_res);
             TestResult::passed()
         }
@@ -855,8 +855,8 @@ mod test_sdd_builder {
         fn sdd_compressed_right_linear(c: Cnf) -> bool {
             let order : Vec<VarLabel> = (0..16).map(VarLabel::new).collect();
             let vtree = VTree::right_linear(&order);
-            let mgr = super::CompressionSddBuilder::new(vtree);
-            let cnf = mgr.from_cnf(&c);
+            let builder = super::CompressionSddBuilder::new(vtree);
+            let cnf = builder.from_cnf(&c);
             cnf.is_compressed()
         }
     }
@@ -865,8 +865,8 @@ mod test_sdd_builder {
         fn sdd_trimmed_right_linear(c: Cnf) -> bool {
             let order : Vec<VarLabel> = (0..16).map(VarLabel::new).collect();
             let vtree = VTree::right_linear(&order);
-            let mgr = super::CompressionSddBuilder::new(vtree);
-            let cnf = mgr.from_cnf(&c);
+            let builder = super::CompressionSddBuilder::new(vtree);
+            let cnf = builder.from_cnf(&c);
 
             cnf.is_trimmed()
         }
@@ -874,33 +874,33 @@ mod test_sdd_builder {
 
     quickcheck! {
         fn sdd_compressed_arbitrary_vtree(c: Cnf, vtree: VTree) -> bool {
-            let mgr = super::CompressionSddBuilder::new(vtree);
-            let cnf = mgr.from_cnf(&c);
+            let builder = super::CompressionSddBuilder::new(vtree);
+            let cnf = builder.from_cnf(&c);
             cnf.is_compressed()
         }
     }
 
     quickcheck! {
         fn sdd_trimmed_arbitrary_vtree(c: Cnf, vtree: VTree) -> bool {
-            let mgr = super::CompressionSddBuilder::new(vtree);
-            let cnf = mgr.from_cnf(&c);
+            let builder = super::CompressionSddBuilder::new(vtree);
+            let cnf = builder.from_cnf(&c);
             cnf.is_trimmed()
         }
     }
 
     quickcheck! {
         fn prob_equiv_trivial(c: Cnf, vtree:VTree) -> bool {
-            let mgr1 = CompressionSddBuilder::new(vtree.clone());
-            let c1 = mgr1.from_cnf(&c);
+            let builder1 = CompressionSddBuilder::new(vtree.clone());
+            let c1 = builder1.from_cnf(&c);
 
             // in this test, compression is still enabled; c2 should be identical to c1
-            let mgr2 = SemanticSddBuilder::<{ crate::BIG_PRIME }>::new(vtree);
-            let c2 = mgr2.from_cnf(&c);
+            let builder2 = SemanticSddBuilder::<{ crate::BIG_PRIME }>::new(vtree);
+            let c2 = builder2.from_cnf(&c);
 
-            let map : WmcParams<FiniteField<{ crate::BIG_PRIME }>> = create_semantic_hash_map(mgr1.num_vars());
+            let map : WmcParams<FiniteField<{ crate::BIG_PRIME }>> = create_semantic_hash_map(builder1.num_vars());
 
-            let h1 = c1.semantic_hash(mgr1.get_vtree_manager(), &map);
-            let h2 = c2.semantic_hash(mgr2.get_vtree_manager(), &map);
+            let h1 = c1.semantic_hash(builder1.get_vtree_manager(), &map);
+            let h2 = c2.semantic_hash(builder2.get_vtree_manager(), &map);
 
             h1 == h2
         }
@@ -908,23 +908,23 @@ mod test_sdd_builder {
 
     quickcheck! {
         fn prob_equiv_sdd_identity_uncompressed_depr(c: Cnf, vtree:VTree) -> TestResult {
-            let compr_mgr = super::CompressionSddBuilder::new(vtree.clone());
-            let compr_cnf = compr_mgr.from_cnf(&c);
+            let compr_builder = super::CompressionSddBuilder::new(vtree.clone());
+            let compr_cnf = compr_builder.from_cnf(&c);
 
-            let mut uncompr_mgr = super::CompressionSddBuilder::new(vtree);
-            uncompr_mgr.set_compression(false);
-            let uncompr_cnf = uncompr_mgr.from_cnf(&c);
+            let mut uncompr_builder = super::CompressionSddBuilder::new(vtree);
+            uncompr_builder.set_compression(false);
+            let uncompr_cnf = uncompr_builder.from_cnf(&c);
 
-            let map : WmcParams<FiniteField<{ crate::BIG_PRIME }>> = create_semantic_hash_map(compr_mgr.num_vars());
+            let map : WmcParams<FiniteField<{ crate::BIG_PRIME }>> = create_semantic_hash_map(compr_builder.num_vars());
 
-            let compr_h = compr_cnf.semantic_hash(compr_mgr.get_vtree_manager(), &map);
-            let uncompr_h = uncompr_cnf.semantic_hash(uncompr_mgr.get_vtree_manager(), &map);
+            let compr_h = compr_cnf.semantic_hash(compr_builder.get_vtree_manager(), &map);
+            let uncompr_h = uncompr_cnf.semantic_hash(uncompr_builder.get_vtree_manager(), &map);
 
             if compr_h != uncompr_h {
                 println!("not equal! hashes: compr: {compr_h}, uncompr: {uncompr_h}");
                 println!("map: {:?}", map);
-                println!("compr sdd: {}", compr_mgr.print_sdd(compr_cnf));
-                println!("uncompr sdd: {}", uncompr_mgr.print_sdd(uncompr_cnf));
+                println!("compr sdd: {}", compr_builder.print_sdd(compr_cnf));
+                println!("uncompr sdd: {}", uncompr_builder.print_sdd(uncompr_cnf));
                 TestResult::from_bool(false)
             } else {
                 TestResult::from_bool(true)
@@ -934,16 +934,16 @@ mod test_sdd_builder {
 
     quickcheck! {
         fn prob_equiv_sdd_identity_uncompressed(c: Cnf, vtree:VTree) -> TestResult {
-            let compr_mgr = CompressionSddBuilder::new(vtree.clone());
-            let compr_cnf = compr_mgr.from_cnf(&c);
+            let compr_builder = CompressionSddBuilder::new(vtree.clone());
+            let compr_cnf = compr_builder.from_cnf(&c);
 
-            let uncompr_mgr = SemanticSddBuilder::<{ crate::BIG_PRIME }>::new(vtree);
-            let uncompr_cnf = uncompr_mgr.from_cnf(&c);
+            let uncompr_builder = SemanticSddBuilder::<{ crate::BIG_PRIME }>::new(vtree);
+            let uncompr_cnf = uncompr_builder.from_cnf(&c);
 
-            if !uncompr_mgr.eq(compr_cnf, uncompr_cnf) {
+            if !uncompr_builder.eq(compr_cnf, uncompr_cnf) {
                 println!("not equal!");
-                println!("compr sdd: {}", compr_mgr.print_sdd(compr_cnf));
-                println!("uncompr sdd: {}", uncompr_mgr.print_sdd(uncompr_cnf));
+                println!("compr sdd: {}", compr_builder.print_sdd(compr_cnf));
+                println!("uncompr sdd: {}", uncompr_builder.print_sdd(uncompr_cnf));
                 TestResult::from_bool(false)
             } else {
                 TestResult::from_bool(true)
@@ -953,19 +953,19 @@ mod test_sdd_builder {
 
     quickcheck! {
         fn prob_equiv_sdd_inequality(c1: Cnf, c2: Cnf, vtree:VTree) -> TestResult {
-            let mut mgr = SemanticSddBuilder::<{ crate::BIG_PRIME }>::new(vtree);
-            mgr.set_compression(true); // necessary to make sure we don't generate two uncompressed SDDs that canonicalize to the same SDD
-            let cnf_1 = mgr.from_cnf(&c1);
-            let cnf_2 = mgr.from_cnf(&c2);
+            let mut builder = SemanticSddBuilder::<{ crate::BIG_PRIME }>::new(vtree);
+            builder.set_compression(true); // necessary to make sure we don't generate two uncompressed SDDs that canonicalize to the same SDD
+            let cnf_1 = builder.from_cnf(&c1);
+            let cnf_2 = builder.from_cnf(&c2);
 
             if cnf_1 == cnf_2 {
                 return TestResult::discard();
             }
 
-            if mgr.eq(cnf_1, cnf_2) {
+            if builder.eq(cnf_1, cnf_2) {
                 println!("collision!");
-                println!("sdd 1: {}", mgr.print_sdd(cnf_1));
-                println!("sdd 2: {}", mgr.print_sdd(cnf_2));
+                println!("sdd 1: {}", builder.print_sdd(cnf_1));
+                println!("sdd 2: {}", builder.print_sdd(cnf_2));
                 TestResult::from_bool(false)
             } else {
                 TestResult::from_bool(true)
@@ -975,18 +975,18 @@ mod test_sdd_builder {
 
     quickcheck! {
         fn prob_equiv_sdd_eq_vs_prob_eq(c1: Cnf, c2: Cnf, vtree:VTree) -> TestResult {
-            let mut mgr = SemanticSddBuilder::<{ crate::BIG_PRIME }>::new(vtree);
-            mgr.set_compression(true); // necessary to make sure we don't generate two uncompressed SDDs that canonicalize to the same SDD
-            let cnf_1 = mgr.from_cnf(&c1);
-            let cnf_2 = mgr.from_cnf(&c2);
+            let mut builder = SemanticSddBuilder::<{ crate::BIG_PRIME }>::new(vtree);
+            builder.set_compression(true); // necessary to make sure we don't generate two uncompressed SDDs that canonicalize to the same SDD
+            let cnf_1 = builder.from_cnf(&c1);
+            let cnf_2 = builder.from_cnf(&c2);
 
-            let h_eq = mgr.eq(cnf_1, cnf_2);
+            let h_eq = builder.eq(cnf_1, cnf_2);
 
             if h_eq != (cnf_1 == cnf_2) {
                 println!("disagreement!");
-                println!("ptr eq: {}, mgr_eq: {}", cnf_1 == cnf_2, h_eq);
-                println!("sdd 1: {}", mgr.print_sdd(cnf_1));
-                println!("sdd 2: {}", mgr.print_sdd(cnf_2));
+                println!("ptr eq: {}, builder_eq: {}", cnf_1 == cnf_2, h_eq);
+                println!("sdd 1: {}", builder.print_sdd(cnf_1));
+                println!("sdd 2: {}", builder.print_sdd(cnf_2));
                 TestResult::from_bool(false)
             } else {
                 TestResult::from_bool(true)
@@ -997,20 +997,20 @@ mod test_sdd_builder {
     quickcheck! {
         /// verify that every node in the SDD compression canonicalizer has a unique semantic hash, using CompressionCanonicalizer
         fn qc_sdd_canonicity(c1: Cnf, vtree:VTree) -> TestResult {
-            let mgr = super::CompressionSddBuilder::new(vtree);
-            let _ = mgr.from_cnf(&c1);
+            let builder = super::CompressionSddBuilder::new(vtree);
+            let _ = builder.from_cnf(&c1);
 
-            let map : WmcParams<FiniteField<{ crate::BIG_PRIME }>>= create_semantic_hash_map(mgr.num_vars());
+            let map : WmcParams<FiniteField<{ crate::BIG_PRIME }>>= create_semantic_hash_map(builder.num_vars());
             let mut seen_hashes : HashMap<u128, SddPtr> = HashMap::new();
-            for sdd in mgr.node_iter() {
-                let hash = sdd.semantic_hash(mgr.get_vtree_manager(), &map);
+            for sdd in builder.node_iter() {
+                let hash = sdd.semantic_hash(builder.get_vtree_manager(), &map);
                 if seen_hashes.contains_key(&hash.value()) {
                     let c = seen_hashes.get(&hash.value()).unwrap();
                     println!("cnf: {}", c1);
                     println!("probmap: {:?}", map);
                     println!("collision found for hash value {}", hash);
-                    println!("sdd a: {}\n", mgr.print_sdd(sdd));
-                    println!("sdd b: {}\n", mgr.print_sdd(*c));
+                    println!("sdd a: {}\n", builder.print_sdd(sdd));
+                    println!("sdd b: {}\n", builder.print_sdd(*c));
                     return TestResult::from_bool(false);
                 }
                 seen_hashes.insert(hash.value(), sdd);
@@ -1023,13 +1023,13 @@ mod test_sdd_builder {
         /// verify that every node in the SDD with the semantic canonicalizer a unique semantic hash w.r.t negations
         /// using SemanticCanonicalizer
         fn qc_semantic_sdd_canonicity(c1: Cnf, vtree:VTree) -> TestResult {
-            let mgr = SemanticSddBuilder::< {crate::BIG_PRIME} >::new(vtree);
-            let _ = mgr.from_cnf(&c1);
+            let builder = SemanticSddBuilder::< {crate::BIG_PRIME} >::new(vtree);
+            let _ = builder.from_cnf(&c1);
 
-            let map : WmcParams<FiniteField<{ crate::BIG_PRIME }>>= create_semantic_hash_map(mgr.num_vars());
+            let map : WmcParams<FiniteField<{ crate::BIG_PRIME }>>= create_semantic_hash_map(builder.num_vars());
             let mut seen_hashes : HashMap<u128, SddPtr> = HashMap::new();
-            for sdd in mgr.node_iter() {
-                let hash = sdd.semantic_hash(mgr.get_vtree_manager(), &map);
+            for sdd in builder.node_iter() {
+                let hash = sdd.semantic_hash(builder.get_vtree_manager(), &map);
 
                 // see the hash itself
                 if seen_hashes.contains_key(&hash.value()) {
@@ -1037,8 +1037,8 @@ mod test_sdd_builder {
                     println!("cnf: {}", c1);
                     println!("probmap: {:?}", map);
                     println!("collision found for hash value {}", hash);
-                    println!("sdd a: {}\n", mgr.print_sdd(sdd));
-                    println!("sdd b: {}\n", mgr.print_sdd(*c));
+                    println!("sdd a: {}\n", builder.print_sdd(sdd));
+                    println!("sdd b: {}\n", builder.print_sdd(*c));
                     return TestResult::from_bool(false);
                 }
 
@@ -1048,8 +1048,8 @@ mod test_sdd_builder {
                     println!("cnf: {}", c1);
                     println!("probmap: {:?}", map);
                     println!("collision found for negated hash value {}", hash.negate());
-                    println!("sdd a: {}\n", mgr.print_sdd(sdd));
-                    println!("sdd b: {}\n", mgr.print_sdd(*c));
+                    println!("sdd a: {}\n", builder.print_sdd(sdd));
+                    println!("sdd b: {}\n", builder.print_sdd(*c));
                     return TestResult::from_bool(false);
                 }
                 seen_hashes.insert(hash.value(), sdd);
@@ -1075,14 +1075,14 @@ mod test_sdd_builder {
     quickcheck! {
         /// verify that the semantic hash of an SDDPtr + its compl is always equal to 1
         fn semantic_reg_plus_compl_eq_one(c1: Cnf, vtree:VTree) -> bool {
-            let mgr = SemanticSddBuilder::<{ crate::BIG_PRIME }>::new(vtree);
-            let map : WmcParams<FiniteField<{ crate::BIG_PRIME }>>= create_semantic_hash_map(mgr.num_vars());
+            let builder = SemanticSddBuilder::<{ crate::BIG_PRIME }>::new(vtree);
+            let map : WmcParams<FiniteField<{ crate::BIG_PRIME }>>= create_semantic_hash_map(builder.num_vars());
 
-            let sdd = mgr.from_cnf(&c1);
+            let sdd = builder.from_cnf(&c1);
             let compl = sdd.neg();
 
-            let sdd_hash = sdd.semantic_hash(mgr.get_vtree_manager(), &map);
-            let compl_hash = compl.semantic_hash(mgr.get_vtree_manager(), &map);
+            let sdd_hash = sdd.semantic_hash(builder.get_vtree_manager(), &map);
+            let compl_hash = compl.semantic_hash(builder.get_vtree_manager(), &map);
 
             let sum = (sdd_hash + compl_hash).value();
 

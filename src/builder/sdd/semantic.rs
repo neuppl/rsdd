@@ -215,7 +215,7 @@ fn prob_equiv_sdd_demorgan() {
     use crate::repr::var_label::VarLabel;
     use crate::util::semirings::finitefield::FiniteField;
 
-    let mut man = SemanticSddBuilder::<100000049>::new(VTree::even_split(
+    let mut builder = SemanticSddBuilder::<100000049>::new(VTree::even_split(
         &[
             VarLabel::new(0),
             VarLabel::new(1),
@@ -225,16 +225,16 @@ fn prob_equiv_sdd_demorgan() {
         ],
         1,
     ));
-    man.set_compression(false);
+    builder.set_compression(false);
     let x = SddPtr::Var(VarLabel::new(0), true);
     let y = SddPtr::Var(VarLabel::new(3), true);
-    let res = man.or(x, y).neg();
-    let expected = man.and(x.neg(), y.neg());
+    let res = builder.or(x, y).neg();
+    let expected = builder.and(x.neg(), y.neg());
 
-    let map: WmcParams<FiniteField<100000049>> = create_semantic_hash_map(man.num_vars());
+    let map: WmcParams<FiniteField<100000049>> = create_semantic_hash_map(builder.num_vars());
 
-    let sh1 = res.cached_semantic_hash(man.get_vtree_manager(), &map);
-    let sh2 = expected.cached_semantic_hash(man.get_vtree_manager(), &map);
+    let sh1 = res.cached_semantic_hash(builder.get_vtree_manager(), &map);
+    let sh2 = expected.cached_semantic_hash(builder.get_vtree_manager(), &map);
 
     assert!(sh1 == sh2, "Not eq:\nGot: {:?}\nExpected: {:?}", sh1, sh2);
 }

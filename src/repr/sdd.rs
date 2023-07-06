@@ -480,7 +480,7 @@ fn is_trimmed_trivial() {
 fn is_trimmed_simple_demorgan() {
     use crate::builder::sdd::compression::CompressionSddBuilder;
     use crate::builder::BottomUpBuilder;
-    let man = CompressionSddBuilder::new(crate::repr::vtree::VTree::even_split(
+    let builder = CompressionSddBuilder::new(crate::repr::vtree::VTree::even_split(
         &[
             VarLabel::new(0),
             VarLabel::new(1),
@@ -493,8 +493,8 @@ fn is_trimmed_simple_demorgan() {
 
     let x = SddPtr::Var(VarLabel::new(0), true);
     let y = SddPtr::Var(VarLabel::new(3), true);
-    let res = man.or(x, y).neg();
-    let expected = man.and(x.neg(), y.neg());
+    let res = builder.or(x, y).neg();
+    let expected = builder.and(x.neg(), y.neg());
 
     assert!(expected.is_trimmed());
     assert!(res.is_trimmed());
@@ -512,7 +512,7 @@ fn is_canonical_trivial() {
 fn is_canonical_simple_demorgan() {
     use crate::builder::sdd::compression::CompressionSddBuilder;
     use crate::builder::BottomUpBuilder;
-    let man = CompressionSddBuilder::new(crate::repr::vtree::VTree::even_split(
+    let builder = CompressionSddBuilder::new(crate::repr::vtree::VTree::even_split(
         &[
             VarLabel::new(0),
             VarLabel::new(1),
@@ -524,8 +524,8 @@ fn is_canonical_simple_demorgan() {
     ));
     let x = SddPtr::Var(VarLabel::new(0), true);
     let y = SddPtr::Var(VarLabel::new(3), true);
-    let res = man.or(x, y).neg();
-    let expected = man.and(x.neg(), y.neg());
+    let res = builder.or(x, y).neg();
+    let expected = builder.and(x.neg(), y.neg());
     assert!(expected.is_canonical());
     assert!(res.is_canonical());
 }

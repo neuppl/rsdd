@@ -77,10 +77,10 @@ struct BenchResult {
 fn compile_topdown_nnf(str: String, _args: &Args) -> BenchResult {
     let cnf = Cnf::from_file(str);
     let order = VarOrder::linear_order(cnf.num_vars());
-    let man = rsdd::builder::decision_nnf_builder::DecisionNNFBuilder::new(order);
+    let builder = rsdd::builder::decision_nnf_builder::DecisionNNFBuilder::new(order);
     // let order = cnf.force_order();
-    let ddnnf = man.from_cnf_topdown(&cnf);
-    println!("num redundant: {}", man.num_logically_redundant());
+    let ddnnf = builder.from_cnf_topdown(&cnf);
+    println!("num redundant: {}", builder.num_logically_redundant());
     BenchResult {
         num_recursive: 0,
         size: ddnnf.count_nodes(),
@@ -92,8 +92,8 @@ fn compile_sdd_dtree(str: String, _args: &Args) -> BenchResult {
     let cnf = Cnf::from_file(str);
     let dtree = DTree::from_cnf(&cnf, &cnf.min_fill_order());
     let vtree = VTree::from_dtree(&dtree).unwrap();
-    let man = CompressionSddBuilder::new(vtree.clone());
-    let _sdd = man.from_cnf(&cnf);
+    let builder = CompressionSddBuilder::new(vtree.clone());
+    let _sdd = builder.from_cnf(&cnf);
 
     if let Some(path) = &_args.dump_sdd {
         let json = ser_sdd::SDDSerializer::from_sdd(_sdd);
@@ -110,7 +110,7 @@ fn compile_sdd_dtree(str: String, _args: &Args) -> BenchResult {
     }
 
     BenchResult {
-        // num_recursive: man.stats().num_rec,
+        // num_recursive: builder.stats().num_rec,
         num_recursive: 0, // TODO: fix
         size: _sdd.count_nodes(),
     }
@@ -123,8 +123,8 @@ fn compile_sdd_rightlinear(str: String, _args: &Args) -> BenchResult {
         .map(|x| VarLabel::new(x as u64))
         .collect();
     let vtree = VTree::right_linear(&o);
-    let man = CompressionSddBuilder::new(vtree.clone());
-    let _sdd = man.from_cnf(&cnf);
+    let builder = CompressionSddBuilder::new(vtree.clone());
+    let _sdd = builder.from_cnf(&cnf);
 
     if let Some(path) = &_args.dump_sdd {
         let json = ser_sdd::SDDSerializer::from_sdd(_sdd);
@@ -141,7 +141,7 @@ fn compile_sdd_rightlinear(str: String, _args: &Args) -> BenchResult {
     }
 
     BenchResult {
-        // num_recursive: man.stats().num_rec,
+        // num_recursive: builder.stats().num_rec,
         num_recursive: 0, // TODO: fix
         size: _sdd.count_nodes(),
     }
@@ -150,8 +150,9 @@ fn compile_sdd_rightlinear(str: String, _args: &Args) -> BenchResult {
 fn compile_bdd(str: String, _args: &Args) -> BenchResult {
     use rsdd::builder::bdd_builder::*;
     let cnf = Cnf::from_file(str);
-    let man = StandardBddBuilder::<BddApplyTable<BddPtr>>::new_default_order_lru(cnf.num_vars());
-    let _bdd = man.from_cnf(&cnf);
+    let builder =
+        StandardBddBuilder::<BddApplyTable<BddPtr>>::new_default_order_lru(cnf.num_vars());
+    let _bdd = builder.from_cnf(&cnf);
 
     if let Some(path) = &_args.dump_bdd {
         let json = ser_bdd::BDDSerializer::from_bdd(_bdd);
@@ -161,7 +162,7 @@ fn compile_bdd(str: String, _args: &Args) -> BenchResult {
     }
 
     BenchResult {
-        num_recursive: man.num_recursive_calls(),
+        num_recursive: builder.num_recursive_calls(),
         size: _bdd.count_nodes(),
     }
 }
@@ -171,21 +172,21 @@ fn compile_bdd_dtree(str: String, _args: &Args) -> BenchResult {
     let cnf = Cnf::from_file(str);
     let order = cnf.min_fill_order();
     let dtree = DTree::from_cnf(&cnf, &order);
-    let man =
+    let builder =
         StandardBddBuilder::<BddApplyTable<BddPtr>>::new(order, BddApplyTable::new(cnf.num_vars()));
     let plan = BddPlan::from_dtree(&dtree);
-    let _bdd = man.compile_plan(&plan);
+    let bdd = builder.compile_plan(&plan);
 
     if let Some(path) = &_args.dump_bdd {
-        let json = ser_bdd::BDDSerializer::from_bdd(_bdd);
+        let json = ser_bdd::BDDSerializer::from_bdd(bdd);
         let mut file = File::create(path).unwrap();
         let r = file.write_all(serde_json::to_string(&json).unwrap().as_bytes());
         assert!(r.is_ok(), "Error writing file");
     }
 
     BenchResult {
-        num_recursive: man.num_recursive_calls(),
-        size: _bdd.count_nodes(),
+        num_recursive: builder.num_recursive_calls(),
+        size: bdd.count_nodes(),
     }
 }
 

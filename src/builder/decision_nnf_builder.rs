@@ -259,8 +259,8 @@ impl<'a> DecisionNNFBuilder<'a> {
 //         // ]
 //     ];
 //     let cnf = Cnf::new(clauses);
-//     let mut mgr = DecisionNNFBuilder::new();
-//     let c2 = mgr.from_cnf_topdown(&VarOrder::linear_order(cnf.num_vars()), &cnf);
+//     let mut builder = DecisionNNFBuilder::new();
+//     let c2 = builder.from_cnf_topdown(&VarOrder::linear_order(cnf.num_vars()), &cnf);
 //     println!("c2: {}", c2.to_string_debug());
 //     assert!(false)
 // }

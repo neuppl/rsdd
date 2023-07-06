@@ -192,7 +192,7 @@ impl<'a> CompressionSddBuilder<'a> {
 #[test]
 fn simple_equality() {
     use crate::builder::bdd_builder::VarLabel;
-    let man = CompressionSddBuilder::new(VTree::even_split(
+    let builder = CompressionSddBuilder::new(VTree::even_split(
         &[
             VarLabel::new(0),
             VarLabel::new(1),
@@ -204,9 +204,9 @@ fn simple_equality() {
     ));
     let a = SddPtr::Var(VarLabel::new(0), true);
     let d = SddPtr::Var(VarLabel::new(3), true);
-    let inner = man.or(a, d);
-    println!("0 || 3:\n{}", man.print_sdd(inner));
-    let term = man.and(inner, a);
+    let inner = builder.or(a, d);
+    println!("0 || 3:\n{}", builder.print_sdd(inner));
+    let term = builder.and(inner, a);
     assert_eq!(a, term);
 }
 
@@ -214,7 +214,7 @@ fn simple_equality() {
 #[test]
 fn sdd_simple_cond() {
     use crate::builder::bdd_builder::VarLabel;
-    let man = CompressionSddBuilder::new(VTree::even_split(
+    let builder = CompressionSddBuilder::new(VTree::even_split(
         &[
             VarLabel::new(0),
             VarLabel::new(1),
@@ -226,22 +226,22 @@ fn sdd_simple_cond() {
     ));
     let a = SddPtr::Var(VarLabel::new(0), true);
     let d = SddPtr::Var(VarLabel::new(3), true);
-    let inner = man.or(a, d);
-    println!("0 || 3: {}", man.print_sdd(inner));
-    let term = man.condition(inner, VarLabel::new(3), false);
+    let inner = builder.or(a, d);
+    println!("0 || 3: {}", builder.print_sdd(inner));
+    let term = builder.condition(inner, VarLabel::new(3), false);
     assert_eq!(
         a,
         term,
         "Got:\n{}\nexpected:\n{}\n",
-        man.print_sdd(term),
-        man.print_sdd(a)
+        builder.print_sdd(term),
+        builder.print_sdd(a)
     );
 }
 
 #[test]
 fn sdd_test_exist() {
     use crate::builder::bdd_builder::VarLabel;
-    let man = CompressionSddBuilder::new(VTree::even_split(
+    let builder = CompressionSddBuilder::new(VTree::even_split(
         &[
             VarLabel::new(0),
             VarLabel::new(1),
@@ -255,22 +255,22 @@ fn sdd_test_exist() {
     let v1 = SddPtr::Var(VarLabel::new(0), true);
     let v2 = SddPtr::Var(VarLabel::new(1), true);
     let v3 = SddPtr::Var(VarLabel::new(2), true);
-    let a1 = man.and(v1, v2);
-    let r1 = man.and(a1, v3);
-    let r_expected = man.and(v1, v3);
-    let res = man.exists(r1, VarLabel::new(1));
+    let a1 = builder.and(v1, v2);
+    let r1 = builder.and(a1, v3);
+    let r_expected = builder.and(v1, v3);
+    let res = builder.exists(r1, VarLabel::new(1));
     assert!(
-        man.eq(r_expected, res),
+        builder.eq(r_expected, res),
         "Got:\n{}\nExpected:\n{}",
-        man.print_sdd(res),
-        man.print_sdd(r_expected)
+        builder.print_sdd(res),
+        builder.print_sdd(r_expected)
     );
 }
 
 #[test]
 fn sdd_bigand() {
     use crate::builder::bdd_builder::VarLabel;
-    let man = CompressionSddBuilder::new(VTree::right_linear(&[
+    let builder = CompressionSddBuilder::new(VTree::right_linear(&[
         VarLabel::new(0),
         VarLabel::new(1),
         VarLabel::new(2),
@@ -278,7 +278,7 @@ fn sdd_bigand() {
         VarLabel::new(4),
     ]));
 
-    // let man = CompressionSddBuilder::new(VTree::even_split(
+    // let builder = CompressionSddBuilder::new(VTree::even_split(
     //     &[
     //         VarLabel::new(0),
     //         VarLabel::new(1),
@@ -292,22 +292,22 @@ fn sdd_bigand() {
     let v1 = SddPtr::Var(VarLabel::new(0), true);
     let v2 = SddPtr::Var(VarLabel::new(1), true);
     let v3 = SddPtr::Var(VarLabel::new(2), true);
-    let a1 = man.and(v1, v2);
-    let r1 = man.and(a1, v3);
-    let f = man.and(r1, SddPtr::Var(VarLabel::new(0), false));
-    println!("{}", man.print_sdd(r1));
+    let a1 = builder.and(v1, v2);
+    let r1 = builder.and(a1, v3);
+    let f = builder.and(r1, SddPtr::Var(VarLabel::new(0), false));
+    println!("{}", builder.print_sdd(r1));
     assert_eq!(
         f,
         SddPtr::false_ptr(),
         "Expected False, got {}",
-        man.print_sdd(f)
+        builder.print_sdd(f)
     );
 }
 
 #[test]
 fn sdd_ite1() {
     use crate::builder::bdd_builder::VarLabel;
-    let man = CompressionSddBuilder::new(VTree::even_split(
+    let builder = CompressionSddBuilder::new(VTree::even_split(
         &[
             VarLabel::new(0),
             VarLabel::new(1),
@@ -319,25 +319,25 @@ fn sdd_ite1() {
     ));
     let v1 = SddPtr::Var(VarLabel::new(0), true);
     let v2 = SddPtr::Var(VarLabel::new(1), true);
-    println!("v1: {}", man.print_sdd(v1));
-    println!("v2: {}", man.print_sdd(v2));
-    let r1 = man.or(v1, v2);
+    println!("v1: {}", builder.print_sdd(v1));
+    println!("v2: {}", builder.print_sdd(v2));
+    let r1 = builder.or(v1, v2);
     // r1: 0 \/ 1
-    println!("0 || 1: {}", man.print_sdd(r1));
-    let r2 = man.and(r1, v1);
+    println!("0 || 1: {}", builder.print_sdd(r1));
+    let r2 = builder.and(r1, v1);
     // r2: (0 \/ 1) && 1
     assert!(
-        man.eq(v1, r2),
+        builder.eq(v1, r2),
         "Not eq:\n {}\n{}",
-        man.print_sdd(v1),
-        man.print_sdd(r2)
+        builder.print_sdd(v1),
+        builder.print_sdd(r2)
     );
 }
 
 #[test]
 fn sdd_demorgan() {
     use crate::builder::bdd_builder::VarLabel;
-    let man = CompressionSddBuilder::new(VTree::even_split(
+    let builder = CompressionSddBuilder::new(VTree::even_split(
         &[
             VarLabel::new(0),
             VarLabel::new(1),
@@ -349,20 +349,20 @@ fn sdd_demorgan() {
     ));
     let x = SddPtr::Var(VarLabel::new(0), true);
     let y = SddPtr::Var(VarLabel::new(3), true);
-    let res = man.or(x, y).neg();
-    let expected = man.and(x.neg(), y.neg());
+    let res = builder.or(x, y).neg();
+    let expected = builder.and(x.neg(), y.neg());
     assert!(
-        man.eq(res, expected),
+        builder.eq(res, expected),
         "Not eq:\nGot: {}\nExpected: {}",
-        man.print_sdd(res),
-        man.print_sdd(expected)
+        builder.print_sdd(res),
+        builder.print_sdd(expected)
     );
 }
 
 #[test]
 fn sdd_circuit1() {
     use crate::builder::bdd_builder::VarLabel;
-    let man = CompressionSddBuilder::new(VTree::even_split(
+    let builder = CompressionSddBuilder::new(VTree::even_split(
         &[
             VarLabel::new(0),
             VarLabel::new(1),
@@ -374,21 +374,21 @@ fn sdd_circuit1() {
     ));
     let x = SddPtr::Var(VarLabel::new(0), false);
     let y = SddPtr::Var(VarLabel::new(1), true);
-    let delta = man.and(x, y);
+    let delta = builder.and(x, y);
     let yp = SddPtr::Var(VarLabel::new(2), true);
-    let inner = man.iff(yp, y);
-    println!("(2 <=> 1): \n{}", man.print_sdd(inner));
-    println!("(0 && 1): \n{}", man.print_sdd(delta));
-    let conj = man.and(inner, delta);
-    println!("((!0 && 1) && (2 <=> 1)): \n{}", man.print_sdd(conj));
-    let res = man.exists(conj, VarLabel::new(1));
+    let inner = builder.iff(yp, y);
+    println!("(2 <=> 1): \n{}", builder.print_sdd(inner));
+    println!("(0 && 1): \n{}", builder.print_sdd(delta));
+    let conj = builder.and(inner, delta);
+    println!("((!0 && 1) && (2 <=> 1)): \n{}", builder.print_sdd(conj));
+    let res = builder.exists(conj, VarLabel::new(1));
 
-    let expected = man.and(x, yp);
+    let expected = builder.and(x, yp);
     assert!(
-        man.eq(res, expected),
+        builder.eq(res, expected),
         "Not eq:\nGot: {}\nExpected: {}",
-        man.print_sdd(res),
-        man.print_sdd(expected)
+        builder.print_sdd(res),
+        builder.print_sdd(expected)
     );
 }
 
@@ -396,7 +396,7 @@ fn sdd_circuit1() {
 fn sdd_circuit2() {
     use crate::builder::bdd_builder::VarLabel;
     // same as circuit1, but with a different variable order
-    let man = CompressionSddBuilder::new(VTree::even_split(
+    let builder = CompressionSddBuilder::new(VTree::even_split(
         &[
             VarLabel::new(0),
             VarLabel::new(1),
@@ -408,18 +408,18 @@ fn sdd_circuit2() {
     ));
     let x = SddPtr::Var(VarLabel::new(3), false);
     let y = SddPtr::Var(VarLabel::new(1), true);
-    let delta = man.and(x, y);
+    let delta = builder.and(x, y);
     let yp = SddPtr::Var(VarLabel::new(4), true);
-    let inner = man.iff(yp, y);
-    let conj = man.and(inner, delta);
-    let res = man.exists(conj, VarLabel::new(1));
+    let inner = builder.iff(yp, y);
+    let conj = builder.and(inner, delta);
+    let res = builder.exists(conj, VarLabel::new(1));
 
-    let expected = man.and(x, yp);
+    let expected = builder.and(x, yp);
     assert!(
-        man.eq(res, expected),
+        builder.eq(res, expected),
         "Not eq:\nGot: {}\nExpected: {}",
-        man.print_sdd(res),
-        man.print_sdd(expected)
+        builder.print_sdd(res),
+        builder.print_sdd(expected)
     );
 }
 
@@ -447,7 +447,7 @@ fn sdd_wmc1() {
         ],
         1,
     );
-    let man = CompressionSddBuilder::new(vtree);
+    let builder = CompressionSddBuilder::new(vtree);
     let mut wmc_map = crate::repr::wmc::WmcParams::new(RealSemiring(0.0), RealSemiring(1.0));
     let x = SddPtr::Var(VarLabel::new(0), true);
     wmc_map.set_weight(VarLabel::new(0), RealSemiring(1.0), RealSemiring(1.0));
@@ -457,13 +457,13 @@ fn sdd_wmc1() {
     wmc_map.set_weight(VarLabel::new(2), RealSemiring(0.5), RealSemiring(0.5));
     let fy = SddPtr::Var(VarLabel::new(3), true);
     wmc_map.set_weight(VarLabel::new(3), RealSemiring(0.5), RealSemiring(0.5));
-    let x_fx = man.iff(x, fx);
-    let y_fy = man.iff(y, fy);
-    let ptr = man.and(x_fx, y_fy);
-    let wmc_res: RealSemiring = ptr.wmc(man.get_vtree_manager(), &wmc_map);
+    let x_fx = builder.iff(x, fx);
+    let y_fy = builder.iff(y, fy);
+    let ptr = builder.and(x_fx, y_fy);
+    let wmc_res: RealSemiring = ptr.wmc(builder.get_vtree_manager(), &wmc_map);
     let expected = RealSemiring(1.0);
     let diff = (wmc_res - expected).0.abs();
-    println!("sdd: {}", man.print_sdd(ptr));
+    println!("sdd: {}", builder.print_sdd(ptr));
     assert!(
         (diff < 0.0001),
         "Not eq: \n Expected: {:?} \n WMC: {:?}",

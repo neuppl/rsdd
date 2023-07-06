@@ -147,10 +147,10 @@ where
     /// # use rsdd::repr::ddnnf::DDNNFPtr;
     /// # use rsdd::builder::cache::all_app::AllTable;
     /// # use rsdd::repr::robdd::BddPtr;
-    /// let mut man = StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(10);
-    /// let lbl_a = man.new_label();
-    /// let a = man.var(lbl_a, true);
-    /// let a_and_not_a = man.and(a, a.neg());
+    /// let mut builder = StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(10);
+    /// let lbl_a = builder.new_label();
+    /// let a = builder.var(lbl_a, true);
+    /// let a_and_not_a = builder.and(a, a.neg());
     /// assert!(a_and_not_a.is_false());
     /// ```
     fn and(&'a self, f: BddPtr<'a>, g: BddPtr<'a>) -> BddPtr<'a> {
@@ -546,7 +546,7 @@ impl<'a, T: LruTable<'a, BddPtr<'a>>> StandardBddBuilder<'a, T> {
         // now cvec has a list of all the clauses; collapse it down
         fn helper<'a, T: LruTable<'a, BddPtr<'a>>>(
             vec: &[BddPtr<'a>],
-            man: &'a StandardBddBuilder<'a, T>,
+            builder: &'a StandardBddBuilder<'a, T>,
         ) -> Option<BddPtr<'a>> {
             if vec.is_empty() {
                 None
@@ -554,12 +554,12 @@ impl<'a, T: LruTable<'a, BddPtr<'a>>> StandardBddBuilder<'a, T> {
                 Some(vec[0])
             } else {
                 let (l, r) = vec.split_at(vec.len() / 2);
-                let sub_l = helper(l, man);
-                let sub_r = helper(r, man);
+                let sub_l = helper(l, builder);
+                let sub_r = helper(r, builder);
                 match (sub_l, sub_r) {
                     (None, None) => None,
                     (Some(v), None) | (None, Some(v)) => Some(v),
-                    (Some(l), Some(r)) => Some(man.and(l, r)),
+                    (Some(l), Some(r)) => Some(builder.and(l, r)),
                 }
             }
         }
@@ -668,13 +668,13 @@ mod tests {
     // check that (a \/ b) /\ a === a
     #[test]
     fn simple_equality() {
-        let man = StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(3);
-        let v1 = man.var(VarLabel::new(0), true);
-        let v2 = man.var(VarLabel::new(1), true);
-        let r1 = man.or(v1, v2);
-        let r2 = man.and(r1, v1);
+        let builder = StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(3);
+        let v1 = builder.var(VarLabel::new(0), true);
+        let v2 = builder.var(VarLabel::new(1), true);
+        let r1 = builder.or(v1, v2);
+        let r2 = builder.and(r1, v1);
         assert!(
-            man.eq(v1, r2),
+            builder.eq(v1, r2),
             "Not eq:\n {}\n{}",
             v1.to_string_debug(),
             r2.to_string_debug()
@@ -683,13 +683,13 @@ mod tests {
 
     #[test]
     fn simple_ite1() {
-        let man = StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(3);
-        let v1 = man.var(VarLabel::new(0), true);
-        let v2 = man.var(VarLabel::new(1), true);
-        let r1 = man.or(v1, v2);
-        let r2 = man.ite(r1, v1, BddPtr::false_ptr());
+        let builder = StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(3);
+        let v1 = builder.var(VarLabel::new(0), true);
+        let v2 = builder.var(VarLabel::new(1), true);
+        let r1 = builder.or(v1, v2);
+        let r2 = builder.ite(r1, v1, BddPtr::false_ptr());
         assert!(
-            man.eq(v1, r2),
+            builder.eq(v1, r2),
             "Not eq:\n {}\n{}",
             v1.to_string_debug(),
             r2.to_string_debug()
@@ -698,15 +698,15 @@ mod tests {
 
     #[test]
     fn test_newvar() {
-        let man = StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(0);
-        let l1 = man.new_label();
-        let l2 = man.new_label();
-        let v1 = man.var(l1, true);
-        let v2 = man.var(l2, true);
-        let r1 = man.or(v1, v2);
-        let r2 = man.and(r1, v1);
+        let builder = StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(0);
+        let l1 = builder.new_label();
+        let l2 = builder.new_label();
+        let v1 = builder.var(l1, true);
+        let v2 = builder.var(l2, true);
+        let r1 = builder.or(v1, v2);
+        let r2 = builder.and(r1, v1);
         assert!(
-            man.eq(v1, r2),
+            builder.eq(v1, r2),
             "Not eq:\n {}\n{}",
             v1.to_string_debug(),
             r2.to_string_debug()
@@ -715,37 +715,37 @@ mod tests {
 
     #[test]
     fn test_wmc() {
-        let man = StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(2);
-        let v1 = man.var(VarLabel::new(0), true);
-        let v2 = man.var(VarLabel::new(1), true);
-        let r1 = man.or(v1, v2);
+        let builder = StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(2);
+        let v1 = builder.var(VarLabel::new(0), true);
+        let v2 = builder.var(VarLabel::new(1), true);
+        let r1 = builder.or(v1, v2);
         let weights = hashmap! {VarLabel::new(0) => (RealSemiring(0.2), RealSemiring(0.8)),
         VarLabel::new(1) => (RealSemiring(0.1), RealSemiring(0.9))};
         let params =
             WmcParams::new_with_default(RealSemiring::zero(), RealSemiring::one(), weights);
-        let wmc = r1.wmc(man.get_order().borrow(), &params);
+        let wmc = r1.wmc(builder.get_order().borrow(), &params);
         assert!((wmc.0 - (1.0 - 0.2 * 0.1)).abs() < 0.000001);
     }
 
     #[test]
     fn test_condition() {
-        let man = StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(3);
-        let v1 = man.var(VarLabel::new(0), true);
-        let v2 = man.var(VarLabel::new(1), true);
-        let r1 = man.or(v1, v2);
-        let r3 = man.condition(r1, VarLabel::new(1), false);
-        assert!(man.eq(r3, v1));
+        let builder = StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(3);
+        let v1 = builder.var(VarLabel::new(0), true);
+        let v2 = builder.var(VarLabel::new(1), true);
+        let r1 = builder.or(v1, v2);
+        let r3 = builder.condition(r1, VarLabel::new(1), false);
+        assert!(builder.eq(r3, v1));
     }
 
     #[test]
     fn test_condition_compl() {
-        let man = StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(3);
-        let v1 = man.var(VarLabel::new(0), false);
-        let v2 = man.var(VarLabel::new(1), false);
-        let r1 = man.and(v1, v2);
-        let r3 = man.condition(r1, VarLabel::new(1), false);
+        let builder = StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(3);
+        let v1 = builder.var(VarLabel::new(0), false);
+        let v2 = builder.var(VarLabel::new(1), false);
+        let r1 = builder.and(v1, v2);
+        let r3 = builder.condition(r1, VarLabel::new(1), false);
         assert!(
-            man.eq(r3, v1),
+            builder.eq(r3, v1),
             "Not eq:\nOne: {}\nTwo: {}",
             r3.to_string_debug(),
             v1.to_string_debug()
@@ -754,17 +754,17 @@ mod tests {
 
     #[test]
     fn test_exist() {
-        let man = StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(3);
+        let builder = StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(3);
         // 1 /\ 2 /\ 3
-        let v1 = man.var(VarLabel::new(0), true);
-        let v2 = man.var(VarLabel::new(1), true);
-        let v3 = man.var(VarLabel::new(2), true);
-        let a1 = man.and(v1, v2);
-        let r1 = man.and(a1, v3);
-        let r_expected = man.and(v1, v3);
-        let res = man.exists(r1, VarLabel::new(1));
+        let v1 = builder.var(VarLabel::new(0), true);
+        let v2 = builder.var(VarLabel::new(1), true);
+        let v3 = builder.var(VarLabel::new(2), true);
+        let a1 = builder.and(v1, v2);
+        let r1 = builder.and(a1, v3);
+        let r_expected = builder.and(v1, v3);
+        let res = builder.exists(r1, VarLabel::new(1));
         assert!(
-            man.eq(r_expected, res),
+            builder.eq(r_expected, res),
             "Got:\nOne: {}\nExpected: {}",
             res.to_string_debug(),
             r_expected.to_string_debug()
@@ -773,18 +773,18 @@ mod tests {
 
     #[test]
     fn test_exist_compl() {
-        let man = StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(3);
+        let builder = StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(3);
         // 1 /\ 2 /\ 3
-        let v1 = man.var(VarLabel::new(0), false);
-        let v2 = man.var(VarLabel::new(1), false);
-        let v3 = man.var(VarLabel::new(2), false);
-        let a1 = man.and(v1, v2);
-        let r1 = man.and(a1, v3);
-        let r_expected = man.and(v1, v3);
-        let res = man.exists(r1, VarLabel::new(1));
+        let v1 = builder.var(VarLabel::new(0), false);
+        let v2 = builder.var(VarLabel::new(1), false);
+        let v3 = builder.var(VarLabel::new(2), false);
+        let a1 = builder.and(v1, v2);
+        let r1 = builder.and(a1, v3);
+        let r_expected = builder.and(v1, v3);
+        let res = builder.exists(r1, VarLabel::new(1));
         // let res = r1;
         assert!(
-            man.eq(r_expected, res),
+            builder.eq(r_expected, res),
             "Got:\n: {}\nExpected: {}",
             res.to_string_debug(),
             r_expected.to_string_debug()
@@ -793,15 +793,15 @@ mod tests {
 
     #[test]
     fn test_compose() {
-        let man = StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(3);
-        let v0 = man.var(VarLabel::new(0), true);
-        let v1 = man.var(VarLabel::new(1), true);
-        let v2 = man.var(VarLabel::new(2), true);
-        let v0_and_v1 = man.and(v0, v1);
-        let v0_and_v2 = man.and(v0, v2);
-        let res = man.compose(v0_and_v1, VarLabel::new(1), v2);
+        let builder = StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(3);
+        let v0 = builder.var(VarLabel::new(0), true);
+        let v1 = builder.var(VarLabel::new(1), true);
+        let v2 = builder.var(VarLabel::new(2), true);
+        let v0_and_v1 = builder.and(v0, v1);
+        let v0_and_v2 = builder.and(v0, v2);
+        let res = builder.compose(v0_and_v1, VarLabel::new(1), v2);
         assert!(
-            man.eq(res, v0_and_v2),
+            builder.eq(res, v0_and_v2),
             "\nGot: {}\nExpected: {}",
             res.to_string_debug(),
             v0_and_v2.to_string_debug()
@@ -810,17 +810,17 @@ mod tests {
 
     #[test]
     fn test_compose_2() {
-        let man = StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(4);
-        let v0 = man.var(VarLabel::new(0), true);
-        let v1 = man.var(VarLabel::new(1), true);
-        let v2 = man.var(VarLabel::new(2), true);
-        let v3 = man.var(VarLabel::new(3), true);
-        let v0_and_v1 = man.and(v0, v1);
-        let v2_and_v3 = man.and(v2, v3);
-        let v0v2v3 = man.and(v0, v2_and_v3);
-        let res = man.compose(v0_and_v1, VarLabel::new(1), v2_and_v3);
+        let builder = StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(4);
+        let v0 = builder.var(VarLabel::new(0), true);
+        let v1 = builder.var(VarLabel::new(1), true);
+        let v2 = builder.var(VarLabel::new(2), true);
+        let v3 = builder.var(VarLabel::new(3), true);
+        let v0_and_v1 = builder.and(v0, v1);
+        let v2_and_v3 = builder.and(v2, v3);
+        let v0v2v3 = builder.and(v0, v2_and_v3);
+        let res = builder.compose(v0_and_v1, VarLabel::new(1), v2_and_v3);
         assert!(
-            man.eq(res, v0v2v3),
+            builder.eq(res, v0v2v3),
             "\nGot: {}\nExpected: {}",
             res.to_string_debug(),
             v0v2v3.to_string_debug()
@@ -829,15 +829,15 @@ mod tests {
 
     #[test]
     fn test_compose_3() {
-        let man = StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(4);
-        let v0 = man.var(VarLabel::new(0), true);
-        let v1 = man.var(VarLabel::new(1), true);
-        let v2 = man.var(VarLabel::new(2), true);
-        let f = man.ite(v0, BddPtr::false_ptr(), v1);
-        let res = man.compose(f, VarLabel::new(1), v2);
-        let expected = man.ite(v0, BddPtr::false_ptr(), v2);
+        let builder = StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(4);
+        let v0 = builder.var(VarLabel::new(0), true);
+        let v1 = builder.var(VarLabel::new(1), true);
+        let v2 = builder.var(VarLabel::new(2), true);
+        let f = builder.ite(v0, BddPtr::false_ptr(), v1);
+        let res = builder.compose(f, VarLabel::new(1), v2);
+        let expected = builder.ite(v0, BddPtr::false_ptr(), v2);
         assert!(
-            man.eq(res, expected),
+            builder.eq(res, expected),
             "\nGot: {}\nExpected: {}",
             res.to_string_debug(),
             expected.to_string_debug()
@@ -846,15 +846,15 @@ mod tests {
 
     #[test]
     fn test_compose_4() {
-        let man = StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(20);
-        let v0 = man.var(VarLabel::new(4), true);
-        let v1 = man.var(VarLabel::new(5), true);
-        let v2 = man.var(VarLabel::new(6), true);
-        let f = man.ite(v1, BddPtr::false_ptr(), v2);
-        let res = man.compose(f, VarLabel::new(6), v0);
-        let expected = man.ite(v1, BddPtr::false_ptr(), v0);
+        let builder = StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(20);
+        let v0 = builder.var(VarLabel::new(4), true);
+        let v1 = builder.var(VarLabel::new(5), true);
+        let v2 = builder.var(VarLabel::new(6), true);
+        let f = builder.ite(v1, BddPtr::false_ptr(), v2);
+        let res = builder.compose(f, VarLabel::new(6), v0);
+        let expected = builder.ite(v1, BddPtr::false_ptr(), v0);
         assert!(
-            man.eq(res, expected),
+            builder.eq(res, expected),
             "\nGot: {}\nExpected: {}",
             res.to_string_debug(),
             expected.to_string_debug()
@@ -863,15 +863,15 @@ mod tests {
 
     #[test]
     fn test_new_label() {
-        let man = StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(0);
-        let vlbl1 = man.new_label();
-        let vlbl2 = man.new_label();
-        let v1 = man.var(vlbl1, false);
-        let v2 = man.var(vlbl2, false);
-        let r1 = man.and(v1, v2);
-        let r3 = man.condition(r1, VarLabel::new(1), false);
+        let builder = StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(0);
+        let vlbl1 = builder.new_label();
+        let vlbl2 = builder.new_label();
+        let v1 = builder.var(vlbl1, false);
+        let v2 = builder.var(vlbl2, false);
+        let r1 = builder.and(v1, v2);
+        let r3 = builder.condition(r1, VarLabel::new(1), false);
         assert!(
-            man.eq(r3, v1),
+            builder.eq(r3, v1),
             "Not eq:\nOne: {}\nTwo: {}",
             r3.to_string_debug(),
             v1.to_string_debug()
@@ -880,18 +880,18 @@ mod tests {
 
     #[test]
     fn circuit1() {
-        let man = StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(3);
-        let x = man.var(VarLabel::new(0), false);
-        let y = man.var(VarLabel::new(1), true);
-        let delta = man.and(x, y);
-        let yp = man.var(VarLabel::new(2), true);
-        let inner = man.iff(yp, y);
-        let conj = man.and(inner, delta);
-        let res = man.exists(conj, VarLabel::new(1));
+        let builder = StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(3);
+        let x = builder.var(VarLabel::new(0), false);
+        let y = builder.var(VarLabel::new(1), true);
+        let delta = builder.and(x, y);
+        let yp = builder.var(VarLabel::new(2), true);
+        let inner = builder.iff(yp, y);
+        let conj = builder.and(inner, delta);
+        let res = builder.exists(conj, VarLabel::new(1));
 
-        let expected = man.and(x, yp);
+        let expected = builder.and(x, yp);
         assert!(
-            man.eq(res, expected),
+            builder.eq(res, expected),
             "Not eq:\nGot: {}\nExpected: {}",
             res.to_string_debug(),
             expected.to_string_debug()
@@ -900,18 +900,18 @@ mod tests {
 
     #[test]
     fn simple_cond() {
-        let man = StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(3);
-        let x = man.var(VarLabel::new(0), true);
-        let y = man.var(VarLabel::new(1), false);
-        let z = man.var(VarLabel::new(2), false);
-        let r1 = man.and(x, y);
-        let r2 = man.and(r1, z);
+        let builder = StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(3);
+        let x = builder.var(VarLabel::new(0), true);
+        let y = builder.var(VarLabel::new(1), false);
+        let z = builder.var(VarLabel::new(2), false);
+        let r1 = builder.and(x, y);
+        let r2 = builder.and(r1, z);
         // now r2 is x /\ !y /\ !z
 
-        let res = man.condition(r2, VarLabel::new(1), true); // condition on y=T
+        let res = builder.condition(r2, VarLabel::new(1), true); // condition on y=T
         let expected = BddPtr::false_ptr();
         assert!(
-            man.eq(res, expected),
+            builder.eq(res, expected),
             "\nOriginal BDD: {}\nNot eq:\nGot: {}\nExpected: {}",
             r2.to_string_debug(),
             res.to_string_debug(),
@@ -921,23 +921,23 @@ mod tests {
 
     #[test]
     fn wmc_test_2() {
-        let man = StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(4);
-        let x = man.var(VarLabel::new(0), true);
-        let y = man.var(VarLabel::new(1), true);
-        let f1 = man.var(VarLabel::new(2), true);
-        let f2 = man.var(VarLabel::new(3), true);
+        let builder = StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(4);
+        let x = builder.var(VarLabel::new(0), true);
+        let y = builder.var(VarLabel::new(1), true);
+        let f1 = builder.var(VarLabel::new(2), true);
+        let f2 = builder.var(VarLabel::new(3), true);
         let map = hashmap! { VarLabel::new(0) => (RealSemiring(1.0), RealSemiring(1.0)),
         VarLabel::new(1) => (RealSemiring(1.0), RealSemiring(1.0)),
         VarLabel::new(2) => (RealSemiring(0.8), RealSemiring(0.2)),
         VarLabel::new(3) => (RealSemiring(0.7), RealSemiring(0.3)) };
         let wmc = WmcParams::new_with_default(RealSemiring::zero(), RealSemiring::one(), map);
-        let iff1 = man.iff(x, f1);
-        let iff2 = man.iff(y, f2);
-        let obs = man.or(x, y);
-        let and1 = man.and(iff1, iff2);
-        let f = man.and(and1, obs);
+        let iff1 = builder.iff(x, f1);
+        let iff2 = builder.iff(y, f2);
+        let obs = builder.or(x, y);
+        let and1 = builder.and(iff1, iff2);
+        let f = builder.and(and1, obs);
         assert_eq!(
-            f.wmc(man.get_order().borrow(), &wmc).0,
+            f.wmc(builder.get_order().borrow(), &wmc).0,
             0.2 * 0.3 + 0.2 * 0.7 + 0.8 * 0.3
         );
     }
@@ -945,34 +945,34 @@ mod tests {
     #[allow(clippy::assertions_on_constants)] // TODO: why does this test have assert!(true) ?
     #[test]
     fn iff_regression() {
-        let man = StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(0);
+        let builder = StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(0);
         let mut ptrvec = Vec::new();
         for _ in 0..40 {
-            let vlab = man.new_label();
-            let flab = man.new_label();
-            let vptr = man.var(vlab, true);
-            let fptr = man.var(flab, true);
-            let sent = man.iff(vptr, fptr);
+            let vlab = builder.new_label();
+            let flab = builder.new_label();
+            let vptr = builder.var(vlab, true);
+            let fptr = builder.var(flab, true);
+            let sent = builder.iff(vptr, fptr);
             ptrvec.push(sent);
         }
         let _resptr = ptrvec
             .iter()
-            .fold(BddPtr::true_ptr(), |acc, x| man.and(acc, *x));
+            .fold(BddPtr::true_ptr(), |acc, x| builder.and(acc, *x));
         assert!(true);
     }
 
     #[test]
     fn test_ite_1() {
-        let man = StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(16);
+        let builder = StandardBddBuilder::<AllTable<BddPtr>>::new_default_order(16);
         let c1 = Cnf::from_string(String::from("(1 || 2) && (0 || -2)"));
         let c2 = Cnf::from_string(String::from("(0 || 1) && (-4 || -7)"));
-        let cnf1 = man.from_cnf(&c1);
-        let cnf2 = man.from_cnf(&c2);
-        let iff1 = man.iff(cnf1, cnf2);
+        let cnf1 = builder.from_cnf(&c1);
+        let cnf2 = builder.from_cnf(&c2);
+        let iff1 = builder.iff(cnf1, cnf2);
 
-        let clause1 = man.and(cnf1, cnf2);
-        let clause2 = man.and(cnf1.neg(), cnf2.neg());
-        let and = man.or(clause1, clause2);
+        let clause1 = builder.and(cnf1, cnf2);
+        let clause2 = builder.and(cnf1.neg(), cnf2.neg());
+        let and = builder.or(clause1, clause2);
 
         if and != iff1 {
             println!("cnf1: {}", c1);
