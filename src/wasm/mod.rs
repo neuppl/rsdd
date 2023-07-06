@@ -1,4 +1,4 @@
-use crate::builder::bdd_builder::{StandardBddBuilder, BddPtr, DDNNFPtr};
+use crate::builder::bdd_builder::{BddPtr, DDNNFPtr, StandardBddBuilder};
 use crate::builder::cache::lru_app::BddApplyTable;
 use crate::builder::sdd::builder::SddBuilder;
 use crate::builder::sdd::compression::CompressionSddBuilder;

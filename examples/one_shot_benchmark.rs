@@ -171,7 +171,8 @@ fn compile_bdd_dtree(str: String, _args: &Args) -> BenchResult {
     let cnf = Cnf::from_file(str);
     let order = cnf.min_fill_order();
     let dtree = DTree::from_cnf(&cnf, &order);
-    let man = StandardBddBuilder::<BddApplyTable<BddPtr>>::new(order, BddApplyTable::new(cnf.num_vars()));
+    let man =
+        StandardBddBuilder::<BddApplyTable<BddPtr>>::new(order, BddApplyTable::new(cnf.num_vars()));
     let plan = BddPlan::from_dtree(&dtree);
     let _bdd = man.compile_plan(&plan);
 

@@ -284,7 +284,9 @@ impl<'a, T: LruTable<'a, BddPtr<'a>>> StandardBddBuilder<'a, T> {
         StandardBddBuilder::new(default_order, AllTable::new())
     }
 
-    pub fn new_default_order_lru(num_vars: usize) -> StandardBddBuilder<'a, BddApplyTable<BddPtr<'a>>> {
+    pub fn new_default_order_lru(
+        num_vars: usize,
+    ) -> StandardBddBuilder<'a, BddApplyTable<BddPtr<'a>>> {
         let default_order = VarOrder::linear_order(num_vars);
         StandardBddBuilder::new(default_order, BddApplyTable::new(21))
     }
