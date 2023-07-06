@@ -400,23 +400,22 @@ pub trait SddBuilder<'a>: BottomUpBuilder<'a, SddPtr<'a>> {
             cvec.push(bdd);
         }
         // now cvec has a list of all the clauses; collapse it down
-        let r = self.from_cnf_helper(&cvec);
+        let r = self.compile_cnf_helper(&cvec);
         match r {
             None => SddPtr::true_ptr(),
             Some(x) => x,
         }
     }
 
-    #[allow(clippy::wrong_self_convention)] // this is a naming thing; consider renaming in the future
-    fn from_cnf_helper(&'a self, vec: &[SddPtr<'a>]) -> Option<SddPtr<'a>> {
+    fn compile_cnf_helper(&'a self, vec: &[SddPtr<'a>]) -> Option<SddPtr<'a>> {
         if vec.is_empty() {
             None
         } else if vec.len() == 1 {
             Some(vec[0])
         } else {
             let (l, r) = vec.split_at(vec.len() / 2);
-            let sub_l = self.from_cnf_helper(l);
-            let sub_r = self.from_cnf_helper(r);
+            let sub_l = self.compile_cnf_helper(l);
+            let sub_r = self.compile_cnf_helper(r);
             match (sub_l, sub_r) {
                 (None, None) => None,
                 (Some(v), None) | (None, Some(v)) => Some(v),
@@ -425,46 +424,45 @@ pub trait SddBuilder<'a>: BottomUpBuilder<'a, SddPtr<'a>> {
         }
     }
 
-    #[allow(clippy::wrong_self_convention)] // this is a naming thing; consider renaming in the future
-    fn from_logical_expr(&mut self, _expr: &LogicalExpr) -> SddPtr {
-        panic!("not impl")
-        // match expr {
-        //     &LogicalExpr::Literal(lbl, polarity) => self.var(VarLabel::new(lbl as u64), polarity),
-        //     &LogicalExpr::Not(ref e) => {
-        //         let e = self.from_logical_expr(e);
-        //         e.neg()
-        //     }
-        //     &LogicalExpr::And(ref l, ref r) => {
-        //         let r1 = self.from_logical_expr(l);
-        //         let r2 = self.from_logical_expr(r);
-        //         self.and(r1, r2)
-        //     }
-        //     &LogicalExpr::Or(ref l, ref r) => {
-        //         let r1 = self.from_logical_expr(l);
-        //         let r2 = self.from_logical_expr(r);
-        //         self.or(r1, r2)
-        //     }
-        //     &LogicalExpr::Xor(ref l, ref r) => {
-        //         let r1 = self.from_logical_expr(l);
-        //         let r2 = self.from_logical_expr(r);
-        //         self.xor(r1, r2)
-        //     }
-        //     &LogicalExpr::Iff(ref l, ref r) => {
-        //         let r1 = self.from_logical_expr(l);
-        //         let r2 = self.from_logical_expr(r);
-        //         self.iff(r1, r2)
-        //     }
-        //     &LogicalExpr::Ite {
-        //         ref guard,
-        //         ref thn,
-        //         ref els,
-        //     } => {
-        //         let g = self.from_logical_expr(guard);
-        //         let thn = self.from_logical_expr(thn);
-        //         let els = self.from_logical_expr(els);
-        //         self.ite(g, thn, els)
-        //     }
-        // }
+    // note: this is not tested
+    fn compile_logical_expr(&'a self, expr: &LogicalExpr) -> SddPtr {
+        match expr {
+            LogicalExpr::Literal(lbl, polarity) => self.var(VarLabel::new(*lbl as u64), *polarity),
+            LogicalExpr::Not(e) => {
+                let e = self.compile_logical_expr(e);
+                e.neg()
+            }
+            LogicalExpr::And(ref l, ref r) => {
+                let r1 = self.compile_logical_expr(l);
+                let r2 = self.compile_logical_expr(r);
+                self.and(r1, r2)
+            }
+            LogicalExpr::Or(ref l, ref r) => {
+                let r1 = self.compile_logical_expr(l);
+                let r2 = self.compile_logical_expr(r);
+                self.or(r1, r2)
+            }
+            LogicalExpr::Xor(ref l, ref r) => {
+                let r1 = self.compile_logical_expr(l);
+                let r2 = self.compile_logical_expr(r);
+                self.xor(r1, r2)
+            }
+            LogicalExpr::Iff(ref l, ref r) => {
+                let r1 = self.compile_logical_expr(l);
+                let r2 = self.compile_logical_expr(r);
+                self.iff(r1, r2)
+            }
+            LogicalExpr::Ite {
+                ref guard,
+                ref thn,
+                ref els,
+            } => {
+                let g = self.compile_logical_expr(guard);
+                let thn = self.compile_logical_expr(thn);
+                let els = self.compile_logical_expr(els);
+                self.ite(g, thn, els)
+            }
+        }
     }
 
     fn print_sdd(&'a self, ptr: SddPtr<'a>) -> String {
@@ -699,13 +697,12 @@ where
     }
 
     /// Compose `g` into `f` by substituting for `lbl`
-    fn compose(&'a self, _f: SddPtr<'a>, _lbl: VarLabel, _g: SddPtr<'a>) -> SddPtr<'a> {
-        panic!("not impl")
+    fn compose(&'a self, f: SddPtr<'a>, lbl: VarLabel, g: SddPtr<'a>) -> SddPtr<'a> {
         // TODO this can be optimized with a specialized implementation to make
         // it a single traversal
-        // let var = self.var(lbl, true);
-        // let iff = self.iff(var, g);
-        // let a = self.and(iff, f);
-        // self.exists(a, lbl)
+        let var = self.var(lbl, true);
+        let iff = self.iff(var, g);
+        let a = self.and(iff, f);
+        self.exists(a, lbl)
     }
 }

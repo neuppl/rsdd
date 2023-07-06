@@ -51,7 +51,7 @@ impl BDDSerializer {
                 let l = BDDSerializer::serialize_helper(bdd.low_raw(), table, nodes);
                 let h = BDDSerializer::serialize_helper(bdd.high_raw(), table, nodes);
                 let new_node = SerBDD {
-                    topvar: bdd.var().value_usize(),
+                    topvar: node.var.value_usize(),
                     low: l,
                     high: h,
                 };

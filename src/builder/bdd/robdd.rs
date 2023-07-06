@@ -48,14 +48,13 @@ impl<'a, T: LruTable<'a, BddPtr<'a>>> BddBuilder<'a> for RobddBuilder<'a, T> {
 
     fn ite_helper(&'a self, f: BddPtr<'a>, g: BddPtr<'a>, h: BddPtr<'a>) -> BddPtr<'a> {
         self.stats.borrow_mut().num_recursive_calls += 1;
-        let o = |a: BddPtr, b: BddPtr| {
-            if a.is_const() {
-                return true;
-            }
-            if b.is_const() {
-                return false;
-            }
-            return self.order.borrow().lt(a.var(), b.var());
+        let o = |a: BddPtr, b: BddPtr| match (a, b) {
+            (BddPtr::PtrTrue, _) | (BddPtr::PtrFalse, _) => true,
+            (_, BddPtr::PtrTrue) | (_, BddPtr::PtrFalse) => false,
+            (
+                BddPtr::Reg(node_a) | BddPtr::Compl(node_a),
+                BddPtr::Reg(node_b) | BddPtr::Compl(node_b),
+            ) => self.order.borrow().lt(node_a.var, node_b.var),
         };
 
         let ite = Ite::new(o, f, g, h);
@@ -164,14 +163,19 @@ impl<'a, T: LruTable<'a, BddPtr<'a>>> RobddBuilder<'a, T> {
 
     // condition a BDD *only* if the top variable is `v`; used in `ite`
     fn condition_essential(&'a self, f: BddPtr<'a>, lbl: VarLabel, v: bool) -> BddPtr<'a> {
-        if f.is_const() || f.var() != lbl {
-            return f;
-        };
-        let r = if v { f.high_raw() } else { f.low_raw() };
-        if f.is_neg() {
-            r.neg()
-        } else {
-            r
+        match f {
+            BddPtr::PtrTrue | BddPtr::PtrFalse => f,
+            BddPtr::Reg(node) | BddPtr::Compl(node) => {
+                if node.var != lbl {
+                    return f;
+                }
+                let r = if v { f.high_raw() } else { f.low_raw() };
+                if f.is_neg() {
+                    r.neg()
+                } else {
+                    r
+                }
+            }
         }
     }
 
@@ -183,64 +187,67 @@ impl<'a, T: LruTable<'a, BddPtr<'a>>> RobddBuilder<'a, T> {
         alloc: &mut Vec<BddPtr<'a>>,
     ) -> BddPtr<'a> {
         self.stats.borrow_mut().num_recursive_calls += 1;
-        if bdd.is_const() || self.order.borrow().lt(lbl, bdd.var()) {
-            // we passed the variable in the order, we will never find it
-            bdd
-        } else if bdd.var() == lbl {
-            let r = if value { bdd.high_raw() } else { bdd.low_raw() };
-            if bdd.is_neg() {
-                r.neg()
-            } else {
-                r
-            }
-        } else {
-            // check cache
-            match bdd.get_scratch::<usize>() {
-                None => (),
-                Some(v) => {
-                    return if bdd.is_neg() {
-                        alloc[v].neg()
-                    } else {
-                        alloc[v]
+        match bdd {
+            BddPtr::PtrTrue | BddPtr::PtrFalse => bdd,
+            BddPtr::Reg(node) | BddPtr::Compl(node) => {
+                if self.order.borrow().lt(lbl, node.var) {
+                    // we passed the variable in the order, we will never find it
+                    return bdd;
+                }
+
+                if node.var == lbl {
+                    let r = if value { bdd.high_raw() } else { bdd.low_raw() };
+                    return if bdd.is_neg() { r.neg() } else { r };
+                }
+
+                // check cache
+                match bdd.get_scratch::<usize>() {
+                    None => (),
+                    Some(v) => {
+                        return if bdd.is_neg() {
+                            alloc[v].neg()
+                        } else {
+                            alloc[v]
+                        }
                     }
-                }
-            };
-
-            // recurse on the children
-            let l = self.cond_with_alloc(bdd.low_raw(), lbl, value, alloc);
-            let h = self.cond_with_alloc(bdd.high_raw(), lbl, value, alloc);
-
-            if l == h {
-                // reduce the BDD -- two children identical
-                if bdd.is_neg() {
-                    return l.neg();
-                } else {
-                    return l;
                 };
-            };
-            let res = if l != bdd.low_raw() || h != bdd.high_raw() {
-                // cache and return the new BDD
-                let new_bdd = BddNode::new(bdd.var(), l, h);
-                let r = self.get_or_insert(new_bdd);
-                if bdd.is_neg() {
-                    r.neg()
-                } else {
-                    r
-                }
-            } else {
-                // nothing changed
-                bdd
-            };
 
-            let idx = if bdd.is_neg() {
-                alloc.push(res.neg());
-                alloc.len() - 1
-            } else {
-                alloc.push(res);
-                alloc.len() - 1
-            };
-            bdd.set_scratch(idx);
-            res
+                // recurse on the children
+                let l = self.cond_with_alloc(bdd.low_raw(), lbl, value, alloc);
+                let h = self.cond_with_alloc(bdd.high_raw(), lbl, value, alloc);
+
+                if l == h {
+                    // reduce the BDD -- two children identical
+                    if bdd.is_neg() {
+                        return l.neg();
+                    } else {
+                        return l;
+                    };
+                };
+                let res = if l != bdd.low_raw() || h != bdd.high_raw() {
+                    // cache and return the new BDD
+                    let new_bdd = BddNode::new(node.var, l, h);
+                    let r = self.get_or_insert(new_bdd);
+                    if bdd.is_neg() {
+                        r.neg()
+                    } else {
+                        r
+                    }
+                } else {
+                    // nothing changed
+                    bdd
+                };
+
+                let idx = if bdd.is_neg() {
+                    alloc.push(res.neg());
+                    alloc.len() - 1
+                } else {
+                    alloc.push(res);
+                    alloc.len() - 1
+                };
+                bdd.set_scratch(idx);
+                res
+            }
         }
     }
 
