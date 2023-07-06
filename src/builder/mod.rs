@@ -4,7 +4,6 @@
 pub mod cache;
 
 pub mod bdd;
-pub mod bdd_plan;
 pub mod decision_nnf_builder;
 pub mod sdd;
 

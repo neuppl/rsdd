@@ -339,8 +339,7 @@ pub trait SddBuilder<'a>: BottomUpBuilder<'a, SddPtr<'a>> {
     }
 
     /// compile an SDD from an input CNF
-    #[allow(clippy::wrong_self_convention)] // this is a naming thing; consider renaming in the future
-    fn from_cnf(&'a self, cnf: &Cnf) -> SddPtr<'a> {
+    fn compile_cnf(&'a self, cnf: &Cnf) -> SddPtr<'a> {
         let mut cvec: Vec<SddPtr> = Vec::with_capacity(cnf.clauses().len());
         if cnf.clauses().is_empty() {
             return SddPtr::true_ptr();

@@ -1,8 +1,9 @@
 extern crate rsdd;
 
 use clap::Parser;
-use rsdd::builder::bdd_plan::BddPlan;
+use rsdd::builder::bdd::builder::BddBuilder;
 use rsdd::builder::cache::lru_app::BddApplyTable;
+use rsdd::plan::bdd_plan::BddPlan;
 use rsdd::repr::cnf::Cnf;
 use rsdd::repr::ddnnf::DDNNFPtr;
 use rsdd::repr::dtree::DTree;
@@ -79,7 +80,7 @@ fn compile_topdown_nnf(str: String, _args: &Args) -> BenchResult {
     let order = VarOrder::linear_order(cnf.num_vars());
     let builder = rsdd::builder::decision_nnf_builder::DecisionNNFBuilder::new(order);
     // let order = cnf.force_order();
-    let ddnnf = builder.from_cnf_topdown(&cnf);
+    let ddnnf = builder.compile_cnf_topdown(&cnf);
     println!("num redundant: {}", builder.num_logically_redundant());
     BenchResult {
         num_recursive: 0,
@@ -93,7 +94,7 @@ fn compile_sdd_dtree(str: String, _args: &Args) -> BenchResult {
     let dtree = DTree::from_cnf(&cnf, &cnf.min_fill_order());
     let vtree = VTree::from_dtree(&dtree).unwrap();
     let builder = CompressionSddBuilder::new(vtree.clone());
-    let _sdd = builder.from_cnf(&cnf);
+    let _sdd = builder.compile_cnf(&cnf);
 
     if let Some(path) = &_args.dump_sdd {
         let json = ser_sdd::SDDSerializer::from_sdd(_sdd);
@@ -124,7 +125,7 @@ fn compile_sdd_rightlinear(str: String, _args: &Args) -> BenchResult {
         .collect();
     let vtree = VTree::right_linear(&o);
     let builder = CompressionSddBuilder::new(vtree.clone());
-    let _sdd = builder.from_cnf(&cnf);
+    let _sdd = builder.compile_cnf(&cnf);
 
     if let Some(path) = &_args.dump_sdd {
         let json = ser_sdd::SDDSerializer::from_sdd(_sdd);
@@ -153,7 +154,7 @@ fn compile_bdd(str: String, _args: &Args) -> BenchResult {
 
     let cnf = Cnf::from_file(str);
     let builder = RobddBuilder::<BddApplyTable<BddPtr>>::new_default_order_lru(cnf.num_vars());
-    let _bdd = builder.from_cnf(&cnf);
+    let _bdd = builder.compile_cnf(&cnf);
 
     if let Some(path) = &_args.dump_bdd {
         let json = ser_bdd::BDDSerializer::from_bdd(_bdd);

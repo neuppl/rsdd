@@ -1,9 +1,11 @@
-use crate::builder::bdd_builder::{BddPtr, DDNNFPtr, RobddBuilder};
+use crate::builder::bdd::builder::BddBuilder;
+use crate::builder::bdd::robdd::RobddBuilder;
 use crate::builder::cache::lru_app::BddApplyTable;
 use crate::builder::sdd::builder::SddBuilder;
 use crate::builder::sdd::compression::CompressionSddBuilder;
+use crate::repr::ddnnf::DDNNFPtr;
 use crate::repr::dtree::DTree;
-use crate::repr::robdd::VarOrder;
+use crate::repr::robdd::{BddPtr, VarOrder};
 use crate::repr::wmc::WmcParams;
 use crate::repr::{cnf::Cnf, var_label::VarLabel, vtree::VTree};
 use crate::serialize::ser_sdd::SDDSerializer;
@@ -49,7 +51,7 @@ pub fn bdd(cnf_input: String) -> String {
     let cnf = Cnf::from_file(cnf_input);
 
     let builder = RobddBuilder::<BddApplyTable<BddPtr>>::new_default_order_lru(cnf.num_vars());
-    let bdd = builder.from_cnf(&cnf);
+    let bdd = builder.compile_cnf(&cnf);
 
     let json = ser_bdd::BDDSerializer::from_bdd(bdd);
 
@@ -64,7 +66,7 @@ pub fn bdd_with_var_order(cnf_input: String, order: &[u64]) -> String {
     let var_order = VarOrder::new(order.iter().map(|v| VarLabel::new(*v)).collect());
 
     let builder = RobddBuilder::new(var_order, BddApplyTable::new(21));
-    let bdd = builder.from_cnf(&cnf);
+    let bdd = builder.compile_cnf(&cnf);
 
     let json = ser_bdd::BDDSerializer::from_bdd(bdd);
 
@@ -81,7 +83,7 @@ pub fn sdd(cnf_input: String, vtree_type_input: JsValue) -> Result<JsValue, JsVa
     let vtree = build_vtree(&cnf, vtree_type);
 
     let builder = CompressionSddBuilder::new(vtree);
-    let sdd = builder.from_cnf(&cnf);
+    let sdd = builder.compile_cnf(&cnf);
 
     let serialized = ser_sdd::SDDSerializer::from_sdd(sdd);
 
@@ -96,7 +98,7 @@ pub fn demo_model_count_sdd(cnf_input: String) -> Result<JsValue, JsValue> {
     let vtree = build_vtree(&cnf, VTreeType::FromDTreeLinear);
 
     let builder = CompressionSddBuilder::new(vtree.clone());
-    let sdd = builder.from_cnf(&cnf);
+    let sdd = builder.compile_cnf(&cnf);
 
     let mut params = WmcParams::new(RealSemiring::zero(), RealSemiring::one());
 

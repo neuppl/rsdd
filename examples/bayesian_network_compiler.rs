@@ -4,6 +4,7 @@ extern crate rsgm;
 
 use crate::rsdd::builder::BottomUpBuilder;
 use clap::Parser;
+use rsdd::builder::bdd::builder::BddBuilder;
 use rsdd::builder::cache::all_app::AllTable;
 use rsdd::builder::decision_nnf_builder::DecisionNNFBuilder;
 use rsdd::builder::sdd::{builder::SddBuilder, compression::CompressionSddBuilder};
@@ -167,7 +168,7 @@ fn compile_bdd_cnf(args: &Args, network: BayesianNetwork) {
 
     println!("Compiling...");
     let start = Instant::now();
-    let r = compiler.from_cnf(&bn.cnf);
+    let r = compiler.compile_cnf(&bn.cnf);
     let duration = start.elapsed();
     let sz = r.count_nodes();
     println!("Compiled\n\tTime: {:?}\n\tSize: {sz}", duration);
@@ -292,7 +293,7 @@ fn compile_sdd_cnf(network: BayesianNetwork) {
 
     println!("Compiling");
     let start = Instant::now();
-    let r = compiler.from_cnf(&bn.cnf);
+    let r = compiler.compile_cnf(&bn.cnf);
     let duration = start.elapsed();
     let sz = r.count_nodes();
     println!("Compiled\n\tCompile time: {:?}\n\tSize: {sz}", duration);
@@ -306,7 +307,7 @@ fn compile_topdown(network: BayesianNetwork) {
 
     println!("Compiling");
     let start = Instant::now();
-    let r = compiler.from_cnf_topdown(&bn.cnf);
+    let r = compiler.compile_cnf_topdown(&bn.cnf);
     let duration = start.elapsed();
     let sz = r.count_nodes();
     println!("Compiled\n\tCompile time: {:?}\n\tSize: {sz}", duration);

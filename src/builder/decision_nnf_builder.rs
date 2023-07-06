@@ -158,7 +158,7 @@ impl<'a> DecisionNNFBuilder<'a> {
     }
 
     /// compile a decision DNNF top-down from a CNF
-    pub fn from_cnf_topdown(&'a self, cnf: &Cnf) -> BddPtr<'a> {
+    pub fn compile_cnf_topdown(&'a self, cnf: &Cnf) -> BddPtr<'a> {
         let mut sat = match SATSolver::new(cnf.clone()) {
             Some(v) => v,
             None => return BddPtr::false_ptr(),

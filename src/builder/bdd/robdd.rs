@@ -1,20 +1,14 @@
-use crate::builder::bdd_plan::BddPlan;
+use crate::backing_store::bump_table::BackedRobinhoodTable;
 use crate::builder::cache::all_app::AllTable;
 use crate::builder::cache::ite::Ite;
 use crate::builder::cache::lru_app::BddApplyTable;
 use crate::repr::model::PartialModel;
 use crate::repr::robdd::BddNode;
 use crate::repr::var_order::VarOrder;
-use crate::{
-    backing_store::bump_table::BackedRobinhoodTable, repr::cnf::*, repr::logical_expr::LogicalExpr,
-    repr::model,
-};
 
 use crate::backing_store::*;
 use crate::builder::BottomUpBuilder;
 use std::cell::RefCell;
-use std::cmp::Ordering;
-use std::collections::BinaryHeap;
 
 pub use crate::builder::cache::LruTable;
 pub use crate::repr::ddnnf::DDNNFPtr;
@@ -23,7 +17,6 @@ pub use crate::repr::var_label::VarLabel;
 
 use super::builder::BddBuilder;
 use super::stats::BddBuilderStats;
-use super::CompiledCNF;
 
 pub struct RobddBuilder<'a, T: LruTable<'a, BddPtr<'a>>> {
     compute_table: RefCell<BackedRobinhoodTable<'a, BddNode<'a>>>,
@@ -33,6 +26,10 @@ pub struct RobddBuilder<'a, T: LruTable<'a, BddPtr<'a>>> {
 }
 
 impl<'a, T: LruTable<'a, BddPtr<'a>>> BddBuilder<'a> for RobddBuilder<'a, T> {
+    fn less_than(&self, a: VarLabel, b: VarLabel) -> bool {
+        self.order.borrow().lt(a, b)
+    }
+
     /// Normalizes and fetches a node from the store
     fn get_or_insert(&'a self, bdd: BddNode<'a>) -> BddPtr<'a> {
         unsafe {
@@ -267,201 +264,6 @@ impl<'a, T: LruTable<'a, BddPtr<'a>>> RobddBuilder<'a, T> {
         r
     }
 
-    pub fn from_cnf_with_assignments(
-        &'a self,
-        cnf: &Cnf,
-        assgn: &model::PartialModel,
-    ) -> BddPtr<'a> {
-        let clauses = cnf.clauses();
-        if clauses.is_empty() {
-            return BddPtr::true_ptr();
-        }
-        let mut compiled_heap: BinaryHeap<CompiledCNF> = BinaryHeap::new();
-        // push each clause onto the compiled_heap
-        for clause in clauses.iter() {
-            let mut cur_ptr = BddPtr::false_ptr();
-            for lit in clause.iter() {
-                match assgn.get(lit.get_label()) {
-                    None => {
-                        let new_v = self.var(lit.get_label(), lit.get_polarity());
-                        cur_ptr = self.or(new_v, cur_ptr);
-                    }
-                    Some(v) if v == lit.get_polarity() => {
-                        cur_ptr = BddPtr::true_ptr();
-                        break;
-                    }
-                    _ => {
-                        continue;
-                    }
-                }
-            }
-            let sz = cur_ptr.count_nodes();
-            compiled_heap.push(CompiledCNF { ptr: cur_ptr, sz });
-        }
-
-        while compiled_heap.len() > 1 {
-            let CompiledCNF { ptr: ptr1, sz: _sz } = compiled_heap.pop().unwrap();
-            let CompiledCNF { ptr: ptr2, sz: _sz } = compiled_heap.pop().unwrap();
-            let ptr = self.and(ptr1, ptr2);
-            let sz = ptr.count_nodes();
-            compiled_heap.push(CompiledCNF { ptr, sz })
-        }
-
-        let CompiledCNF { ptr, sz: _sz } = compiled_heap.pop().unwrap();
-        ptr
-    }
-
-    /// Compile a BDD from a CNF
-    pub fn from_cnf(&'a self, cnf: &Cnf) -> BddPtr<'a> {
-        let mut cvec: Vec<BddPtr> = Vec::with_capacity(cnf.clauses().len());
-        if cnf.clauses().is_empty() {
-            return BddPtr::true_ptr();
-        }
-        // check if there is an empty clause -- if so, UNSAT
-        if cnf.clauses().iter().any(|x| x.is_empty()) {
-            return BddPtr::false_ptr();
-        }
-
-        // sort the clauses based on a best-effort bottom-up ordering of clauses
-        let mut cnf_sorted = cnf.clauses().to_vec();
-        let order = self.order.borrow();
-        cnf_sorted.sort_by(|c1, c2| {
-            // order the clause with the first-most variable last
-            let fst1 = c1
-                .iter()
-                .max_by(|l1, l2| {
-                    if order.lt(l1.get_label(), l2.get_label()) {
-                        Ordering::Less
-                    } else {
-                        Ordering::Equal
-                    }
-                })
-                .unwrap();
-            let fst2 = c2
-                .iter()
-                .max_by(|l1, l2| {
-                    if order.lt(l1.get_label(), l2.get_label()) {
-                        Ordering::Less
-                    } else {
-                        Ordering::Equal
-                    }
-                })
-                .unwrap();
-            if order.lt(fst1.get_label(), fst2.get_label()) {
-                Ordering::Less
-            } else {
-                Ordering::Equal
-            }
-        });
-
-        for lit_vec in cnf_sorted.iter() {
-            let (vlabel, val) = (lit_vec[0].get_label(), lit_vec[0].get_polarity());
-            let mut bdd = self.var(vlabel, val);
-            for lit in lit_vec {
-                let (vlabel, val) = (lit.get_label(), lit.get_polarity());
-                let var = self.var(vlabel, val);
-                bdd = self.or(bdd, var);
-            }
-            cvec.push(bdd);
-        }
-        // now cvec has a list of all the clauses; collapse it down
-        fn helper<'a, T: LruTable<'a, BddPtr<'a>>>(
-            vec: &[BddPtr<'a>],
-            builder: &'a RobddBuilder<'a, T>,
-        ) -> Option<BddPtr<'a>> {
-            if vec.is_empty() {
-                None
-            } else if vec.len() == 1 {
-                Some(vec[0])
-            } else {
-                let (l, r) = vec.split_at(vec.len() / 2);
-                let sub_l = helper(l, builder);
-                let sub_r = helper(r, builder);
-                match (sub_l, sub_r) {
-                    (None, None) => None,
-                    (Some(v), None) | (None, Some(v)) => Some(v),
-                    (Some(l), Some(r)) => Some(builder.and(l, r)),
-                }
-            }
-        }
-        let r = helper(&cvec, self);
-        match r {
-            None => BddPtr::true_ptr(),
-            Some(x) => x,
-        }
-    }
-
-    pub fn from_boolexpr(&'a self, expr: &LogicalExpr) -> BddPtr<'a> {
-        match &expr {
-            LogicalExpr::Literal(lbl, polarity) => self.var(VarLabel::new(*lbl as u64), *polarity),
-            LogicalExpr::And(ref l, ref r) => {
-                let r1 = self.from_boolexpr(l);
-                let r2 = self.from_boolexpr(r);
-                self.and(r1, r2)
-            }
-            LogicalExpr::Or(ref l, ref r) => {
-                let r1 = self.from_boolexpr(l);
-                let r2 = self.from_boolexpr(r);
-                self.or(r1, r2)
-            }
-            LogicalExpr::Not(ref e) => self.from_boolexpr(e).neg(),
-            LogicalExpr::Iff(ref l, ref r) => {
-                let r1 = self.from_boolexpr(l);
-                let r2 = self.from_boolexpr(r);
-                self.iff(r1, r2)
-            }
-            LogicalExpr::Xor(ref l, ref r) => {
-                let r1 = self.from_boolexpr(l);
-                let r2 = self.from_boolexpr(r);
-                self.xor(r1, r2)
-            }
-            LogicalExpr::Ite {
-                ref guard,
-                ref thn,
-                ref els,
-            } => {
-                let g = self.from_boolexpr(guard);
-                let t = self.from_boolexpr(thn);
-                let e = self.from_boolexpr(els);
-                self.ite(g, t, e)
-            }
-        }
-    }
-
-    /// Compiles a plan into a BDD
-    pub fn compile_plan(&'a self, expr: &BddPlan) -> BddPtr<'a> {
-        match &expr {
-            BddPlan::Literal(var, polarity) => self.var(*var, *polarity),
-            BddPlan::And(ref l, ref r) => {
-                let r1 = self.compile_plan(l);
-                let r2 = self.compile_plan(r);
-                self.and(r1, r2)
-            }
-            BddPlan::Or(ref l, ref r) => {
-                let r1 = self.compile_plan(l);
-                let r2 = self.compile_plan(r);
-                self.or(r1, r2)
-            }
-            BddPlan::Iff(ref l, ref r) => {
-                let r1 = self.compile_plan(l);
-                let r2 = self.compile_plan(r);
-                self.iff(r1, r2)
-            }
-            BddPlan::Ite(ref f, ref g, ref h) => {
-                let f = self.compile_plan(f);
-                let g = self.compile_plan(g);
-                let h = self.compile_plan(h);
-                self.ite(f, g, h)
-            }
-            BddPlan::Not(ref f) => {
-                let f = self.compile_plan(f);
-                f.neg()
-            }
-            BddPlan::ConstTrue => BddPtr::true_ptr(),
-            BddPlan::ConstFalse => BddPtr::false_ptr(),
-        }
-    }
-
     /// Prints the total number of recursive calls executed so far by the RobddBuilder
     /// This is a stable way to track performance
     pub fn num_recursive_calls(&self) -> usize {
@@ -474,6 +276,7 @@ mod tests {
 
     use std::borrow::Borrow;
 
+    use crate::builder::bdd::builder::BddBuilder;
     use crate::builder::BottomUpBuilder;
     use crate::repr::wmc::WmcParams;
     use crate::util::semirings::realsemiring::RealSemiring;
@@ -787,8 +590,8 @@ mod tests {
         let builder = RobddBuilder::<AllTable<BddPtr>>::new_default_order(16);
         let c1 = Cnf::from_string(String::from("(1 || 2) && (0 || -2)"));
         let c2 = Cnf::from_string(String::from("(0 || 1) && (-4 || -7)"));
-        let cnf1 = builder.from_cnf(&c1);
-        let cnf2 = builder.from_cnf(&c2);
+        let cnf1 = builder.compile_cnf(&c1);
+        let cnf2 = builder.compile_cnf(&c2);
         let iff1 = builder.iff(cnf1, cnf2);
 
         let clause1 = builder.and(cnf1, cnf2);

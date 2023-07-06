@@ -18,6 +18,7 @@ extern crate segment_tree;
 pub mod util;
 mod backing_store;
 pub mod builder;
+pub mod plan;
 pub mod repr;
 pub mod sample;
 pub mod serialize;

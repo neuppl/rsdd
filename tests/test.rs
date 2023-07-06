@@ -6,6 +6,7 @@ extern crate rsdd;
 extern crate quickcheck;
 use crate::repr::cnf::Cnf;
 use crate::repr::var_label::VarLabel;
+use rsdd::builder::bdd::builder::BddBuilder;
 use rsdd::builder::bdd::robdd::RobddBuilder;
 use rsdd::builder::cache::all_app::AllTable;
 use rsdd::builder::sdd::{builder::SddBuilder, compression::CompressionSddBuilder};
@@ -254,8 +255,8 @@ fn get_canonical_forms() -> Vec<(Cnf, Cnf)> {
 fn test_bdd_canonicity() {
     for (cnf1, cnf2) in get_canonical_forms().into_iter() {
         let builder = RobddBuilder::<AllTable<BddPtr>>::new_default_order(cnf1.num_vars());
-        let r1 = builder.from_cnf(&cnf1);
-        let r2 = builder.from_cnf(&cnf2);
+        let r1 = builder.compile_cnf(&cnf1);
+        let r2 = builder.compile_cnf(&cnf2);
         assert!(
             builder::BottomUpBuilder::eq(&builder, r1, r2),
             "Not eq\nCNF 1: {:?}\nCNF 2: {:?}\nBDD 1:{}\n BDD 2: {}",
@@ -275,8 +276,8 @@ fn test_sdd_canonicity() {
             .collect();
         let vtree = VTree::even_split(&v, 1);
         let builder = CompressionSddBuilder::new(vtree);
-        let r1 = builder.from_cnf(&cnf1);
-        let r2 = builder.from_cnf(&cnf2);
+        let r1 = builder.compile_cnf(&cnf1);
+        let r2 = builder.compile_cnf(&cnf2);
         assert!(
             builder::BottomUpBuilder::eq(&builder, r1, r2),
             "Not eq\nCNF 1: {:?}\nCNF 2: {:?}\nSDD 1:{}\n SDD 2: {}",
@@ -296,8 +297,8 @@ fn test_sdd_is_canonical() {
             .collect();
         let vtree = VTree::even_split(&v, 1);
         let builder = CompressionSddBuilder::new(vtree);
-        let r1 = builder.from_cnf(&cnf1);
-        let r2 = builder.from_cnf(&cnf2);
+        let r1 = builder.compile_cnf(&cnf1);
+        let r2 = builder.compile_cnf(&cnf2);
         assert!(
             r1.is_canonical(),
             "Not canonical\nCNF 1: {:?}\nSDD 1:{}",
@@ -318,6 +319,7 @@ mod test_bdd_builder {
     use crate::builder::decision_nnf_builder::DecisionNNFBuilder;
     use crate::repr::cnf::Cnf;
     use crate::repr::var_label::VarLabel;
+    use crate::rsdd::builder::bdd::builder::BddBuilder;
     use crate::rsdd::builder::BottomUpBuilder;
     use quickcheck::TestResult;
     use rand::Rng;
@@ -340,7 +342,7 @@ mod test_bdd_builder {
     quickcheck! {
         fn test_cond_and(c: Cnf) -> bool {
             let builder = super::RobddBuilder::<AllTable<BddPtr>>::new_default_order(16);
-            let cnf = builder.from_cnf(&c);
+            let cnf = builder.compile_cnf(&c);
             let v1 = VarLabel::new(0);
             let bdd1 = builder.exists(cnf, v1);
 
@@ -354,8 +356,8 @@ mod test_bdd_builder {
     quickcheck! {
         fn test_ite_and(c1: Cnf, c2: Cnf) -> bool {
             let builder = super::RobddBuilder::<AllTable<BddPtr>>::new_default_order(16);
-            let cnf1 = builder.from_cnf(&c1);
-            let cnf2 = builder.from_cnf(&c2);
+            let cnf1 = builder.compile_cnf(&c1);
+            let cnf2 = builder.compile_cnf(&c2);
 
             let itebdd = builder.ite(cnf1, cnf2, BddPtr::false_ptr());
             let andbdd = builder.and(cnf1, cnf2);
@@ -369,8 +371,8 @@ mod test_bdd_builder {
             if c1.num_vars() == 0 || c1.num_vars() > 8 { return TestResult::discard() }
             if c1.clauses().len() > 12 { return TestResult::discard() }
             let builder = super::RobddBuilder::<AllTable<BddPtr>>::new_default_order(16);
-            let cnf1 = builder.from_cnf(&c1);
-            let cnf2 = builder.from_cnf(&c2);
+            let cnf1 = builder.compile_cnf(&c1);
+            let cnf2 = builder.compile_cnf(&c2);
             let iff1 = builder.iff(cnf1, cnf2);
 
             let clause1 = builder.and(cnf1, cnf2);
@@ -394,8 +396,8 @@ mod test_bdd_builder {
             let mut pm = PartialModel::from_litvec(&Vec::new(), c1.num_vars());
             pm.set(VarLabel::new(0), true);
             pm.set(VarLabel::new(1), true);
-            let cnf1 = builder.from_cnf_with_assignments(&c1, &pm);
-            let mut cnf2 = builder.from_cnf(&c1);
+            let cnf1 = builder.compile_cnf_with_assignments(&c1, &pm);
+            let mut cnf2 = builder.compile_cnf(&c1);
             cnf2 = builder.condition(cnf2, VarLabel::new(0), true);
             cnf2 = builder.condition(cnf2, VarLabel::new(1), true);
             assert_eq!(cnf1, cnf2);
@@ -412,7 +414,7 @@ mod test_bdd_builder {
 
             let builder = super::RobddBuilder::<AllTable<BddPtr>>::new_default_order(c1.num_vars());
             let weight = create_semantic_hash_map::<{crate::BIG_PRIME}>(c1.num_vars());
-            let cnf1 = builder.from_cnf(&c1);
+            let cnf1 = builder.compile_cnf(&c1);
             let bddres = cnf1.wmc(builder.get_order(), &weight);
             let cnfres = c1.wmc(&weight);
             TestResult::from_bool(bddres == cnfres)
@@ -425,8 +427,8 @@ mod test_bdd_builder {
             let bdd_builder = super::RobddBuilder::<AllTable<BddPtr>>::new_default_order(c1.num_vars());
             let sdd_builder = super::CompressionSddBuilder::new(vtree);
             let map : WmcParams<rsdd::util::semirings::finitefield::FiniteField<{ crate::BIG_PRIME }>>= create_semantic_hash_map(c1.num_vars());
-            let bdd = bdd_builder.from_cnf(&c1);
-            let sdd = sdd_builder.from_cnf(&c1);
+            let bdd = bdd_builder.compile_cnf(&c1);
+            let sdd = sdd_builder.compile_cnf(&c1);
             bdd.semantic_hash(bdd_builder.get_order(), &map) == sdd.semantic_hash(sdd_builder.get_vtree_manager(), &map)
         }
     }
@@ -441,8 +443,8 @@ mod test_bdd_builder {
 
             let sdd_builder = super::CompressionSddBuilder::new(vtree);
             let map : WmcParams<rsdd::util::semirings::finitefield::FiniteField<{ crate::BIG_PRIME }>>= create_semantic_hash_map(c1.num_vars());
-            let bdd = bdd_builder.from_cnf(&c1);
-            let sdd = sdd_builder.from_cnf(&c1);
+            let bdd = bdd_builder.compile_cnf(&c1);
+            let sdd = sdd_builder.compile_cnf(&c1);
             bdd.semantic_hash(bdd_builder.get_order(), &map) == sdd.semantic_hash(sdd_builder.get_vtree_manager(), &map)
         }
     }
@@ -457,10 +459,10 @@ mod test_bdd_builder {
             let weight_map : HashMap<VarLabel, (RealSemiring, RealSemiring)> = HashMap::from_iter(
                 (0..16).map(|x| (VarLabel::new(x as u64), (RealSemiring(0.3), RealSemiring(0.7)))));
             let order = VarOrder::linear_order(c1.num_vars());
-            let cnf1 = builder.from_cnf(&c1);
+            let cnf1 = builder.compile_cnf(&c1);
 
             let builder2 = DecisionNNFBuilder::new(order);
-            let dnnf = builder2.from_cnf_topdown(&c1);
+            let dnnf = builder2.compile_cnf_topdown(&c1);
 
             let bddwmc = super::repr::wmc::WmcParams::new_with_default(RealSemiring::zero(), RealSemiring::one(), weight_map);
             let bddres = cnf1.wmc(builder.get_order(),  &bddwmc);
@@ -484,8 +486,8 @@ mod test_bdd_builder {
                 (0..16).map(|x| (VarLabel::new(x as u64), (RealSemiring(0.3), RealSemiring(0.7)))));
 
             let bddwmc = super::repr::wmc::WmcParams::new_with_default(RealSemiring::zero(), RealSemiring::one(), weight_map);
-            let cnf1 = builder1.from_cnf(&c1);
-            let cnf2 = builder2.from_cnf(&c1);
+            let cnf1 = builder1.compile_cnf(&c1);
+            let cnf2 = builder2.compile_cnf(&c1);
             let wmc1 = cnf1.wmc(builder1.get_order(), &bddwmc);
             let wmc2 = cnf2.wmc(builder2.get_order(), &bddwmc);
             TestResult::from_bool(f64::abs(wmc1.0 - wmc2.0) < 0.00001)
@@ -502,7 +504,7 @@ mod test_bdd_builder {
             let builder = super::RobddBuilder::<AllTable<BddPtr>>::new_default_order(c1.num_vars());
             let weight_map : HashMap<VarLabel, (RealSemiring, RealSemiring)> = HashMap::from_iter(
                 (0..16).map(|x| (VarLabel::new(x as u64), (RealSemiring(0.3), RealSemiring(0.7)))));
-            let cnf = builder.from_cnf(&c1);
+            let cnf = builder.compile_cnf(&c1);
             let vars = vec![VarLabel::new(0), VarLabel::new(2), VarLabel::new(4)];
             if !c1.var_in_cnf(VarLabel::new(0))
                || !c1.var_in_cnf(VarLabel::new(2))
@@ -584,7 +586,7 @@ mod test_bdd_builder {
             if !(5..=8).contains(&n) { return TestResult::discard() }
             if c1.clauses().len() > 14 { return TestResult::discard() }
             let builder = super::RobddBuilder::<AllTable<BddPtr>>::new_default_order(n);
-            let cnf = builder.from_cnf(&c1);
+            let cnf = builder.compile_cnf(&c1);
 
             // randomizing the decisions
             let mut rng = rand::thread_rng();
@@ -695,6 +697,7 @@ mod test_sdd_builder {
     use crate::builder::bdd::robdd::RobddBuilder;
     use crate::repr::cnf::Cnf;
     use crate::repr::var_label::{Literal, VarLabel};
+    use crate::rsdd::builder::bdd::builder::BddBuilder;
     use crate::rsdd::builder::BottomUpBuilder;
     use quickcheck::{Arbitrary, TestResult};
     use rand::rngs::SmallRng;
@@ -718,7 +721,7 @@ mod test_sdd_builder {
         fn test_cond_and(c: Cnf) -> bool {
             let order : Vec<VarLabel> = (0..16).map(VarLabel::new).collect();
             let builder = super::CompressionSddBuilder::new(VTree::even_split(&order, 4));
-            let cnf = builder.from_cnf(&c);
+            let cnf = builder.compile_cnf(&c);
             let v1 = VarLabel::new(0);
             let bdd1 = builder.exists(cnf, v1);
 
@@ -736,8 +739,8 @@ mod test_sdd_builder {
             // let vtree = VTree::even_split(&order, 4);
             let vtree = VTree::right_linear(&order);
             let builder = super::CompressionSddBuilder::new(vtree);
-            let cnf1 = builder.from_cnf(&c1);
-            let cnf2 = builder.from_cnf(&c2);
+            let cnf1 = builder.compile_cnf(&c1);
+            let cnf2 = builder.compile_cnf(&c2);
             let iff1 = builder.iff(cnf1, cnf2);
 
             let clause1 = builder.and(cnf1, cnf2);
@@ -757,8 +760,8 @@ mod test_sdd_builder {
             let order : Vec<VarLabel> = (0..16).map(VarLabel::new).collect();
             let vtree = VTree::even_split(&order, 4);
             let builder = super::CompressionSddBuilder::new(vtree);
-            let cnf1 = builder.from_cnf(&c1);
-            let cnf2 = builder.from_cnf(&c2);
+            let cnf1 = builder.compile_cnf(&c1);
+            let cnf2 = builder.compile_cnf(&c2);
             let iff1 = builder.iff(cnf1, cnf2);
 
             let clause1 = builder.and(cnf1, cnf2);
@@ -784,13 +787,13 @@ mod test_sdd_builder {
            let weight_map = create_semantic_hash_map::< {crate::BIG_PRIME} >(cnf.num_vars());
            let order : Vec<VarLabel> = (0..cnf.num_vars()).map(|x| VarLabel::new(x as u64)).collect();
            let builder = super::CompressionSddBuilder::new(VTree::even_split(&order, 3));
-           let cnf_sdd = builder.from_cnf(&cnf);
+           let cnf_sdd = builder.compile_cnf(&cnf);
            let sdd_res = cnf_sdd.semantic_hash(builder.get_vtree_manager(), &weight_map);
 
 
-            let bddbuilder = RobddBuilder::<AllTable<BddPtr>>::new_default_order(cnf.num_vars());
-            let cnf_bdd = bddbuilder.from_cnf(&cnf);
-            let bdd_res = cnf_bdd.semantic_hash(bddbuilder.get_order(), &weight_map);
+            let bdd_builder = RobddBuilder::<AllTable<BddPtr>>::new_default_order(cnf.num_vars());
+            let cnf_bdd = bdd_builder.compile_cnf(&cnf);
+            let bdd_res = cnf_bdd.semantic_hash(bdd_builder.get_order(), &weight_map);
             assert_eq!(bdd_res, sdd_res);
             TestResult::passed()
         }
@@ -809,13 +812,13 @@ mod test_sdd_builder {
 
             let weight_map = create_semantic_hash_map::< {crate::BIG_PRIME} >(cnf.num_vars());
             let builder = super::CompressionSddBuilder::new(vtree);
-            let cnf_sdd = builder.from_cnf(&cnf);
+            let cnf_sdd = builder.compile_cnf(&cnf);
             let sdd_res = cnf_sdd.semantic_hash(builder.get_vtree_manager(), &weight_map);
 
 
-            let bddbuilder = RobddBuilder::<AllTable<BddPtr>>::new_default_order(cnf.num_vars());
-            let cnf_bdd = bddbuilder.from_cnf(&cnf);
-            let bdd_res = cnf_bdd.semantic_hash(bddbuilder.get_order(), &weight_map);
+            let bdd_builder = RobddBuilder::<AllTable<BddPtr>>::new_default_order(cnf.num_vars());
+            let cnf_bdd = bdd_builder.compile_cnf(&cnf);
+            let bdd_res = cnf_bdd.semantic_hash(bdd_builder.get_order(), &weight_map);
             assert_eq!(bdd_res, sdd_res);
             TestResult::passed()
         }
@@ -856,7 +859,7 @@ mod test_sdd_builder {
             let order : Vec<VarLabel> = (0..16).map(VarLabel::new).collect();
             let vtree = VTree::right_linear(&order);
             let builder = super::CompressionSddBuilder::new(vtree);
-            let cnf = builder.from_cnf(&c);
+            let cnf = builder.compile_cnf(&c);
             cnf.is_compressed()
         }
     }
@@ -866,7 +869,7 @@ mod test_sdd_builder {
             let order : Vec<VarLabel> = (0..16).map(VarLabel::new).collect();
             let vtree = VTree::right_linear(&order);
             let builder = super::CompressionSddBuilder::new(vtree);
-            let cnf = builder.from_cnf(&c);
+            let cnf = builder.compile_cnf(&c);
 
             cnf.is_trimmed()
         }
@@ -875,7 +878,7 @@ mod test_sdd_builder {
     quickcheck! {
         fn sdd_compressed_arbitrary_vtree(c: Cnf, vtree: VTree) -> bool {
             let builder = super::CompressionSddBuilder::new(vtree);
-            let cnf = builder.from_cnf(&c);
+            let cnf = builder.compile_cnf(&c);
             cnf.is_compressed()
         }
     }
@@ -883,7 +886,7 @@ mod test_sdd_builder {
     quickcheck! {
         fn sdd_trimmed_arbitrary_vtree(c: Cnf, vtree: VTree) -> bool {
             let builder = super::CompressionSddBuilder::new(vtree);
-            let cnf = builder.from_cnf(&c);
+            let cnf = builder.compile_cnf(&c);
             cnf.is_trimmed()
         }
     }
@@ -891,11 +894,11 @@ mod test_sdd_builder {
     quickcheck! {
         fn prob_equiv_trivial(c: Cnf, vtree:VTree) -> bool {
             let builder1 = CompressionSddBuilder::new(vtree.clone());
-            let c1 = builder1.from_cnf(&c);
+            let c1 = builder1.compile_cnf(&c);
 
             // in this test, compression is still enabled; c2 should be identical to c1
             let builder2 = SemanticSddBuilder::<{ crate::BIG_PRIME }>::new(vtree);
-            let c2 = builder2.from_cnf(&c);
+            let c2 = builder2.compile_cnf(&c);
 
             let map : WmcParams<FiniteField<{ crate::BIG_PRIME }>> = create_semantic_hash_map(builder1.num_vars());
 
@@ -909,11 +912,11 @@ mod test_sdd_builder {
     quickcheck! {
         fn prob_equiv_sdd_identity_uncompressed_depr(c: Cnf, vtree:VTree) -> TestResult {
             let compr_builder = super::CompressionSddBuilder::new(vtree.clone());
-            let compr_cnf = compr_builder.from_cnf(&c);
+            let compr_cnf = compr_builder.compile_cnf(&c);
 
             let mut uncompr_builder = super::CompressionSddBuilder::new(vtree);
             uncompr_builder.set_compression(false);
-            let uncompr_cnf = uncompr_builder.from_cnf(&c);
+            let uncompr_cnf = uncompr_builder.compile_cnf(&c);
 
             let map : WmcParams<FiniteField<{ crate::BIG_PRIME }>> = create_semantic_hash_map(compr_builder.num_vars());
 
@@ -935,10 +938,10 @@ mod test_sdd_builder {
     quickcheck! {
         fn prob_equiv_sdd_identity_uncompressed(c: Cnf, vtree:VTree) -> TestResult {
             let compr_builder = CompressionSddBuilder::new(vtree.clone());
-            let compr_cnf = compr_builder.from_cnf(&c);
+            let compr_cnf = compr_builder.compile_cnf(&c);
 
             let uncompr_builder = SemanticSddBuilder::<{ crate::BIG_PRIME }>::new(vtree);
-            let uncompr_cnf = uncompr_builder.from_cnf(&c);
+            let uncompr_cnf = uncompr_builder.compile_cnf(&c);
 
             if !uncompr_builder.eq(compr_cnf, uncompr_cnf) {
                 println!("not equal!");
@@ -955,8 +958,8 @@ mod test_sdd_builder {
         fn prob_equiv_sdd_inequality(c1: Cnf, c2: Cnf, vtree:VTree) -> TestResult {
             let mut builder = SemanticSddBuilder::<{ crate::BIG_PRIME }>::new(vtree);
             builder.set_compression(true); // necessary to make sure we don't generate two uncompressed SDDs that canonicalize to the same SDD
-            let cnf_1 = builder.from_cnf(&c1);
-            let cnf_2 = builder.from_cnf(&c2);
+            let cnf_1 = builder.compile_cnf(&c1);
+            let cnf_2 = builder.compile_cnf(&c2);
 
             if cnf_1 == cnf_2 {
                 return TestResult::discard();
@@ -977,8 +980,8 @@ mod test_sdd_builder {
         fn prob_equiv_sdd_eq_vs_prob_eq(c1: Cnf, c2: Cnf, vtree:VTree) -> TestResult {
             let mut builder = SemanticSddBuilder::<{ crate::BIG_PRIME }>::new(vtree);
             builder.set_compression(true); // necessary to make sure we don't generate two uncompressed SDDs that canonicalize to the same SDD
-            let cnf_1 = builder.from_cnf(&c1);
-            let cnf_2 = builder.from_cnf(&c2);
+            let cnf_1 = builder.compile_cnf(&c1);
+            let cnf_2 = builder.compile_cnf(&c2);
 
             let h_eq = builder.eq(cnf_1, cnf_2);
 
@@ -998,7 +1001,7 @@ mod test_sdd_builder {
         /// verify that every node in the SDD compression canonicalizer has a unique semantic hash, using CompressionCanonicalizer
         fn qc_sdd_canonicity(c1: Cnf, vtree:VTree) -> TestResult {
             let builder = super::CompressionSddBuilder::new(vtree);
-            let _ = builder.from_cnf(&c1);
+            let _ = builder.compile_cnf(&c1);
 
             let map : WmcParams<FiniteField<{ crate::BIG_PRIME }>>= create_semantic_hash_map(builder.num_vars());
             let mut seen_hashes : HashMap<u128, SddPtr> = HashMap::new();
@@ -1024,7 +1027,7 @@ mod test_sdd_builder {
         /// using SemanticCanonicalizer
         fn qc_semantic_sdd_canonicity(c1: Cnf, vtree:VTree) -> TestResult {
             let builder = SemanticSddBuilder::< {crate::BIG_PRIME} >::new(vtree);
-            let _ = builder.from_cnf(&c1);
+            let _ = builder.compile_cnf(&c1);
 
             let map : WmcParams<FiniteField<{ crate::BIG_PRIME }>>= create_semantic_hash_map(builder.num_vars());
             let mut seen_hashes : HashMap<u128, SddPtr> = HashMap::new();
@@ -1078,7 +1081,7 @@ mod test_sdd_builder {
             let builder = SemanticSddBuilder::<{ crate::BIG_PRIME }>::new(vtree);
             let map : WmcParams<FiniteField<{ crate::BIG_PRIME }>>= create_semantic_hash_map(builder.num_vars());
 
-            let sdd = builder.from_cnf(&c1);
+            let sdd = builder.compile_cnf(&c1);
             let compl = sdd.neg();
 
             let sdd_hash = sdd.semantic_hash(builder.get_vtree_manager(), &map);

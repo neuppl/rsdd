@@ -5,7 +5,10 @@ use std::{collections::HashMap, fs};
 use clap::Parser;
 use rand::Rng;
 use rsdd::{
-    builder::{bdd::robdd::RobddBuilder, cache::all_app::AllTable},
+    builder::{
+        bdd::{builder::BddBuilder, robdd::RobddBuilder},
+        cache::all_app::AllTable,
+    },
     repr::{cnf::Cnf, robdd::BddPtr, var_label::VarLabel, wmc::WmcParams},
     util::semirings::realsemiring::RealSemiring,
     util::semirings::semiring_traits::Semiring,
@@ -63,7 +66,7 @@ fn main() {
     // TODO: allow user to pick varorder
     let builder = RobddBuilder::<AllTable<BddPtr>>::new_default_order(cnf.num_vars());
 
-    let bdd = builder.from_cnf(&cnf);
+    let bdd = builder.compile_cnf(&cnf);
 
     if args.vars.is_empty() {
         panic!("No vars provided. Please provide at least one with -v")
