@@ -186,47 +186,48 @@ impl<'a> DecisionNNFBuilder<'a> {
     }
 
     fn cond_helper(&'a self, bdd: BddPtr<'a>, lbl: VarLabel, value: bool) -> BddPtr<'a> {
-        if bdd.is_const() {
-            bdd
-        } else if bdd.var() == lbl {
-            let r = if value { bdd.high() } else { bdd.low() };
-            if bdd.is_neg() {
-                r.neg()
-            } else {
-                r
-            }
-        } else {
-            // check cache
-            if let Some(v) = bdd.get_scratch::<BddPtr>() {
-                return if bdd.is_neg() { v.neg() } else { v };
-            }
-
-            // recurse on the children
-            let l = self.cond_helper(bdd.low(), lbl, value);
-            let h = self.cond_helper(bdd.high(), lbl, value);
-            if l == h {
-                if bdd.is_neg() {
-                    return l.neg();
-                } else {
-                    return l;
-                };
-            };
-            let res = if l != bdd.low() || h != bdd.high() {
-                // cache and return the new BDD
-                let new_bdd = BddNode::new(bdd.var(), l, h);
-                let r = self.get_or_insert(new_bdd);
+        match bdd {
+            BddPtr::PtrTrue | BddPtr::PtrFalse => bdd,
+            BddPtr::Reg(node) | BddPtr::Compl(node) if node.var == lbl => {
+                let r = if value { bdd.high() } else { bdd.low() };
                 if bdd.is_neg() {
                     r.neg()
                 } else {
                     r
                 }
-            } else {
-                // nothing changed
-                bdd
-            };
-            // TODO: fix scratch lifetime issue
-            // bdd.set_scratch(if bdd.is_neg() { res.neg() } else { res });
-            res
+            }
+            BddPtr::Reg(node) | BddPtr::Compl(node) => {
+                // check cache
+                if let Some(v) = bdd.get_scratch::<BddPtr>() {
+                    return if bdd.is_neg() { v.neg() } else { v };
+                }
+
+                // recurse on the children
+                let l = self.cond_helper(bdd.low(), lbl, value);
+                let h = self.cond_helper(bdd.high(), lbl, value);
+                if l == h {
+                    if bdd.is_neg() {
+                        return l.neg();
+                    } else {
+                        return l;
+                    };
+                };
+                let res = if l != bdd.low() || h != bdd.high() {
+                    // cache and return the new BDD
+                    let new_bdd = BddNode::new(node.var, l, h);
+                    let r = self.get_or_insert(new_bdd);
+                    if bdd.is_neg() {
+                        r.neg()
+                    } else {
+                        r
+                    }
+                } else {
+                    bdd
+                };
+                // TODO: fix scratch lifetime issue
+                // bdd.set_scratch(if bdd.is_neg() { res.neg() } else { res });
+                res
+            }
         }
     }
 

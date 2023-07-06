@@ -182,16 +182,6 @@ impl<'a> BddPtr<'a> {
     }
 
     /// Gets the varlabel of &self
-    /// Panics if not a node
-    #[inline]
-    pub fn var(&self) -> VarLabel {
-        match self {
-            Compl(n) | Reg(n) => n.var,
-            _ => panic!("attempting to dereference non-node"),
-        }
-    }
-
-    /// Gets the varlabel of &self
     #[inline]
     pub fn var_safe(&self) -> Option<VarLabel> {
         match self {
@@ -317,24 +307,24 @@ impl<'a> BddPtr<'a> {
 
     pub fn to_string_debug(&self) -> String {
         fn print_bdd_helper(ptr: BddPtr) -> String {
-            if ptr.is_true() {
-                String::from("T")
-            } else if ptr.is_false() {
-                String::from("F")
-            } else {
-                let l_p = if ptr.is_neg() {
-                    ptr.low_raw().neg()
-                } else {
-                    ptr.low_raw()
-                };
-                let h_p = if ptr.is_neg() {
-                    ptr.high_raw().neg()
-                } else {
-                    ptr.high_raw()
-                };
-                let l_s = print_bdd_helper(l_p);
-                let h_s = print_bdd_helper(h_p);
-                format!("({}, {}, {})", ptr.var().value(), h_s, l_s)
+            match ptr {
+                PtrTrue => String::from("T"),
+                PtrFalse => String::from("F"),
+                Reg(node) | Compl(node) => {
+                    let l_p = if ptr.is_neg() {
+                        ptr.low_raw().neg()
+                    } else {
+                        ptr.low_raw()
+                    };
+                    let h_p = if ptr.is_neg() {
+                        ptr.high_raw().neg()
+                    } else {
+                        ptr.high_raw()
+                    };
+                    let l_s = print_bdd_helper(l_p);
+                    let h_s = print_bdd_helper(h_p);
+                    format!("({}, {}, {})", node.var.value(), h_s, l_s)
+                }
             }
         }
         print_bdd_helper(*self)
@@ -344,8 +334,7 @@ impl<'a> BddPtr<'a> {
     pub fn print_bdd_lbl(&self, map: &HashMap<VarLabel, VarLabel>) -> String {
         match self {
             BddPtr::PtrTrue => String::from("T"),
-            // BddPtr::PtrFalse => String::from("T"),
-            BddPtr::PtrFalse => String::from("F"), // TODO: check that this is right?
+            BddPtr::PtrFalse => String::from("F"),
             BddPtr::Compl(n) => {
                 let s = BddPtr::Reg(n).print_bdd_lbl(map);
                 format!("!{}", s)
@@ -379,41 +368,41 @@ impl<'a> BddPtr<'a> {
     where
         T: 'static,
     {
-        // If current node is true leaf, return accumulated high_v value
-        if self.is_true() {
-            high_v
-        // Else if current node is false leaf, return accumulated low_v value
-        } else if self.is_false() {
-            low_v
-        } else {
-            // Every node has an associated cache (scratch)
-            // Scratch data is arbitrary (depends on use case)
-            // fst is negated, snd is non-negated accumulator
+        match self {
+            // If current node is true leaf, return accumulated high_v value
+            PtrTrue => high_v,
+            // Else if current node is false leaf, return accumulated low_v value
+            PtrFalse => low_v,
+            Reg(node) | Compl(node) => {
+                // Every node has an associated cache (scratch)
+                // Scratch data is arbitrary (depends on use case)
+                // fst is negated, snd is non-negated accumulator
 
-            let fold_helper = |prev_low, prev_high| {
-                // Standard fold stuff
-                let l = self.low().bdd_fold_h(f, low_v, high_v);
-                let h = self.high().bdd_fold_h(f, low_v, high_v);
-                let res = f(self.var(), l, h);
-                // Set cache (accumulator)
-                // Then corrects scratch so it traverses correctly in a recursive case downstream
-                if self.is_neg() {
-                    self.set_scratch::<(Option<T>, Option<T>)>((Some(res), prev_high));
-                } else {
-                    self.set_scratch::<(Option<T>, Option<T>)>((prev_low, Some(res)));
+                let fold_helper = |prev_low, prev_high| {
+                    // Standard fold stuff
+                    let l = self.low().bdd_fold_h(f, low_v, high_v);
+                    let h = self.high().bdd_fold_h(f, low_v, high_v);
+                    let res = f(node.var, l, h);
+                    // Set cache (accumulator)
+                    // Then corrects scratch so it traverses correctly in a recursive case downstream
+                    if self.is_neg() {
+                        self.set_scratch::<(Option<T>, Option<T>)>((Some(res), prev_high));
+                    } else {
+                        self.set_scratch::<(Option<T>, Option<T>)>((prev_low, Some(res)));
+                    }
+                    res
+                };
+
+                match self.get_scratch::<(Option<T>, Option<T>)>() {
+                    // If complemented and accumulated, use the already memoized value
+                    Some((Some(v), _)) if self.is_neg() => v,
+                    // Same for not complemented
+                    Some((_, Some(v))) if !self.is_neg() => v,
+                    // (Some(v), None) but not a complemented node
+                    // (None, Some(v)) but a complemented node
+                    Some((prev_low, prev_high)) => fold_helper(prev_low, prev_high),
+                    None => fold_helper(None, None),
                 }
-                res
-            };
-
-            match self.get_scratch::<(Option<T>, Option<T>)>() {
-                // If complemented and accumulated, use the already memoized value
-                Some((Some(v), _)) if self.is_neg() => v,
-                // Same for not complemented
-                Some((_, Some(v))) if !self.is_neg() => v,
-                // (Some(v), None) but not a complemented node
-                // (None, Some(v)) but a complemented node
-                Some((prev_low, prev_high)) => fold_helper(prev_low, prev_high),
-                None => fold_helper(None, None),
             }
         }
     }
@@ -856,7 +845,7 @@ impl<'a> DDNNFPtr<'a> for BddPtr<'a> {
             match ptr {
                 PtrTrue => f(DDNNF::True),
                 PtrFalse => f(DDNNF::False),
-                Compl(_) | Reg(_) => {
+                Compl(node) | Reg(node) => {
                     // inside the cache, store a (compl, non_compl) pair corresponding to the
                     // complemented and uncomplemented pass over this node
 
@@ -870,7 +859,7 @@ impl<'a> DDNNFPtr<'a> for BddPtr<'a> {
 
                         let low_v = bottomup_pass_h(l, f);
                         let high_v = bottomup_pass_h(h, f);
-                        let top = ptr.var();
+                        let top = node.var;
 
                         let lit_high = f(DDNNF::Lit(top, true));
                         let lit_low = f(DDNNF::Lit(top, false));

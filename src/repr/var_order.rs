@@ -99,17 +99,20 @@ impl VarOrder {
     /// Returns the BddPtr whose top variable occurs first in a given
     /// ordering (ties broken by returning `a`)
     pub fn first<'a>(&self, a: BddPtr<'a>, b: BddPtr<'a>) -> BddPtr<'a> {
-        if a.is_const() {
-            b
-        } else if b.is_const() {
-            a
-        } else {
-            let pa = self.get(a.var());
-            let pb = self.get(b.var());
-            if pa < pb {
-                a
-            } else {
-                b
+        match (a, b) {
+            (BddPtr::PtrTrue, _) | (BddPtr::PtrFalse, _) => b,
+            (_, BddPtr::PtrTrue) | (_, BddPtr::PtrFalse) => a,
+            (
+                BddPtr::Reg(node_a) | BddPtr::Compl(node_a),
+                BddPtr::Reg(node_b) | BddPtr::Compl(node_b),
+            ) => {
+                let pa = self.get(node_a.var);
+                let pb = self.get(node_b.var);
+                if pa < pb {
+                    a
+                } else {
+                    b
+                }
             }
         }
     }
@@ -117,17 +120,20 @@ impl VarOrder {
     /// Returns a sorted pair where the BddPtr whose top variable is first
     /// occurs first in the pair.
     pub fn sort<'a>(&self, a: BddPtr<'a>, b: BddPtr<'a>) -> (BddPtr<'a>, BddPtr<'a>) {
-        if a.is_const() {
-            (b, a)
-        } else if b.is_const() {
-            (a, b)
-        } else {
-            let pa = self.get(a.var());
-            let pb = self.get(b.var());
-            if pa < pb {
-                (a, b)
-            } else {
-                (b, a)
+        match (a, b) {
+            (BddPtr::PtrTrue, _) | (BddPtr::PtrFalse, _) => (b, a),
+            (_, BddPtr::PtrTrue) | (_, BddPtr::PtrFalse) => (a, b),
+            (
+                BddPtr::Reg(node_a) | BddPtr::Compl(node_a),
+                BddPtr::Reg(node_b) | BddPtr::Compl(node_b),
+            ) => {
+                let pa = self.get(node_a.var);
+                let pb = self.get(node_b.var);
+                if pa < pb {
+                    (a, b)
+                } else {
+                    (b, a)
+                }
             }
         }
     }
@@ -179,7 +185,13 @@ impl VarOrder {
     pub fn first_essential(&self, a: BddPtr, b: BddPtr, c: BddPtr) -> VarLabel {
         let f1 = self.first(a, b);
         let f2 = self.first(f1, c);
-        f2.var()
+        match f2 {
+            BddPtr::Reg(n) | BddPtr::Compl(n) => n.var,
+            BddPtr::PtrTrue | BddPtr::PtrFalse => panic!(
+                "Could not find a valid first variable among a: {:?}, b: {:?}, c: {:?}",
+                a, b, c
+            ),
+        }
     }
 
     /// Produces a vector of variable positions indexed by
