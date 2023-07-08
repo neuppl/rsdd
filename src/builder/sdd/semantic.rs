@@ -136,6 +136,7 @@ impl<'a, const P: u128> SddBuilder<'a> for SemanticSddBuilder<'a, P> {
 
         SddBuilderStats {
             app_cache_hits: self.bdd_tbl.borrow().hits() + self.sdd_tbl.borrow().hits(),
+            app_cache_size: self.bdd_tbl.borrow().num_nodes() + self.sdd_tbl.borrow().num_nodes(),
             num_logically_redundant: num_collisions,
             num_recursive_calls: *self.num_recursive_calls.borrow(),
             num_compressions: 0,

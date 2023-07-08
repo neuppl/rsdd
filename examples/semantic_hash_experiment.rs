@@ -59,15 +59,12 @@ struct BenchStats {
     time: Duration,
     num_child_nodes: usize,
     num_nodes_alloc: usize,
-    // num_nodes_bdd: usize,
-    // num_nodes_sdd: usize,
     num_recursive_calls: usize,
     num_get_or_insert_bdd: usize,
     num_get_or_insert_sdd: usize,
-    // brt_cache_rate: f32,
-    // app_cache_rate: f32,
+    app_cache_rate: f32,
+    app_cache_size: usize,
     num_compr: usize,
-    // num_compr_and: usize,
 }
 
 impl BenchStats {
@@ -86,33 +83,26 @@ impl BenchStats {
             num_recursive_calls: stats.num_recursive_calls,
             num_get_or_insert_bdd: stats.num_get_or_insert_bdd,
             num_get_or_insert_sdd: stats.num_get_or_insert_sdd,
-            // brt_cache_rate: (builder.num_app_cache_hits()) as f32 / (stats.num_get_or_insert as f32)
-            //     * 100.0,
-            // app_cache_rate: stats.num_app_cache_hits as f32 / stats.num_recursive_calls as f32 * 100.0,
+            app_cache_rate: stats.app_cache_hits as f32 / stats.num_recursive_calls as f32 * 100.0,
+            app_cache_size: stats.app_cache_size,
             num_compr: stats.num_compressions,
-            // num_compr_and: stats.num_compr_and,
         }
     }
 }
 
 impl Display for BenchStats {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        // write!(f, "{}: {:05} nodes | {:06} bdd / {:06} sdd uniq | {:07} rec | {:06} g/i, {:.1}% brt cache | {:.1}% app cache | {:05}/{:05} compr/and | t: {:?}",
-        // write!(f, "{}: {:05} nodes | {:06} nodes alloc | {:07} rec | {:06} g/i, {:.1}% brt cache | {:.1}% app cache | {:05}/{:05} compr/and | t: {:?}",
         write!(
             f,
-            "{}: {:05} nodes | {:06} nodes alloc | {:05} num recur | {:05} g/i | {:05} c | t: {:?}",
+            "{}: {:05} nodes | {:06} nodes alloc | {:05} num recur | {:05} g/i | app cache: {:05} hits, {:.1}% recur | {:05} #c | t: {:?}",
             self.label,
             self.num_child_nodes,
-            // self.num_nodes_bdd,
-            // self.num_nodes_sdd,
             self.num_nodes_alloc,
             self.num_recursive_calls,
             self.num_get_or_insert_bdd + self.num_get_or_insert_sdd,
-            // self.brt_cache_rate,
-            // self.app_cache_rate,
+            self.app_cache_size,
+            self.app_cache_rate,
             self.num_compr,
-            // self.num_compr_and,
             self.time,
         )
     }
@@ -149,38 +139,36 @@ fn run_random_comparisons(cnf: Cnf, order: &[VarLabel], num: usize, bias: f64) {
     let mut avg_nodes_cnf_sem = 0;
     let mut avg_nodes_cnf_compr = 0;
 
-    // let mut avg_rec_sem = 0;
-    // let mut avg_rec_compr = 0;
+    let mut avg_rec_sem = 0;
+    let mut avg_rec_compr = 0;
 
     for _ in 0..num {
         let vtree = VTree::rand_split(order, bias);
 
         let (compr, sem) = run_compr_sem(&cnf, &vtree);
         println!(
-            // "c/s: {:.2}x nodes ({:.2}x b+sdd) | {:.2}x rec | {:.2}x g/i | {:.2}x %brt | {:.2}x %app | r% {:.2}",
-            "c/s: {:.2}x nodes ({:.2}x nodes alloc), {:.2}x num_recur | r% {:.2}",
+            "c/s: {:.2}x nodes ({:.2}x b+sdd) | {:.2}x rec | {:.2}x g/i | | {:.2}x %app hits | {:.2}x % app size | r% {:.2}",
             sem.num_child_nodes as f32 / compr.num_child_nodes as f32,
             (sem.num_nodes_alloc) as f32 / (compr.num_nodes_alloc) as f32,
             sem.num_recursive_calls as f32 / compr.num_recursive_calls as f32,
-            // sem.num_get_or_insert as f32 / compr.num_get_or_insert as f32,
-            // sem.brt_cache_rate / compr.brt_cache_rate,
-            // sem.app_cache_rate / compr.app_cache_rate,
+            (sem.num_get_or_insert_bdd + sem.num_get_or_insert_sdd) as f32 / (compr.num_get_or_insert_bdd + compr.num_get_or_insert_sdd) as f32,
+            sem.app_cache_rate / compr.app_cache_rate,
+            sem.app_cache_size as f32 / compr.app_cache_size as f32,
             vtree_rightness(&vtree)
         );
 
         avg_nodes_cnf_sem += sem.num_child_nodes;
         avg_nodes_cnf_compr += compr.num_child_nodes;
 
-        // avg_rec_sem += sem.num_recursive_calls;
-        // avg_rec_compr += compr.num_recursive_calls;
+        avg_rec_sem += sem.num_recursive_calls;
+        avg_rec_compr += compr.num_recursive_calls;
     }
     println!("---");
     println!(
-        // "total c/s (n={}): {:.2}x nodes | {:.2}x rec",
-        "total c/s (n={}): {:.2}x nodes",
+        "total c/s (n={}): {:.2}x nodes | {:.2}x rec",
         num,
         (avg_nodes_cnf_sem as f32 / avg_nodes_cnf_compr as f32),
-        // (avg_rec_sem as f32 / avg_rec_compr as f32)
+        (avg_rec_sem as f32 / avg_rec_compr as f32)
     );
 }
 

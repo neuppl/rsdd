@@ -15,6 +15,7 @@ use crate::{repr::cnf::Cnf, repr::logical_expr::LogicalExpr, repr::var_label::Va
 #[derive(Default)]
 pub struct SddBuilderStats {
     pub app_cache_hits: usize,
+    pub app_cache_size: usize,
     pub num_logically_redundant: usize,
     pub num_recursive_calls: usize,
     pub num_compressions: usize,
