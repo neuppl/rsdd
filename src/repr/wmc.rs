@@ -7,7 +7,7 @@ use super::var_label::{Literal, VarLabel};
 
 /// Weighted model counting parameters for a BDD. It primarily is a storage for
 /// the weight on each variable.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct WmcParams<T: Semiring> {
     pub zero: T,
     pub one: T,
@@ -68,5 +68,29 @@ impl<T: Semiring + std::ops::Mul<Output = T> + std::ops::Add<Output = T>> WmcPar
     // gives you the weight of `(low, high)` literals for a given VarLabel
     pub fn get_var_weight(&self, label: VarLabel) -> &(T, T) {
         return (self.var_to_val[label.value_usize()]).as_ref().unwrap();
+    }
+}
+
+impl<T: Semiring> Debug for WmcParams<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("WmcParams")
+            .field("zero", &self.zero)
+            .field("one", &self.one)
+            .field(
+                "var_to_val",
+                &self
+                    .var_to_val
+                    .iter()
+                    .enumerate()
+                    .map(|(index, val)| {
+                        if let Some((low, high)) = val {
+                            format!("{}: l: {:?}, h: {:?}", index, low, high)
+                        } else {
+                            format!("{}: None", index)
+                        }
+                    })
+                    .collect::<Vec<String>>(),
+            )
+            .finish()
     }
 }

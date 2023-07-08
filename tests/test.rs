@@ -892,11 +892,10 @@ mod test_sdd_builder {
     }
 
     quickcheck! {
-        fn prob_equiv_trivial(c: Cnf, vtree:VTree) -> bool {
+        fn prob_equiv_identical(c: Cnf, vtree:VTree) -> bool {
             let builder1 = CompressionSddBuilder::new(vtree.clone());
             let c1 = builder1.compile_cnf(&c);
 
-            // in this test, compression is still enabled; c2 should be identical to c1
             let builder2 = SemanticSddBuilder::<{ crate::BIG_PRIME }>::new(vtree);
             let c2 = builder2.compile_cnf(&c);
 
@@ -906,6 +905,15 @@ mod test_sdd_builder {
             let h2 = c2.semantic_hash(builder2.get_vtree_manager(), &map);
 
             h1 == h2
+        }
+    }
+
+    quickcheck! {
+        fn prob_equiv_reflexive(c: Cnf, vtree: VTree) -> bool {
+            let builder = SemanticSddBuilder::<{ crate::BIG_PRIME }>::new(vtree);
+            let c = builder.compile_cnf(&c);
+
+            builder.eq(c, c)
         }
     }
 

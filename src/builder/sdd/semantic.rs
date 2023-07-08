@@ -29,6 +29,10 @@ pub struct SemanticSddBuilder<'a, const P: u128> {
     app_cache: RefCell<HashMap<u128, SddPtr<'a>>>,
     // semantic hashing
     map: WmcParams<FiniteField<P>>,
+    // stats
+    num_recursive_calls: RefCell<usize>,
+    num_get_or_insert_bdd: RefCell<usize>,
+    num_get_or_insert_sdd: RefCell<usize>,
 }
 
 impl<'a, const P: u128> SddBuilder<'a> for SemanticSddBuilder<'a, P> {
@@ -79,6 +83,7 @@ impl<'a, const P: u128> SddBuilder<'a> for SemanticSddBuilder<'a, P> {
     }
 
     fn get_or_insert_bdd(&'a self, bdd: BinarySDD<'a>) -> SddPtr<'a> {
+        *self.num_get_or_insert_bdd.borrow_mut() += 1;
         let semantic_hash = bdd.semantic_hash(&self.vtree, &self.map);
 
         if let Some(sdd) = self.check_cached_hash_and_neg(semantic_hash) {
@@ -93,6 +98,7 @@ impl<'a, const P: u128> SddBuilder<'a> for SemanticSddBuilder<'a, P> {
     }
 
     fn get_or_insert_sdd(&'a self, or: SddOr<'a>) -> SddPtr<'a> {
+        *self.num_get_or_insert_sdd.borrow_mut() += 1;
         let semantic_hash = or.semantic_hash(&self.vtree, &self.map);
         if let Some(sdd) = self.check_cached_hash_and_neg(semantic_hash) {
             return sdd;
@@ -130,8 +136,17 @@ impl<'a, const P: u128> SddBuilder<'a> for SemanticSddBuilder<'a, P> {
 
         SddBuilderStats {
             app_cache_hits: self.bdd_tbl.borrow().hits() + self.sdd_tbl.borrow().hits(),
+            app_cache_size: self.bdd_tbl.borrow().num_nodes() + self.sdd_tbl.borrow().num_nodes(),
             num_logically_redundant: num_collisions,
+            num_recursive_calls: *self.num_recursive_calls.borrow(),
+            num_compressions: 0,
+            num_get_or_insert_bdd: *self.num_get_or_insert_bdd.borrow(),
+            num_get_or_insert_sdd: *self.num_get_or_insert_sdd.borrow(),
         }
+    }
+
+    fn log_recursive_call(&self) {
+        *self.num_recursive_calls.borrow_mut() += 1
     }
 }
 
@@ -147,7 +162,18 @@ impl<'a, const P: u128> SemanticSddBuilder<'a, P> {
             bdd_tbl: RefCell::new(BackedRobinhoodTable::new()),
             sdd_tbl: RefCell::new(BackedRobinhoodTable::new()),
             map,
+            num_recursive_calls: RefCell::new(0),
+            num_get_or_insert_bdd: RefCell::new(0),
+            num_get_or_insert_sdd: RefCell::new(0),
         }
+    }
+
+    pub fn cached_semantic_hash(&self, sdd: SddPtr) -> FiniteField<P> {
+        sdd.cached_semantic_hash(&self.vtree, &self.map)
+    }
+
+    pub fn map(&self) -> &WmcParams<FiniteField<P>> {
+        &self.map
     }
 
     fn hash_bdd(&self, elem: &BinarySDD) -> u64 {
