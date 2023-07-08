@@ -1,5 +1,5 @@
 use std::cell::RefCell;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 use crate::backing_store::bump_table::BackedRobinhoodTable;
 use crate::backing_store::UniqueTable;
@@ -7,7 +7,6 @@ use crate::builder::cache::all_app::AllTable;
 use crate::builder::cache::ite::Ite;
 use crate::builder::cache::LruTable;
 use crate::builder::BottomUpBuilder;
-use crate::repr::bdd::create_semantic_hash_map;
 use crate::repr::ddnnf::DDNNFPtr;
 use crate::repr::sdd::binary_sdd::BinarySDD;
 use crate::repr::sdd::sdd_or::{SddAnd, SddOr};
@@ -25,6 +24,11 @@ pub struct CompressionSddBuilder<'a> {
     // caches
     ite_cache: RefCell<AllTable<SddPtr<'a>>>,
     app_cache: RefCell<HashMap<SddAnd<'a>, SddPtr<'a>>>,
+    // stats
+    num_recursive_calls: RefCell<usize>,
+    num_compressions: RefCell<usize>,
+    num_get_or_insert_bdd: RefCell<usize>,
+    num_get_or_insert_sdd: RefCell<usize>,
 }
 
 impl<'a> SddBuilder<'a> for CompressionSddBuilder<'a> {
@@ -61,6 +65,7 @@ impl<'a> SddBuilder<'a> for CompressionSddBuilder<'a> {
 
     #[inline]
     fn get_or_insert_bdd(&'a self, bdd: BinarySDD<'a>) -> SddPtr<'a> {
+        *self.num_get_or_insert_bdd.borrow_mut() += 1;
         unsafe {
             let tbl = &mut *self.bdd_tbl.as_ptr();
             SddPtr::BDD(tbl.get_or_insert(bdd))
@@ -69,6 +74,7 @@ impl<'a> SddBuilder<'a> for CompressionSddBuilder<'a> {
 
     #[inline]
     fn get_or_insert_sdd(&'a self, or: SddOr<'a>) -> SddPtr<'a> {
+        *self.num_get_or_insert_sdd.borrow_mut() += 1;
         unsafe {
             let tbl = &mut *self.sdd_tbl.as_ptr();
             SddPtr::Reg(tbl.get_or_insert(or))
@@ -88,6 +94,7 @@ impl<'a> SddBuilder<'a> for CompressionSddBuilder<'a> {
     /// Canonicalizes the list of (prime, sub) terms in-place
     /// `node`: a list of (prime, sub) pairs
     fn compress(&'a self, node: &mut Vec<SddAnd<'a>>) {
+        *self.num_compressions.borrow_mut() += 1;
         for i in 0..node.len() {
             // see if we can compress i
             let mut j = i + 1;
@@ -132,21 +139,18 @@ impl<'a> SddBuilder<'a> for CompressionSddBuilder<'a> {
     }
 
     fn stats(&self) -> super::builder::SddBuilderStats {
-        let mut s: HashSet<u128> = HashSet::new();
-        let hasher = create_semantic_hash_map::<100000000063>(self.num_vars() + 1000); // TODO FIX THIS BADNESS
-        let mut num_collisions = 0;
-        for n in self.node_iter() {
-            let h = n.cached_semantic_hash(self.get_vtree_manager(), &hasher);
-            if s.contains(&h.value()) {
-                num_collisions += 1;
-            }
-            s.insert(h.value());
-        }
-
         SddBuilderStats {
             app_cache_hits: self.bdd_tbl.borrow().hits() + self.sdd_tbl.borrow().hits(),
-            num_logically_redundant: num_collisions,
+            num_logically_redundant: 0,
+            num_recursive_calls: *self.num_recursive_calls.borrow(),
+            num_compressions: *self.num_compressions.borrow(),
+            num_get_or_insert_bdd: *self.num_get_or_insert_bdd.borrow(),
+            num_get_or_insert_sdd: *self.num_get_or_insert_sdd.borrow(),
         }
+    }
+
+    fn log_recursive_call(&self) {
+        *self.num_recursive_calls.borrow_mut() += 1
     }
 }
 
@@ -160,6 +164,10 @@ impl<'a> CompressionSddBuilder<'a> {
             sdd_tbl: RefCell::new(BackedRobinhoodTable::new()),
             vtree: vtree_man,
             should_compress: true,
+            num_recursive_calls: RefCell::new(0),
+            num_compressions: RefCell::new(0),
+            num_get_or_insert_bdd: RefCell::new(0),
+            num_get_or_insert_sdd: RefCell::new(0),
         }
     }
 

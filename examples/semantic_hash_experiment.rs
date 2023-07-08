@@ -57,15 +57,16 @@ struct Args {
 struct BenchStats {
     label: String,
     time: Duration,
-    num_nodes_cnf: usize,
+    num_child_nodes: usize,
     num_nodes_alloc: usize,
     // num_nodes_bdd: usize,
     // num_nodes_sdd: usize,
-    // num_rec: usize,
-    // num_get_or_insert: usize,
+    num_recursive_calls: usize,
+    num_get_or_insert_bdd: usize,
+    num_get_or_insert_sdd: usize,
     // brt_cache_rate: f32,
     // app_cache_rate: f32,
-    // num_compr: usize,
+    num_compr: usize,
     // num_compr_and: usize,
 }
 
@@ -76,18 +77,19 @@ impl BenchStats {
         sdd: &SddPtr,
         builder: &impl SddBuilder<'a>,
     ) -> BenchStats {
-        // let stats = builder.stats();
+        let stats = builder.stats();
         BenchStats {
             label,
             time,
-            num_nodes_cnf: sdd.num_child_nodes(),
+            num_child_nodes: sdd.num_child_nodes(),
             num_nodes_alloc: builder.node_iter().len(),
-            // num_rec: stats.num_rec,
-            // num_get_or_insert: stats.num_get_or_insert,
+            num_recursive_calls: stats.num_recursive_calls,
+            num_get_or_insert_bdd: stats.num_get_or_insert_bdd,
+            num_get_or_insert_sdd: stats.num_get_or_insert_sdd,
             // brt_cache_rate: (builder.num_app_cache_hits()) as f32 / (stats.num_get_or_insert as f32)
             //     * 100.0,
-            // app_cache_rate: stats.num_app_cache_hits as f32 / stats.num_rec as f32 * 100.0,
-            // num_compr: stats.num_compr,
+            // app_cache_rate: stats.num_app_cache_hits as f32 / stats.num_recursive_calls as f32 * 100.0,
+            num_compr: stats.num_compressions,
             // num_compr_and: stats.num_compr_and,
         }
     }
@@ -99,17 +101,17 @@ impl Display for BenchStats {
         // write!(f, "{}: {:05} nodes | {:06} nodes alloc | {:07} rec | {:06} g/i, {:.1}% brt cache | {:.1}% app cache | {:05}/{:05} compr/and | t: {:?}",
         write!(
             f,
-            "{}: {:05} nodes | {:06} nodes alloc | t: {:?}",
+            "{}: {:05} nodes | {:06} nodes alloc | {:05} num recur | {:05} g/i | {:05} c | t: {:?}",
             self.label,
-            self.num_nodes_cnf,
+            self.num_child_nodes,
             // self.num_nodes_bdd,
             // self.num_nodes_sdd,
             self.num_nodes_alloc,
-            // self.num_rec,
-            // self.num_get_or_insert,
+            self.num_recursive_calls,
+            self.num_get_or_insert_bdd + self.num_get_or_insert_sdd,
             // self.brt_cache_rate,
             // self.app_cache_rate,
-            // self.num_compr,
+            self.num_compr,
             // self.num_compr_and,
             self.time,
         )
@@ -156,23 +158,21 @@ fn run_random_comparisons(cnf: Cnf, order: &[VarLabel], num: usize, bias: f64) {
         let (compr, sem) = run_compr_sem(&cnf, &vtree);
         println!(
             // "c/s: {:.2}x nodes ({:.2}x b+sdd) | {:.2}x rec | {:.2}x g/i | {:.2}x %brt | {:.2}x %app | r% {:.2}",
-            "c/s: {:.2}x nodes ({:.2}x b+sdd) | r% {:.2}",
-            sem.num_nodes_cnf as f32 / compr.num_nodes_cnf as f32,
-            // (sem.num_nodes_bdd + sem.num_nodes_sdd) as f32
-            //     / (compr.num_nodes_bdd + compr.num_nodes_sdd) as f32,
+            "c/s: {:.2}x nodes ({:.2}x nodes alloc), {:.2}x num_recur | r% {:.2}",
+            sem.num_child_nodes as f32 / compr.num_child_nodes as f32,
             (sem.num_nodes_alloc) as f32 / (compr.num_nodes_alloc) as f32,
-            // sem.num_rec as f32 / compr.num_rec as f32,
+            sem.num_recursive_calls as f32 / compr.num_recursive_calls as f32,
             // sem.num_get_or_insert as f32 / compr.num_get_or_insert as f32,
             // sem.brt_cache_rate / compr.brt_cache_rate,
             // sem.app_cache_rate / compr.app_cache_rate,
             vtree_rightness(&vtree)
         );
 
-        avg_nodes_cnf_sem += sem.num_nodes_cnf;
-        avg_nodes_cnf_compr += compr.num_nodes_cnf;
+        avg_nodes_cnf_sem += sem.num_child_nodes;
+        avg_nodes_cnf_compr += compr.num_child_nodes;
 
-        // avg_rec_sem += sem.num_rec;
-        // avg_rec_compr += compr.num_rec;
+        // avg_rec_sem += sem.num_recursive_calls;
+        // avg_rec_compr += compr.num_recursive_calls;
     }
     println!("---");
     println!(
@@ -211,6 +211,9 @@ fn run_canonicalizer_experiment(c: Cnf, vtree: VTree, verbose: bool) {
     if !sem_builder.eq(compr_cnf, sem_cnf) {
         println!(" ");
         println!("not equal! test is broken...");
+        println!("compr_cnf: {}", sem_builder.cached_semantic_hash(compr_cnf));
+        println!("sem_cnf: {}", sem_builder.cached_semantic_hash(sem_cnf));
+        println!("map: {:#?}", sem_builder.map());
         if verbose {
             eprintln!("=== COMPRESSED CNF ===");
             eprintln!("{}", sem_builder.print_sdd(compr_cnf));
@@ -233,7 +236,11 @@ fn main() {
         .collect::<Vec<VarLabel>>();
     let vars = binding.as_slice();
 
-    println!("num vars: {}", cnf.num_vars());
+    println!(
+        "num vars: {} | num clauses: {}",
+        cnf.num_vars(),
+        cnf.clauses().len()
+    );
 
     if args.run_random_vtrees > 0 {
         println!(

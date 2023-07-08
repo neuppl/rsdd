@@ -1,9 +1,10 @@
 use super::semiring_traits::*;
+use core::fmt::Debug;
 /// Simple real-number semiring abstraction (all operations standard for reals, abstracted as f64)
 /// a finite-field abstraction. The parameter `p` is the size of the field.
 use std::{fmt::Display, ops};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub struct FiniteField<const P: u128> {
     v: u128,
 }
@@ -54,12 +55,22 @@ impl<const P: u128> ops::Sub<FiniteField<P>> for FiniteField<P> {
     type Output = FiniteField<P>;
 
     fn sub(self, rhs: FiniteField<P>) -> Self::Output {
-        FiniteField::new(self.v.abs_diff(rhs.v) % P)
+        FiniteField::new(if self.v > rhs.v {
+            self.v - rhs.v
+        } else {
+            rhs.v - self.v
+        })
     }
 }
 
 impl<const P: u128> Display for FiniteField<P> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.v)
+    }
+}
+
+impl<const P: u128> Debug for FiniteField<P> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "FiniteField({})", self.v)
     }
 }

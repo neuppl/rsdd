@@ -16,6 +16,10 @@ use crate::{repr::cnf::Cnf, repr::logical_expr::LogicalExpr, repr::var_label::Va
 pub struct SddBuilderStats {
     pub app_cache_hits: usize,
     pub num_logically_redundant: usize,
+    pub num_recursive_calls: usize,
+    pub num_compressions: usize,
+    pub num_get_or_insert_bdd: usize,
+    pub num_get_or_insert_sdd: usize,
 }
 
 pub trait SddBuilder<'a>: BottomUpBuilder<'a, SddPtr<'a>> {
@@ -515,6 +519,7 @@ pub trait SddBuilder<'a>: BottomUpBuilder<'a, SddPtr<'a>> {
     }
 
     fn stats(&self) -> SddBuilderStats;
+    fn log_recursive_call(&self);
 }
 
 impl<'a, T> BottomUpBuilder<'a, SddPtr<'a>> for T
@@ -546,7 +551,8 @@ where
     }
 
     fn and(&'a self, a: SddPtr<'a>, b: SddPtr<'a>) -> SddPtr<'a> {
-        // println!("and a: {}\nb: {}", self.print_sdd(a), self.print_sdd(b));
+        self.log_recursive_call();
+
         // first, check for a base case
         match (a, b) {
             (a, b) if self.is_true(a) => return b,
@@ -610,6 +616,7 @@ where
     /// TODO: This is highly inefficient, will re-traverse nodes, needs a cache
     /// TODO : this can bail out early by checking the vtree
     fn condition(&'a self, f: SddPtr<'a>, lbl: VarLabel, value: bool) -> SddPtr<'a> {
+        self.log_recursive_call();
         match f {
             SddPtr::PtrTrue | SddPtr::PtrFalse => f,
             SddPtr::Var(label, polarity) => {
