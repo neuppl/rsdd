@@ -84,9 +84,8 @@ impl<'a> SddOr<'a> {
             .cloned()
     }
 
-    // TODO: this feels wrong?
     pub fn set_scratch<T: 'static>(&self, v: T) {
-        self.scratch.replace(Some(Box::new(v)));
+        *self.scratch.borrow_mut() = Some(Box::new(v));
     }
 
     pub fn clear_scratch(&self) {
