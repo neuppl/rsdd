@@ -237,7 +237,7 @@ impl<'a> BddPtr<'a> {
         match &self {
             Compl(x) | Reg(x) => {
                 if x.data.borrow().is_some() {
-                    x.data.replace(None);
+                    x.data.take();
                     x.low.clear_scratch();
                     x.high.clear_scratch();
                 }
@@ -289,7 +289,7 @@ impl<'a> BddPtr<'a> {
     pub fn set_scratch<T: 'static>(&self, v: T) {
         match self {
             Compl(n) | Reg(n) => {
-                n.data.replace(Some(Box::new(v)));
+                *n.data.borrow_mut() = Some(Box::new(v));
             }
             _ => panic!("attempting to store scratch on constant"),
         }

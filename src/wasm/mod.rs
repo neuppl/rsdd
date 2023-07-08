@@ -12,7 +12,7 @@ use crate::repr::{cnf::Cnf, var_label::VarLabel, vtree::VTree};
 use crate::serialize::ser_sdd::SDDSerializer;
 use crate::serialize::ser_vtree::VTreeSerializer;
 use crate::serialize::{ser_bdd, ser_sdd, ser_vtree};
-use crate::util::semirings::realsemiring::RealSemiring;
+use crate::util::semirings::finitefield::FiniteField;
 use crate::util::semirings::semiring_traits::Semiring;
 use wasm_bindgen::prelude::*;
 
@@ -27,7 +27,7 @@ pub enum VTreeType {
 
 #[derive(Serialize, Deserialize)]
 pub struct SddModelCountResult {
-    model_count: f64,
+    model_count: u128,
     sdd: SDDSerializer,
     vtree: VTreeSerializer,
 }
@@ -101,20 +101,21 @@ pub fn demo_model_count_sdd(cnf_input: String) -> Result<JsValue, JsValue> {
     let builder = CompressionSddBuilder::new(vtree.clone());
     let sdd = builder.compile_cnf(&cnf);
 
-    let mut params = WmcParams::new(RealSemiring::zero(), RealSemiring::one());
+    let mut params: WmcParams<FiniteField<1000001>> =
+        WmcParams::new(FiniteField::zero(), FiniteField::one());
 
     for v in 0..builder.get_vtree_manager().num_vars() + 1 {
         params.set_weight(
             VarLabel::new_usize(v),
-            RealSemiring::zero(),
-            RealSemiring::one(),
+            FiniteField::new(1),
+            FiniteField::new(1),
         )
     }
 
     let model_count = sdd.wmc(builder.get_vtree_manager(), &params);
 
     let res = SddModelCountResult {
-        model_count: model_count.0,
+        model_count: model_count.value(),
         sdd: ser_sdd::SDDSerializer::from_sdd(sdd),
         vtree: ser_vtree::VTreeSerializer::from_vtree(&vtree),
     };
