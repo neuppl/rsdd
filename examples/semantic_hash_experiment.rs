@@ -108,6 +108,41 @@ impl Display for BenchStats {
     }
 }
 
+fn vtree_rightness(vtree: &VTree) -> f32 {
+    fn helper(vtree: &VTree) -> usize {
+        if vtree.is_leaf() {
+            return 0;
+        }
+        let count = if vtree.left().is_leaf() { 1 } else { 0 };
+        return count + helper(vtree.left()) + helper(vtree.right());
+    }
+    (helper(vtree) - 1) as f32 / (vtree.num_vars() - 2) as f32
+}
+
+fn num_false_subs(sdd: SddPtr) -> usize {
+    fn current(sdd: SddPtr) -> usize {
+        if matches!(sdd, SddPtr::PtrFalse) {
+            1
+        } else {
+            0
+        }
+    }
+    match sdd {
+        SddPtr::PtrTrue | SddPtr::PtrFalse | SddPtr::Var(_, _) => 0,
+        SddPtr::BDD(bdd) | SddPtr::ComplBDD(bdd) => {
+            // current(bdd.low())
+            //     + current(bdd.high())
+            //     +
+            num_false_subs(bdd.low()) + num_false_subs(bdd.high())
+        }
+        SddPtr::Reg(or) | SddPtr::Compl(or) => or
+            .nodes
+            .iter()
+            .map(|and| current(and.sub()) + num_false_subs(and.prime()) + num_false_subs(and.sub()))
+            .sum(),
+    }
+}
+
 fn run_compr_sem(cnf: &Cnf, vtree: &VTree) -> (BenchStats, BenchStats) {
     let start = Instant::now();
     let compr_builder = CompressionSddBuilder::new(vtree.clone());
@@ -120,17 +155,6 @@ fn run_compr_sem(cnf: &Cnf, vtree: &VTree) -> (BenchStats, BenchStats) {
     let sem = BenchStats::from_run("s".to_owned(), start.elapsed(), &sem_cnf, &sem_builder);
 
     (compr, sem)
-}
-
-fn vtree_rightness(vtree: &VTree) -> f32 {
-    fn helper(vtree: &VTree) -> usize {
-        if vtree.is_leaf() {
-            return 0;
-        }
-        let count = if vtree.left().is_leaf() { 1 } else { 0 };
-        return count + helper(vtree.left()) + helper(vtree.right());
-    }
-    (helper(vtree) - 1) as f32 / (vtree.num_vars() - 2) as f32
 }
 
 fn run_random_comparisons(cnf: Cnf, order: &[VarLabel], num: usize, bias: f64) {
@@ -194,6 +218,13 @@ fn run_canonicalizer_experiment(c: Cnf, vtree: VTree, verbose: bool) {
     println!(
         "{}\n",
         BenchStats::from_run("s".to_owned(), start.elapsed(), &sem_cnf, &sem_builder)
+    );
+
+    println!(
+        "# false subs: compr: {}, sem: {} | filtered sem size: {}",
+        num_false_subs(compr_cnf),
+        num_false_subs(sem_cnf),
+        sem_builder.filter_false_subs(sem_cnf).num_child_nodes()
     );
 
     if !sem_builder.eq(compr_cnf, sem_cnf) {

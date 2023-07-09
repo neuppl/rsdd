@@ -231,6 +231,24 @@ impl<'a, const P: u128> SemanticSddBuilder<'a, P> {
         }
         None
     }
+
+    pub fn filter_false_subs(&'a self, sdd: SddPtr<'a>) -> SddPtr<'a> {
+        match sdd {
+            SddPtr::Reg(or) => {
+                let or = SddOr::new(
+                    or.nodes
+                        .iter()
+                        .filter(|and| !self.is_false(and.sub()))
+                        .copied()
+                        .collect::<Vec<_>>(),
+                    or.index(),
+                );
+                self.get_or_insert_sdd(or)
+            }
+            SddPtr::Compl(_) => self.filter_false_subs(sdd.neg()).neg(),
+            _ => sdd,
+        }
+    }
 }
 
 #[test]
