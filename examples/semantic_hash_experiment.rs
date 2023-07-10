@@ -9,7 +9,8 @@ use rsdd::{
         BottomUpBuilder,
     },
     repr::{
-        cnf::Cnf, dtree::DTree, sdd::SddPtr, var_label::VarLabel, var_order::VarOrder, vtree::VTree,
+        cnf::Cnf, ddnnf::DDNNFPtr, dtree::DTree, sdd::SddPtr, var_label::VarLabel,
+        var_order::VarOrder, vtree::VTree,
     },
 };
 use std::{
@@ -57,7 +58,7 @@ struct Args {
 struct BenchStats {
     label: String,
     time: Duration,
-    num_child_nodes: usize,
+    num_distinct_nodes: usize,
     num_nodes_alloc: usize,
     num_recursive_calls: usize,
     num_get_or_insert_bdd: usize,
@@ -78,7 +79,7 @@ impl BenchStats {
         BenchStats {
             label,
             time,
-            num_child_nodes: sdd.num_child_nodes(),
+            num_distinct_nodes: sdd.count_nodes(),
             num_nodes_alloc: builder.node_iter().len(),
             num_recursive_calls: stats.num_recursive_calls,
             num_get_or_insert_bdd: stats.num_get_or_insert_bdd,
@@ -96,7 +97,7 @@ impl Display for BenchStats {
             f,
             "{}: {:05} nodes | {:06} nodes alloc | {:05} num recur | {:05} g/i | app cache: {:05} hits, {:.1}% recur | {:05} #c | t: {:?}",
             self.label,
-            self.num_child_nodes,
+            self.num_distinct_nodes,
             self.num_nodes_alloc,
             self.num_recursive_calls,
             self.num_get_or_insert_bdd + self.num_get_or_insert_sdd,
@@ -148,7 +149,7 @@ fn run_random_comparisons(cnf: Cnf, order: &[VarLabel], num: usize, bias: f64) {
         let (compr, sem) = run_compr_sem(&cnf, &vtree);
         println!(
             "c/s: {:.2}x nodes ({:.2}x b+sdd) | {:.2}x rec | {:.2}x g/i | | {:.2}x %app hits | {:.2}x % app size | r% {:.2}",
-            sem.num_child_nodes as f32 / compr.num_child_nodes as f32,
+            sem.num_distinct_nodes as f32 / compr.num_distinct_nodes as f32,
             (sem.num_nodes_alloc) as f32 / (compr.num_nodes_alloc) as f32,
             sem.num_recursive_calls as f32 / compr.num_recursive_calls as f32,
             (sem.num_get_or_insert_bdd + sem.num_get_or_insert_sdd) as f32 / (compr.num_get_or_insert_bdd + compr.num_get_or_insert_sdd) as f32,
@@ -157,8 +158,8 @@ fn run_random_comparisons(cnf: Cnf, order: &[VarLabel], num: usize, bias: f64) {
             vtree_rightness(&vtree)
         );
 
-        avg_nodes_cnf_sem += sem.num_child_nodes;
-        avg_nodes_cnf_compr += compr.num_child_nodes;
+        avg_nodes_cnf_sem += sem.num_distinct_nodes;
+        avg_nodes_cnf_compr += compr.num_distinct_nodes;
 
         avg_rec_sem += sem.num_recursive_calls;
         avg_rec_compr += compr.num_recursive_calls;
