@@ -158,16 +158,23 @@ where
     }
 }
 
-impl<'a, T: Eq + PartialEq + Hash + Clone + std::fmt::Debug> UniqueTable<'a, T>
-    for BackedRobinhoodTable<'a, T>
-{
+impl<'a, T: Eq + Hash + Clone> UniqueTable<'a, T> for BackedRobinhoodTable<'a, T> {
     fn get_or_insert(&'a mut self, elem: T) -> &'a T {
         let mut hasher = FxHasher::default();
         elem.hash(&mut hasher);
         let hash = hasher.finish();
         self.get_or_insert_by_hash(hash, elem, false)
     }
-    fn get_or_insert_by_hash(&'a mut self, hash: u64, elem: T, equality_by_hash: bool) -> &'a T {
+}
+
+impl<'a, T: Eq + Hash + Clone> BackedRobinhoodTable<'a, T> {
+    /// use a hash to both allocate space in table, *and* form equalitySS
+    pub fn get_or_insert_by_hash(
+        &'a mut self,
+        hash: u64,
+        elem: T,
+        equality_by_hash: bool,
+    ) -> &'a T {
         if (self.len + 1) as f64 > (self.cap as f64 * LOAD_FACTOR) {
             self.grow();
         }
@@ -215,11 +222,7 @@ impl<'a, T: Eq + PartialEq + Hash + Clone + std::fmt::Debug> UniqueTable<'a, T>
         }
     }
 
-    fn get_by_hash(&'a mut self, hash: u64) -> Option<&'a T> {
-        if (self.len + 1) as f64 > (self.cap as f64 * LOAD_FACTOR) {
-            self.grow();
-        }
-
+    pub fn get_by_hash(&'a mut self, hash: u64) -> Option<&'a T> {
         // the current index into the array
         let mut pos: usize = (hash as usize) % self.cap;
         // the distance this item is from its desired location
@@ -245,10 +248,7 @@ impl<'a, T: Eq + PartialEq + Hash + Clone + std::fmt::Debug> UniqueTable<'a, T>
     }
 }
 
-impl<'a, T: Clone> Default for BackedRobinhoodTable<'a, T>
-where
-    T: Hash + PartialEq + Eq + Clone,
-{
+impl<'a, T: Hash + Eq + Clone> Default for BackedRobinhoodTable<'a, T> {
     fn default() -> Self {
         Self::new()
     }
