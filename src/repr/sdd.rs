@@ -18,7 +18,7 @@ use SddPtr::*;
 use std::hash::Hash;
 
 use self::binary_sdd::BinarySDD;
-use self::sdd_or::{SddAnd, SddNodeIter, SddOr};
+use self::sdd_or::{SddNodeIter, SddOr};
 
 // This type is used a lot. Make sure it doesn't unintentionally get bigger.
 #[derive(Debug, Clone, Eq, Ord, PartialOrd, Copy)]
@@ -117,8 +117,17 @@ impl<'a> SddPtr<'a> {
     pub fn is_scratch_cleared(&self) -> bool {
         match self {
             PtrTrue | PtrFalse | Var(_, _) => true,
-            BDD(bdd) | ComplBDD(bdd) => bdd.is_scratch_cleared(),
-            Reg(or) | Compl(or) => or.scratch.borrow().is_none(),
+            BDD(bdd) | ComplBDD(bdd) => {
+                bdd.is_scratch_cleared()
+                    && bdd.low().is_scratch_cleared()
+                    && bdd.high().is_scratch_cleared()
+            }
+            Reg(or) | Compl(or) => {
+                or.scratch.borrow().is_none()
+                    && or.nodes.iter().all(|and| {
+                        and.prime().is_scratch_cleared() && and.sub().is_scratch_cleared()
+                    })
+            }
         }
     }
 
@@ -178,12 +187,6 @@ impl<'a> SddPtr<'a> {
             ComplBDD(bdd) => bdd.high().neg(),
             _ => panic!("Called high() on a pointer to a non-BinarySDD"),
         }
-    }
-
-    /// get an iterator to all the (prime, sub) pairs this node points to
-    /// panics if not an or-node
-    pub fn node_iter(&self) -> impl Iterator<Item = SddAnd<'a>> {
-        SddNodeIter::new(*self)
     }
 
     /// gets the total number of nodes that are a child to this SDD
@@ -313,7 +316,7 @@ impl<'a> DDNNFPtr<'a> for SddPtr<'a> {
                     // helper performs actual fold-and-cache work
                     let bottomup_helper = |cached| {
                         let mut or_v = f(DDNNF::False);
-                        for and in ptr.node_iter() {
+                        for and in SddNodeIter::new(ptr) {
                             let s = if ptr.is_neg() {
                                 and.sub().neg()
                             } else {
@@ -344,8 +347,8 @@ impl<'a> DDNNFPtr<'a> for SddPtr<'a> {
                                 h
                             }
                         }
-                        Some((Some(v), None)) if ptr.is_neg() => v,
-                        Some((None, Some(v))) if !ptr.is_neg() => v,
+                        Some((Some(l), None)) if ptr.is_neg() => l,
+                        Some((None, Some(h))) if !ptr.is_neg() => h,
                         // no cached value found, compute it
                         Some((None, cached)) | Some((cached, None)) => bottomup_helper(cached),
                         None => bottomup_helper(None),
@@ -371,7 +374,7 @@ impl<'a> DDNNFPtr<'a> for SddPtr<'a> {
                     // found a new node
                     ptr.set_scratch::<usize>(0);
                     let mut c = 0;
-                    for a in ptr.node_iter() {
+                    for a in SddNodeIter::new(ptr) {
                         c += count_h(a.sub());
                         c += count_h(a.prime());
                         c += 1;

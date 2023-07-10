@@ -7,7 +7,7 @@ use crate::builder::cache::ite::Ite;
 use crate::builder::BottomUpBuilder;
 use crate::repr::ddnnf::DDNNFPtr;
 use crate::repr::sdd::binary_sdd::BinarySDD;
-use crate::repr::sdd::sdd_or::{SddAnd, SddOr};
+use crate::repr::sdd::sdd_or::{SddAnd, SddNodeIter, SddOr};
 use crate::repr::sdd::SddPtr::{self, Var};
 use crate::repr::vtree::{VTree, VTreeIndex, VTreeManager};
 use crate::{repr::cnf::Cnf, repr::logical_expr::LogicalExpr, repr::var_label::VarLabel};
@@ -207,7 +207,7 @@ pub trait SddBuilder<'a>: BottomUpBuilder<'a, SddPtr<'a>> {
         ];
 
         let mut new_n: Vec<SddAnd> = Vec::new();
-        for a1 in r.node_iter() {
+        for a1 in SddNodeIter::new(r) {
             let p1 = a1.prime();
             let s1 = a1.sub();
             let s1 = if r.is_neg() { s1.neg() } else { s1 };
@@ -263,11 +263,11 @@ pub trait SddBuilder<'a>: BottomUpBuilder<'a, SddPtr<'a>> {
         // (1) if p1i = p2j or if p1i => p2j, then p1k x p2j = false for all k<>i
         // (2) if p1i = !p2j, then p1k x p2j = p1k for all k<>i
         let mut r: Vec<SddAnd> = Vec::new();
-        for a1 in a.node_iter() {
+        for a1 in SddNodeIter::new(a) {
             let p1 = a1.prime();
             let s1 = a1.sub();
             // // check if there exists an equal prime
-            let eq_itm = b.node_iter().find(|a| self.eq(a.prime(), p1));
+            let eq_itm = SddNodeIter::new(b).find(|a| self.eq(a.prime(), p1));
             let s1 = if a.is_neg() { s1.neg() } else { s1 };
 
             match eq_itm {
@@ -285,7 +285,7 @@ pub trait SddBuilder<'a>: BottomUpBuilder<'a, SddPtr<'a>> {
             }
 
             // no special case
-            for a2 in b.node_iter() {
+            for a2 in SddNodeIter::new(b) {
                 let p2 = a2.prime();
                 let s2 = a2.sub();
                 let s2 = if b.is_neg() { s2.neg() } else { s2 };
@@ -486,7 +486,7 @@ pub trait SddBuilder<'a>: BottomUpBuilder<'a, SddPtr<'a>> {
                     let h = helper(bdd.high());
                     let mut doc: Doc<BoxDoc> = Doc::from("");
                     doc = doc.append(Doc::newline()).append(
-                        (Doc::from(format!("ITE {:?} {}", ptr, bdd.label().value()))
+                        (Doc::from(format!("ITE {:#?} {}", ptr, bdd.label().value()))
                             .append(Doc::newline())
                             .append(h.append(Doc::newline()).append(l)))
                         .nest(2),
@@ -647,7 +647,7 @@ where
             _ => {
                 let mut v = Vec::new();
                 // f is a node; recurse and compress the result
-                for a in f.node_iter() {
+                for a in SddNodeIter::new(f) {
                     let prime = a.prime();
                     let sub = a.sub();
                     let newp = self.condition(prime, lbl, value);

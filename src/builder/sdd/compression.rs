@@ -480,3 +480,99 @@ fn sdd_wmc1() {
         wmc_res
     );
 }
+
+#[test]
+fn sdd_compression_builder_e2e_mc() {
+    use crate::repr::cnf::Cnf;
+    use crate::repr::dtree::DTree;
+    use crate::repr::var_label::VarLabel;
+    use crate::repr::var_order::VarOrder;
+    use crate::repr::wmc::WmcParams;
+    use crate::util::semirings::finitefield::FiniteField;
+    use crate::util::semirings::realsemiring::RealSemiring;
+    use crate::util::semirings::semiring_traits::Semiring;
+    use maplit::hashmap;
+
+    static CNF: &str = "
+    p cnf 6 3
+    c weights 0.05 0.10 0.15 0.20 0.25 0.30 0.35 0.40 0.45 0.50 0.55 0.60
+    1 2 3 4 0
+    -2 -3 4 5 0
+    -4 -5 6 6 0
+    ";
+
+    let cnf = Cnf::from_file(String::from(CNF));
+    let dtree = DTree::from_cnf(&cnf, &VarOrder::linear_order(cnf.num_vars()));
+    let vtree = VTree::from_dtree(&dtree).unwrap();
+
+    let builder = CompressionSddBuilder::new(vtree);
+
+    let sdd = builder.compile_cnf(&cnf);
+
+    let model_count = sdd.wmc(
+        builder.get_vtree_manager(),
+        &WmcParams::<FiniteField<1000001>>::new_with_default(
+            FiniteField::zero(),
+            FiniteField::one(),
+            hashmap! {
+                VarLabel::new(0) => (FiniteField::new(1), FiniteField::new(1)),
+                VarLabel::new(1) => (FiniteField::new(1), FiniteField::new(1)),
+                VarLabel::new(2) => (FiniteField::new(1), FiniteField::new(1)),
+                VarLabel::new(3) => (FiniteField::new(1), FiniteField::new(1)),
+                VarLabel::new(4) => (FiniteField::new(1), FiniteField::new(1)),
+                VarLabel::new(5) => (FiniteField::new(1), FiniteField::new(1)),
+            },
+        ),
+    );
+
+    let weighted_model_count = sdd.wmc(
+        builder.get_vtree_manager(),
+        &WmcParams::new_with_default(
+            RealSemiring::zero(),
+            RealSemiring::one(),
+            hashmap! {
+                // VarLabel::new(0) => (RealSemiring(0.05), RealSemiring(0.10)),
+                // VarLabel::new(1) => (RealSemiring(0.15), RealSemiring(0.20)),
+                // VarLabel::new(2) => (RealSemiring(0.25), RealSemiring(0.30)),
+                // VarLabel::new(3) => (RealSemiring(0.35), RealSemiring(0.40)),
+                // VarLabel::new(4) => (RealSemiring(0.45), RealSemiring(0.50)),
+                // VarLabel::new(5) => (RealSemiring(0.55), RealSemiring(0.60)),
+
+                VarLabel::new(0) => (RealSemiring(0.10), RealSemiring(0.05)),
+                VarLabel::new(1) => (RealSemiring(0.20), RealSemiring(0.15)),
+                VarLabel::new(2) => (RealSemiring(0.30), RealSemiring(0.25)),
+                VarLabel::new(3) => (RealSemiring(0.40), RealSemiring(0.35)),
+                VarLabel::new(4) => (RealSemiring(0.50), RealSemiring(0.45)),
+                VarLabel::new(5) => (RealSemiring(0.60), RealSemiring(0.55)),
+            },
+        ),
+    );
+
+    // verified with pysdd
+    //
+    // given tiny2-with-weights.cnf
+    //
+    // p cnf 6 3
+    // c weights 0.05 0.10 0.15 0.20 0.25 0.30 0.35 0.40 0.45 0.50 0.55 0.60
+    // 1 2 3 4 0
+    // -2 -3 4 5 0
+    // -4 -5 6 6 0
+    //
+    // $ pysdd -c tiny2-with-weights.cnf
+    // reading cnf...
+    // Read CNF: vars=6 clauses=3
+    // creating initial vtree balanced
+    // creating manager...
+    // compiling...
+
+    // compilation time         : 0.001 sec
+    //  sdd size                : 10
+    //  sdd node count          : 5
+    //  sdd model count         : 48    0.000 sec
+    //  sdd weighted model count: 0.017015015625000005    0.000 sec
+    // done
+
+    println!("{:}", builder.print_sdd(sdd));
+    assert_eq!(model_count.value(), 48);
+    assert_eq!(weighted_model_count.0, 0.017015015625000005);
+}

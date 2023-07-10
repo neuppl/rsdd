@@ -1104,4 +1104,25 @@ mod test_sdd_builder {
             sum == 1
         }
     }
+
+    quickcheck! {
+        fn semantic_and_compression_agree_on_model_count(cnf: Cnf, vtree: VTree) -> bool {
+            let weights = create_semantic_hash_map::< {crate::BIG_PRIME} >(cnf.num_vars());
+
+            let com_builder = CompressionSddBuilder::new(vtree.clone());
+            let com_sdd = com_builder.compile_cnf(&cnf);
+            let com_mc = com_sdd.wmc(com_builder.get_vtree_manager(), &weights);
+
+            let sem_builder = SemanticSddBuilder::<{ crate::BIG_PRIME }>::new(vtree);
+            let sem_sdd = sem_builder.compile_cnf(&cnf);
+            let sem_mc = sem_sdd.wmc(sem_builder.get_vtree_manager(), &weights);
+
+            if com_mc != sem_mc {
+                println!("model counts do not agree; com: {}, sem: {}", com_mc, sem_mc);
+            }
+
+            com_mc == sem_mc
+        }
+
+    }
 }
