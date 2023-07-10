@@ -22,7 +22,6 @@ pub mod plan;
 pub mod repr;
 pub mod sample;
 pub mod serialize;
-pub mod unique_table;
 
 #[cfg(target_arch = "wasm32")]
 pub mod wasm;

@@ -167,7 +167,14 @@ impl<'a, T: Eq + PartialEq + Hash + Clone + std::fmt::Debug> UniqueTable<'a, T>
         let hash = hasher.finish();
         self.get_or_insert_by_hash(hash, elem, false)
     }
-    fn get_or_insert_by_hash(&'a mut self, hash: u64, elem: T, equality_by_hash: bool) -> &'a T {
+}
+impl<'a, T: Eq + PartialEq + Hash + Clone + std::fmt::Debug> BackedRobinhoodTable<'a, T> {
+    pub fn get_or_insert_by_hash(
+        &'a mut self,
+        hash: u64,
+        elem: T,
+        equality_by_hash: bool,
+    ) -> &'a T {
         if (self.len + 1) as f64 > (self.cap as f64 * LOAD_FACTOR) {
             self.grow();
         }
@@ -215,11 +222,7 @@ impl<'a, T: Eq + PartialEq + Hash + Clone + std::fmt::Debug> UniqueTable<'a, T>
         }
     }
 
-    fn get_by_hash(&'a mut self, hash: u64) -> Option<&'a T> {
-        if (self.len + 1) as f64 > (self.cap as f64 * LOAD_FACTOR) {
-            self.grow();
-        }
-
+    pub fn get_by_hash(&'a mut self, hash: u64) -> Option<&'a T> {
         // the current index into the array
         let mut pos: usize = (hash as usize) % self.cap;
         // the distance this item is from its desired location
@@ -240,6 +243,46 @@ impl<'a, T: Eq + PartialEq + Hash + Clone + std::fmt::Debug> UniqueTable<'a, T>
                 pos = (pos + 1) % self.cap;
             } else {
                 return None;
+            }
+        }
+    }
+
+    pub fn get_or_replace_by_hash(&'a mut self, hash: u64, elem: T) -> &'a T {
+        // the current index into the array
+        let mut pos: usize = (hash as usize) % self.cap;
+        // the distance this item is from its desired location
+        let mut psl = 0;
+
+        loop {
+            if self.is_occupied(pos) {
+                let cur_itm = self.tbl[pos].clone();
+                if hash == cur_itm.hash {
+                    self.hits += 1;
+                    let ptr = self.alloc.alloc(elem);
+                    let entry = HashTableElement::new(ptr, hash, psl);
+                    self.tbl[pos] = entry;
+                    return ptr;
+                }
+
+                if cur_itm.psl < psl {
+                    // elem is not in the table; insert it at pos and propagate
+                    // the item that is currently here
+                    self.propagate(cur_itm, pos);
+                    let ptr = self.alloc.alloc(elem);
+                    let entry = HashTableElement::new(ptr, hash, psl);
+                    self.len += 1;
+                    self.tbl[pos] = entry;
+                    return ptr;
+                }
+                psl += 1;
+                pos = (pos + 1) % self.cap;
+            } else {
+                // this element is unique, so place it in the current spot
+                let ptr = self.alloc.alloc(elem);
+                let entry = HashTableElement::new(ptr, hash, psl);
+                self.len += 1;
+                self.tbl[pos] = entry;
+                return ptr;
             }
         }
     }

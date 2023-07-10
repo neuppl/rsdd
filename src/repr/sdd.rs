@@ -187,6 +187,7 @@ impl<'a> SddPtr<'a> {
     }
 
     /// gets the total number of nodes that are a child to this SDD
+    /// once the SDD is expanded (i.e., nodes can be double-counted)
     pub fn num_child_nodes(&self) -> usize {
         match &self {
             PtrTrue | PtrFalse | Var(_, _) => 1,

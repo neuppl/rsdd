@@ -5,7 +5,6 @@ use std::hash::{Hash, Hasher};
 use rustc_hash::FxHasher;
 
 use crate::backing_store::bump_table::BackedRobinhoodTable;
-use crate::backing_store::UniqueTable;
 use crate::builder::cache::ite::Ite;
 use crate::repr::bdd::create_semantic_hash_map;
 use crate::repr::ddnnf::DDNNFPtr;
@@ -230,6 +229,53 @@ impl<'a, const P: u128> SemanticSddBuilder<'a, P> {
             return Some(sdd.neg());
         }
         None
+    }
+
+    fn get_or_replace_bdd(&'a self, bdd: BinarySDD<'a>) -> SddPtr<'a> {
+        let hash = self.hash_bdd(&bdd);
+        unsafe {
+            let tbl = &mut *self.bdd_tbl.as_ptr();
+            SddPtr::BDD(tbl.get_or_replace_by_hash(hash, bdd))
+        }
+    }
+
+    fn get_or_replace_sdd(&'a self, or: SddOr<'a>) -> SddPtr<'a> {
+        let hash = self.hash_sdd(&or);
+        unsafe {
+            let tbl = &mut *self.sdd_tbl.as_ptr();
+            SddPtr::Reg(tbl.get_or_replace_by_hash(hash, or))
+        }
+    }
+
+    pub fn filter_false_subs(&'a self, sdd: SddPtr<'a>) -> SddPtr<'a> {
+        match sdd {
+            SddPtr::Reg(or) => {
+                let or = SddOr::new(
+                    or.nodes
+                        .iter()
+                        .filter(|and| !self.is_false(and.sub()))
+                        .map(|and| SddAnd {
+                            prime: self.filter_false_subs(and.prime()),
+                            sub: self.filter_false_subs(and.sub()),
+                        })
+                        .collect::<Vec<_>>(),
+                    or.index(),
+                );
+                self.get_or_replace_sdd(or)
+            }
+            SddPtr::Compl(_) => self.filter_false_subs(sdd.neg()).neg(),
+            SddPtr::BDD(bdd) => {
+                let new_bdd = BinarySDD::new(
+                    bdd.label(),
+                    self.filter_false_subs(bdd.low()),
+                    self.filter_false_subs(bdd.high()),
+                    bdd.vtree(),
+                );
+                self.get_or_replace_bdd(new_bdd)
+            }
+            SddPtr::ComplBDD(_) => self.filter_false_subs(sdd.neg()).neg(),
+            _ => sdd,
+        }
     }
 }
 

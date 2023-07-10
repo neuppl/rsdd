@@ -9,7 +9,8 @@ use rsdd::{
         BottomUpBuilder,
     },
     repr::{
-        cnf::Cnf, dtree::DTree, sdd::SddPtr, var_label::VarLabel, var_order::VarOrder, vtree::VTree,
+        cnf::Cnf, ddnnf::DDNNFPtr, dtree::DTree, sdd::SddPtr, var_label::VarLabel,
+        var_order::VarOrder, vtree::VTree,
     },
 };
 use std::{
@@ -57,7 +58,7 @@ struct Args {
 struct BenchStats {
     label: String,
     time: Duration,
-    num_child_nodes: usize,
+    distinct_node_count: usize,
     num_nodes_alloc: usize,
     num_recursive_calls: usize,
     num_get_or_insert_bdd: usize,
@@ -78,7 +79,7 @@ impl BenchStats {
         BenchStats {
             label,
             time,
-            num_child_nodes: sdd.num_child_nodes(),
+            distinct_node_count: sdd.count_nodes(),
             num_nodes_alloc: builder.node_iter().len(),
             num_recursive_calls: stats.num_recursive_calls,
             num_get_or_insert_bdd: stats.num_get_or_insert_bdd,
@@ -96,7 +97,7 @@ impl Display for BenchStats {
             f,
             "{}: {:05} nodes | {:06} nodes alloc | {:05} num recur | {:05} g/i | app cache: {:05} hits, {:.1}% recur | {:05} #c | t: {:?}",
             self.label,
-            self.num_child_nodes,
+            self.distinct_node_count,
             self.num_nodes_alloc,
             self.num_recursive_calls,
             self.num_get_or_insert_bdd + self.num_get_or_insert_sdd,
@@ -105,6 +106,41 @@ impl Display for BenchStats {
             self.num_compr,
             self.time,
         )
+    }
+}
+
+fn vtree_rightness(vtree: &VTree) -> f32 {
+    fn helper(vtree: &VTree) -> usize {
+        if vtree.is_leaf() {
+            return 0;
+        }
+        let count = if vtree.left().is_leaf() { 1 } else { 0 };
+        return count + helper(vtree.left()) + helper(vtree.right());
+    }
+    (helper(vtree) - 1) as f32 / (vtree.num_vars() - 2) as f32
+}
+
+fn num_false_subs(sdd: SddPtr) -> usize {
+    fn current(sdd: SddPtr) -> usize {
+        if matches!(sdd, SddPtr::PtrFalse) {
+            1
+        } else {
+            0
+        }
+    }
+    match sdd {
+        SddPtr::PtrTrue | SddPtr::PtrFalse | SddPtr::Var(_, _) => 0,
+        SddPtr::BDD(bdd) | SddPtr::ComplBDD(bdd) => {
+            // current(bdd.low())
+            //     + current(bdd.high())
+            //     +
+            num_false_subs(bdd.low()) + num_false_subs(bdd.high())
+        }
+        SddPtr::Reg(or) | SddPtr::Compl(or) => or
+            .nodes
+            .iter()
+            .map(|and| current(and.sub()) + num_false_subs(and.prime()) + num_false_subs(and.sub()))
+            .sum(),
     }
 }
 
@@ -122,17 +158,6 @@ fn run_compr_sem(cnf: &Cnf, vtree: &VTree) -> (BenchStats, BenchStats) {
     (compr, sem)
 }
 
-fn vtree_rightness(vtree: &VTree) -> f32 {
-    fn helper(vtree: &VTree) -> usize {
-        if vtree.is_leaf() {
-            return 0;
-        }
-        let count = if vtree.left().is_leaf() { 1 } else { 0 };
-        return count + helper(vtree.left()) + helper(vtree.right());
-    }
-    (helper(vtree) - 1) as f32 / (vtree.num_vars() - 2) as f32
-}
-
 fn run_random_comparisons(cnf: Cnf, order: &[VarLabel], num: usize, bias: f64) {
     println!("---");
 
@@ -148,7 +173,7 @@ fn run_random_comparisons(cnf: Cnf, order: &[VarLabel], num: usize, bias: f64) {
         let (compr, sem) = run_compr_sem(&cnf, &vtree);
         println!(
             "c/s: {:.2}x nodes ({:.2}x b+sdd) | {:.2}x rec | {:.2}x g/i | | {:.2}x %app hits | {:.2}x % app size | r% {:.2}",
-            sem.num_child_nodes as f32 / compr.num_child_nodes as f32,
+            sem.distinct_node_count as f32 / compr.distinct_node_count as f32,
             (sem.num_nodes_alloc) as f32 / (compr.num_nodes_alloc) as f32,
             sem.num_recursive_calls as f32 / compr.num_recursive_calls as f32,
             (sem.num_get_or_insert_bdd + sem.num_get_or_insert_sdd) as f32 / (compr.num_get_or_insert_bdd + compr.num_get_or_insert_sdd) as f32,
@@ -157,8 +182,8 @@ fn run_random_comparisons(cnf: Cnf, order: &[VarLabel], num: usize, bias: f64) {
             vtree_rightness(&vtree)
         );
 
-        avg_nodes_cnf_sem += sem.num_child_nodes;
-        avg_nodes_cnf_compr += compr.num_child_nodes;
+        avg_nodes_cnf_sem += sem.distinct_node_count;
+        avg_nodes_cnf_compr += compr.distinct_node_count;
 
         avg_rec_sem += sem.num_recursive_calls;
         avg_rec_compr += compr.num_recursive_calls;
@@ -194,6 +219,13 @@ fn run_canonicalizer_experiment(c: Cnf, vtree: VTree, verbose: bool) {
     println!(
         "{}\n",
         BenchStats::from_run("s".to_owned(), start.elapsed(), &sem_cnf, &sem_builder)
+    );
+
+    println!(
+        "# false subs: compr: {}, sem: {} | filtered sem size: {}",
+        num_false_subs(compr_cnf),
+        num_false_subs(sem_cnf),
+        sem_builder.filter_false_subs(sem_cnf).count_nodes()
     );
 
     if !sem_builder.eq(compr_cnf, sem_cnf) {
