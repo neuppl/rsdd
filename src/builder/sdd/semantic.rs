@@ -5,7 +5,6 @@ use std::hash::{Hash, Hasher};
 use rustc_hash::FxHasher;
 
 use crate::backing_store::bump_table::BackedRobinhoodTable;
-use crate::backing_store::UniqueTable;
 use crate::builder::cache::ite::Ite;
 use crate::repr::bdd::create_semantic_hash_map;
 use crate::repr::ddnnf::DDNNFPtr;
