@@ -1124,6 +1124,27 @@ mod test_dnnf_builder {
     };
 
     quickcheck! {
+        fn semantic_no_redundant_nodes(cnf: Cnf) -> TestResult {
+            // constrain the size
+            if cnf.num_vars() == 0 || cnf.num_vars() > 8 { return TestResult::discard() }
+            if cnf.clauses().len() > 16 { return TestResult::discard() }
+
+            let linear_order = VarOrder::linear_order(cnf.num_vars());
+
+            let sem_builder = SemanticDecisionNNFBuilder::<{ crate::BIG_PRIME }>::new(linear_order);
+            sem_builder.compile_cnf_topdown(&cnf);
+
+            let num_redundant = sem_builder.num_logically_redundant();
+
+            if num_redundant > 0 {
+                println!("Error on input {}, found {} redundant nodes", cnf, num_redundant);
+            }
+
+            TestResult::from_bool(num_redundant == 0)
+        }
+    }
+
+    quickcheck! {
         fn semantic_and_standard_agree_on_hash(cnf: Cnf) -> TestResult {
             // constrain the size
             if cnf.num_vars() == 0 || cnf.num_vars() > 8 { return TestResult::discard() }
