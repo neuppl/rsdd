@@ -1,6 +1,7 @@
 //! Stores the variable order for a the BDD manager Variables that occur first
 //! in the order occur first in the BDD, starting from the root.
 //! Lower numbers occur first in the order (i.e., closer to the root)
+
 use crate::repr::var_label::VarLabel;
 use crate::util;
 use std::slice::Iter;
