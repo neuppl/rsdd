@@ -4,7 +4,7 @@
 pub mod cache;
 
 pub mod bdd;
-pub mod decision_nnf_builder;
+pub mod decision_nnf;
 pub mod sdd;
 
 use crate::repr::var_label::VarLabel;
@@ -48,4 +48,11 @@ pub trait BottomUpBuilder<'a, Ptr> {
     /// compose g into f for variable v
     /// I.e., computes the logical function (exists v. (g <=> v) /\ f).
     fn compose(&'a self, f: Ptr, lbl: VarLabel, g: Ptr) -> Ptr;
+}
+
+pub trait TopDownBuilder<'a, Ptr> {
+    fn var(&'a self, label: VarLabel, polarity: bool) -> Ptr;
+
+    /// conditions f | v = value
+    fn condition(&'a self, a: Ptr, v: VarLabel, value: bool) -> Ptr;
 }

@@ -3,6 +3,8 @@ extern crate rsdd;
 use clap::Parser;
 use rsdd::builder::bdd::builder::BddBuilder;
 use rsdd::builder::cache::lru_app::BddApplyTable;
+use rsdd::builder::decision_nnf::builder::DecisionNNFBuilder;
+use rsdd::builder::decision_nnf::standard::StandardDecisionNNFBuilder;
 use rsdd::plan::bdd_plan::BddPlan;
 use rsdd::repr::cnf::Cnf;
 use rsdd::repr::ddnnf::DDNNFPtr;
@@ -78,7 +80,7 @@ struct BenchResult {
 fn compile_topdown_nnf(str: String, _args: &Args) -> BenchResult {
     let cnf = Cnf::from_file(str);
     let order = VarOrder::linear_order(cnf.num_vars());
-    let builder = rsdd::builder::decision_nnf_builder::DecisionNNFBuilder::new(order);
+    let builder = StandardDecisionNNFBuilder::new(order);
     // let order = cnf.force_order();
     let ddnnf = builder.compile_cnf_topdown(&cnf);
     println!("num redundant: {}", builder.num_logically_redundant());

@@ -1,65 +1,27 @@
-//! Top-down decision DNNF compiler and manipulator
-
-use std::{cell::RefCell, collections::HashSet};
-
-use crate::{
-    backing_store::*,
-    repr::{
-        bdd::create_semantic_hash_map,
-        ddnnf::DDNNFPtr,
-        unit_prop::{DecisionResult, SATSolver},
-    },
-};
 use rustc_hash::FxHashMap;
 
 use crate::{
-    backing_store::bump_table::BackedRobinhoodTable,
+    builder::{
+        bdd::robdd::{BddPtr, DDNNFPtr},
+        TopDownBuilder,
+    },
     repr::{
-        bdd::{BddNode, BddPtr},
-        cnf::*,
-        var_label::{Literal, VarLabel},
-        var_order::VarOrder,
+        bdd::{BddNode, Literal, VarOrder},
+        cnf::Cnf,
+        unit_prop::{DecisionResult, SATSolver},
     },
 };
 
-pub struct DecisionNNFBuilder<'a> {
-    compute_table: RefCell<BackedRobinhoodTable<'a, BddNode<'a>>>,
-    order: VarOrder,
-}
+use crate::repr::var_label::VarLabel;
 
-impl<'a> DecisionNNFBuilder<'a> {
-    pub fn new(order: VarOrder) -> DecisionNNFBuilder<'a> {
-        DecisionNNFBuilder {
-            order,
-            compute_table: RefCell::new(BackedRobinhoodTable::new()),
-        }
-    }
+pub trait DecisionNNFBuilder<'a>: TopDownBuilder<'a, BddPtr<'a>> {
+    fn order(&'a self) -> &'a VarOrder;
 
     /// Normalizes and fetches a node from the store
-    fn get_or_insert(&'a self, bdd: BddNode<'a>) -> BddPtr<'a> {
-        // TODO make this safe
-        unsafe {
-            let tbl = &mut *self.compute_table.as_ptr();
-            if bdd.high.is_neg() {
-                let bdd = BddNode::new(bdd.var, bdd.low.neg(), bdd.high.neg());
-                BddPtr::new_compl(tbl.get_or_insert(bdd))
-            } else {
-                let bdd = BddNode::new(bdd.var, bdd.low, bdd.high);
-                BddPtr::new_reg(tbl.get_or_insert(bdd))
-            }
-        }
-    }
+    fn get_or_insert(&'a self, bdd: BddNode<'a>) -> BddPtr<'a>;
 
-    /// Get a pointer to the variable with label `lbl` and polarity `polarity`
-    pub fn var(&'a self, lbl: VarLabel, polarity: bool) -> BddPtr<'a> {
-        let bdd = BddNode::new(lbl, BddPtr::false_ptr(), BddPtr::true_ptr());
-        let r = self.get_or_insert(bdd);
-        if polarity {
-            r
-        } else {
-            r.neg()
-        }
-    }
+    /// counts number of redundant nodes allocated in internal table
+    fn num_logically_redundant(&self) -> usize;
 
     fn conjoin_implied(
         &'a self,
@@ -96,7 +58,7 @@ impl<'a> DecisionNNFBuilder<'a> {
         if level >= cnf.num_vars() || sat.is_sat() {
             return BddPtr::true_ptr();
         }
-        let cur_v = self.order.var_at_level(level);
+        let cur_v = self.order().var_at_level(level);
 
         // check if this literal is currently set in unit propagation; if
         // it is, skip it
@@ -158,7 +120,7 @@ impl<'a> DecisionNNFBuilder<'a> {
     }
 
     /// compile a decision DNNF top-down from a CNF
-    pub fn compile_cnf_topdown(&'a self, cnf: &Cnf) -> BddPtr<'a> {
+    fn compile_cnf_topdown(&'a self, cnf: &Cnf) -> BddPtr<'a> {
         let mut sat = match SATSolver::new(cnf.clone()) {
             Some(v) => v,
             None => return BddPtr::false_ptr(),
@@ -175,13 +137,6 @@ impl<'a> DecisionNNFBuilder<'a> {
             };
             r = self.get_or_insert(node);
         }
-        r
-    }
-
-    /// Compute the Boolean function `f | var = value`
-    pub fn condition(&'a self, bdd: BddPtr<'a>, lbl: VarLabel, value: bool) -> BddPtr<'a> {
-        let r = self.cond_helper(bdd, lbl, value);
-        bdd.clear_scratch();
         r
     }
 
@@ -230,38 +185,27 @@ impl<'a> DecisionNNFBuilder<'a> {
             }
         }
     }
-
-    pub fn num_logically_redundant(&self) -> usize {
-        let mut num_collisions = 0;
-        let mut seen_hashes = HashSet::new();
-        let map = create_semantic_hash_map::<10000000049>(self.order.num_vars());
-        for bdd in self.compute_table.borrow().iter() {
-            let h = BddPtr::new_reg(bdd).semantic_hash(&self.order, &map);
-            if seen_hashes.contains(&(h.value())) {
-                num_collisions += 1;
-            } else {
-                seen_hashes.insert(h.value());
-            }
-        }
-        num_collisions
-    }
 }
 
-// #[test]
-// fn test_dnnf() {
-//     let clauses = vec![
-//         vec![
-//             Literal::new(VarLabel::new(0), true),
-//             Literal::new(VarLabel::new(1), false),
-//         ],
-//         // vec![
-//         // Literal::new(VarLabel::new(0), false),
-//         // Literal::new(VarLabel::new(1), true)
-//         // ]
-//     ];
-//     let cnf = Cnf::new(clauses);
-//     let mut builder = DecisionNNFBuilder::new();
-//     let c2 = builder.from_cnf_topdown(&VarOrder::linear_order(cnf.num_vars()), &cnf);
-//     println!("c2: {}", c2.to_string_debug());
-//     assert!(false)
-// }
+impl<'a, T> TopDownBuilder<'a, BddPtr<'a>> for T
+where
+    T: DecisionNNFBuilder<'a>,
+{
+    /// Get a pointer to the variable with label `lbl` and polarity `polarity`
+    fn var(&'a self, lbl: VarLabel, polarity: bool) -> BddPtr<'a> {
+        let bdd = BddNode::new(lbl, BddPtr::false_ptr(), BddPtr::true_ptr());
+        let r = self.get_or_insert(bdd);
+        if polarity {
+            r
+        } else {
+            r.neg()
+        }
+    }
+
+    /// Compute the Boolean function `f | var = value`
+    fn condition(&'a self, bdd: BddPtr<'a>, lbl: VarLabel, value: bool) -> BddPtr<'a> {
+        let r = self.cond_helper(bdd, lbl, value);
+        bdd.clear_scratch();
+        r
+    }
+}

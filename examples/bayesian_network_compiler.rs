@@ -6,7 +6,8 @@ use crate::rsdd::builder::BottomUpBuilder;
 use clap::Parser;
 use rsdd::builder::bdd::builder::BddBuilder;
 use rsdd::builder::cache::all_app::AllTable;
-use rsdd::builder::decision_nnf_builder::DecisionNNFBuilder;
+use rsdd::builder::decision_nnf::builder::DecisionNNFBuilder;
+use rsdd::builder::decision_nnf::standard::StandardDecisionNNFBuilder;
 use rsdd::builder::sdd::{builder::SddBuilder, compression::CompressionSddBuilder};
 use rsdd::repr::bdd::BddPtr;
 use rsdd::repr::ddnnf::DDNNFPtr;
@@ -303,7 +304,7 @@ fn compile_topdown(network: BayesianNetwork) {
     println!("############################\n\tCompiling topdown\n############################");
     let bn = BayesianNetworkCNF::new(&network);
     let order = VarOrder::linear_order(bn.cnf.num_vars());
-    let compiler = DecisionNNFBuilder::new(order);
+    let compiler = StandardDecisionNNFBuilder::new(order);
 
     println!("Compiling");
     let start = Instant::now();

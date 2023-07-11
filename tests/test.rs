@@ -316,7 +316,6 @@ fn test_sdd_is_canonical() {
 
 #[cfg(test)]
 mod test_bdd_builder {
-    use crate::builder::decision_nnf_builder::DecisionNNFBuilder;
     use crate::repr::cnf::Cnf;
     use crate::repr::var_label::VarLabel;
     use crate::rsdd::builder::bdd::builder::BddBuilder;
@@ -325,6 +324,8 @@ mod test_bdd_builder {
     use rand::Rng;
     use rsdd::builder::cache::all_app::AllTable;
     use rsdd::builder::cache::lru_app::BddApplyTable;
+    use rsdd::builder::decision_nnf::builder::DecisionNNFBuilder;
+    use rsdd::builder::decision_nnf::standard::StandardDecisionNNFBuilder;
     use rsdd::builder::sdd::builder::SddBuilder;
     use rsdd::repr::bdd::BddPtr;
     use rsdd::repr::ddnnf::{create_semantic_hash_map, DDNNFPtr};
@@ -461,7 +462,7 @@ mod test_bdd_builder {
             let order = VarOrder::linear_order(c1.num_vars());
             let cnf1 = builder.compile_cnf(&c1);
 
-            let builder2 = DecisionNNFBuilder::new(order);
+            let builder2 = StandardDecisionNNFBuilder::new(order);
             let dnnf = builder2.compile_cnf_topdown(&c1);
 
             let bddwmc = super::repr::wmc::WmcParams::new_with_default(RealSemiring::zero(), RealSemiring::one(), weight_map);
