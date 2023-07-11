@@ -96,8 +96,27 @@ pub trait DDNNFPtr<'a>: Clone + Debug + PartialEq + Eq + Hash + Copy {
         })
     }
 
-    fn evaluate(&self, o: &Self::Order, params: &WmcParams<BooleanSemiring>) -> BooleanSemiring {
-        self.wmc(o, params)
+    fn evaluate(&self, o: &Self::Order, instantations: &[bool]) -> bool {
+        fn gen_bs_mappings(
+            instantations: &[bool],
+        ) -> HashMap<VarLabel, (BooleanSemiring, BooleanSemiring)> {
+            HashMap::from_iter(instantations.iter().enumerate().map(|(index, polarity)| {
+                (
+                    VarLabel::new(index as u64),
+                    (BooleanSemiring(!polarity), BooleanSemiring(*polarity)),
+                )
+            }))
+        }
+
+        self.wmc(
+            o,
+            &WmcParams::new_with_default(
+                BooleanSemiring::zero(),
+                BooleanSemiring::one(),
+                gen_bs_mappings(instantations),
+            ),
+        )
+        .0
     }
 
     /// compute the semantic hash for this pointer

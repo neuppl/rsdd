@@ -62,42 +62,14 @@ impl<'a> StandardDecisionNNFBuilder<'a> {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
 
     use crate::{
         builder::{
-            bdd::robdd::{BddPtr, DDNNFPtr, VarLabel},
+            bdd::robdd::DDNNFPtr,
             decision_nnf::{builder::DecisionNNFBuilder, standard::StandardDecisionNNFBuilder},
         },
-        repr::{
-            bdd::{VarOrder, WmcParams},
-            cnf::Cnf,
-        },
-        util::semirings::{boolean::BooleanSemiring, semiring_traits::Semiring},
+        repr::{bdd::VarOrder, cnf::Cnf},
     };
-
-    fn gen_bs_mappings(
-        instantations: &[bool],
-    ) -> HashMap<VarLabel, (BooleanSemiring, BooleanSemiring)> {
-        HashMap::from_iter(instantations.iter().enumerate().map(|(index, polarity)| {
-            (
-                VarLabel::new(index as u64),
-                (BooleanSemiring(!polarity), BooleanSemiring(*polarity)),
-            )
-        }))
-    }
-
-    fn bs_wmc(dnnf: &BddPtr, instantations: &[bool], order: &VarOrder) -> bool {
-        dnnf.evaluate(
-            order,
-            &WmcParams::new_with_default(
-                BooleanSemiring::zero(),
-                BooleanSemiring::one(),
-                gen_bs_mappings(instantations),
-            ),
-        )
-        .0
-    }
 
     #[test]
     fn trivial_evaluation_test() {
@@ -113,9 +85,9 @@ mod tests {
         let builder = StandardDecisionNNFBuilder::new(linear_order.clone());
         let dnnf = builder.compile_cnf_topdown(&cnf);
 
-        assert!(bs_wmc(&dnnf, &[true, true], &linear_order));
-        assert!(bs_wmc(&dnnf, &[true, false], &linear_order));
-        assert!(bs_wmc(&dnnf, &[false, true], &linear_order));
-        assert!(!bs_wmc(&dnnf, &[false, false], &linear_order));
+        assert!(dnnf.evaluate(&linear_order, &[true, true]));
+        assert!(dnnf.evaluate(&linear_order, &[false, true]));
+        assert!(dnnf.evaluate(&linear_order, &[true, false]));
+        assert!(!dnnf.evaluate(&linear_order, &[false, false]));
     }
 }

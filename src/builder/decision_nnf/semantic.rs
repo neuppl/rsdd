@@ -112,3 +112,35 @@ impl<'a, const P: u128> SemanticDecisionNNFBuilder<'a, P> {
         None
     }
 }
+
+#[cfg(test)]
+mod tests {
+
+    use crate::{
+        builder::{
+            bdd::robdd::DDNNFPtr,
+            decision_nnf::{builder::DecisionNNFBuilder, semantic::SemanticDecisionNNFBuilder},
+        },
+        repr::{bdd::VarOrder, cnf::Cnf},
+    };
+
+    #[test]
+    fn trivial_evaluation_test() {
+        static CNF: &str = "
+        p cnf 2 1
+        1 2 0
+        ";
+
+        let cnf = Cnf::from_file(String::from(CNF));
+
+        let linear_order = VarOrder::linear_order(cnf.num_vars());
+
+        let builder = SemanticDecisionNNFBuilder::<100000049>::new(linear_order.clone());
+        let dnnf = builder.compile_cnf_topdown(&cnf);
+
+        assert!(dnnf.evaluate(&linear_order, &[true, true]));
+        assert!(dnnf.evaluate(&linear_order, &[false, true]));
+        assert!(dnnf.evaluate(&linear_order, &[true, false]));
+        assert!(!dnnf.evaluate(&linear_order, &[false, false]));
+    }
+}
