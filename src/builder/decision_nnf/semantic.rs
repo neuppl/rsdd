@@ -47,24 +47,12 @@ impl<'a, const P: u128> DecisionNNFBuilder<'a> for SemanticDecisionNNFBuilder<'a
             let tbl = &mut *self.compute_table.as_ptr();
             BddPtr::Reg(tbl.get_or_insert_by_hash(hash, bdd, true))
         }
-
-        // // TODO make this safe
-        // unsafe {
-        //     let tbl = &mut *self.compute_table.as_ptr();
-        //     if bdd.high.is_neg() {
-        //         let bdd = BddNode::new(bdd.var, bdd.low.neg(), bdd.high.neg());
-        //         BddPtr::new_compl(tbl.get_or_insert(bdd))
-        //     } else {
-        //         let bdd = BddNode::new(bdd.var, bdd.low, bdd.high);
-        //         BddPtr::new_reg(tbl.get_or_insert(bdd))
-        //     }
-        // }
     }
 
     fn num_logically_redundant(&self) -> usize {
         let mut num_collisions = 0;
         let mut seen_hashes = HashSet::new();
-        let map = create_semantic_hash_map::<10000000049>(self.order.num_vars());
+        let map = create_semantic_hash_map::<P>(self.order.num_vars());
         for bdd in self.compute_table.borrow().iter() {
             let h = BddPtr::new_reg(bdd).semantic_hash(&self.order, &map);
             if seen_hashes.contains(&(h.value())) {
