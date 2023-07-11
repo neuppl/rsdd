@@ -2,8 +2,8 @@
 //! (d-DNNF) pointer type
 use core::fmt::Debug;
 
-use crate::util::semirings::finitefield::FiniteField;
 use crate::util::semirings::semiring_traits::Semiring;
+use crate::util::semirings::{boolean::BooleanSemiring, finitefield::FiniteField};
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha8Rng;
 
@@ -94,6 +94,10 @@ pub trait DDNNFPtr<'a>: Clone + Debug + PartialEq + Eq + Hash + Copy {
                 }
             }
         })
+    }
+
+    fn evaluate(&self, o: &Self::Order, params: &WmcParams<BooleanSemiring>) -> BooleanSemiring {
+        self.wmc(o, params)
     }
 
     /// compute the semantic hash for this pointer
