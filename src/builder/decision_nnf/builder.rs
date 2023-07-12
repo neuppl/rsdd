@@ -14,6 +14,10 @@ use crate::{
 
 use crate::repr::var_label::VarLabel;
 
+pub struct DecisionNNFBuilderStats {
+    pub num_nodes_alloc: usize,
+}
+
 pub trait DecisionNNFBuilder<'a>: TopDownBuilder<'a, BddPtr<'a>> {
     fn order(&'a self) -> &'a VarOrder;
 
@@ -22,6 +26,10 @@ pub trait DecisionNNFBuilder<'a>: TopDownBuilder<'a, BddPtr<'a>> {
 
     /// counts number of redundant nodes allocated in internal table
     fn num_logically_redundant(&self) -> usize;
+
+    fn stats(&self) -> DecisionNNFBuilderStats;
+
+    // impls
 
     fn conjoin_implied(
         &'a self,
