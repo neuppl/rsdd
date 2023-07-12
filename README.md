@@ -1,4 +1,5 @@
 [![CI](https://github.com/neuppl/rsdd/actions/workflows/ci.yml/badge.svg)](https://github.com/neuppl/rsdd/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/neuppl/rsdd/branch/main/graph/badge.svg?token=ZPA9C38VPT)](https://codecov.io/gh/neuppl/rsdd)
 
 [Documentation and tutorial](https://neuppl.github.io/rsdd-docs/)
 
