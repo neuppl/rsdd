@@ -38,10 +38,10 @@ impl<'a, T: LruTable<'a, BddPtr<'a>>> BddBuilder<'a> for RobddBuilder<'a, T> {
             if bdd.high.is_neg() || bdd.high.is_false() {
                 let bdd: BddNode<'a> = BddNode::new(bdd.var, bdd.low.neg(), bdd.high.neg());
                 let r: &'a BddNode<'a> = tbl.get_or_insert(bdd);
-                BddPtr::new_compl(r)
+                BddPtr::Compl(r)
             } else {
                 let bdd = BddNode::new(bdd.var, bdd.low, bdd.high);
-                BddPtr::new_reg(tbl.get_or_insert(bdd))
+                BddPtr::Reg(tbl.get_or_insert(bdd))
             }
         }
     }

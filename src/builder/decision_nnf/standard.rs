@@ -28,10 +28,10 @@ impl<'a> DecisionNNFBuilder<'a> for StandardDecisionNNFBuilder<'a> {
             let tbl = &mut *self.compute_table.as_ptr();
             if bdd.high.is_neg() {
                 let bdd = BddNode::new(bdd.var, bdd.low.neg(), bdd.high.neg());
-                BddPtr::new_compl(tbl.get_or_insert(bdd))
+                BddPtr::Compl(tbl.get_or_insert(bdd))
             } else {
                 let bdd = BddNode::new(bdd.var, bdd.low, bdd.high);
-                BddPtr::new_reg(tbl.get_or_insert(bdd))
+                BddPtr::Reg(tbl.get_or_insert(bdd))
             }
         }
     }
@@ -41,7 +41,7 @@ impl<'a> DecisionNNFBuilder<'a> for StandardDecisionNNFBuilder<'a> {
         let mut seen_hashes = HashSet::new();
         let map = create_semantic_hash_map::<{ primes::U32_SMALL }>(self.order.num_vars());
         for bdd in self.compute_table.borrow().iter() {
-            let h = BddPtr::new_reg(bdd).semantic_hash(&self.order, &map);
+            let h = BddPtr::Reg(bdd).semantic_hash(&self.order, &map);
             if seen_hashes.contains(&(h.value())) {
                 num_collisions += 1;
             } else {

@@ -162,25 +162,6 @@ impl<'a, T: Clone, U> Fold<'a, T, U> {
 }
 
 impl<'a> BddPtr<'a> {
-    #[inline]
-    pub fn new_reg(n: &'a BddNode) -> BddPtr<'a> {
-        Reg(n)
-    }
-
-    #[inline]
-    pub fn from_bool(b: bool) -> BddPtr<'a> {
-        if b {
-            PtrTrue
-        } else {
-            PtrFalse
-        }
-    }
-
-    #[inline]
-    pub fn new_compl(n: &'a BddNode) -> BddPtr<'a> {
-        Compl(n)
-    }
-
     /// Gets the varlabel of &self
     #[inline]
     pub fn var_safe(&self) -> Option<VarLabel> {
@@ -190,7 +171,20 @@ impl<'a> BddPtr<'a> {
         }
     }
 
-    /// convert a BddPtr into a regular (non-complemented) pointer
+    /// convert a BddPtr into a regular (non-complemented) pointer,
+    /// but does not change the underlying node.
+    /// ```
+    /// use rsdd::repr::bdd::*;
+    ///
+    /// assert_eq!(BddPtr::PtrTrue, BddPtr::PtrTrue.to_reg());
+    /// assert_eq!(BddPtr::PtrTrue, BddPtr::PtrFalse.to_reg());
+    ///
+    /// // this node represents the positive literal 0
+    /// let node = BddNode::new(VarLabel::new(0), BddPtr::PtrFalse, BddPtr::PtrTrue);
+    ///
+    /// assert_eq!(BddPtr::Reg(&node), BddPtr::Compl(&node).to_reg());
+    /// assert_eq!(BddPtr::Reg(&node), BddPtr::Reg(&node).to_reg());
+    /// ```
     pub fn to_reg(&self) -> BddPtr {
         match &self {
             Compl(x) => Reg(x),
@@ -200,6 +194,16 @@ impl<'a> BddPtr<'a> {
         }
     }
 
+    /// ```
+    /// use rsdd::repr::bdd::*;
+    /// // this node represents the positive literal 0
+    /// let node = BddNode::new(VarLabel::new(0), BddPtr::PtrFalse, BddPtr::PtrTrue);
+    ///
+    /// // for regular BDDs, this behaves "normally"
+    /// assert_eq!(BddPtr::Reg(&node).low(), BddPtr::PtrFalse);
+    /// // but, for complemented edges, it negates the low edge
+    /// assert_eq!(BddPtr::Compl(&node).low(), BddPtr::PtrTrue);
+    /// ```
     pub fn low(&self) -> BddPtr<'a> {
         match &self {
             Compl(x) => x.low.neg(),
@@ -208,6 +212,16 @@ impl<'a> BddPtr<'a> {
         }
     }
 
+    /// ```
+    /// use rsdd::repr::bdd::*;
+    /// // this node represents the positive literal 0
+    /// let node = BddNode::new(VarLabel::new(0), BddPtr::PtrFalse, BddPtr::PtrTrue);
+    ///
+    /// // for regular BDDs, this behaves "normally"
+    /// assert_eq!(BddPtr::Reg(&node).low_raw(), BddPtr::PtrFalse);
+    /// // but, for complemented edges, it does not negate the low edge
+    /// assert_eq!(BddPtr::Compl(&node).low_raw(), BddPtr::PtrFalse);
+    /// ```
     pub fn low_raw(&self) -> BddPtr<'a> {
         match &self {
             Compl(x) => x.low,
@@ -216,6 +230,16 @@ impl<'a> BddPtr<'a> {
         }
     }
 
+    /// ```
+    /// use rsdd::repr::bdd::*;
+    /// // this node represents the positive literal 0
+    /// let node = BddNode::new(VarLabel::new(0), BddPtr::PtrFalse, BddPtr::PtrTrue);
+    ///
+    /// // for regular BDDs, this behaves "normally"
+    /// assert_eq!(BddPtr::Reg(&node).high_raw(), BddPtr::PtrTrue);
+    /// // but, for complemented edges, it does not negate the high edge
+    /// assert_eq!(BddPtr::Compl(&node).high_raw(), BddPtr::PtrTrue);
+    /// ```
     pub fn high_raw(&self) -> BddPtr<'a> {
         match &self {
             Compl(x) => x.high,
@@ -224,6 +248,16 @@ impl<'a> BddPtr<'a> {
         }
     }
 
+    /// ```
+    /// use rsdd::repr::bdd::*;
+    /// // this node represents the positive literal 0
+    /// let node = BddNode::new(VarLabel::new(0), BddPtr::PtrFalse, BddPtr::PtrTrue);
+    ///
+    /// // for regular BDDs, this behaves "normally"
+    /// assert_eq!(BddPtr::Reg(&node).high(), BddPtr::PtrTrue);
+    /// // but, for complemented edges, it negates the high edge
+    /// assert_eq!(BddPtr::Compl(&node).high(), BddPtr::PtrFalse);
+    /// ```
     pub fn high(&self) -> BddPtr<'a> {
         match &self {
             Compl(x) => x.high.neg(),
@@ -247,12 +281,20 @@ impl<'a> BddPtr<'a> {
     }
 
     /// true if the BddPtr points to a constant (i.e., True or False)
+    /// ```
+    /// use rsdd::repr::bdd::*;
+    /// assert!(BddPtr::is_const(&BddPtr::PtrTrue));
+    /// assert!(BddPtr::is_const(&BddPtr::PtrFalse));
+    ///
+    /// let node = BddNode::new(VarLabel::new(0), BddPtr::PtrFalse, BddPtr::PtrTrue);
+    ///
+    /// assert!(!BddPtr::is_const(&BddPtr::Reg(&node)));
+    /// assert!(!BddPtr::is_const(&BddPtr::Compl(&node)));
+    /// ```
     pub fn is_const(&self) -> bool {
         match &self {
-            Compl(_) => false,
-            Reg(_) => false,
-            PtrTrue => true,
-            PtrFalse => true,
+            Reg(_) | Compl(_) => false,
+            PtrTrue | PtrFalse => true,
         }
     }
 
