@@ -4,6 +4,7 @@
 
 use crate::repr::var_label::VarLabel;
 use crate::util;
+use std::fmt::Display;
 use std::slice::Iter;
 
 use super::bdd::BddPtr;
@@ -238,6 +239,12 @@ impl VarOrder {
             .take(high_level - low_level)
             .rev()
             .map(|x| VarLabel::new_usize(*x))
+    }
+}
+
+impl Display for VarOrder {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_fmt(format_args!("{:?}", self.pos_to_var))
     }
 }
 

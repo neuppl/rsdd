@@ -4,7 +4,7 @@ use crate::{
     backing_store::bump_table::BackedRobinhoodTable,
     builder::{
         bdd::robdd::{BddPtr, DDNNFPtr},
-        decision_nnf::builder::DecisionNNFBuilder,
+        decision_nnf::builder::{DecisionNNFBuilder, DecisionNNFBuilderStats},
     },
     constants::primes,
     repr::bdd::{create_semantic_hash_map, BddNode, VarOrder},
@@ -49,6 +49,12 @@ impl<'a> DecisionNNFBuilder<'a> for StandardDecisionNNFBuilder<'a> {
             }
         }
         num_collisions
+    }
+
+    fn stats(&self) -> DecisionNNFBuilderStats {
+        DecisionNNFBuilderStats {
+            num_nodes_alloc: self.compute_table.borrow().num_nodes(),
+        }
     }
 }
 
