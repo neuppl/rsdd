@@ -964,7 +964,7 @@ mod test_sdd_builder {
 
     quickcheck! {
         fn prob_equiv_sdd_inequality(c1: Cnf, c2: Cnf, vtree:VTree) -> TestResult {
-            let mut builder = SemanticSddBuilder::<{primes::U32_SMALL}>::new(vtree);
+            let mut builder = SemanticSddBuilder::<{primes::U64_LARGEST}>::new(vtree);
             builder.set_compression(true); // necessary to make sure we don't generate two uncompressed SDDs that canonicalize to the same SDD
             let cnf_1 = builder.compile_cnf(&c1);
             let cnf_2 = builder.compile_cnf(&c2);
@@ -986,7 +986,7 @@ mod test_sdd_builder {
 
     quickcheck! {
         fn prob_equiv_sdd_eq_vs_prob_eq(c1: Cnf, c2: Cnf, vtree:VTree) -> TestResult {
-            let mut builder = SemanticSddBuilder::<{primes::U32_SMALL}>::new(vtree);
+            let mut builder = SemanticSddBuilder::<{primes::U64_LARGEST}>::new(vtree);
             builder.set_compression(true); // necessary to make sure we don't generate two uncompressed SDDs that canonicalize to the same SDD
             let cnf_1 = builder.compile_cnf(&c1);
             let cnf_2 = builder.compile_cnf(&c2);
@@ -1110,7 +1110,8 @@ mod test_sdd_builder {
 mod test_dnnf_builder {
     use std::collections::HashMap;
 
-    use quickcheck::TestResult;
+    use quickcheck::{Arbitrary, Gen, TestResult};
+    use rand::{rngs::SmallRng, seq::SliceRandom, SeedableRng};
     use rsdd::{
         builder::decision_nnf::{
             builder::DecisionNNFBuilder, semantic::SemanticDecisionNNFBuilder,
@@ -1122,6 +1123,28 @@ mod test_dnnf_builder {
         },
         util::semirings::{realsemiring::RealSemiring, semiring_traits::Semiring},
     };
+
+    #[derive(Clone, Debug)]
+    struct CnfAndOrdering {
+        pub cnf: Cnf,
+        pub order: VarOrder,
+    }
+
+    impl Arbitrary for CnfAndOrdering {
+        fn arbitrary(g: &mut Gen) -> Self {
+            let cnf = Cnf::arbitrary(g);
+
+            let mut order: Vec<VarLabel> = (0..cnf.num_vars() as u64).map(VarLabel::new).collect();
+
+            let mut rng = SmallRng::seed_from_u64(u64::arbitrary(g));
+            order.shuffle(&mut rng);
+
+            CnfAndOrdering {
+                cnf,
+                order: VarOrder::new(order),
+            }
+        }
+    }
 
     quickcheck! {
         fn semantic_no_redundant_nodes(cnf: Cnf) -> TestResult {
@@ -1145,7 +1168,7 @@ mod test_dnnf_builder {
     }
 
     quickcheck! {
-        fn semantic_and_standard_agree_on_hash(cnf: Cnf) -> TestResult {
+        fn semantic_and_standard_agree_on_hash_linear_order(cnf: Cnf) -> TestResult {
             // constrain the size
             if cnf.num_vars() == 0 || cnf.num_vars() > 8 { return TestResult::discard() }
             if cnf.clauses().len() > 16 { return TestResult::discard() }
@@ -1155,7 +1178,7 @@ mod test_dnnf_builder {
             let std_builder = StandardDecisionNNFBuilder::new(linear_order.clone());
             let std_dnnf = std_builder.compile_cnf_topdown(&cnf);
 
-            let sem_builder = SemanticDecisionNNFBuilder::<{primes::U32_SMALL}>::new(linear_order.clone());
+            let sem_builder = SemanticDecisionNNFBuilder::<{primes::U64_LARGEST}>::new(linear_order.clone());
             let sem_dnnf = sem_builder.compile_cnf_topdown(&cnf);
 
 
@@ -1165,6 +1188,34 @@ mod test_dnnf_builder {
 
             let std_wmc = std_dnnf.wmc(&linear_order, &params);
             let sem_wmc = sem_dnnf.wmc(&linear_order, &params);
+
+            let eps = f64::abs(std_wmc.0 - sem_wmc.0) < 0.0001;
+            if !eps {
+              println!("error on input {}: std wmc: {}, sem wmc: {}\n std bdd: {}\nsem bdd: {}",
+                cnf, std_wmc, sem_wmc, std_dnnf.to_string_debug(), sem_dnnf.to_string_debug());
+            }
+            TestResult::from_bool(eps)
+        }
+    }
+
+    quickcheck! {
+        fn semantic_and_standard_agree_on_hash_arbitrary_order(cnf_and_ordering: CnfAndOrdering) -> TestResult {
+            let cnf = cnf_and_ordering.cnf;
+            let order = cnf_and_ordering.order;
+
+            let std_builder = StandardDecisionNNFBuilder::new(order.clone());
+            let std_dnnf = std_builder.compile_cnf_topdown(&cnf);
+
+            let sem_builder = SemanticDecisionNNFBuilder::<{primes::U64_LARGEST}>::new(order.clone());
+            let sem_dnnf = sem_builder.compile_cnf_topdown(&cnf);
+
+
+            let weight_map : HashMap<VarLabel, (RealSemiring, RealSemiring)> = HashMap::from_iter(
+                (0..cnf.num_vars()).map(|x| (VarLabel::new(x as u64), (RealSemiring(0.3), RealSemiring(0.7)))));
+            let params = WmcParams::new_with_default(RealSemiring::zero(), RealSemiring::one(), weight_map);
+
+            let std_wmc = std_dnnf.wmc(&order, &params);
+            let sem_wmc = sem_dnnf.wmc(&order, &params);
 
             let eps = f64::abs(std_wmc.0 - sem_wmc.0) < 0.0001;
             if !eps {
