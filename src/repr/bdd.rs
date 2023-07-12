@@ -10,8 +10,8 @@ pub use super::{
 use crate::{
     repr::var_label::VarSet,
     util::semirings::expectation::ExpectedUtility,
-    util::semirings::realsemiring::RealSemiring,
     util::semirings::semiring_traits::{BBSemiring, JoinSemilattice},
+    util::semirings::{finitefield::FiniteField, realsemiring::RealSemiring},
 };
 use bit_set::BitSet;
 use core::fmt::Debug;
@@ -794,6 +794,20 @@ impl<'a> BddPtr<'a> {
             PartialModel::from_litvec(&[], num_vars),
         )
     }
+
+    /// performs a semantic hash and caches the result on the node
+    pub fn cached_semantic_hash<const P: u128>(
+        &self,
+        order: &VarOrder,
+        map: &WmcParams<FiniteField<P>>,
+    ) -> FiniteField<P> {
+        match self {
+            PtrTrue => FiniteField::new(1),
+            PtrFalse => FiniteField::new(0),
+            Reg(node) => node.cached_semantic_hash(order, map),
+            Compl(_) => self.neg().cached_semantic_hash(order, map).negate(),
+        }
+    }
 }
 
 type DDNNFCache<T> = (Option<T>, Option<T>);
@@ -948,6 +962,7 @@ pub struct BddNode<'a> {
     /// scratch space used for caching data during traversals; ignored during
     /// equality checking and hashing
     data: RefCell<Option<Box<dyn Any>>>,
+    semantic_hash: RefCell<Option<u128>>,
 }
 
 impl<'a> BddNode<'a> {
@@ -957,7 +972,33 @@ impl<'a> BddNode<'a> {
             low,
             high,
             data: RefCell::new(None),
+            semantic_hash: RefCell::new(None),
         }
+    }
+
+    pub fn semantic_hash<const P: u128>(
+        &self,
+        order: &VarOrder,
+        map: &WmcParams<FiniteField<P>>,
+    ) -> FiniteField<P> {
+        let (low_w, high_w) = map.get_var_weight(self.var);
+        self.low.cached_semantic_hash(order, map) * (*low_w)
+            + self.high.cached_semantic_hash(order, map) * (*high_w)
+    }
+
+    pub fn cached_semantic_hash<const P: u128>(
+        &self,
+        order: &VarOrder,
+        map: &WmcParams<FiniteField<P>>,
+    ) -> FiniteField<P> {
+        if let Some(h) = *(self.semantic_hash.borrow()) {
+            return FiniteField::new(h);
+        }
+
+        let h = self.semantic_hash(order, map);
+        *(self.semantic_hash.borrow_mut()) = Some(h.value());
+
+        h
     }
 }
 
@@ -1006,6 +1047,7 @@ impl<'a> Clone for BddNode<'a> {
             low: self.low,
             high: self.high,
             data: RefCell::new(None),
+            semantic_hash: RefCell::new(None),
         }
     }
 }

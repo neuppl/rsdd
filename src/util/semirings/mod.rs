@@ -1,3 +1,4 @@
+pub mod boolean;
 pub mod expectation;
 pub mod finitefield;
 pub mod realsemiring;

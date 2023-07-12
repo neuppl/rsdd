@@ -1106,3 +1106,72 @@ mod test_sdd_builder {
         }
     }
 }
+
+#[cfg(test)]
+mod test_dnnf_builder {
+    use std::collections::HashMap;
+
+    use quickcheck::TestResult;
+    use rsdd::{
+        builder::decision_nnf::{
+            builder::DecisionNNFBuilder, semantic::SemanticDecisionNNFBuilder,
+            standard::StandardDecisionNNFBuilder,
+        },
+        repr::{
+            cnf::Cnf, ddnnf::DDNNFPtr, var_label::VarLabel, var_order::VarOrder, wmc::WmcParams,
+        },
+        util::semirings::{realsemiring::RealSemiring, semiring_traits::Semiring},
+    };
+
+    quickcheck! {
+        fn semantic_no_redundant_nodes(cnf: Cnf) -> TestResult {
+            // constrain the size
+            if cnf.num_vars() == 0 || cnf.num_vars() > 8 { return TestResult::discard() }
+            if cnf.clauses().len() > 16 { return TestResult::discard() }
+
+            let linear_order = VarOrder::linear_order(cnf.num_vars());
+
+            let sem_builder = SemanticDecisionNNFBuilder::<{ crate::BIG_PRIME }>::new(linear_order);
+            sem_builder.compile_cnf_topdown(&cnf);
+
+            let num_redundant = sem_builder.num_logically_redundant();
+
+            if num_redundant > 0 {
+                println!("Error on input {}, found {} redundant nodes", cnf, num_redundant);
+            }
+
+            TestResult::from_bool(num_redundant == 0)
+        }
+    }
+
+    quickcheck! {
+        fn semantic_and_standard_agree_on_hash(cnf: Cnf) -> TestResult {
+            // constrain the size
+            if cnf.num_vars() == 0 || cnf.num_vars() > 8 { return TestResult::discard() }
+            if cnf.clauses().len() > 16 { return TestResult::discard() }
+
+            let linear_order = VarOrder::linear_order(cnf.num_vars());
+
+            let std_builder = StandardDecisionNNFBuilder::new(linear_order.clone());
+            let std_dnnf = std_builder.compile_cnf_topdown(&cnf);
+
+            let sem_builder = SemanticDecisionNNFBuilder::<{ crate::BIG_PRIME }>::new(linear_order.clone());
+            let sem_dnnf = sem_builder.compile_cnf_topdown(&cnf);
+
+
+            let weight_map : HashMap<VarLabel, (RealSemiring, RealSemiring)> = HashMap::from_iter(
+                (0..16).map(|x| (VarLabel::new(x as u64), (RealSemiring(0.3), RealSemiring(0.7)))));
+            let params = WmcParams::new_with_default(RealSemiring::zero(), RealSemiring::one(), weight_map);
+
+            let std_wmc = std_dnnf.wmc(&linear_order, &params);
+            let sem_wmc = sem_dnnf.wmc(&linear_order, &params);
+
+            let eps = f64::abs(std_wmc.0 - sem_wmc.0) < 0.0001;
+            if !eps {
+              println!("error on input {}: std wmc: {}, sem wmc: {}\n std bdd: {}\nsem bdd: {}",
+                cnf, std_wmc, sem_wmc, std_dnnf.to_string_debug(), sem_dnnf.to_string_debug());
+            }
+            TestResult::from_bool(eps)
+        }
+    }
+}
