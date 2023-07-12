@@ -47,7 +47,7 @@ fn diff_by_wmc(num_vars: usize, order: &VarOrder, std_dnnf: BddPtr, sem_dnnf: Bd
     f64::abs(std_wmc.0 - sem_wmc.0)
 }
 
-fn compare_sem_and_std(cnf: &Cnf, order: &VarOrder) {
+fn compare_sem_and_std(cnf: &Cnf, order: &VarOrder) -> (usize, usize) {
     let std_builder = StandardDecisionNNFBuilder::new(order.clone());
 
     let start = Instant::now();
@@ -69,11 +69,14 @@ fn compare_sem_and_std(cnf: &Cnf, order: &VarOrder) {
         );
     }
 
+    let sem_nodes = sem_dnnf.count_nodes();
+    let std_nodes = std_dnnf.count_nodes();
+
     println!(
         "sem/std size ratio: {:.4}x ({} / {})",
-        (sem_dnnf.count_nodes() as f64 / std_dnnf.count_nodes() as f64),
-        sem_dnnf.count_nodes(),
-        std_dnnf.count_nodes()
+        (sem_nodes as f64 / std_nodes as f64),
+        sem_nodes,
+        std_nodes
     );
     println!(
         "sem/std alloc ratio: {:.4}x ({} / {})",
@@ -87,6 +90,8 @@ fn compare_sem_and_std(cnf: &Cnf, order: &VarOrder) {
         sem_time,
         std_time
     );
+
+    (sem_nodes, std_nodes)
 }
 
 struct RandomVarOrders {
@@ -139,8 +144,22 @@ fn main() {
 
     let orders = RandomVarOrders::new(&cnf, args.orders);
 
+    let mut avg_sem_nodes = 0;
+    let mut avg_std_nodes = 0;
+
     for order in orders {
         println!("\norder: {}\n", order);
-        compare_sem_and_std(&cnf, &order)
+        let (sem, std) = compare_sem_and_std(&cnf, &order);
+        avg_sem_nodes += sem;
+        avg_std_nodes += std;
     }
+
+    println!("=== AVG, n = {} ===", args.orders);
+
+    println!(
+        "sem/std size ratio: {:.2}x ({} / {})",
+        (avg_sem_nodes as f64 / avg_std_nodes as f64),
+        avg_sem_nodes / args.orders,
+        avg_std_nodes / args.orders
+    );
 }
