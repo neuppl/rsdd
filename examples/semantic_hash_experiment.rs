@@ -8,6 +8,7 @@ use rsdd::{
         },
         BottomUpBuilder,
     },
+    constants::primes,
     repr::{
         cnf::Cnf, ddnnf::DDNNFPtr, dtree::DTree, sdd::SddPtr, var_label::VarLabel,
         var_order::VarOrder, vtree::VTree,
@@ -116,7 +117,7 @@ fn run_compr_sem(cnf: &Cnf, vtree: &VTree) -> (BenchStats, BenchStats) {
     let compr = BenchStats::from_run("c".to_owned(), start.elapsed(), &compr_cnf, &compr_builder);
 
     let start = Instant::now();
-    let sem_builder = SemanticSddBuilder::<479001599>::new(vtree.clone());
+    let sem_builder = SemanticSddBuilder::<{ primes::U32_SMALL }>::new(vtree.clone());
     let sem_cnf = sem_builder.compile_cnf(cnf);
     let sem = BenchStats::from_run("s".to_owned(), start.elapsed(), &sem_cnf, &sem_builder);
 
@@ -188,8 +189,7 @@ fn run_canonicalizer_experiment(c: Cnf, vtree: VTree, verbose: bool) {
 
     let start = Instant::now();
 
-    // other primes: 100000049, 18_446_744_073_709_551_591
-    let sem_builder = SemanticSddBuilder::<18_446_744_073_709_551_591>::new(vtree);
+    let sem_builder = SemanticSddBuilder::<{ primes::U64_LARGEST }>::new(vtree);
     let sem_cnf = sem_builder.compile_cnf(&c);
 
     println!(

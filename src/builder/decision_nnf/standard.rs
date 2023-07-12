@@ -6,6 +6,7 @@ use crate::{
         bdd::robdd::{BddPtr, DDNNFPtr},
         decision_nnf::builder::DecisionNNFBuilder,
     },
+    constants::primes,
     repr::bdd::{create_semantic_hash_map, BddNode, VarOrder},
 };
 
@@ -38,7 +39,7 @@ impl<'a> DecisionNNFBuilder<'a> for StandardDecisionNNFBuilder<'a> {
     fn num_logically_redundant(&self) -> usize {
         let mut num_collisions = 0;
         let mut seen_hashes = HashSet::new();
-        let map = create_semantic_hash_map::<10000000049>(self.order.num_vars());
+        let map = create_semantic_hash_map::<{ primes::U32_SMALL }>(self.order.num_vars());
         for bdd in self.compute_table.borrow().iter() {
             let h = BddPtr::new_reg(bdd).semantic_hash(&self.order, &map);
             if seen_hashes.contains(&(h.value())) {

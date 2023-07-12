@@ -17,14 +17,6 @@ use petgraph::graph::NodeIndex;
 
 use super::wmc::WmcParams;
 
-// TODO: resolve unused
-#[allow(unused)]
-const PRIMES: [u128; 4] = [
-    64733603481794218985640164159,
-    79016979402926483817096290621,
-    46084029846212370199652019757,
-    49703069216273825773136967137,
-];
 // number of primes to consider during CNF hashing
 const NUM_PRIMES: usize = 2;
 
@@ -721,6 +713,7 @@ impl fmt::Display for Cnf {
 
 #[test]
 fn test_cnf_wmc() {
+    use crate::constants::primes;
     use crate::util::semirings::finitefield::FiniteField;
     use maplit::*;
 
@@ -729,7 +722,13 @@ fn test_cnf_wmc() {
         Literal::new(VarLabel::new(1), false),
     ]];
     let cnf = Cnf::new(v);
-    let weights: std::collections::HashMap<VarLabel, (FiniteField<1000001>, FiniteField<1000001>)> = hashmap! {
+    let weights: std::collections::HashMap<
+        VarLabel,
+        (
+            FiniteField<{ primes::U32_TINY }>,
+            FiniteField<{ primes::U32_TINY }>,
+        ),
+    > = hashmap! {
         VarLabel::new(0) => (FiniteField::new(1), FiniteField::new(1)),
         VarLabel::new(1) => (FiniteField::new(1), FiniteField::new(1)),
     };

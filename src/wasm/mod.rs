@@ -3,6 +3,7 @@ use crate::builder::bdd::robdd::RobddBuilder;
 use crate::builder::cache::lru_app::BddApplyTable;
 use crate::builder::sdd::builder::SddBuilder;
 use crate::builder::sdd::compression::CompressionSddBuilder;
+use crate::constants::primes;
 use crate::repr::bdd::BddPtr;
 use crate::repr::ddnnf::DDNNFPtr;
 use crate::repr::dtree::DTree;
@@ -101,7 +102,7 @@ pub fn demo_model_count_sdd(cnf_input: String) -> Result<JsValue, JsValue> {
     let builder = CompressionSddBuilder::new(vtree.clone());
     let sdd = builder.compile_cnf(&cnf);
 
-    let mut params: WmcParams<FiniteField<1000001>> =
+    let mut params: WmcParams<FiniteField<{ primes::U32_TINY }>> =
         WmcParams::new(FiniteField::zero(), FiniteField::one());
 
     for v in 0..builder.get_vtree_manager().num_vars() + 1 {

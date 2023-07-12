@@ -235,12 +235,13 @@ impl<'a, const P: u128> SemanticSddBuilder<'a, P> {
 #[test]
 fn prob_equiv_sdd_demorgan() {
     use crate::builder::BottomUpBuilder;
+    use crate::constants::primes;
     use crate::repr::bdd::create_semantic_hash_map;
     use crate::repr::bdd::WmcParams;
     use crate::repr::var_label::VarLabel;
     use crate::util::semirings::finitefield::FiniteField;
 
-    let mut builder = SemanticSddBuilder::<100000049>::new(VTree::even_split(
+    let mut builder = SemanticSddBuilder::<{ primes::U32_SMALL }>::new(VTree::even_split(
         &[
             VarLabel::new(0),
             VarLabel::new(1),
@@ -256,7 +257,8 @@ fn prob_equiv_sdd_demorgan() {
     let res = builder.or(x, y).neg();
     let expected = builder.and(x.neg(), y.neg());
 
-    let map: WmcParams<FiniteField<100000049>> = create_semantic_hash_map(builder.num_vars());
+    let map: WmcParams<FiniteField<{ primes::U32_SMALL }>> =
+        create_semantic_hash_map(builder.num_vars());
 
     let sh1 = res.cached_semantic_hash(builder.get_vtree_manager(), &map);
     let sh2 = expected.cached_semantic_hash(builder.get_vtree_manager(), &map);

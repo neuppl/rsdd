@@ -109,6 +109,7 @@ mod tests {
             bdd::robdd::DDNNFPtr,
             decision_nnf::{builder::DecisionNNFBuilder, semantic::SemanticDecisionNNFBuilder},
         },
+        constants::primes,
         repr::{bdd::VarOrder, cnf::Cnf},
     };
 
@@ -123,7 +124,8 @@ mod tests {
 
         let linear_order = VarOrder::linear_order(cnf.num_vars());
 
-        let builder = SemanticDecisionNNFBuilder::<100000049>::new(linear_order.clone());
+        let builder =
+            SemanticDecisionNNFBuilder::<{ primes::U32_SMALL }>::new(linear_order.clone());
         let dnnf = builder.compile_cnf_topdown(&cnf);
 
         assert!(dnnf.evaluate(&linear_order, &[true, true]));
