@@ -15,9 +15,6 @@ use rsdd::repr::vtree::VTree;
 use rsdd::*;
 extern crate rand;
 
-/// a prime large enough to ensure no collisions for semantic hashing
-const BIG_PRIME: u128 = 100000049;
-
 /// A list of canonical forms in DIMACS form. The goal of these tests is to ensure that caching
 /// and application are working as intended
 static C1_A: &str = "
@@ -327,6 +324,7 @@ mod test_bdd_builder {
     use rsdd::builder::decision_nnf::builder::DecisionNNFBuilder;
     use rsdd::builder::decision_nnf::standard::StandardDecisionNNFBuilder;
     use rsdd::builder::sdd::builder::SddBuilder;
+    use rsdd::constants::primes;
     use rsdd::repr::bdd::BddPtr;
     use rsdd::repr::ddnnf::{create_semantic_hash_map, DDNNFPtr};
     use rsdd::repr::dtree::DTree;
@@ -414,7 +412,7 @@ mod test_bdd_builder {
             if c1.clauses().len() > 16 { return TestResult::discard() }
 
             let builder = super::RobddBuilder::<AllTable<BddPtr>>::new_default_order(c1.num_vars());
-            let weight = create_semantic_hash_map::<{crate::BIG_PRIME}>(c1.num_vars());
+            let weight = create_semantic_hash_map::<{primes::U32_SMALL}>(c1.num_vars());
             let cnf1 = builder.compile_cnf(&c1);
             let bddres = cnf1.wmc(builder.get_order(), &weight);
             let cnfres = c1.wmc(&weight);
@@ -427,7 +425,7 @@ mod test_bdd_builder {
         fn sdd_semantic_eq_bdd(c1: Cnf, vtree: VTree) -> bool {
             let bdd_builder = super::RobddBuilder::<AllTable<BddPtr>>::new_default_order(c1.num_vars());
             let sdd_builder = super::CompressionSddBuilder::new(vtree);
-            let map : WmcParams<rsdd::util::semirings::finitefield::FiniteField<{ crate::BIG_PRIME }>>= create_semantic_hash_map(c1.num_vars());
+            let map : WmcParams<rsdd::util::semirings::finitefield::FiniteField<{primes::U32_SMALL}>>= create_semantic_hash_map(c1.num_vars());
             let bdd = bdd_builder.compile_cnf(&c1);
             let sdd = sdd_builder.compile_cnf(&c1);
             bdd.semantic_hash(bdd_builder.get_order(), &map) == sdd.semantic_hash(sdd_builder.get_vtree_manager(), &map)
@@ -443,7 +441,7 @@ mod test_bdd_builder {
             let vtree = VTree::from_dtree(&dtree).unwrap();
 
             let sdd_builder = super::CompressionSddBuilder::new(vtree);
-            let map : WmcParams<rsdd::util::semirings::finitefield::FiniteField<{ crate::BIG_PRIME }>>= create_semantic_hash_map(c1.num_vars());
+            let map : WmcParams<rsdd::util::semirings::finitefield::FiniteField<{primes::U32_SMALL}>>= create_semantic_hash_map(c1.num_vars());
             let bdd = bdd_builder.compile_cnf(&c1);
             let sdd = sdd_builder.compile_cnf(&c1);
             bdd.semantic_hash(bdd_builder.get_order(), &map) == sdd.semantic_hash(sdd_builder.get_vtree_manager(), &map)
@@ -708,6 +706,7 @@ mod test_sdd_builder {
     use rsdd::builder::sdd::{
         builder::SddBuilder, compression::CompressionSddBuilder, semantic::SemanticSddBuilder,
     };
+    use rsdd::constants::primes;
     use rsdd::repr::bdd::BddPtr;
     use rsdd::repr::ddnnf::{create_semantic_hash_map, DDNNFPtr};
     use rsdd::repr::dtree::DTree;
@@ -785,7 +784,7 @@ mod test_sdd_builder {
             if cnf.num_vars() < 8 || cnf.num_vars() > 16 { return TestResult::discard() }
             if cnf.clauses().len() > 16 { return TestResult::discard() }
 
-           let weight_map = create_semantic_hash_map::< {crate::BIG_PRIME} >(cnf.num_vars());
+           let weight_map = create_semantic_hash_map::<{primes::U32_SMALL}>(cnf.num_vars());
            let order : Vec<VarLabel> = (0..cnf.num_vars()).map(|x| VarLabel::new(x as u64)).collect();
            let builder = super::CompressionSddBuilder::new(VTree::even_split(&order, 3));
            let cnf_sdd = builder.compile_cnf(&cnf);
@@ -811,7 +810,7 @@ mod test_sdd_builder {
             let dtree = DTree::from_cnf(&cnf, &VarOrder::linear_order(cnf.num_vars()));
             let vtree = VTree::from_dtree(&dtree).unwrap();
 
-            let weight_map = create_semantic_hash_map::< {crate::BIG_PRIME} >(cnf.num_vars());
+            let weight_map = create_semantic_hash_map::<{primes::U32_SMALL}>(cnf.num_vars());
             let builder = super::CompressionSddBuilder::new(vtree);
             let cnf_sdd = builder.compile_cnf(&cnf);
             let sdd_res = cnf_sdd.semantic_hash(builder.get_vtree_manager(), &weight_map);
@@ -897,10 +896,10 @@ mod test_sdd_builder {
             let builder1 = CompressionSddBuilder::new(vtree.clone());
             let c1 = builder1.compile_cnf(&c);
 
-            let builder2 = SemanticSddBuilder::<{ crate::BIG_PRIME }>::new(vtree);
+            let builder2 = SemanticSddBuilder::<{primes::U32_SMALL}>::new(vtree);
             let c2 = builder2.compile_cnf(&c);
 
-            let map : WmcParams<FiniteField<{ crate::BIG_PRIME }>> = create_semantic_hash_map(builder1.num_vars());
+            let map : WmcParams<FiniteField<{primes::U32_SMALL}>> = create_semantic_hash_map(builder1.num_vars());
 
             let h1 = c1.semantic_hash(builder1.get_vtree_manager(), &map);
             let h2 = c2.semantic_hash(builder2.get_vtree_manager(), &map);
@@ -911,7 +910,7 @@ mod test_sdd_builder {
 
     quickcheck! {
         fn prob_equiv_reflexive(c: Cnf, vtree: VTree) -> bool {
-            let builder = SemanticSddBuilder::<{ crate::BIG_PRIME }>::new(vtree);
+            let builder = SemanticSddBuilder::<{primes::U32_SMALL}>::new(vtree);
             let c = builder.compile_cnf(&c);
 
             builder.eq(c, c)
@@ -927,7 +926,7 @@ mod test_sdd_builder {
             uncompr_builder.set_compression(false);
             let uncompr_cnf = uncompr_builder.compile_cnf(&c);
 
-            let map : WmcParams<FiniteField<{ crate::BIG_PRIME }>> = create_semantic_hash_map(compr_builder.num_vars());
+            let map : WmcParams<FiniteField<{primes::U32_SMALL}>> = create_semantic_hash_map(compr_builder.num_vars());
 
             let compr_h = compr_cnf.semantic_hash(compr_builder.get_vtree_manager(), &map);
             let uncompr_h = uncompr_cnf.semantic_hash(uncompr_builder.get_vtree_manager(), &map);
@@ -949,7 +948,7 @@ mod test_sdd_builder {
             let compr_builder = CompressionSddBuilder::new(vtree.clone());
             let compr_cnf = compr_builder.compile_cnf(&c);
 
-            let uncompr_builder = SemanticSddBuilder::<{ crate::BIG_PRIME }>::new(vtree);
+            let uncompr_builder = SemanticSddBuilder::<{primes::U32_SMALL}>::new(vtree);
             let uncompr_cnf = uncompr_builder.compile_cnf(&c);
 
             if !uncompr_builder.eq(compr_cnf, uncompr_cnf) {
@@ -965,7 +964,7 @@ mod test_sdd_builder {
 
     quickcheck! {
         fn prob_equiv_sdd_inequality(c1: Cnf, c2: Cnf, vtree:VTree) -> TestResult {
-            let mut builder = SemanticSddBuilder::<{ crate::BIG_PRIME }>::new(vtree);
+            let mut builder = SemanticSddBuilder::<{primes::U32_SMALL}>::new(vtree);
             builder.set_compression(true); // necessary to make sure we don't generate two uncompressed SDDs that canonicalize to the same SDD
             let cnf_1 = builder.compile_cnf(&c1);
             let cnf_2 = builder.compile_cnf(&c2);
@@ -987,7 +986,7 @@ mod test_sdd_builder {
 
     quickcheck! {
         fn prob_equiv_sdd_eq_vs_prob_eq(c1: Cnf, c2: Cnf, vtree:VTree) -> TestResult {
-            let mut builder = SemanticSddBuilder::<{ crate::BIG_PRIME }>::new(vtree);
+            let mut builder = SemanticSddBuilder::<{primes::U32_SMALL}>::new(vtree);
             builder.set_compression(true); // necessary to make sure we don't generate two uncompressed SDDs that canonicalize to the same SDD
             let cnf_1 = builder.compile_cnf(&c1);
             let cnf_2 = builder.compile_cnf(&c2);
@@ -1012,7 +1011,7 @@ mod test_sdd_builder {
             let builder = super::CompressionSddBuilder::new(vtree);
             builder.compile_cnf(&c1);
 
-            let map : WmcParams<FiniteField<{ crate::BIG_PRIME }>>= create_semantic_hash_map(builder.num_vars());
+            let map : WmcParams<FiniteField<{primes::U32_SMALL}>>= create_semantic_hash_map(builder.num_vars());
             let mut seen_hashes : HashMap<u128, SddPtr> = HashMap::new();
             for sdd in builder.node_iter() {
                 let hash = sdd.semantic_hash(builder.get_vtree_manager(), &map);
@@ -1035,10 +1034,10 @@ mod test_sdd_builder {
         /// verify that every node in the SDD with the semantic canonicalizer a unique semantic hash w.r.t negations
         /// using SemanticCanonicalizer
         fn qc_semantic_sdd_canonicity(c1: Cnf, vtree:VTree) -> TestResult {
-            let builder = SemanticSddBuilder::< {crate::BIG_PRIME} >::new(vtree);
+            let builder = SemanticSddBuilder::<{primes::U32_SMALL}>::new(vtree);
             builder.compile_cnf(&c1);
 
-            let map : WmcParams<FiniteField<{ crate::BIG_PRIME }>>= create_semantic_hash_map(builder.num_vars());
+            let map : WmcParams<FiniteField<{primes::U32_SMALL}>>= create_semantic_hash_map(builder.num_vars());
             let mut seen_hashes : HashMap<u128, SddPtr> = HashMap::new();
             for sdd in builder.node_iter() {
                 let hash = sdd.semantic_hash(builder.get_vtree_manager(), &map);
@@ -1087,8 +1086,8 @@ mod test_sdd_builder {
     quickcheck! {
         /// verify that the semantic hash of an SDDPtr + its compl is always equal to 1
         fn semantic_reg_plus_compl_eq_one(c1: Cnf, vtree:VTree) -> bool {
-            let builder = SemanticSddBuilder::<{ crate::BIG_PRIME }>::new(vtree);
-            let map : WmcParams<FiniteField<{ crate::BIG_PRIME }>>= create_semantic_hash_map(builder.num_vars());
+            let builder = SemanticSddBuilder::<{primes::U32_SMALL}>::new(vtree);
+            let map : WmcParams<FiniteField<{primes::U32_SMALL}>>= create_semantic_hash_map(builder.num_vars());
 
             let sdd = builder.compile_cnf(&c1);
             let compl = sdd.neg();
@@ -1117,6 +1116,7 @@ mod test_dnnf_builder {
             builder::DecisionNNFBuilder, semantic::SemanticDecisionNNFBuilder,
             standard::StandardDecisionNNFBuilder,
         },
+        constants::primes,
         repr::{
             cnf::Cnf, ddnnf::DDNNFPtr, var_label::VarLabel, var_order::VarOrder, wmc::WmcParams,
         },
@@ -1131,7 +1131,7 @@ mod test_dnnf_builder {
 
             let linear_order = VarOrder::linear_order(cnf.num_vars());
 
-            let sem_builder = SemanticDecisionNNFBuilder::<{ crate::BIG_PRIME }>::new(linear_order);
+            let sem_builder = SemanticDecisionNNFBuilder::<{primes::U32_SMALL}>::new(linear_order);
             sem_builder.compile_cnf_topdown(&cnf);
 
             let num_redundant = sem_builder.num_logically_redundant();
@@ -1155,7 +1155,7 @@ mod test_dnnf_builder {
             let std_builder = StandardDecisionNNFBuilder::new(linear_order.clone());
             let std_dnnf = std_builder.compile_cnf_topdown(&cnf);
 
-            let sem_builder = SemanticDecisionNNFBuilder::<{ crate::BIG_PRIME }>::new(linear_order.clone());
+            let sem_builder = SemanticDecisionNNFBuilder::<{primes::U32_SMALL}>::new(linear_order.clone());
             let sem_dnnf = sem_builder.compile_cnf_topdown(&cnf);
 
 
