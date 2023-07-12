@@ -16,12 +16,19 @@ use rsdd::{
     util::semirings::{realsemiring::RealSemiring, semiring_traits::Semiring},
 };
 
+use rand::seq::SliceRandom;
+use rand::thread_rng;
+
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
 struct Args {
     /// input CNF in DIMACS form
     #[clap(short, long, value_parser)]
     file: String,
+
+    /// number of variable orders to try. 0 means just do linear
+    #[clap(short, long, value_parser, default_value_t = 0)]
+    orders: usize,
 }
 
 fn diff_by_wmc(num_vars: usize, order: &VarOrder, std_dnnf: BddPtr, sem_dnnf: BddPtr) -> f64 {
@@ -40,29 +47,20 @@ fn diff_by_wmc(num_vars: usize, order: &VarOrder, std_dnnf: BddPtr, sem_dnnf: Bd
     f64::abs(std_wmc.0 - sem_wmc.0)
 }
 
-fn main() {
-    let args = Args::parse();
-
-    let cnf_input = fs::read_to_string(args.file).expect("Should have been able to read the file");
-
-    let cnf = Cnf::from_file(cnf_input);
-
-    let linear_order = VarOrder::linear_order(cnf.num_vars());
-
-    let std_builder = StandardDecisionNNFBuilder::new(linear_order.clone());
+fn compare_sem_and_std(cnf: &Cnf, order: &VarOrder) {
+    let std_builder = StandardDecisionNNFBuilder::new(order.clone());
 
     let start = Instant::now();
-    let std_dnnf = std_builder.compile_cnf_topdown(&cnf);
+    let std_dnnf = std_builder.compile_cnf_topdown(cnf);
     let std_time = start.elapsed().as_secs_f64();
 
-    let sem_builder =
-        SemanticDecisionNNFBuilder::<{ primes::U64_LARGEST }>::new(linear_order.clone());
+    let sem_builder = SemanticDecisionNNFBuilder::<{ primes::U64_LARGEST }>::new(order.clone());
 
     let start = Instant::now();
-    let sem_dnnf = sem_builder.compile_cnf_topdown(&cnf);
+    let sem_dnnf = sem_builder.compile_cnf_topdown(cnf);
     let sem_time = start.elapsed().as_secs_f64();
 
-    if diff_by_wmc(cnf.num_vars(), &linear_order, std_dnnf, sem_dnnf) > 0.0001 {
+    if diff_by_wmc(cnf.num_vars(), order, std_dnnf, sem_dnnf) > 0.0001 {
         println!(
             "error on input {}\n std bdd: {}\nsem bdd: {}",
             cnf,
@@ -89,4 +87,60 @@ fn main() {
         sem_time,
         std_time
     );
+}
+
+struct RandomVarOrders {
+    vars: u64,
+    total: usize,
+    current: usize,
+}
+
+impl RandomVarOrders {
+    fn new(cnf: &Cnf, total: usize) -> RandomVarOrders {
+        RandomVarOrders {
+            vars: cnf.num_vars() as u64,
+            total,
+            current: 0,
+        }
+    }
+}
+
+impl Iterator for RandomVarOrders {
+    type Item = VarOrder;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.current >= self.total {
+            return None;
+        }
+
+        self.current += 1;
+
+        let mut order: Vec<VarLabel> = (0..self.vars).map(VarLabel::new).collect();
+
+        order.shuffle(&mut thread_rng());
+
+        Some(VarOrder::new(order))
+    }
+}
+
+fn main() {
+    let args = Args::parse();
+
+    let cnf_input = fs::read_to_string(args.file).expect("Should have been able to read the file");
+
+    let cnf = Cnf::from_file(cnf_input);
+
+    if args.orders == 0 {
+        let linear_order = VarOrder::linear_order(cnf.num_vars());
+
+        compare_sem_and_std(&cnf, &linear_order);
+        return;
+    }
+
+    let orders = RandomVarOrders::new(&cnf, args.orders);
+
+    for order in orders {
+        println!("\norder: {}\n", order);
+        compare_sem_and_std(&cnf, &order)
+    }
 }
