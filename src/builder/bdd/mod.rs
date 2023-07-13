@@ -2,9 +2,13 @@ use std::cmp::Ordering;
 
 use crate::repr::{bdd::BddPtr, var_label::VarLabel};
 
-pub mod builder;
-pub mod robdd;
-pub mod stats;
+mod builder;
+mod robdd;
+mod stats;
+
+pub use self::builder::*;
+pub use self::robdd::*;
+pub use self::stats::*;
 
 // TODO: move this to a compile module
 

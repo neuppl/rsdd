@@ -261,7 +261,7 @@ where
 
     /// Produce a new BDD that is the result of conjoining `f` and `g`
     /// ```
-    /// # use rsdd::builder::bdd::robdd::RobddBuilder;
+    /// # use rsdd::builder::bdd::RobddBuilder;
     /// # use rsdd::builder::BottomUpBuilder;
     /// # use rsdd::repr::var_label::VarLabel;
     /// # use rsdd::repr::ddnnf::DDNNFPtr;

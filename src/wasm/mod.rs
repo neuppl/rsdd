@@ -1,8 +1,8 @@
-use crate::builder::bdd::builder::BddBuilder;
-use crate::builder::bdd::robdd::RobddBuilder;
+use crate::builder::bdd::BddBuilder;
+use crate::builder::bdd::RobddBuilder;
 use crate::builder::cache::lru_app::BddApplyTable;
-use crate::builder::sdd::builder::SddBuilder;
-use crate::builder::sdd::compression::CompressionSddBuilder;
+use crate::builder::sdd::CompressionSddBuilder;
+use crate::builder::sdd::SddBuilder;
 use crate::constants::primes;
 use crate::repr::bdd::BddPtr;
 use crate::repr::ddnnf::DDNNFPtr;

@@ -4,16 +4,14 @@
 extern crate rsdd;
 #[macro_use]
 extern crate quickcheck;
-use crate::repr::cnf::Cnf;
-use crate::repr::var_label::VarLabel;
-use rsdd::builder::bdd::builder::BddBuilder;
-use rsdd::builder::bdd::robdd::RobddBuilder;
+use rsdd::builder::bdd::{BddBuilder, RobddBuilder};
 use rsdd::builder::cache::all_app::AllTable;
-use rsdd::builder::sdd::{builder::SddBuilder, compression::CompressionSddBuilder};
+use rsdd::builder::sdd::{CompressionSddBuilder, SddBuilder};
 use rsdd::repr::bdd::BddPtr;
+use rsdd::repr::cnf::Cnf;
+use rsdd::repr::var_label::VarLabel;
 use rsdd::repr::vtree::VTree;
 use rsdd::*;
-extern crate rand;
 
 /// A list of canonical forms in DIMACS form. The goal of these tests is to ensure that caching
 /// and application are working as intended
@@ -313,22 +311,22 @@ fn test_sdd_is_canonical() {
 
 #[cfg(test)]
 mod test_bdd_builder {
-    use crate::repr::cnf::Cnf;
-    use crate::repr::var_label::VarLabel;
-    use crate::rsdd::builder::bdd::builder::BddBuilder;
-    use crate::rsdd::builder::BottomUpBuilder;
     use quickcheck::TestResult;
     use rand::Rng;
+    use rsdd::builder::bdd::BddBuilder;
     use rsdd::builder::cache::all_app::AllTable;
     use rsdd::builder::cache::lru_app::BddApplyTable;
-    use rsdd::builder::decision_nnf::builder::DecisionNNFBuilder;
-    use rsdd::builder::decision_nnf::standard::StandardDecisionNNFBuilder;
-    use rsdd::builder::sdd::builder::SddBuilder;
+    use rsdd::builder::decision_nnf::DecisionNNFBuilder;
+    use rsdd::builder::decision_nnf::StandardDecisionNNFBuilder;
+    use rsdd::builder::sdd::SddBuilder;
+    use rsdd::builder::BottomUpBuilder;
     use rsdd::constants::primes;
     use rsdd::repr::bdd::BddPtr;
+    use rsdd::repr::cnf::Cnf;
     use rsdd::repr::ddnnf::{create_semantic_hash_map, DDNNFPtr};
     use rsdd::repr::dtree::DTree;
     use rsdd::repr::model::PartialModel;
+    use rsdd::repr::var_label::VarLabel;
     use rsdd::repr::var_order::VarOrder;
     use rsdd::repr::vtree::VTree;
     use rsdd::repr::wmc::WmcParams;
@@ -693,24 +691,22 @@ mod test_bdd_builder {
 
 #[cfg(test)]
 mod test_sdd_builder {
-    use crate::builder::bdd::robdd::RobddBuilder;
-    use crate::repr::cnf::Cnf;
-    use crate::repr::var_label::{Literal, VarLabel};
-    use crate::rsdd::builder::bdd::builder::BddBuilder;
-    use crate::rsdd::builder::BottomUpBuilder;
     use quickcheck::{Arbitrary, TestResult};
     use rand::rngs::SmallRng;
     use rand::seq::SliceRandom;
     use rand::SeedableRng;
+    use rsdd::builder::bdd::BddBuilder;
+    use rsdd::builder::bdd::RobddBuilder;
     use rsdd::builder::cache::all_app::AllTable;
-    use rsdd::builder::sdd::{
-        builder::SddBuilder, compression::CompressionSddBuilder, semantic::SemanticSddBuilder,
-    };
+    use rsdd::builder::sdd::{CompressionSddBuilder, SddBuilder, SemanticSddBuilder};
+    use rsdd::builder::BottomUpBuilder;
     use rsdd::constants::primes;
     use rsdd::repr::bdd::BddPtr;
+    use rsdd::repr::cnf::Cnf;
     use rsdd::repr::ddnnf::{create_semantic_hash_map, DDNNFPtr};
     use rsdd::repr::dtree::DTree;
     use rsdd::repr::sdd::SddPtr;
+    use rsdd::repr::var_label::{Literal, VarLabel};
     use rsdd::repr::var_order::VarOrder;
     use rsdd::repr::vtree::VTree;
     use rsdd::repr::wmc::WmcParams;
@@ -1114,8 +1110,7 @@ mod test_dnnf_builder {
     use rand::{rngs::SmallRng, seq::SliceRandom, SeedableRng};
     use rsdd::{
         builder::decision_nnf::{
-            builder::DecisionNNFBuilder, semantic::SemanticDecisionNNFBuilder,
-            standard::StandardDecisionNNFBuilder,
+            DecisionNNFBuilder, SemanticDecisionNNFBuilder, StandardDecisionNNFBuilder,
         },
         constants::primes,
         repr::{

@@ -292,7 +292,7 @@ mod tests {
     use maplit::*;
 
     use crate::{
-        builder::bdd::robdd::RobddBuilder,
+        builder::bdd::RobddBuilder,
         repr::{bdd::BddPtr, cnf::Cnf, var_label::VarLabel},
     };
 

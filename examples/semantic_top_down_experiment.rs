@@ -5,8 +5,7 @@ use std::{collections::HashMap, fs, time::Instant};
 use clap::Parser;
 use rsdd::{
     builder::decision_nnf::{
-        builder::DecisionNNFBuilder, semantic::SemanticDecisionNNFBuilder,
-        standard::StandardDecisionNNFBuilder,
+        DecisionNNFBuilder, SemanticDecisionNNFBuilder, StandardDecisionNNFBuilder,
     },
     constants::primes,
     repr::{

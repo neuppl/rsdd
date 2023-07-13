@@ -1,11 +1,14 @@
 extern crate rsdd;
 
 use clap::Parser;
-use rsdd::builder::bdd::builder::BddBuilder;
+use rsdd::builder::bdd::BddBuilder;
+use rsdd::builder::bdd::RobddBuilder;
 use rsdd::builder::cache::lru_app::BddApplyTable;
-use rsdd::builder::decision_nnf::builder::DecisionNNFBuilder;
-use rsdd::builder::decision_nnf::standard::StandardDecisionNNFBuilder;
+use rsdd::builder::decision_nnf::DecisionNNFBuilder;
+use rsdd::builder::decision_nnf::StandardDecisionNNFBuilder;
+use rsdd::builder::sdd::{CompressionSddBuilder, SddBuilder};
 use rsdd::plan::bdd_plan::BddPlan;
+use rsdd::repr::bdd::BddPtr;
 use rsdd::repr::cnf::Cnf;
 use rsdd::repr::ddnnf::DDNNFPtr;
 use rsdd::repr::dtree::DTree;
@@ -91,7 +94,6 @@ fn compile_topdown_nnf(str: String, _args: &Args) -> BenchResult {
 }
 
 fn compile_sdd_dtree(str: String, _args: &Args) -> BenchResult {
-    use rsdd::builder::sdd::{builder::SddBuilder, compression::CompressionSddBuilder};
     let cnf = Cnf::from_file(str);
     let dtree = DTree::from_cnf(&cnf, &cnf.min_fill_order());
     let vtree = VTree::from_dtree(&dtree).unwrap();
@@ -119,7 +121,6 @@ fn compile_sdd_dtree(str: String, _args: &Args) -> BenchResult {
 }
 
 fn compile_sdd_rightlinear(str: String, _args: &Args) -> BenchResult {
-    use rsdd::builder::sdd::{builder::SddBuilder, compression::CompressionSddBuilder};
     let cnf = Cnf::from_file(str);
     let o: Vec<VarLabel> = (0..cnf.num_vars())
         .map(|x| VarLabel::new(x as u64))
@@ -149,9 +150,6 @@ fn compile_sdd_rightlinear(str: String, _args: &Args) -> BenchResult {
 }
 
 fn compile_bdd(str: String, _args: &Args) -> BenchResult {
-    use rsdd::builder::bdd::robdd::RobddBuilder;
-    use rsdd::repr::bdd::BddPtr;
-
     let cnf = Cnf::from_file(str);
     let builder = RobddBuilder::<BddApplyTable<BddPtr>>::new_default_order_lru(cnf.num_vars());
     let bdd = builder.compile_cnf(&cnf);
@@ -170,9 +168,6 @@ fn compile_bdd(str: String, _args: &Args) -> BenchResult {
 }
 
 fn compile_bdd_dtree(str: String, _args: &Args) -> BenchResult {
-    use rsdd::builder::bdd::robdd::RobddBuilder;
-    use rsdd::repr::bdd::BddPtr;
-
     let cnf = Cnf::from_file(str);
     let order = cnf.min_fill_order();
     let dtree = DTree::from_cnf(&cnf, &order);
