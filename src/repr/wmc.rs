@@ -51,24 +51,6 @@ impl<T: Semiring> WmcParams<T> {
         }
     }
 
-    /// Parametrize a weighted model count (over a semiring) with no default assocations;
-    /// requires weights to be set before performing the count.
-    /// ```
-    /// use rsdd::repr::wmc::WmcParams;
-    /// use rsdd::util::semirings::{RealSemiring, FiniteField};
-    ///
-    /// let params = WmcParams::<RealSemiring>::new_with_no_associations();
-    ///
-    /// let params = WmcParams::<FiniteField<2>>::new_with_no_associations();
-    /// ```
-    pub fn new_with_no_associations() -> WmcParams<T> {
-        WmcParams {
-            zero: T::zero(),
-            one: T::one(),
-            var_to_val: Vec::new(),
-        }
-    }
-
     /// get the weight of an asignment
     /// ```
     /// use rsdd::repr::var_label::{Literal, VarLabel};
@@ -175,5 +157,25 @@ impl<T: Semiring> Debug for WmcParams<T> {
                     .collect::<Vec<String>>(),
             )
             .finish()
+    }
+}
+
+impl<T: Semiring> Default for WmcParams<T> {
+    /// Parametrize a weighted model count (over a semiring) with no default assocations;
+    /// requires weights to be set before performing the count.
+    /// ```
+    /// use rsdd::repr::wmc::WmcParams;
+    /// use rsdd::util::semirings::{RealSemiring, FiniteField};
+    ///
+    /// let params = WmcParams::<RealSemiring>::default();
+    ///
+    /// let params = WmcParams::<FiniteField<2>>::default();
+    /// ```
+    fn default() -> Self {
+        WmcParams {
+            zero: T::zero(),
+            one: T::one(),
+            var_to_val: Vec::new(),
+        }
     }
 }

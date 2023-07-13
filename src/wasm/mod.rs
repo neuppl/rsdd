@@ -99,8 +99,7 @@ pub fn demo_model_count_sdd(cnf_input: String) -> Result<JsValue, JsValue> {
     let builder = CompressionSddBuilder::new(vtree.clone());
     let sdd = builder.compile_cnf(&cnf);
 
-    let mut params: WmcParams<FiniteField<{ primes::U32_TINY }>> =
-        WmcParams::new_with_no_associations();
+    let mut params: WmcParams<FiniteField<{ primes::U32_TINY }>> = WmcParams::default();
 
     for v in 0..builder.get_vtree_manager().num_vars() + 1 {
         params.set_weight(
