@@ -1,7 +1,7 @@
 use std::{cell::RefCell, collections::HashSet};
 
 use crate::{
-    backing_store::bump_table::BackedRobinhoodTable,
+    backing_store::BackedRobinhoodTable,
     builder::decision_nnf::builder::{DecisionNNFBuilder, DecisionNNFBuilderStats},
     constants::primes,
     repr::{

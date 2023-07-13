@@ -4,7 +4,7 @@ use std::hash::{Hash, Hasher};
 
 use rustc_hash::FxHasher;
 
-use crate::backing_store::bump_table::BackedRobinhoodTable;
+use crate::backing_store::BackedRobinhoodTable;
 use crate::builder::cache::ite::Ite;
 use crate::repr::ddnnf::{create_semantic_hash_map, DDNNFPtr};
 use crate::repr::sdd::BinarySDD;

@@ -1,7 +1,7 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
 
-use crate::backing_store::bump_table::BackedRobinhoodTable;
+use crate::backing_store::BackedRobinhoodTable;
 use crate::backing_store::UniqueTable;
 use crate::builder::cache::all_app::AllTable;
 use crate::builder::cache::ite::Ite;

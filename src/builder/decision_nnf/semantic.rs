@@ -7,7 +7,7 @@ use std::{
 use rustc_hash::FxHasher;
 
 use crate::{
-    backing_store::bump_table::BackedRobinhoodTable,
+    backing_store::BackedRobinhoodTable,
     builder::decision_nnf::builder::{DecisionNNFBuilder, DecisionNNFBuilderStats},
     repr::{
         bdd::{BddNode, BddPtr},
