@@ -9,10 +9,9 @@ use crate::repr::model::PartialModel;
 
 use crate::builder::BottomUpBuilder;
 
-pub use crate::builder::cache::LruTable;
-pub use crate::repr::bdd::BddPtr;
-pub use crate::repr::ddnnf::DDNNFPtr;
-pub use crate::repr::var_label::VarLabel;
+use crate::repr::bdd::BddPtr;
+use crate::repr::ddnnf::DDNNFPtr;
+use crate::repr::var_label::VarLabel;
 
 use super::CompiledCNF;
 

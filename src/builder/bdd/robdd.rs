@@ -10,10 +10,10 @@ use crate::backing_store::*;
 use crate::builder::BottomUpBuilder;
 use std::cell::RefCell;
 
-pub use crate::builder::cache::LruTable;
-pub use crate::repr::bdd::BddPtr;
-pub use crate::repr::ddnnf::DDNNFPtr;
-pub use crate::repr::var_label::VarLabel;
+use crate::builder::cache::LruTable;
+use crate::repr::bdd::BddPtr;
+use crate::repr::ddnnf::DDNNFPtr;
+use crate::repr::var_label::VarLabel;
 
 use super::builder::BddBuilder;
 use super::stats::BddBuilderStats;

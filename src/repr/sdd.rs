@@ -6,11 +6,14 @@ pub mod sdd_or;
 
 use crate::{
     repr::{
-        ddnnf::DDNNF,
+        ddnnf::{DDNNFPtr, DDNNF},
         var_label::{VarLabel, VarSet},
+        vtree::{VTreeIndex, VTreeManager},
+        wmc::WmcParams,
     },
     util::semirings::finitefield::FiniteField,
 };
+
 use std::fmt::Debug;
 use std::{collections::HashSet, ptr};
 use SddPtr::*;
@@ -59,12 +62,6 @@ impl<'a> PartialEq for SddPtr<'a> {
         }
     }
 }
-
-use super::{
-    bdd::WmcParams,
-    ddnnf::DDNNFPtr,
-    vtree::{VTreeIndex, VTreeManager},
-};
 
 impl<'a> SddPtr<'a> {
     /// performs a semantic hash and caches the result on the node

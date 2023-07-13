@@ -1,14 +1,14 @@
 use rustc_hash::FxHashMap;
 
 use crate::{
-    builder::{
-        bdd::robdd::{BddPtr, DDNNFPtr},
-        TopDownBuilder,
-    },
+    builder::TopDownBuilder,
     repr::{
-        bdd::{BddNode, Literal, VarOrder},
+        bdd::{BddNode, BddPtr},
         cnf::Cnf,
+        ddnnf::DDNNFPtr,
         unit_prop::{DecisionResult, SATSolver},
+        var_label::Literal,
+        var_order::VarOrder,
     },
 };
 

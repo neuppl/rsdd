@@ -8,11 +8,13 @@ use rustc_hash::FxHasher;
 
 use crate::{
     backing_store::bump_table::BackedRobinhoodTable,
-    builder::{
-        bdd::robdd::{BddPtr, DDNNFPtr},
-        decision_nnf::builder::{DecisionNNFBuilder, DecisionNNFBuilderStats},
+    builder::decision_nnf::builder::{DecisionNNFBuilder, DecisionNNFBuilderStats},
+    repr::{
+        bdd::{BddNode, BddPtr},
+        ddnnf::{create_semantic_hash_map, DDNNFPtr},
+        var_order::VarOrder,
+        wmc::WmcParams,
     },
-    repr::bdd::{create_semantic_hash_map, BddNode, VarOrder, WmcParams},
     util::semirings::finitefield::FiniteField,
 };
 
@@ -111,12 +113,11 @@ impl<'a, const P: u128> SemanticDecisionNNFBuilder<'a, P> {
 mod tests {
 
     use crate::{
-        builder::{
-            bdd::robdd::DDNNFPtr,
-            decision_nnf::{builder::DecisionNNFBuilder, semantic::SemanticDecisionNNFBuilder},
+        builder::decision_nnf::{
+            builder::DecisionNNFBuilder, semantic::SemanticDecisionNNFBuilder,
         },
         constants::primes,
-        repr::{bdd::VarOrder, cnf::Cnf},
+        repr::{cnf::Cnf, ddnnf::DDNNFPtr, var_order::VarOrder},
     };
 
     #[test]
