@@ -6,9 +6,8 @@ use crate::{
     repr::var_label::{Literal, VarLabel, VarSet},
     repr::var_order::VarOrder,
     repr::wmc::WmcParams,
-    util::semirings::expectation::ExpectedUtility,
-    util::semirings::semiring_traits::{BBSemiring, JoinSemilattice},
-    util::semirings::{finitefield::FiniteField, realsemiring::RealSemiring},
+    util::semirings::ExpectedUtility,
+    util::semirings::{BBSemiring, FiniteField, JoinSemilattice, RealSemiring},
 };
 use bit_set::BitSet;
 use core::fmt::Debug;

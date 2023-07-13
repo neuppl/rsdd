@@ -10,8 +10,8 @@ use rsdd::{
         cache::all_app::AllTable,
     },
     repr::{bdd::BddPtr, cnf::Cnf, var_label::VarLabel, wmc::WmcParams},
-    util::semirings::realsemiring::RealSemiring,
-    util::semirings::semiring_traits::Semiring,
+    util::semirings::RealSemiring,
+    util::semirings::Semiring,
 };
 
 #[derive(Parser, Debug)]

@@ -330,9 +330,9 @@ mod test_bdd_builder {
     use rsdd::repr::var_order::VarOrder;
     use rsdd::repr::vtree::VTree;
     use rsdd::repr::wmc::WmcParams;
-    use rsdd::util::semirings::expectation::ExpectedUtility;
-    use rsdd::util::semirings::realsemiring::RealSemiring;
-    use rsdd::util::semirings::semiring_traits::Semiring;
+    use rsdd::util::semirings::ExpectedUtility;
+    use rsdd::util::semirings::RealSemiring;
+    use rsdd::util::semirings::Semiring;
     use std::collections::HashMap;
     use std::iter::FromIterator;
 
@@ -423,7 +423,7 @@ mod test_bdd_builder {
         fn sdd_semantic_eq_bdd(c1: Cnf, vtree: VTree) -> bool {
             let bdd_builder = super::RobddBuilder::<AllTable<BddPtr>>::new_default_order(c1.num_vars());
             let sdd_builder = super::CompressionSddBuilder::new(vtree);
-            let map : WmcParams<rsdd::util::semirings::finitefield::FiniteField<{primes::U32_SMALL}>>= create_semantic_hash_map(c1.num_vars());
+            let map : WmcParams<rsdd::util::semirings::FiniteField<{primes::U32_SMALL}>>= create_semantic_hash_map(c1.num_vars());
             let bdd = bdd_builder.compile_cnf(&c1);
             let sdd = sdd_builder.compile_cnf(&c1);
             bdd.semantic_hash(bdd_builder.get_order(), &map) == sdd.semantic_hash(sdd_builder.get_vtree_manager(), &map)
@@ -439,7 +439,7 @@ mod test_bdd_builder {
             let vtree = VTree::from_dtree(&dtree).unwrap();
 
             let sdd_builder = super::CompressionSddBuilder::new(vtree);
-            let map : WmcParams<rsdd::util::semirings::finitefield::FiniteField<{primes::U32_SMALL}>>= create_semantic_hash_map(c1.num_vars());
+            let map : WmcParams<rsdd::util::semirings::FiniteField<{primes::U32_SMALL}>>= create_semantic_hash_map(c1.num_vars());
             let bdd = bdd_builder.compile_cnf(&c1);
             let sdd = sdd_builder.compile_cnf(&c1);
             bdd.semantic_hash(bdd_builder.get_order(), &map) == sdd.semantic_hash(sdd_builder.get_vtree_manager(), &map)
@@ -710,7 +710,7 @@ mod test_sdd_builder {
     use rsdd::repr::var_order::VarOrder;
     use rsdd::repr::vtree::VTree;
     use rsdd::repr::wmc::WmcParams;
-    use rsdd::util::semirings::finitefield::FiniteField;
+    use rsdd::util::semirings::FiniteField;
     use std::collections::HashMap;
 
     quickcheck! {
@@ -1116,7 +1116,7 @@ mod test_dnnf_builder {
         repr::{
             cnf::Cnf, ddnnf::DDNNFPtr, var_label::VarLabel, var_order::VarOrder, wmc::WmcParams,
         },
-        util::semirings::{realsemiring::RealSemiring, semiring_traits::Semiring},
+        util::semirings::{RealSemiring, Semiring},
     };
 
     #[derive(Clone, Debug)]

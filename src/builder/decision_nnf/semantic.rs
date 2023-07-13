@@ -15,7 +15,7 @@ use crate::{
         var_order::VarOrder,
         wmc::WmcParams,
     },
-    util::semirings::finitefield::FiniteField,
+    util::semirings::FiniteField,
 };
 
 pub struct SemanticDecisionNNFBuilder<'a, const P: u128> {

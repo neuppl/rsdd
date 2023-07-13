@@ -14,8 +14,8 @@ use rsdd::repr::ddnnf::DDNNFPtr;
 use rsdd::repr::dtree::DTree;
 use rsdd::repr::var_order::VarOrder;
 use rsdd::repr::vtree::VTree;
-use rsdd::util::semirings::realsemiring::RealSemiring;
-use rsdd::util::semirings::semiring_traits::Semiring;
+use rsdd::util::semirings::RealSemiring;
+use rsdd::util::semirings::Semiring;
 use rsdd::{builder::bdd::RobddBuilder, repr::wmc::WmcParams};
 
 use std::collections::HashMap;

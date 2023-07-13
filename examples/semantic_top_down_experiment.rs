@@ -12,7 +12,7 @@ use rsdd::{
         bdd::BddPtr, cnf::Cnf, ddnnf::DDNNFPtr, var_label::VarLabel, var_order::VarOrder,
         wmc::WmcParams,
     },
-    util::semirings::{realsemiring::RealSemiring, semiring_traits::Semiring},
+    util::semirings::{RealSemiring, Semiring},
 };
 
 use rand::seq::SliceRandom;

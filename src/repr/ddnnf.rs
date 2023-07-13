@@ -2,8 +2,8 @@
 //! (d-DNNF) pointer type
 use core::fmt::Debug;
 
-use crate::util::semirings::semiring_traits::Semiring;
-use crate::util::semirings::{boolean::BooleanSemiring, finitefield::FiniteField};
+use crate::util::semirings::Semiring;
+use crate::util::semirings::{BooleanSemiring, FiniteField};
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha8Rng;
 

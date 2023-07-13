@@ -12,7 +12,7 @@ use crate::repr::sdd::SddPtr;
 use crate::repr::sdd::{SddAnd, SddOr};
 use crate::repr::vtree::{VTree, VTreeIndex, VTreeManager};
 use crate::repr::wmc::WmcParams;
-use crate::util::semirings::finitefield::FiniteField;
+use crate::util::semirings::FiniteField;
 
 use super::builder::{SddBuilder, SddBuilderStats};
 
@@ -236,7 +236,7 @@ fn prob_equiv_sdd_demorgan() {
     use crate::builder::BottomUpBuilder;
     use crate::constants::primes;
     use crate::repr::var_label::VarLabel;
-    use crate::util::semirings::finitefield::FiniteField;
+    use crate::util::semirings::FiniteField;
 
     let mut builder = SemanticSddBuilder::<{ primes::U32_SMALL }>::new(VTree::even_split(
         &[

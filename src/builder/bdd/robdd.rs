@@ -286,13 +286,13 @@ mod tests {
     use crate::builder::bdd::builder::BddBuilder;
     use crate::builder::BottomUpBuilder;
     use crate::repr::wmc::WmcParams;
-    use crate::util::semirings::realsemiring::RealSemiring;
-    use crate::util::semirings::semiring_traits::Semiring;
+    use crate::util::semirings::RealSemiring;
+    use crate::util::semirings::Semiring;
     use crate::{builder::cache::all_app::AllTable, repr::ddnnf::DDNNFPtr};
     use maplit::*;
 
     use crate::{
-        builder::bdd::RobddBuilder,
+        builder::bdd::robdd::RobddBuilder,
         repr::{bdd::BddPtr, cnf::Cnf, var_label::VarLabel},
     };
 

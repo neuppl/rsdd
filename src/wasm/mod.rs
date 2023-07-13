@@ -11,8 +11,8 @@ use crate::repr::var_order::VarOrder;
 use crate::repr::wmc::WmcParams;
 use crate::repr::{cnf::Cnf, var_label::VarLabel, vtree::VTree};
 use crate::serialize::{BDDSerializer, SDDSerializer, VTreeSerializer};
-use crate::util::semirings::finitefield::FiniteField;
-use crate::util::semirings::semiring_traits::Semiring;
+use crate::util::semirings::FiniteField;
+use crate::util::semirings::Semiring;
 use wasm_bindgen::prelude::*;
 
 #[derive(Serialize, Deserialize)]
