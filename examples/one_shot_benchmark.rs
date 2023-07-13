@@ -12,7 +12,7 @@ use rsdd::repr::dtree::DTree;
 use rsdd::repr::var_label::VarLabel;
 use rsdd::repr::var_order::VarOrder;
 use rsdd::repr::vtree::VTree;
-use rsdd::serialize::{ser_bdd, ser_sdd, ser_vtree};
+use rsdd::serialize::{BDDSerializer, SDDSerializer, VTreeSerializer};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::fs::{self, File};
@@ -99,14 +99,14 @@ fn compile_sdd_dtree(str: String, _args: &Args) -> BenchResult {
     let sdd = builder.compile_cnf(&cnf);
 
     if let Some(path) = &_args.dump_sdd {
-        let json = ser_sdd::SDDSerializer::from_sdd(sdd);
+        let json = SDDSerializer::from_sdd(sdd);
         let mut file = File::create(path).unwrap();
         let r = file.write_all(serde_json::to_string(&json).unwrap().as_bytes());
         assert!(r.is_ok(), "Error writing file");
     }
 
     if let Some(path) = &_args.dump_vtree {
-        let json = ser_vtree::VTreeSerializer::from_vtree(&vtree);
+        let json = VTreeSerializer::from_vtree(&vtree);
         let mut file = File::create(path).unwrap();
         let r = file.write_all(serde_json::to_string(&json).unwrap().as_bytes());
         assert!(r.is_ok(), "Error writing file");
@@ -129,14 +129,14 @@ fn compile_sdd_rightlinear(str: String, _args: &Args) -> BenchResult {
     let sdd = builder.compile_cnf(&cnf);
 
     if let Some(path) = &_args.dump_sdd {
-        let json = ser_sdd::SDDSerializer::from_sdd(sdd);
+        let json = SDDSerializer::from_sdd(sdd);
         let mut file = File::create(path).unwrap();
         let r = file.write_all(serde_json::to_string(&json).unwrap().as_bytes());
         assert!(r.is_ok(), "Error writing file");
     }
 
     if let Some(path) = &_args.dump_vtree {
-        let json = ser_vtree::VTreeSerializer::from_vtree(&vtree);
+        let json = VTreeSerializer::from_vtree(&vtree);
         let mut file = File::create(path).unwrap();
         let r = file.write_all(serde_json::to_string(&json).unwrap().as_bytes());
         assert!(r.is_ok(), "Error writing file");
@@ -157,7 +157,7 @@ fn compile_bdd(str: String, _args: &Args) -> BenchResult {
     let bdd = builder.compile_cnf(&cnf);
 
     if let Some(path) = &_args.dump_bdd {
-        let json = ser_bdd::BDDSerializer::from_bdd(bdd);
+        let json = BDDSerializer::from_bdd(bdd);
         let mut file = File::create(path).unwrap();
         let r = file.write_all(serde_json::to_string(&json).unwrap().as_bytes());
         assert!(r.is_ok(), "Error writing file");
@@ -182,7 +182,7 @@ fn compile_bdd_dtree(str: String, _args: &Args) -> BenchResult {
     let bdd = builder.compile_plan(&plan);
 
     if let Some(path) = &_args.dump_bdd {
-        let json = ser_bdd::BDDSerializer::from_bdd(bdd);
+        let json = BDDSerializer::from_bdd(bdd);
         let mut file = File::create(path).unwrap();
         let r = file.write_all(serde_json::to_string(&json).unwrap().as_bytes());
         assert!(r.is_ok(), "Error writing file");

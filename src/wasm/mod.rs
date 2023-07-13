@@ -10,9 +10,7 @@ use crate::repr::dtree::DTree;
 use crate::repr::var_order::VarOrder;
 use crate::repr::wmc::WmcParams;
 use crate::repr::{cnf::Cnf, var_label::VarLabel, vtree::VTree};
-use crate::serialize::ser_sdd::SDDSerializer;
-use crate::serialize::ser_vtree::VTreeSerializer;
-use crate::serialize::{ser_bdd, ser_sdd, ser_vtree};
+use crate::serialize::{BDDSerializer, SDDSerializer, VTreeSerializer};
 use crate::util::semirings::finitefield::FiniteField;
 use crate::util::semirings::semiring_traits::Semiring;
 use wasm_bindgen::prelude::*;
@@ -42,7 +40,7 @@ pub fn vtree(cnf_input: String, vtree_type_input: JsValue) -> Result<JsValue, Js
 
     let vtree = build_vtree(&cnf, vtree_type);
 
-    let serialized = ser_vtree::VTreeSerializer::from_vtree(&vtree);
+    let serialized = VTreeSerializer::from_vtree(&vtree);
 
     Ok(serde_wasm_bindgen::to_value(&serialized)?)
 }
@@ -55,7 +53,7 @@ pub fn bdd(cnf_input: String) -> String {
     let builder = RobddBuilder::<BddApplyTable<BddPtr>>::new_default_order_lru(cnf.num_vars());
     let bdd = builder.compile_cnf(&cnf);
 
-    let json = ser_bdd::BDDSerializer::from_bdd(bdd);
+    let json = BDDSerializer::from_bdd(bdd);
 
     serde_json::to_string(&json).unwrap()
 }
@@ -70,7 +68,7 @@ pub fn bdd_with_var_order(cnf_input: String, order: &[u64]) -> String {
     let builder = RobddBuilder::new(var_order, BddApplyTable::new(21));
     let bdd = builder.compile_cnf(&cnf);
 
-    let json = ser_bdd::BDDSerializer::from_bdd(bdd);
+    let json = BDDSerializer::from_bdd(bdd);
 
     serde_json::to_string(&json).unwrap()
 }
@@ -87,7 +85,7 @@ pub fn sdd(cnf_input: String, vtree_type_input: JsValue) -> Result<JsValue, JsVa
     let builder = CompressionSddBuilder::new(vtree);
     let sdd = builder.compile_cnf(&cnf);
 
-    let serialized = ser_sdd::SDDSerializer::from_sdd(sdd);
+    let serialized = SDDSerializer::from_sdd(sdd);
 
     Ok(serde_wasm_bindgen::to_value(&serialized)?)
 }
@@ -117,8 +115,8 @@ pub fn demo_model_count_sdd(cnf_input: String) -> Result<JsValue, JsValue> {
 
     let res = SddModelCountResult {
         model_count: model_count.value(),
-        sdd: ser_sdd::SDDSerializer::from_sdd(sdd),
-        vtree: ser_vtree::VTreeSerializer::from_vtree(&vtree),
+        sdd: SDDSerializer::from_sdd(sdd),
+        vtree: VTreeSerializer::from_vtree(&vtree),
     };
 
     Ok(serde_wasm_bindgen::to_value(&res)?)
