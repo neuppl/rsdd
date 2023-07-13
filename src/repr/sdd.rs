@@ -1,8 +1,8 @@
 //! Defines the internal representations for a trimmed and compressed SDD with
 //! complemented edges.
 
-pub mod binary_sdd;
-pub mod sdd_or;
+mod binary_sdd;
+mod sdd_or;
 
 use crate::{
     repr::{
@@ -20,8 +20,8 @@ use SddPtr::*;
 
 use std::hash::Hash;
 
-use self::binary_sdd::BinarySDD;
-use self::sdd_or::{SddAnd, SddNodeIter, SddOr};
+pub use self::binary_sdd::*;
+pub use self::sdd_or::*;
 
 // This type is used a lot. Make sure it doesn't unintentionally get bigger.
 #[derive(Debug, Clone, Eq, Ord, PartialOrd, Copy)]
