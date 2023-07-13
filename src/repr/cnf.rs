@@ -732,12 +732,5 @@ fn test_cnf_wmc() {
         VarLabel::new(0) => (FiniteField::new(1), FiniteField::new(1)),
         VarLabel::new(1) => (FiniteField::new(1), FiniteField::new(1)),
     };
-    assert_eq!(
-        cnf.wmc(&WmcParams::new_with_default(
-            FiniteField::zero(),
-            FiniteField::one(),
-            weights
-        )),
-        FiniteField::new(3)
-    );
+    assert_eq!(cnf.wmc(&WmcParams::new(weights)), FiniteField::new(3));
 }

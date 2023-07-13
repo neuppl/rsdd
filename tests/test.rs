@@ -461,7 +461,7 @@ mod test_bdd_builder {
             let builder2 = StandardDecisionNNFBuilder::new(order);
             let dnnf = builder2.compile_cnf_topdown(&c1);
 
-            let bddwmc = super::repr::wmc::WmcParams::new_with_default(RealSemiring::zero(), RealSemiring::one(), weight_map);
+            let bddwmc = super::repr::wmc::WmcParams::new(weight_map);
             let bddres = cnf1.wmc(builder.get_order(),  &bddwmc);
             let dnnfres = dnnf.wmc(builder.get_order(), &bddwmc);
             let eps = f64::abs(bddres.0 - dnnfres.0) < 0.0001;
@@ -482,7 +482,7 @@ mod test_bdd_builder {
             let weight_map : HashMap<VarLabel, (RealSemiring, RealSemiring)> = HashMap::from_iter(
                 (0..16).map(|x| (VarLabel::new(x as u64), (RealSemiring(0.3), RealSemiring(0.7)))));
 
-            let bddwmc = super::repr::wmc::WmcParams::new_with_default(RealSemiring::zero(), RealSemiring::one(), weight_map);
+            let bddwmc = super::repr::wmc::WmcParams::new(weight_map);
             let cnf1 = builder1.compile_cnf(&c1);
             let cnf2 = builder2.compile_cnf(&c1);
             let wmc1 = cnf1.wmc(builder1.get_order(), &bddwmc);
@@ -508,7 +508,7 @@ mod test_bdd_builder {
                || !c1.var_in_cnf(VarLabel::new(4)) {
                 return TestResult::discard()
             }
-            let wmc = WmcParams::new_with_default(RealSemiring::zero(), RealSemiring::one(), weight_map);
+            let wmc = WmcParams::new(weight_map);
 
             let (marg_prob, marg_assgn) = cnf.marginal_map(&vars, builder.num_vars(), &wmc);
             let (marg_prob_bb, marg_assgn_bb) = cnf.bb(&vars, builder.num_vars(), &wmc);
@@ -617,7 +617,7 @@ mod test_bdd_builder {
 
             // set up wmc, run meu
             let vars = decisions.clone();
-            let wmc = WmcParams::new_with_default(ExpectedUtility::zero(), ExpectedUtility::one(), weight_map);
+            let wmc = WmcParams::new(weight_map);
 
             let (meu , meu_assgn) = cnf.meu(&vars, builder.num_vars(), &wmc);
             let (meu_bb, meu_assgn_bb) = cnf.bb(&vars, builder.num_vars(), &wmc);
@@ -1116,7 +1116,7 @@ mod test_dnnf_builder {
         repr::{
             cnf::Cnf, ddnnf::DDNNFPtr, var_label::VarLabel, var_order::VarOrder, wmc::WmcParams,
         },
-        util::semirings::{RealSemiring, Semiring},
+        util::semirings::RealSemiring,
     };
 
     #[derive(Clone, Debug)]
@@ -1179,7 +1179,7 @@ mod test_dnnf_builder {
 
             let weight_map : HashMap<VarLabel, (RealSemiring, RealSemiring)> = HashMap::from_iter(
                 (0..16).map(|x| (VarLabel::new(x as u64), (RealSemiring(0.3), RealSemiring(0.7)))));
-            let params = WmcParams::new_with_default(RealSemiring::zero(), RealSemiring::one(), weight_map);
+            let params = WmcParams::new(weight_map);
 
             let std_wmc = std_dnnf.wmc(&linear_order, &params);
             let sem_wmc = sem_dnnf.wmc(&linear_order, &params);
@@ -1207,7 +1207,7 @@ mod test_dnnf_builder {
 
             let weight_map : HashMap<VarLabel, (RealSemiring, RealSemiring)> = HashMap::from_iter(
                 (0..cnf.num_vars()).map(|x| (VarLabel::new(x as u64), (RealSemiring(0.3), RealSemiring(0.7)))));
-            let params = WmcParams::new_with_default(RealSemiring::zero(), RealSemiring::one(), weight_map);
+            let params = WmcParams::new(weight_map);
 
             let std_wmc = std_dnnf.wmc(&order, &params);
             let sem_wmc = sem_dnnf.wmc(&order, &params);

@@ -11,7 +11,6 @@ use rsdd::{
     },
     repr::{bdd::BddPtr, cnf::Cnf, var_label::VarLabel, wmc::WmcParams},
     util::semirings::RealSemiring,
-    util::semirings::Semiring,
 };
 
 #[derive(Parser, Debug)]
@@ -80,7 +79,7 @@ fn main() {
 
     let var_to_val = gen_all_weights(&args.weights, builder.num_vars());
 
-    let wmc = WmcParams::new_with_default(RealSemiring::zero(), RealSemiring::one(), var_to_val);
+    let wmc = WmcParams::new(var_to_val);
 
     let (probability, partial) = bdd.marginal_map(&vars, builder.num_vars(), &wmc);
 

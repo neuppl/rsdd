@@ -287,7 +287,6 @@ mod tests {
     use crate::builder::BottomUpBuilder;
     use crate::repr::wmc::WmcParams;
     use crate::util::semirings::RealSemiring;
-    use crate::util::semirings::Semiring;
     use crate::{builder::cache::all_app::AllTable, repr::ddnnf::DDNNFPtr};
     use maplit::*;
 
@@ -352,8 +351,7 @@ mod tests {
         let r1 = builder.or(v1, v2);
         let weights = hashmap! {VarLabel::new(0) => (RealSemiring(0.2), RealSemiring(0.8)),
         VarLabel::new(1) => (RealSemiring(0.1), RealSemiring(0.9))};
-        let params =
-            WmcParams::new_with_default(RealSemiring::zero(), RealSemiring::one(), weights);
+        let params = WmcParams::new(weights);
         let wmc = r1.wmc(builder.get_order().borrow(), &params);
         assert!((wmc.0 - (1.0 - 0.2 * 0.1)).abs() < 0.000001);
     }
@@ -561,7 +559,7 @@ mod tests {
         VarLabel::new(1) => (RealSemiring(1.0), RealSemiring(1.0)),
         VarLabel::new(2) => (RealSemiring(0.8), RealSemiring(0.2)),
         VarLabel::new(3) => (RealSemiring(0.7), RealSemiring(0.3)) };
-        let wmc = WmcParams::new_with_default(RealSemiring::zero(), RealSemiring::one(), map);
+        let wmc = WmcParams::new(map);
         let iff1 = builder.iff(x, f1);
         let iff2 = builder.iff(y, f2);
         let obs = builder.or(x, y);
