@@ -457,7 +457,7 @@ fn sdd_wmc1() {
         1,
     );
     let builder = CompressionSddBuilder::new(vtree);
-    let mut wmc_map = crate::repr::wmc::WmcParams::new(RealSemiring(0.0), RealSemiring(1.0));
+    let mut wmc_map = crate::repr::wmc::WmcParams::new_with_no_associations();
     let x = SddPtr::Var(VarLabel::new(0), true);
     wmc_map.set_weight(VarLabel::new(0), RealSemiring(1.0), RealSemiring(1.0));
     let y = SddPtr::Var(VarLabel::new(1), true);

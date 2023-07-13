@@ -16,35 +16,80 @@ pub struct WmcParams<T: Semiring> {
     var_to_val: Vec<Option<(T, T)>>,
 }
 
-impl<T: Semiring + std::ops::Mul<Output = T> + std::ops::Add<Output = T>> WmcParams<T> {
-    /// Generates a new `BddWmc` with a default `var_to_val`; it is private because we
-    /// do not want to expose the structure of the associative array
-    pub fn new_with_default(
-        zero: T,
-        one: T,
-        var_to_val: HashMap<VarLabel, (T, T)>,
-    ) -> WmcParams<T> {
+impl<T: Semiring> WmcParams<T> {
+    /// Parametrize a weighted model count (over a semiring) with default weights.
+    /// The weights are a mapping from variables to (negative, positive) weights.
+    /// ```
+    /// use rsdd::repr::var_label::{Literal, VarLabel};
+    /// use rsdd::repr::wmc::WmcParams;
+    /// use rsdd::util::semirings::{Semiring, RealSemiring};
+    /// use std::collections::HashMap;
+    ///
+    /// let weights = HashMap::from([
+    ///     (VarLabel::new(0), (RealSemiring(0.0), RealSemiring(1.0))),
+    ///     (VarLabel::new(1), (RealSemiring(0.3), RealSemiring(0.7)))
+    /// ]);
+    ///
+    /// let params = WmcParams::<RealSemiring>::new(weights);
+    ///
+    /// let all_true = [
+    ///     Literal::new(VarLabel::new(0), true),
+    ///     Literal::new(VarLabel::new(1), true),
+    /// ];
+    ///
+    /// assert_eq!(params.get_weight(&all_true).0, 0.7)
+    /// ```
+    pub fn new(var_to_val: HashMap<VarLabel, (T, T)>) -> WmcParams<T> {
         let mut var_to_val_vec: Vec<Option<(T, T)>> = vec![None; var_to_val.len()];
         for (key, value) in var_to_val.iter() {
             var_to_val_vec[key.value_usize()] = Some(*value);
         }
         WmcParams {
-            zero,
-            one,
+            zero: T::zero(),
+            one: T::one(),
             var_to_val: var_to_val_vec,
         }
     }
 
-    /// Generate a new `BddWmc` with no associations
-    pub fn new(zero: T, one: T) -> WmcParams<T> {
+    /// Parametrize a weighted model count (over a semiring) with no default assocations;
+    /// requires weights to be set before performing the count.
+    /// ```
+    /// use rsdd::repr::wmc::WmcParams;
+    /// use rsdd::util::semirings::{RealSemiring, FiniteField};
+    ///
+    /// let params = WmcParams::<RealSemiring>::new_with_no_associations();
+    ///
+    /// let params = WmcParams::<FiniteField<2>>::new_with_no_associations();
+    /// ```
+    pub fn new_with_no_associations() -> WmcParams<T> {
         WmcParams {
-            zero,
-            one,
+            zero: T::zero(),
+            one: T::one(),
             var_to_val: Vec::new(),
         }
     }
 
     /// get the weight of an asignment
+    /// ```
+    /// use rsdd::repr::var_label::{Literal, VarLabel};
+    /// use rsdd::repr::wmc::WmcParams;
+    /// use rsdd::util::semirings::{Semiring, RealSemiring};
+    /// use std::collections::HashMap;
+    ///
+    /// let weights = HashMap::from([
+    ///     (VarLabel::new(0), (RealSemiring(0.0), RealSemiring(1.0))),
+    ///     (VarLabel::new(1), (RealSemiring(0.3), RealSemiring(0.7)))
+    /// ]);
+    ///
+    /// let params = WmcParams::<RealSemiring>::new(weights);
+    ///
+    /// let all_true = [
+    ///     Literal::new(VarLabel::new(0), true),
+    ///     Literal::new(VarLabel::new(1), true),
+    /// ];
+    ///
+    /// assert_eq!(params.get_weight(&all_true).0, 0.7)
+    /// ```
     pub fn get_weight(&self, assgn: &[Literal]) -> T {
         let mut prod = self.one;
         for lit in assgn.iter() {
@@ -57,6 +102,29 @@ impl<T: Semiring + std::ops::Mul<Output = T> + std::ops::Add<Output = T>> WmcPar
         prod
     }
 
+    /// ```
+    /// use rsdd::repr::var_label::{Literal, VarLabel};
+    /// use rsdd::repr::wmc::WmcParams;
+    /// use rsdd::util::semirings::{Semiring, RealSemiring};
+    /// use std::collections::HashMap;
+    ///
+    /// let weights = HashMap::from([
+    ///     (VarLabel::new(0), (RealSemiring(0.0), RealSemiring(1.0))),
+    ///     (VarLabel::new(1), (RealSemiring(0.3), RealSemiring(0.7)))
+    /// ]);
+    ///
+    /// let mut params = WmcParams::<RealSemiring>::new(weights);
+    ///
+    /// let all_true = [
+    ///     Literal::new(VarLabel::new(0), true),
+    ///     Literal::new(VarLabel::new(1), true),
+    /// ];
+    ///
+    /// assert_eq!(params.get_weight(&all_true).0, 0.7);
+    ///
+    /// params.set_weight(VarLabel::new(1), RealSemiring(0.5), RealSemiring(0.5));
+    /// assert_eq!(params.get_weight(&all_true).0, 0.5);
+    /// ```
     pub fn set_weight(&mut self, lbl: VarLabel, low: T, high: T) {
         let n = lbl.value_usize();
         while n >= self.var_to_val.len() {
@@ -65,6 +133,21 @@ impl<T: Semiring + std::ops::Mul<Output = T> + std::ops::Add<Output = T>> WmcPar
         self.var_to_val[n] = Some((low, high));
     }
 
+    /// ```
+    /// use rsdd::repr::var_label::VarLabel;
+    /// use rsdd::repr::wmc::WmcParams;
+    /// use rsdd::util::semirings::{Semiring, RealSemiring};
+    /// use std::collections::HashMap;
+    ///
+    /// let weights = HashMap::from([
+    ///     (VarLabel::new(0), (RealSemiring(0.0), RealSemiring(1.0))),
+    ///     (VarLabel::new(1), (RealSemiring(0.3), RealSemiring(0.7)))
+    /// ]);
+    ///
+    /// let params = WmcParams::<RealSemiring>::new(weights);
+    ///
+    /// assert_eq!(*params.get_var_weight(VarLabel::new(1)), (RealSemiring(0.3), RealSemiring(0.7)))
+    /// ```
     // gives you the weight of `(low, high)` literals for a given VarLabel
     pub fn get_var_weight(&self, label: VarLabel) -> &(T, T) {
         return (self.var_to_val[label.value_usize()]).as_ref().unwrap();

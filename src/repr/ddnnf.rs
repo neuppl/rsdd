@@ -37,7 +37,7 @@ pub fn create_semantic_hash_map<const P: u128>(num_vars: usize) -> WmcParams<Fin
         map.insert(var, value);
     }
 
-    WmcParams::new_with_default(FiniteField::zero(), FiniteField::one(), map)
+    WmcParams::new(map)
 }
 
 use super::{
@@ -97,24 +97,16 @@ pub trait DDNNFPtr<'a>: Clone + Debug + PartialEq + Eq + Hash + Copy {
     }
 
     fn evaluate(&self, o: &Self::Order, instantations: &[bool]) -> bool {
-        fn gen_bs_mappings(
-            instantations: &[bool],
-        ) -> HashMap<VarLabel, (BooleanSemiring, BooleanSemiring)> {
-            HashMap::from_iter(instantations.iter().enumerate().map(|(index, polarity)| {
-                (
-                    VarLabel::new(index as u64),
-                    (BooleanSemiring(!polarity), BooleanSemiring(*polarity)),
-                )
-            }))
-        }
-
         self.wmc(
             o,
-            &WmcParams::new_with_default(
-                BooleanSemiring::zero(),
-                BooleanSemiring::one(),
-                gen_bs_mappings(instantations),
-            ),
+            &WmcParams::new(HashMap::from_iter(instantations.iter().enumerate().map(
+                |(index, polarity)| {
+                    (
+                        VarLabel::new(index as u64),
+                        (BooleanSemiring(!polarity), BooleanSemiring(*polarity)),
+                    )
+                },
+            ))),
         )
         .0
     }

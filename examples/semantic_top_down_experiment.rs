@@ -12,7 +12,7 @@ use rsdd::{
         bdd::BddPtr, cnf::Cnf, ddnnf::DDNNFPtr, var_label::VarLabel, var_order::VarOrder,
         wmc::WmcParams,
     },
-    util::semirings::{RealSemiring, Semiring},
+    util::semirings::RealSemiring,
 };
 
 use rand::seq::SliceRandom;
@@ -38,7 +38,7 @@ fn diff_by_wmc(num_vars: usize, order: &VarOrder, std_dnnf: BddPtr, sem_dnnf: Bd
                 (RealSemiring(0.3), RealSemiring(0.7)),
             )
         }));
-    let params = WmcParams::new_with_default(RealSemiring::zero(), RealSemiring::one(), weight_map);
+    let params = WmcParams::new(weight_map);
 
     let std_wmc = std_dnnf.wmc(order, &params);
     let sem_wmc = sem_dnnf.wmc(order, &params);

@@ -93,7 +93,7 @@ impl BayesianNetworkCNF {
         BayesianNetworkCNF {
             cnf: Cnf::new(clauses),
             indicators,
-            params: WmcParams::new_with_default(RealSemiring(0.0), RealSemiring(1.0), wmc_params),
+            params: WmcParams::new(wmc_params),
         }
     }
 
