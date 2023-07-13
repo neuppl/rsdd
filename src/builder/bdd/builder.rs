@@ -9,10 +9,9 @@ use crate::repr::model::PartialModel;
 
 use crate::builder::BottomUpBuilder;
 
-pub use crate::builder::cache::LruTable;
-pub use crate::repr::bdd::BddPtr;
-pub use crate::repr::ddnnf::DDNNFPtr;
-pub use crate::repr::var_label::VarLabel;
+use crate::repr::bdd::BddPtr;
+use crate::repr::ddnnf::DDNNFPtr;
+use crate::repr::var_label::VarLabel;
 
 use super::CompiledCNF;
 
@@ -262,7 +261,7 @@ where
 
     /// Produce a new BDD that is the result of conjoining `f` and `g`
     /// ```
-    /// # use rsdd::builder::bdd::robdd::RobddBuilder;
+    /// # use rsdd::builder::bdd::RobddBuilder;
     /// # use rsdd::builder::BottomUpBuilder;
     /// # use rsdd::repr::var_label::VarLabel;
     /// # use rsdd::repr::ddnnf::DDNNFPtr;

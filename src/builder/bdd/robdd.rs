@@ -1,4 +1,4 @@
-use crate::backing_store::bump_table::BackedRobinhoodTable;
+use crate::backing_store::BackedRobinhoodTable;
 use crate::builder::cache::all_app::AllTable;
 use crate::builder::cache::ite::Ite;
 use crate::builder::cache::lru_app::BddApplyTable;
@@ -10,10 +10,10 @@ use crate::backing_store::*;
 use crate::builder::BottomUpBuilder;
 use std::cell::RefCell;
 
-pub use crate::builder::cache::LruTable;
-pub use crate::repr::bdd::BddPtr;
-pub use crate::repr::ddnnf::DDNNFPtr;
-pub use crate::repr::var_label::VarLabel;
+use crate::builder::cache::LruTable;
+use crate::repr::bdd::BddPtr;
+use crate::repr::ddnnf::DDNNFPtr;
+use crate::repr::var_label::VarLabel;
 
 use super::builder::BddBuilder;
 use super::stats::BddBuilderStats;
@@ -286,8 +286,8 @@ mod tests {
     use crate::builder::bdd::builder::BddBuilder;
     use crate::builder::BottomUpBuilder;
     use crate::repr::wmc::WmcParams;
-    use crate::util::semirings::realsemiring::RealSemiring;
-    use crate::util::semirings::semiring_traits::Semiring;
+    use crate::util::semirings::RealSemiring;
+    use crate::util::semirings::Semiring;
     use crate::{builder::cache::all_app::AllTable, repr::ddnnf::DDNNFPtr};
     use maplit::*;
 

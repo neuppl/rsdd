@@ -5,15 +5,14 @@ use std::{collections::HashMap, fs, time::Instant};
 use clap::Parser;
 use rsdd::{
     builder::decision_nnf::{
-        builder::DecisionNNFBuilder, semantic::SemanticDecisionNNFBuilder,
-        standard::StandardDecisionNNFBuilder,
+        DecisionNNFBuilder, SemanticDecisionNNFBuilder, StandardDecisionNNFBuilder,
     },
     constants::primes,
     repr::{
         bdd::BddPtr, cnf::Cnf, ddnnf::DDNNFPtr, var_label::VarLabel, var_order::VarOrder,
         wmc::WmcParams,
     },
-    util::semirings::{realsemiring::RealSemiring, semiring_traits::Semiring},
+    util::semirings::{RealSemiring, Semiring},
 };
 
 use rand::seq::SliceRandom;

@@ -6,9 +6,9 @@ use std::cmp::Ordering;
 use crate::builder::cache::ite::Ite;
 use crate::builder::BottomUpBuilder;
 use crate::repr::ddnnf::DDNNFPtr;
-use crate::repr::sdd::binary_sdd::BinarySDD;
-use crate::repr::sdd::sdd_or::{SddAnd, SddOr};
+use crate::repr::sdd::BinarySDD;
 use crate::repr::sdd::SddPtr::{self, Var};
+use crate::repr::sdd::{SddAnd, SddOr};
 use crate::repr::vtree::{VTree, VTreeIndex, VTreeManager};
 use crate::{repr::cnf::Cnf, repr::logical_expr::LogicalExpr, repr::var_label::VarLabel};
 

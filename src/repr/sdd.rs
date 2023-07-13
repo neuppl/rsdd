@@ -1,24 +1,27 @@
 //! Defines the internal representations for a trimmed and compressed SDD with
 //! complemented edges.
 
-pub mod binary_sdd;
-pub mod sdd_or;
+mod binary_sdd;
+mod sdd_or;
 
 use crate::{
     repr::{
-        ddnnf::DDNNF,
+        ddnnf::{DDNNFPtr, DDNNF},
         var_label::{VarLabel, VarSet},
+        vtree::{VTreeIndex, VTreeManager},
+        wmc::WmcParams,
     },
-    util::semirings::finitefield::FiniteField,
+    util::semirings::FiniteField,
 };
+
 use std::fmt::Debug;
 use std::{collections::HashSet, ptr};
 use SddPtr::*;
 
 use std::hash::Hash;
 
-use self::binary_sdd::BinarySDD;
-use self::sdd_or::{SddAnd, SddNodeIter, SddOr};
+pub use self::binary_sdd::*;
+pub use self::sdd_or::*;
 
 // This type is used a lot. Make sure it doesn't unintentionally get bigger.
 #[derive(Debug, Clone, Eq, Ord, PartialOrd, Copy)]
@@ -59,12 +62,6 @@ impl<'a> PartialEq for SddPtr<'a> {
         }
     }
 }
-
-use super::{
-    bdd::WmcParams,
-    ddnnf::DDNNFPtr,
-    vtree::{VTreeIndex, VTreeManager},
-};
 
 impl<'a> SddPtr<'a> {
     /// performs a semantic hash and caches the result on the node
@@ -478,7 +475,7 @@ fn is_trimmed_trivial() {
 
 #[test]
 fn is_trimmed_simple_demorgan() {
-    use crate::builder::sdd::compression::CompressionSddBuilder;
+    use crate::builder::sdd::CompressionSddBuilder;
     use crate::builder::BottomUpBuilder;
     let builder = CompressionSddBuilder::new(crate::repr::vtree::VTree::even_split(
         &[
@@ -510,7 +507,7 @@ fn is_canonical_trivial() {
 
 #[test]
 fn is_canonical_simple_demorgan() {
-    use crate::builder::sdd::compression::CompressionSddBuilder;
+    use crate::builder::sdd::CompressionSddBuilder;
     use crate::builder::BottomUpBuilder;
     let builder = CompressionSddBuilder::new(crate::repr::vtree::VTree::even_split(
         &[

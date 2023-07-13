@@ -1,13 +1,14 @@
 use std::{cell::RefCell, collections::HashSet};
 
 use crate::{
-    backing_store::bump_table::BackedRobinhoodTable,
-    builder::{
-        bdd::robdd::{BddPtr, DDNNFPtr},
-        decision_nnf::builder::{DecisionNNFBuilder, DecisionNNFBuilderStats},
-    },
+    backing_store::BackedRobinhoodTable,
+    builder::decision_nnf::builder::{DecisionNNFBuilder, DecisionNNFBuilderStats},
     constants::primes,
-    repr::bdd::{create_semantic_hash_map, BddNode, VarOrder},
+    repr::{
+        bdd::{BddNode, BddPtr},
+        ddnnf::{create_semantic_hash_map, DDNNFPtr},
+        var_order::VarOrder,
+    },
 };
 
 use crate::backing_store::UniqueTable;
@@ -71,11 +72,10 @@ impl<'a> StandardDecisionNNFBuilder<'a> {
 mod tests {
 
     use crate::{
-        builder::{
-            bdd::robdd::DDNNFPtr,
-            decision_nnf::{builder::DecisionNNFBuilder, standard::StandardDecisionNNFBuilder},
+        builder::decision_nnf::{
+            builder::DecisionNNFBuilder, standard::StandardDecisionNNFBuilder,
         },
-        repr::{bdd::VarOrder, cnf::Cnf},
+        repr::{cnf::Cnf, ddnnf::DDNNFPtr, var_order::VarOrder},
     };
 
     #[test]

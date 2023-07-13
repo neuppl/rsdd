@@ -4,19 +4,19 @@ extern crate rsgm;
 
 use crate::rsdd::builder::BottomUpBuilder;
 use clap::Parser;
-use rsdd::builder::bdd::builder::BddBuilder;
+use rsdd::builder::bdd::BddBuilder;
 use rsdd::builder::cache::all_app::AllTable;
-use rsdd::builder::decision_nnf::builder::DecisionNNFBuilder;
-use rsdd::builder::decision_nnf::standard::StandardDecisionNNFBuilder;
-use rsdd::builder::sdd::{builder::SddBuilder, compression::CompressionSddBuilder};
+use rsdd::builder::decision_nnf::DecisionNNFBuilder;
+use rsdd::builder::decision_nnf::StandardDecisionNNFBuilder;
+use rsdd::builder::sdd::{CompressionSddBuilder, SddBuilder};
 use rsdd::repr::bdd::BddPtr;
 use rsdd::repr::ddnnf::DDNNFPtr;
 use rsdd::repr::dtree::DTree;
 use rsdd::repr::var_order::VarOrder;
 use rsdd::repr::vtree::VTree;
-use rsdd::util::semirings::realsemiring::RealSemiring;
-use rsdd::util::semirings::semiring_traits::Semiring;
-use rsdd::{builder::bdd::robdd::RobddBuilder, repr::wmc::WmcParams};
+use rsdd::util::semirings::RealSemiring;
+use rsdd::util::semirings::Semiring;
+use rsdd::{builder::bdd::RobddBuilder, repr::wmc::WmcParams};
 
 use std::collections::HashMap;
 use std::time::Instant;

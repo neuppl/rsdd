@@ -3,9 +3,7 @@ extern crate rsdd;
 use clap::Parser;
 use rsdd::{
     builder::{
-        sdd::{
-            builder::SddBuilder, compression::CompressionSddBuilder, semantic::SemanticSddBuilder,
-        },
+        sdd::{CompressionSddBuilder, SddBuilder, SemanticSddBuilder},
         BottomUpBuilder,
     },
     constants::primes,

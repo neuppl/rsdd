@@ -4,16 +4,14 @@
 extern crate rsdd;
 #[macro_use]
 extern crate quickcheck;
-use crate::repr::cnf::Cnf;
-use crate::repr::var_label::VarLabel;
-use rsdd::builder::bdd::builder::BddBuilder;
-use rsdd::builder::bdd::robdd::RobddBuilder;
+use rsdd::builder::bdd::{BddBuilder, RobddBuilder};
 use rsdd::builder::cache::all_app::AllTable;
-use rsdd::builder::sdd::{builder::SddBuilder, compression::CompressionSddBuilder};
+use rsdd::builder::sdd::{CompressionSddBuilder, SddBuilder};
 use rsdd::repr::bdd::BddPtr;
+use rsdd::repr::cnf::Cnf;
+use rsdd::repr::var_label::VarLabel;
 use rsdd::repr::vtree::VTree;
 use rsdd::*;
-extern crate rand;
 
 /// A list of canonical forms in DIMACS form. The goal of these tests is to ensure that caching
 /// and application are working as intended
@@ -313,28 +311,28 @@ fn test_sdd_is_canonical() {
 
 #[cfg(test)]
 mod test_bdd_builder {
-    use crate::repr::cnf::Cnf;
-    use crate::repr::var_label::VarLabel;
-    use crate::rsdd::builder::bdd::builder::BddBuilder;
-    use crate::rsdd::builder::BottomUpBuilder;
     use quickcheck::TestResult;
     use rand::Rng;
+    use rsdd::builder::bdd::BddBuilder;
     use rsdd::builder::cache::all_app::AllTable;
     use rsdd::builder::cache::lru_app::BddApplyTable;
-    use rsdd::builder::decision_nnf::builder::DecisionNNFBuilder;
-    use rsdd::builder::decision_nnf::standard::StandardDecisionNNFBuilder;
-    use rsdd::builder::sdd::builder::SddBuilder;
+    use rsdd::builder::decision_nnf::DecisionNNFBuilder;
+    use rsdd::builder::decision_nnf::StandardDecisionNNFBuilder;
+    use rsdd::builder::sdd::SddBuilder;
+    use rsdd::builder::BottomUpBuilder;
     use rsdd::constants::primes;
     use rsdd::repr::bdd::BddPtr;
+    use rsdd::repr::cnf::Cnf;
     use rsdd::repr::ddnnf::{create_semantic_hash_map, DDNNFPtr};
     use rsdd::repr::dtree::DTree;
     use rsdd::repr::model::PartialModel;
+    use rsdd::repr::var_label::VarLabel;
     use rsdd::repr::var_order::VarOrder;
     use rsdd::repr::vtree::VTree;
     use rsdd::repr::wmc::WmcParams;
-    use rsdd::util::semirings::expectation::ExpectedUtility;
-    use rsdd::util::semirings::realsemiring::RealSemiring;
-    use rsdd::util::semirings::semiring_traits::Semiring;
+    use rsdd::util::semirings::ExpectedUtility;
+    use rsdd::util::semirings::RealSemiring;
+    use rsdd::util::semirings::Semiring;
     use std::collections::HashMap;
     use std::iter::FromIterator;
 
@@ -425,7 +423,7 @@ mod test_bdd_builder {
         fn sdd_semantic_eq_bdd(c1: Cnf, vtree: VTree) -> bool {
             let bdd_builder = super::RobddBuilder::<AllTable<BddPtr>>::new_default_order(c1.num_vars());
             let sdd_builder = super::CompressionSddBuilder::new(vtree);
-            let map : WmcParams<rsdd::util::semirings::finitefield::FiniteField<{primes::U32_SMALL}>>= create_semantic_hash_map(c1.num_vars());
+            let map : WmcParams<rsdd::util::semirings::FiniteField<{primes::U32_SMALL}>>= create_semantic_hash_map(c1.num_vars());
             let bdd = bdd_builder.compile_cnf(&c1);
             let sdd = sdd_builder.compile_cnf(&c1);
             bdd.semantic_hash(bdd_builder.get_order(), &map) == sdd.semantic_hash(sdd_builder.get_vtree_manager(), &map)
@@ -441,7 +439,7 @@ mod test_bdd_builder {
             let vtree = VTree::from_dtree(&dtree).unwrap();
 
             let sdd_builder = super::CompressionSddBuilder::new(vtree);
-            let map : WmcParams<rsdd::util::semirings::finitefield::FiniteField<{primes::U32_SMALL}>>= create_semantic_hash_map(c1.num_vars());
+            let map : WmcParams<rsdd::util::semirings::FiniteField<{primes::U32_SMALL}>>= create_semantic_hash_map(c1.num_vars());
             let bdd = bdd_builder.compile_cnf(&c1);
             let sdd = sdd_builder.compile_cnf(&c1);
             bdd.semantic_hash(bdd_builder.get_order(), &map) == sdd.semantic_hash(sdd_builder.get_vtree_manager(), &map)
@@ -693,28 +691,26 @@ mod test_bdd_builder {
 
 #[cfg(test)]
 mod test_sdd_builder {
-    use crate::builder::bdd::robdd::RobddBuilder;
-    use crate::repr::cnf::Cnf;
-    use crate::repr::var_label::{Literal, VarLabel};
-    use crate::rsdd::builder::bdd::builder::BddBuilder;
-    use crate::rsdd::builder::BottomUpBuilder;
     use quickcheck::{Arbitrary, TestResult};
     use rand::rngs::SmallRng;
     use rand::seq::SliceRandom;
     use rand::SeedableRng;
+    use rsdd::builder::bdd::BddBuilder;
+    use rsdd::builder::bdd::RobddBuilder;
     use rsdd::builder::cache::all_app::AllTable;
-    use rsdd::builder::sdd::{
-        builder::SddBuilder, compression::CompressionSddBuilder, semantic::SemanticSddBuilder,
-    };
+    use rsdd::builder::sdd::{CompressionSddBuilder, SddBuilder, SemanticSddBuilder};
+    use rsdd::builder::BottomUpBuilder;
     use rsdd::constants::primes;
     use rsdd::repr::bdd::BddPtr;
+    use rsdd::repr::cnf::Cnf;
     use rsdd::repr::ddnnf::{create_semantic_hash_map, DDNNFPtr};
     use rsdd::repr::dtree::DTree;
     use rsdd::repr::sdd::SddPtr;
+    use rsdd::repr::var_label::{Literal, VarLabel};
     use rsdd::repr::var_order::VarOrder;
     use rsdd::repr::vtree::VTree;
     use rsdd::repr::wmc::WmcParams;
-    use rsdd::util::semirings::finitefield::FiniteField;
+    use rsdd::util::semirings::FiniteField;
     use std::collections::HashMap;
 
     quickcheck! {
@@ -1114,14 +1110,13 @@ mod test_dnnf_builder {
     use rand::{rngs::SmallRng, seq::SliceRandom, SeedableRng};
     use rsdd::{
         builder::decision_nnf::{
-            builder::DecisionNNFBuilder, semantic::SemanticDecisionNNFBuilder,
-            standard::StandardDecisionNNFBuilder,
+            DecisionNNFBuilder, SemanticDecisionNNFBuilder, StandardDecisionNNFBuilder,
         },
         constants::primes,
         repr::{
             cnf::Cnf, ddnnf::DDNNFPtr, var_label::VarLabel, var_order::VarOrder, wmc::WmcParams,
         },
-        util::semirings::{realsemiring::RealSemiring, semiring_traits::Semiring},
+        util::semirings::{RealSemiring, Semiring},
     };
 
     #[derive(Clone, Debug)]

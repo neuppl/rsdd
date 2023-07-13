@@ -1,7 +1,7 @@
 use core::fmt::Debug;
 use std::collections::HashMap;
 
-use crate::util::semirings::semiring_traits::Semiring;
+use crate::util::semirings::Semiring;
 
 use super::var_label::{Literal, VarLabel};
 

@@ -1,16 +1,16 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
 
-use crate::backing_store::bump_table::BackedRobinhoodTable;
+use crate::backing_store::BackedRobinhoodTable;
 use crate::backing_store::UniqueTable;
 use crate::builder::cache::all_app::AllTable;
 use crate::builder::cache::ite::Ite;
 use crate::builder::cache::LruTable;
 use crate::builder::BottomUpBuilder;
 use crate::repr::ddnnf::DDNNFPtr;
-use crate::repr::sdd::binary_sdd::BinarySDD;
-use crate::repr::sdd::sdd_or::{SddAnd, SddOr};
+use crate::repr::sdd::BinarySDD;
 use crate::repr::sdd::SddPtr;
+use crate::repr::sdd::{SddAnd, SddOr};
 use crate::repr::vtree::{VTree, VTreeIndex, VTreeManager};
 
 use super::builder::{SddBuilder, SddBuilderStats};
@@ -435,7 +435,7 @@ fn sdd_circuit2() {
 #[test]
 fn sdd_wmc1() {
     use crate::repr::var_label::VarLabel;
-    use crate::util::semirings::realsemiring::RealSemiring;
+    use crate::util::semirings::RealSemiring;
     // modeling the formula (x<=>fx) && (y<=>fy), with f weight of 0.5
 
     // let vtree = VTree::right_linear(

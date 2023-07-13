@@ -4,16 +4,15 @@ use std::hash::{Hash, Hasher};
 
 use rustc_hash::FxHasher;
 
-use crate::backing_store::bump_table::BackedRobinhoodTable;
+use crate::backing_store::BackedRobinhoodTable;
 use crate::builder::cache::ite::Ite;
-use crate::repr::bdd::create_semantic_hash_map;
-use crate::repr::ddnnf::DDNNFPtr;
-use crate::repr::sdd::binary_sdd::BinarySDD;
-use crate::repr::sdd::sdd_or::{SddAnd, SddOr};
+use crate::repr::ddnnf::{create_semantic_hash_map, DDNNFPtr};
+use crate::repr::sdd::BinarySDD;
 use crate::repr::sdd::SddPtr;
+use crate::repr::sdd::{SddAnd, SddOr};
 use crate::repr::vtree::{VTree, VTreeIndex, VTreeManager};
 use crate::repr::wmc::WmcParams;
-use crate::util::semirings::finitefield::FiniteField;
+use crate::util::semirings::FiniteField;
 
 use super::builder::{SddBuilder, SddBuilderStats};
 
@@ -236,10 +235,8 @@ impl<'a, const P: u128> SemanticSddBuilder<'a, P> {
 fn prob_equiv_sdd_demorgan() {
     use crate::builder::BottomUpBuilder;
     use crate::constants::primes;
-    use crate::repr::bdd::create_semantic_hash_map;
-    use crate::repr::bdd::WmcParams;
     use crate::repr::var_label::VarLabel;
-    use crate::util::semirings::finitefield::FiniteField;
+    use crate::util::semirings::FiniteField;
 
     let mut builder = SemanticSddBuilder::<{ primes::U32_SMALL }>::new(VTree::even_split(
         &[

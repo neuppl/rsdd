@@ -1,21 +1,24 @@
 //! Binary decision diagram representation
 
-pub use super::{
-    ddnnf::*,
-    model::PartialModel,
-    var_label::{Literal, VarLabel},
-    var_order::VarOrder,
-    wmc::WmcParams,
-};
 use crate::{
-    repr::var_label::VarSet,
-    util::semirings::expectation::ExpectedUtility,
-    util::semirings::semiring_traits::{BBSemiring, JoinSemilattice},
-    util::semirings::{finitefield::FiniteField, realsemiring::RealSemiring},
+    repr::ddnnf::{DDNNFPtr, DDNNF},
+    repr::model::PartialModel,
+    repr::var_label::{Literal, VarLabel, VarSet},
+    repr::var_order::VarOrder,
+    repr::wmc::WmcParams,
+    util::semirings::ExpectedUtility,
+    util::semirings::{BBSemiring, FiniteField, JoinSemilattice, RealSemiring},
 };
 use bit_set::BitSet;
 use core::fmt::Debug;
-use std::{any::Any, cell::RefCell, iter::FromIterator, ptr};
+use std::{
+    any::Any,
+    cell::RefCell,
+    collections::HashMap,
+    hash::{Hash, Hasher},
+    iter::FromIterator,
+    ptr,
+};
 use BddPtr::*;
 
 /// Core BDD pointer datatype
@@ -174,7 +177,10 @@ impl<'a> BddPtr<'a> {
     /// convert a BddPtr into a regular (non-complemented) pointer,
     /// but does not change the underlying node.
     /// ```
-    /// use rsdd::repr::bdd::*;
+    /// use rsdd::repr::{
+    ///     bdd::{BddNode, BddPtr},
+    ///     var_label::VarLabel
+    /// };
     ///
     /// assert_eq!(BddPtr::PtrTrue, BddPtr::PtrTrue.to_reg());
     /// assert_eq!(BddPtr::PtrTrue, BddPtr::PtrFalse.to_reg());
@@ -195,7 +201,11 @@ impl<'a> BddPtr<'a> {
     }
 
     /// ```
-    /// use rsdd::repr::bdd::*;
+    /// use rsdd::repr::{
+    ///     bdd::{BddNode, BddPtr},
+    ///     var_label::VarLabel
+    /// };
+    ///
     /// // this node represents the positive literal 0
     /// let node = BddNode::new(VarLabel::new(0), BddPtr::PtrFalse, BddPtr::PtrTrue);
     ///
@@ -213,7 +223,11 @@ impl<'a> BddPtr<'a> {
     }
 
     /// ```
-    /// use rsdd::repr::bdd::*;
+    /// use rsdd::repr::{
+    ///     bdd::{BddNode, BddPtr},
+    ///     var_label::VarLabel
+    /// };
+    ///
     /// // this node represents the positive literal 0
     /// let node = BddNode::new(VarLabel::new(0), BddPtr::PtrFalse, BddPtr::PtrTrue);
     ///
@@ -231,7 +245,11 @@ impl<'a> BddPtr<'a> {
     }
 
     /// ```
-    /// use rsdd::repr::bdd::*;
+    /// use rsdd::repr::{
+    ///     bdd::{BddNode, BddPtr},
+    ///     var_label::VarLabel
+    /// };
+    ///
     /// // this node represents the positive literal 0
     /// let node = BddNode::new(VarLabel::new(0), BddPtr::PtrFalse, BddPtr::PtrTrue);
     ///
@@ -249,7 +267,11 @@ impl<'a> BddPtr<'a> {
     }
 
     /// ```
-    /// use rsdd::repr::bdd::*;
+    /// use rsdd::repr::{
+    ///     bdd::{BddNode, BddPtr},
+    ///     var_label::VarLabel
+    /// };
+    ///
     /// // this node represents the positive literal 0
     /// let node = BddNode::new(VarLabel::new(0), BddPtr::PtrFalse, BddPtr::PtrTrue);
     ///
@@ -282,7 +304,11 @@ impl<'a> BddPtr<'a> {
 
     /// true if the BddPtr points to a constant (i.e., True or False)
     /// ```
-    /// use rsdd::repr::bdd::*;
+    /// use rsdd::repr::{
+    ///     bdd::{BddNode, BddPtr},
+    ///     var_label::VarLabel
+    /// };
+    ///
     /// assert!(BddPtr::is_const(&BddPtr::PtrTrue));
     /// assert!(BddPtr::is_const(&BddPtr::PtrFalse));
     ///
@@ -1050,10 +1076,6 @@ impl<'a> PartialEq for BddNode<'a> {
     }
 }
 
-use std::{
-    collections::HashMap,
-    hash::{Hash, Hasher},
-};
 impl<'a> Hash for BddNode<'a> {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.var.hash(state);
