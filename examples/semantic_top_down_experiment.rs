@@ -1,5 +1,3 @@
-extern crate rsdd;
-
 use std::{collections::HashMap, fs, time::Instant};
 
 use clap::Parser;

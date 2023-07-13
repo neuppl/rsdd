@@ -715,7 +715,7 @@ impl fmt::Display for Cnf {
 fn test_cnf_wmc() {
     use crate::constants::primes;
     use crate::util::semirings::FiniteField;
-    use maplit::*;
+    use std::collections::HashMap;
 
     let v = vec![vec![
         Literal::new(VarLabel::new(0), true),
@@ -728,9 +728,9 @@ fn test_cnf_wmc() {
             FiniteField<{ primes::U32_TINY }>,
             FiniteField<{ primes::U32_TINY }>,
         ),
-    > = hashmap! {
-        VarLabel::new(0) => (FiniteField::new(1), FiniteField::new(1)),
-        VarLabel::new(1) => (FiniteField::new(1), FiniteField::new(1)),
-    };
+    > = HashMap::from_iter([
+        (VarLabel::new(0), (FiniteField::new(1), FiniteField::new(1))),
+        (VarLabel::new(1), (FiniteField::new(1), FiniteField::new(1))),
+    ]);
     assert_eq!(cnf.wmc(&WmcParams::new(weights)), FiniteField::new(3));
 }

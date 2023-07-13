@@ -1,5 +1,3 @@
-extern crate rsdd;
-
 use clap::Parser;
 use rsdd::builder::bdd::BddBuilder;
 use rsdd::builder::bdd::RobddBuilder;
