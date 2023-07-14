@@ -23,9 +23,13 @@ struct Args {
     #[clap(short, long, value_parser)]
     file: String,
 
-    /// number of variable orders to try. 0 means just do linear
-    #[clap(short, long, value_parser, default_value_t = 0)]
+    /// number of variable orders to try; defaults to 1
+    #[clap(short, long, value_parser, default_value_t = 1)]
     orders: usize,
+
+    /// whether or not a random var order should be used, or the min_fill one. Defaults to min_fill.
+    #[clap(short, long, value_parser)]
+    random_order: bool,
 }
 
 fn diff_by_wmc(num_vars: usize, order: &VarOrder, std_dnnf: BddPtr, sem_dnnf: BddPtr) -> f64 {
@@ -132,23 +136,27 @@ fn main() {
 
     let cnf = Cnf::from_file(cnf_input);
 
-    if args.orders == 0 {
-        let linear_order = VarOrder::linear_order(cnf.num_vars());
-
-        compare_sem_and_std(&cnf, &linear_order);
-        return;
-    }
-
-    let orders = RandomVarOrders::new(&cnf, args.orders);
-
     let mut avg_sem_nodes = 0;
     let mut avg_std_nodes = 0;
 
-    for order in orders {
-        println!("\norder: {}\n", order);
-        let (sem, std) = compare_sem_and_std(&cnf, &order);
-        avg_sem_nodes += sem;
-        avg_std_nodes += std;
+    if args.random_order {
+        println!("generating random variable orders");
+        let orders = RandomVarOrders::new(&cnf, args.orders);
+
+        for order in orders {
+            println!("\norder: {}\n", order);
+            let (sem, std) = compare_sem_and_std(&cnf, &order);
+            avg_sem_nodes += sem;
+            avg_std_nodes += std;
+        }
+    } else {
+        let order = cnf.min_fill_order();
+        println!("using min fill order\n{}", order);
+        for _ in 0..args.orders {
+            let (sem, std) = compare_sem_and_std(&cnf, &order);
+            avg_sem_nodes += sem;
+            avg_std_nodes += std;
+        }
     }
 
     println!("=== AVG, n = {} ===", args.orders);
