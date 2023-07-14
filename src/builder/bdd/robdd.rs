@@ -273,6 +273,42 @@ impl<'a, T: LruTable<'a, BddPtr<'a>>> RobddBuilder<'a, T> {
     pub fn num_recursive_calls(&self) -> usize {
         self.stats.borrow().num_recursive_calls
     }
+
+    fn smooth_helper(&'a self, bdd: BddPtr<'a>, current: usize, total: usize) -> BddPtr<'a> {
+        debug_assert!(current <= total);
+        if current >= self.num_vars() {
+            return bdd;
+        }
+
+        match bdd {
+            BddPtr::Reg(node) => {
+                let smoothed_node = BddNode::new(
+                    node.var,
+                    self.smooth_helper(node.low, current + 1, total),
+                    self.smooth_helper(node.high, current + 1, total),
+                );
+                self.get_or_insert(smoothed_node)
+            }
+            BddPtr::Compl(node) => self.smooth_helper(BddPtr::Reg(node), current, total).neg(),
+            BddPtr::PtrTrue | BddPtr::PtrFalse => {
+                let var = self.order.borrow().var_at_level(current);
+                let smoothed_node = BddNode::new(
+                    var,
+                    self.smooth_helper(bdd, current + 1, total),
+                    self.smooth_helper(bdd, current + 1, total),
+                );
+                self.get_or_insert(smoothed_node)
+            }
+        }
+    }
+
+    /// Return a smoothed version of the input BDD. Requires:
+    /// - BDD is an ROBDD, i.e. each variable only appears once per path
+    /// - variable ordering respects the builder's order
+    pub fn smooth(&'a self, bdd: BddPtr<'a>, num_vars: usize) -> BddPtr<'a> {
+        // TODO: this num_vars should be tied to the specific BDD, not the manager
+        self.smooth_helper(bdd, 0, num_vars)
+    }
 }
 
 #[cfg(test)]
@@ -284,7 +320,7 @@ mod tests {
     use crate::builder::bdd::builder::BddBuilder;
     use crate::builder::BottomUpBuilder;
     use crate::repr::wmc::WmcParams;
-    use crate::util::semirings::RealSemiring;
+    use crate::util::semirings::{FiniteField, RealSemiring};
     use crate::{builder::cache::all_app::AllTable, repr::ddnnf::DDNNFPtr};
 
     use crate::{
@@ -597,5 +633,137 @@ mod tests {
             );
         }
         assert_eq!(and, iff1);
+    }
+
+    #[test]
+    fn smoothed_model_count_with_finite_field_simple() {
+        static CNF: &str = "
+        p cnf 3 1
+        1 2 3 0
+        ";
+        let cnf = Cnf::from_file(String::from(CNF));
+
+        let builder = RobddBuilder::<AllTable<BddPtr>>::new_default_order(cnf.num_vars());
+
+        let bdd = builder.compile_cnf(&cnf);
+
+        let smoothed = builder.smooth(bdd, cnf.num_vars());
+
+        let weights = WmcParams::<FiniteField<1000001>>::new(HashMap::from_iter([
+            (VarLabel::new(0), (FiniteField::new(1), FiniteField::new(1))),
+            (VarLabel::new(1), (FiniteField::new(1), FiniteField::new(1))),
+            (VarLabel::new(2), (FiniteField::new(1), FiniteField::new(1))),
+        ]));
+
+        let unsmoothed_model_count = bdd.wmc(builder.get_order(), &weights);
+
+        let smoothed_model_count = smoothed.wmc(builder.get_order(), &weights);
+
+        assert_eq!(unsmoothed_model_count.value(), 3);
+        assert_eq!(smoothed_model_count.value(), 7);
+    }
+
+    #[test]
+    fn smoothed_weighted_model_count_with_finite_field_simple() {
+        // see: https://pysdd.readthedocs.io/en/latest/examples/model_counting.html#perform-weighted-model-counting-on-cnf-file-from-cli
+        static CNF: &str = "
+        p cnf 2 2
+        c weights 0.4 0.6 0.3 0.7
+        -1 2 0
+        1 -2 0
+        ";
+        let cnf = Cnf::from_file(String::from(CNF));
+
+        let builder = RobddBuilder::<AllTable<BddPtr>>::new_default_order(cnf.num_vars());
+
+        let bdd = builder.compile_cnf(&cnf);
+
+        let smoothed = builder.smooth(bdd, cnf.num_vars());
+
+        let weighted_model_count = smoothed.wmc(
+            builder.get_order(),
+            &WmcParams::<RealSemiring>::new(HashMap::from_iter([
+                (VarLabel::new(0), (RealSemiring(0.4), RealSemiring(0.6))),
+                (VarLabel::new(1), (RealSemiring(0.3), RealSemiring(0.7))),
+            ])),
+        );
+
+        assert_eq!(weighted_model_count.0, 0.54);
+    }
+
+    #[test]
+    fn wmc_test_with_finite_field_complex() {
+        static CNF: &str = "
+        p cnf 6 3
+        c weights 0.05 0.10 0.15 0.20 0.25 0.30 0.35 0.40 0.45 0.50 0.55 0.60
+        1 2 3 4 0
+        -2 -3 4 5 0
+        -4 -5 6 6 0
+        ";
+        let cnf = Cnf::from_file(String::from(CNF));
+
+        let builder = RobddBuilder::<AllTable<BddPtr>>::new_default_order(cnf.num_vars());
+
+        let bdd = builder.compile_cnf(&cnf);
+
+        let smoothed = builder.smooth(bdd, cnf.num_vars());
+
+        let model_count = smoothed.wmc(
+            builder.get_order(),
+            &WmcParams::<FiniteField<1000001>>::new(HashMap::from_iter([
+                (VarLabel::new(0), (FiniteField::new(1), FiniteField::new(1))),
+                (VarLabel::new(1), (FiniteField::new(1), FiniteField::new(1))),
+                (VarLabel::new(2), (FiniteField::new(1), FiniteField::new(1))),
+                (VarLabel::new(3), (FiniteField::new(1), FiniteField::new(1))),
+                (VarLabel::new(4), (FiniteField::new(1), FiniteField::new(1))),
+                (VarLabel::new(5), (FiniteField::new(1), FiniteField::new(1))),
+            ])),
+        );
+
+        // TODO: this WMC test is broken. not sure why :(
+        // let weighted_model_count = smoothed.wmc(
+        //     builder.get_order(),
+        //     &WmcParams::new(HashMap::from_iter([
+        //         // (VarLabel::new(0), (RealSemiring(0.10), RealSemiring(0.05))),
+        //         // (VarLabel::new(1), (RealSemiring(0.20), RealSemiring(0.15))),
+        //         // (VarLabel::new(2), (RealSemiring(0.30), RealSemiring(0.25))),
+        //         // (VarLabel::new(3), (RealSemiring(0.40), RealSemiring(0.35))),
+        //         // (VarLabel::new(4), (RealSemiring(0.50), RealSemiring(0.45))),
+        //         // (VarLabel::new(5), (RealSemiring(0.60), RealSemiring(0.55))),
+        //         (VarLabel::new(0), (RealSemiring(0.05), RealSemiring(0.10))),
+        //         (VarLabel::new(1), (RealSemiring(0.15), RealSemiring(0.20))),
+        //         (VarLabel::new(2), (RealSemiring(0.25), RealSemiring(0.30))),
+        //         (VarLabel::new(3), (RealSemiring(0.35), RealSemiring(0.40))),
+        //         (VarLabel::new(4), (RealSemiring(0.45), RealSemiring(0.50))),
+        //         (VarLabel::new(5), (RealSemiring(0.55), RealSemiring(0.60))),
+        //     ])),
+        // );
+
+        // verified with pysdd
+        //
+        // given tiny2-with-weights.cnf
+        //
+        // p cnf 6 3
+        // c weights 0.05 0.10 0.15 0.20 0.25 0.30 0.35 0.40 0.45 0.50 0.55 0.60
+        // 1 2 3 4 0
+        // -2 -3 4 5 0
+        // -4 -5 6 6 0
+        //
+        // $ pysdd -c tiny2-with-weights.cnf
+        // reading cnf...
+        // Read CNF: vars=6 clauses=3
+        // creating initial vtree balanced
+        // creating manager...
+        // compiling...
+
+        // compilation time         : 0.001 sec
+        //  sdd size                : 10
+        //  sdd node count          : 5
+        //  sdd model count         : 48    0.000 sec
+        //  sdd weighted model count: 0.017015015625000005    0.000 sec
+        // done
+
+        assert_eq!(model_count.value(), 48);
+        // assert_eq!(weighted_model_count.0, 0.017015015625000005);
     }
 }

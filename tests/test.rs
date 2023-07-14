@@ -314,6 +314,7 @@ mod test_bdd_builder {
     use quickcheck::TestResult;
     use rand::Rng;
     use rsdd::builder::bdd::BddBuilder;
+    use rsdd::builder::bdd::RobddBuilder;
     use rsdd::builder::cache::all_app::AllTable;
     use rsdd::builder::cache::lru_app::BddApplyTable;
     use rsdd::builder::decision_nnf::DecisionNNFBuilder;
@@ -685,6 +686,22 @@ mod test_bdd_builder {
             }
 
             TestResult::from_bool(pr_check1 && pr_check2 && pm_check)
+        }
+    }
+
+    quickcheck! {
+        fn smooth_and_unsmooth_bdd_agree(cnf: Cnf) -> bool {
+            let builder = RobddBuilder::<AllTable<BddPtr>>::new_default_order(cnf.num_vars());
+
+            let bdd = builder.compile_cnf(&cnf);
+
+            let smoothed = builder.smooth(bdd, cnf.num_vars());
+
+            // while it's not true that smooth and unsmooth wmc are the same generally,
+            // they are with the property that pos_weight + neg_weight = 1
+            let map = create_semantic_hash_map::<{primes::U32_SMALL}>(cnf.num_vars());
+
+            bdd.semantic_hash(builder.get_order(), &map) == smoothed.semantic_hash(builder.get_order(), &map)
         }
     }
 }
