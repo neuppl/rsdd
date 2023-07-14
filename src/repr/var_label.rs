@@ -41,14 +41,12 @@ BITFIELD!(Literal data : u64 [
 ]);
 
 impl Literal {
-    pub fn get_label(&self) -> VarLabel {
-        VarLabel(self.label())
-    }
-
-    pub fn get_polarity(&self) -> bool {
-        self.polarity() == 1
-    }
-
+    /// create a new Literal, which is a logical variable initialized with a polarity.
+    /// ```
+    /// use rsdd::repr::var_label::{Literal, VarLabel};
+    ///
+    /// let lit = Literal::new(VarLabel::new(0), true);
+    /// ```
     pub fn new(label: VarLabel, polarity: bool) -> Literal {
         let mut ret = Literal { data: 0 };
         ret.set_label(label.0);
@@ -56,14 +54,62 @@ impl Literal {
         ret
     }
 
+    /// ```
+    /// use rsdd::repr::var_label::{Literal, VarLabel};
+    ///
+    /// let lit = Literal::new(VarLabel::new(0), true);
+    ///
+    /// assert_eq!(lit.get_label(), VarLabel::new(0))
+    /// ```
+    pub fn get_label(&self) -> VarLabel {
+        VarLabel(self.label())
+    }
+
+    /// ```
+    /// use rsdd::repr::var_label::{Literal, VarLabel};
+    ///
+    /// let lit1 = Literal::new(VarLabel::new(0), true);
+    /// let lit2 = Literal::new(VarLabel::new(0), false);
+    ///
+    /// assert!(lit1.get_polarity());
+    /// assert!(!lit2.get_polarity());
+    /// ```
+    pub fn get_polarity(&self) -> bool {
+        self.polarity() == 1
+    }
+
+    /// ```
+    /// use rsdd::repr::var_label::{Literal, VarLabel};
+    ///
+    /// let lit1 = Literal::new(VarLabel::new(0), true);
+    /// let lit2 = Literal::new(VarLabel::new(0), true);
+    ///
+    /// assert!(lit1.implies_true(&lit2));
+    /// ```
     pub fn implies_true(&self, other: &Literal) -> bool {
         self.get_label() == other.get_label() && self.get_polarity() == other.get_polarity()
     }
 
+    /// ```
+    /// use rsdd::repr::var_label::{Literal, VarLabel};
+    ///
+    /// let lit1 = Literal::new(VarLabel::new(0), true);
+    /// let lit2 = Literal::new(VarLabel::new(0), false);
+    ///
+    /// assert!(lit1.implies_false(&lit2));
+    /// ```
     pub fn implies_false(&self, other: &Literal) -> bool {
         self.get_label() == other.get_label() && self.get_polarity() != other.get_polarity()
     }
 
+    /// ```
+    /// use rsdd::repr::var_label::{Literal, VarLabel};
+    ///
+    /// let lit1 = Literal::new(VarLabel::new(0), true);
+    /// let lit2 = Literal::new(VarLabel::new(0), false);
+    ///
+    /// assert_eq!(lit1.negated(), lit2);
+    /// ```
     pub fn negated(&self) -> Literal {
         Literal::new(self.get_label(), !self.get_polarity())
     }
@@ -107,6 +153,14 @@ impl Display for VarSet {
 }
 
 impl VarSet {
+    /// create a new VarSet with no items in it
+    /// ```
+    /// use rsdd::repr::var_label::VarSet;
+    ///
+    /// let s = VarSet::new();
+    ///
+    /// assert!(s.is_empty());
+    /// ```
     pub fn new() -> VarSet {
         VarSet { b: BitSet::new() }
     }
@@ -118,33 +172,103 @@ impl VarSet {
     }
 
     /// unions self with other in-place
+    /// ```
+    /// use rsdd::repr::var_label::{VarLabel, VarSet};
+    ///
+    /// let mut s1 = VarSet::new();
+    /// let mut s2 = VarSet::new();
+    ///
+    /// s1.insert(VarLabel::new(0));
+    /// s2.insert(VarLabel::new(0));
+    /// s2.insert(VarLabel::new(1));
+    ///
+    /// s1.union_with(&s2);
+    ///
+    /// assert!(s1.len() == 2);
+    /// assert!(s1.contains(VarLabel::new(0)));
+    /// assert!(s1.contains(VarLabel::new(1)));
+    /// ```
     pub fn union_with(&mut self, other: &VarSet) {
         self.b.union_with(&other.b);
     }
 
-    /// unions self with other in-place
+    /// iterate over items in varset
     pub fn iter(&self) -> impl Iterator<Item = VarLabel> + '_ {
         self.b.iter().map(VarLabel::new_usize)
     }
 
-    /// unions self with other
+    /// unions self with other, returning a new VarSet
+    /// ```
+    /// use rsdd::repr::var_label::{VarLabel, VarSet};
+    ///
+    /// let mut s1 = VarSet::new();
+    /// let mut s2 = VarSet::new();
+    ///
+    /// s1.insert(VarLabel::new(0));
+    /// s2.insert(VarLabel::new(0));
+    /// s2.insert(VarLabel::new(1));
+    ///
+    /// let s3 = s1.union(&s2);
+    ///
+    /// assert!(s3.len() == 2);
+    /// assert!(s3.contains(VarLabel::new(0)));
+    /// assert!(s3.contains(VarLabel::new(1)));
+    /// ```
     pub fn union(&self, other: &VarSet) -> VarSet {
         VarSet {
             b: self.b.union(&other.b).collect(),
         }
     }
 
-    /// returns self \ other, where "\"" is the "set minus" operator
+    /// returns a new VarSet = self \ other, where "\"" is the "set minus" operator
+    /// ```
+    /// use rsdd::repr::var_label::{VarLabel, VarSet};
+    ///
+    /// let mut s1 = VarSet::new();
+    /// let mut s2 = VarSet::new();
+    ///
+    /// s1.insert(VarLabel::new(0));
+    /// s2.insert(VarLabel::new(0));
+    /// s2.insert(VarLabel::new(1));
+    ///
+    /// let s3 = s2.minus(&s1);
+    ///
+    /// assert!(s3.len() == 1);
+    /// assert!(!s3.contains(VarLabel::new(0)));
+    /// assert!(s3.contains(VarLabel::new(1)));
+    /// ```
     pub fn minus(&self, other: &VarSet) -> VarSet {
         VarSet {
             b: self.b.difference(&other.b).collect(),
         }
     }
 
+    /// ```
+    /// use rsdd::repr::var_label::{VarLabel, VarSet};
+    ///
+    /// let mut s1 = VarSet::new();
+    ///
+    /// assert!(!s1.contains(VarLabel::new(0)));
+    ///
+    /// s1.insert(VarLabel::new(0));
+    ///
+    /// assert!(s1.contains(VarLabel::new(0)));
+    /// ```
     pub fn insert(&mut self, v: VarLabel) {
         self.b.insert(v.value_usize());
     }
 
+    /// ```
+    /// use rsdd::repr::var_label::{VarLabel, VarSet};
+    ///
+    /// let mut s1 = VarSet::new();
+    ///
+    /// assert!(!s1.contains(VarLabel::new(0)));
+    ///
+    /// s1.insert(VarLabel::new(0));
+    ///
+    /// assert!(s1.contains(VarLabel::new(0)));
+    /// ```
     pub fn contains(&self, v: VarLabel) -> bool {
         self.b.contains(v.value_usize())
     }
@@ -167,6 +291,13 @@ impl VarSet {
         };
     }
 
+    /// ```
+    /// use rsdd::repr::var_label::VarSet;
+    ///
+    /// let s = VarSet::new();
+    ///
+    /// assert!(s.is_empty());
+    /// ```
     pub fn is_empty(&self) -> bool {
         self.b.is_empty()
     }
