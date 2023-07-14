@@ -1,19 +1,17 @@
-use std::{
-    any::Any,
-    cell::RefCell,
-    hash::{Hash, Hasher},
-};
-
 use crate::{
     repr::{
+        sdd::SddPtr,
         var_label::VarLabel,
         vtree::{VTreeIndex, VTreeManager},
         wmc::WmcParams,
     },
     util::semirings::FiniteField,
 };
-
-use super::SddPtr;
+use std::{
+    any::Any,
+    cell::RefCell,
+    hash::{Hash, Hasher},
+};
 
 /// Specialized SDD node for a right-linear sub-vtree
 /// SDDs for these fragments are binary decisions

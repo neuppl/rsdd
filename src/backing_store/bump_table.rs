@@ -1,13 +1,13 @@
 //! A unique table based on a bump allocator and robin-hood hashing
 //! this is the primary unique table for storing all nodes
 
-use super::UniqueTable;
+use crate::{backing_store::UniqueTable, util::*};
 use bumpalo::Bump;
 use rustc_hash::FxHasher;
-use std::hash::{Hash, Hasher};
-use std::mem;
-
-use crate::util::*;
+use std::{
+    hash::{Hash, Hasher},
+    mem,
+};
 
 /// The load factor of the table, i.e. how full the table will be when it
 /// automatically resizes

@@ -1,10 +1,9 @@
+use crate::{
+    repr::var_label::{Literal, VarLabel},
+    util::semirings::Semiring,
+};
 use core::fmt::Debug;
 use std::collections::HashMap;
-
-use crate::util::semirings::Semiring;
-
-use super::var_label::{Literal, VarLabel};
-
 /// Weighted model counting parameters for a BDD. It primarily is a storage for
 /// the weight on each variable.
 #[derive(Clone)]

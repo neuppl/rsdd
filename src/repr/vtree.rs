@@ -1,16 +1,17 @@
 //! Defines the vtree datastructure used by SDDs for decomposition
 
-use std::collections::HashSet;
-
-use super::var_label::VarSet;
-use super::{sdd::SddPtr, var_label::VarLabel};
-use crate::quickcheck::{Arbitrary, Gen};
-use crate::repr::dtree::DTree;
-use crate::util::btree::{BTree, LeastCommonAncestor};
-use rand::rngs::SmallRng;
-use rand::seq::SliceRandom;
-use rand::{Rng, SeedableRng};
+use crate::{
+    repr::{
+        dtree::DTree,
+        sdd::SddPtr,
+        var_label::{VarLabel, VarSet},
+    },
+    util::btree::{BTree, LeastCommonAncestor},
+};
+use quickcheck::{Arbitrary, Gen};
+use rand::{rngs::SmallRng, seq::SliceRandom, Rng, SeedableRng};
 use rand_chacha::ChaCha8Rng;
+use std::collections::HashSet;
 
 pub type VTree = BTree<(), VarLabel>;
 

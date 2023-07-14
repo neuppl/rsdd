@@ -22,7 +22,7 @@
 //! Then, if we were to hash this CNF with the partial model (a = T), would
 //! get the value 7
 
-use super::{
+use crate::repr::{
     cnf::Cnf,
     model::PartialModel,
     var_label::{Literal, VarLabel},

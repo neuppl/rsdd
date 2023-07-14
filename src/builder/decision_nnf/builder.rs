@@ -7,12 +7,10 @@ use crate::{
         cnf::Cnf,
         ddnnf::DDNNFPtr,
         unit_prop::{DecisionResult, SATSolver},
-        var_label::Literal,
+        var_label::{Literal, VarLabel},
         var_order::VarOrder,
     },
 };
-
-use crate::repr::var_label::VarLabel;
 
 pub struct DecisionNNFBuilderStats {
     pub num_nodes_alloc: usize,

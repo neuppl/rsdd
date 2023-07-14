@@ -1,11 +1,15 @@
 //! Implementing of a generic decision decomposable deterministic negation normal form
 //! (d-DNNF) pointer type
-use core::fmt::Debug;
-
-use crate::util::semirings::Semiring;
-use crate::util::semirings::{BooleanSemiring, FiniteField};
+use crate::{
+    repr::{
+        var_label::{VarLabel, VarSet},
+        wmc::WmcParams,
+    },
+    util::semirings::{BooleanSemiring, FiniteField, Semiring},
+};
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha8Rng;
+use std::{collections::HashMap, fmt::Debug, hash::Hash};
 
 /// creates a weighting that can be used for semantically hashing a DDNNF node
 /// the constant `P` denotes the size of the field over which the semantic hash will
@@ -40,11 +44,6 @@ pub fn create_semantic_hash_map<const P: u128>(num_vars: usize) -> WmcParams<Fin
     WmcParams::new(map)
 }
 
-use super::{
-    var_label::{VarLabel, VarSet},
-    wmc::WmcParams,
-};
-use std::{collections::HashMap, hash::Hash};
 /// A base d-DNNF type
 pub enum DDNNF<T> {
     /// contains the cached values for the children, and the VarSet that

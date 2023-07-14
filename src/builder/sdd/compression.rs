@@ -1,19 +1,17 @@
-use std::cell::RefCell;
-use std::collections::HashMap;
-
-use crate::backing_store::BackedRobinhoodTable;
-use crate::backing_store::UniqueTable;
-use crate::builder::cache::all_app::AllTable;
-use crate::builder::cache::ite::Ite;
-use crate::builder::cache::LruTable;
-use crate::builder::BottomUpBuilder;
-use crate::repr::ddnnf::DDNNFPtr;
-use crate::repr::sdd::BinarySDD;
-use crate::repr::sdd::SddPtr;
-use crate::repr::sdd::{SddAnd, SddOr};
-use crate::repr::vtree::{VTree, VTreeIndex, VTreeManager};
-
-use super::builder::{SddBuilder, SddBuilderStats};
+use crate::{
+    backing_store::{BackedRobinhoodTable, UniqueTable},
+    builder::{
+        cache::{all_app::AllTable, ite::Ite, LruTable},
+        sdd::{SddBuilder, SddBuilderStats},
+        BottomUpBuilder,
+    },
+    repr::{
+        ddnnf::DDNNFPtr,
+        sdd::{BinarySDD, SddAnd, SddOr, SddPtr},
+        vtree::{VTree, VTreeIndex, VTreeManager},
+    },
+};
+use std::{cell::RefCell, collections::HashMap};
 
 pub struct CompressionSddBuilder<'a> {
     vtree: VTreeManager,

@@ -2,12 +2,11 @@
 //! in the order occur first in the BDD, starting from the root.
 //! Lower numbers occur first in the order (i.e., closer to the root)
 
-use crate::repr::var_label::VarLabel;
-use crate::util;
-use std::fmt::Display;
-use std::slice::Iter;
-
-use super::bdd::BddPtr;
+use crate::{
+    repr::{bdd::BddPtr, var_label::VarLabel},
+    util,
+};
+use std::{fmt::Display, slice::Iter};
 
 #[derive(Debug, Clone)]
 pub struct VarOrder {

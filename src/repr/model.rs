@@ -1,8 +1,7 @@
 //! Models and partial models of logical sentences
 
+use crate::repr::var_label::{Literal, VarLabel, VarSet};
 use std::fmt::Display;
-
-use super::var_label::{Literal, VarLabel, VarSet};
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct PartialModel {

@@ -1,16 +1,18 @@
 //! The main trait of the SDD manager, the primary way of interacting
 //! with SDDs.
 
+use crate::{
+    builder::{cache::ite::Ite, BottomUpBuilder},
+    repr::{
+        cnf::Cnf,
+        ddnnf::DDNNFPtr,
+        logical_expr::LogicalExpr,
+        sdd::{BinarySDD, SddAnd, SddOr, SddPtr},
+        var_label::VarLabel,
+        vtree::{VTree, VTreeIndex, VTreeManager},
+    },
+};
 use std::cmp::Ordering;
-
-use crate::builder::cache::ite::Ite;
-use crate::builder::BottomUpBuilder;
-use crate::repr::ddnnf::DDNNFPtr;
-use crate::repr::sdd::BinarySDD;
-use crate::repr::sdd::SddPtr::{self, Var};
-use crate::repr::sdd::{SddAnd, SddOr};
-use crate::repr::vtree::{VTree, VTreeIndex, VTreeManager};
-use crate::{repr::cnf::Cnf, repr::logical_expr::LogicalExpr, repr::var_label::VarLabel};
 
 #[derive(Default)]
 pub struct SddBuilderStats {
@@ -118,8 +120,8 @@ pub trait SddBuilder<'a>: BottomUpBuilder<'a, SddPtr<'a>> {
         if self.get_vtree_manager().get_idx(lca).is_right_linear() {
             // a is a right-linear decision for b; construct a binary decision
             let bdd = match a {
-                Var(label, true) => BinarySDD::new(label, SddPtr::false_ptr(), b, lca),
-                Var(label, false) => BinarySDD::new(label, b, SddPtr::false_ptr(), lca),
+                SddPtr::Var(label, true) => BinarySDD::new(label, SddPtr::false_ptr(), b, lca),
+                SddPtr::Var(label, false) => BinarySDD::new(label, b, SddPtr::false_ptr(), lca),
                 _ => panic!(
                     "Assumed that a is a right-linear decision for b, but a is not a variable"
                 ),

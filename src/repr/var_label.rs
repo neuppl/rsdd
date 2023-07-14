@@ -1,11 +1,8 @@
 //! A generic data structure for tracking variable labels throughout the library
+use bit_set::BitSet;
+use quickcheck::{Arbitrary, Gen};
 use serde::Serialize;
 use std::fmt::{self, Display};
-
-extern crate quickcheck;
-use bit_set::BitSet;
-
-use self::quickcheck::{Arbitrary, Gen};
 
 /// a label for each distinct variable in the BDD
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Hash, Copy, PartialOrd, Ord)]

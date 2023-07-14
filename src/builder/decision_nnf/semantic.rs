@@ -1,11 +1,3 @@
-use std::{
-    cell::RefCell,
-    collections::HashSet,
-    hash::{Hash, Hasher},
-};
-
-use rustc_hash::FxHasher;
-
 use crate::{
     backing_store::BackedRobinhoodTable,
     builder::decision_nnf::builder::{DecisionNNFBuilder, DecisionNNFBuilderStats},
@@ -16,6 +8,12 @@ use crate::{
         wmc::WmcParams,
     },
     util::semirings::FiniteField,
+};
+use rustc_hash::FxHasher;
+use std::{
+    cell::RefCell,
+    collections::HashSet,
+    hash::{Hash, Hasher},
 };
 
 pub struct SemanticDecisionNNFBuilder<'a, const P: u128> {
