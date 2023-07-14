@@ -1,22 +1,19 @@
-use crate::backing_store::BackedRobinhoodTable;
-use crate::builder::cache::all_app::AllTable;
-use crate::builder::cache::ite::Ite;
-use crate::builder::cache::lru_app::BddApplyTable;
-use crate::repr::bdd::BddNode;
-use crate::repr::model::PartialModel;
-use crate::repr::var_order::VarOrder;
-
-use crate::backing_store::*;
-use crate::builder::BottomUpBuilder;
+use crate::{
+    backing_store::{BackedRobinhoodTable, UniqueTable},
+    builder::{
+        bdd::{BddBuilder, BddBuilderStats},
+        cache::{all_app::AllTable, ite::Ite, lru_app::BddApplyTable, LruTable},
+        BottomUpBuilder,
+    },
+    repr::{
+        bdd::{BddNode, BddPtr},
+        ddnnf::DDNNFPtr,
+        model::PartialModel,
+        var_label::VarLabel,
+        var_order::VarOrder,
+    },
+};
 use std::cell::RefCell;
-
-use crate::builder::cache::LruTable;
-use crate::repr::bdd::BddPtr;
-use crate::repr::ddnnf::DDNNFPtr;
-use crate::repr::var_label::VarLabel;
-
-use super::builder::BddBuilder;
-use super::stats::BddBuilderStats;
 
 pub struct RobddBuilder<'a, T: LruTable<'a, BddPtr<'a>>> {
     compute_table: RefCell<BackedRobinhoodTable<'a, BddNode<'a>>>,

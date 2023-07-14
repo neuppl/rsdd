@@ -1,18 +1,16 @@
-use std::{
-    any::Any,
-    cell::RefCell,
-    hash::{Hash, Hasher},
-};
-
 use crate::{
     repr::{
+        sdd::SddPtr::{self, Compl, ComplBDD, PtrFalse, PtrTrue, Reg, Var, BDD},
         vtree::{VTreeIndex, VTreeManager},
         wmc::WmcParams,
     },
     util::semirings::FiniteField,
 };
-
-use super::SddPtr::{self, Compl, ComplBDD, PtrFalse, PtrTrue, Reg, Var, BDD};
+use std::{
+    any::Any,
+    cell::RefCell,
+    hash::{Hash, Hasher},
+};
 
 /// An SddOr node is a vector of (prime, sub) pairs.
 #[derive(Debug)]

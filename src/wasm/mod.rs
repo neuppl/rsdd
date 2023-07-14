@@ -1,17 +1,17 @@
-use crate::builder::bdd::BddBuilder;
-use crate::builder::bdd::RobddBuilder;
-use crate::builder::cache::lru_app::BddApplyTable;
-use crate::builder::sdd::CompressionSddBuilder;
-use crate::builder::sdd::SddBuilder;
-use crate::constants::primes;
-use crate::repr::bdd::BddPtr;
-use crate::repr::ddnnf::DDNNFPtr;
-use crate::repr::dtree::DTree;
-use crate::repr::var_order::VarOrder;
-use crate::repr::wmc::WmcParams;
-use crate::repr::{cnf::Cnf, var_label::VarLabel, vtree::VTree};
-use crate::serialize::{BDDSerializer, SDDSerializer, VTreeSerializer};
-use crate::util::semirings::FiniteField;
+use crate::{
+    builder::{
+        bdd::{BddBuilder, RobddBuilder},
+        cache::lru_app::BddApplyTable,
+        sdd::{CompressionSddBuilder, SddBuilder},
+    },
+    constants::primes,
+    repr::{
+        bdd::BddPtr, cnf::Cnf, ddnnf::DDNNFPtr, dtree::DTree, var_label::VarLabel,
+        var_order::VarOrder, vtree::VTree, wmc::WmcParams,
+    },
+    serialize::{BDDSerializer, SDDSerializer, VTreeSerializer},
+    util::semirings::FiniteField,
+};
 use wasm_bindgen::prelude::*;
 
 #[derive(Serialize, Deserialize)]
@@ -49,7 +49,8 @@ pub fn vtree(cnf_input: String, vtree_type_input: JsValue) -> Result<JsValue, Js
 pub fn bdd(cnf_input: String) -> String {
     let cnf = Cnf::from_file(cnf_input);
 
-    let builder = RobddBuilder::<BddApplyTable<BddPtr>>::new_default_order_lru(cnf.num_vars());
+    let builder: RobddBuilder<'_, BddApplyTable<BddPtr<'_>>> =
+        RobddBuilder::<BddApplyTable<BddPtr>>::new_default_order_lru(cnf.num_vars());
     let bdd = builder.compile_cnf(&cnf);
 
     let json = BDDSerializer::from_bdd(bdd);

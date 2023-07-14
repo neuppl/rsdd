@@ -1,7 +1,5 @@
-use std::{cell::RefCell, collections::HashSet};
-
 use crate::{
-    backing_store::BackedRobinhoodTable,
+    backing_store::{BackedRobinhoodTable, UniqueTable},
     builder::decision_nnf::builder::{DecisionNNFBuilder, DecisionNNFBuilderStats},
     constants::primes,
     repr::{
@@ -10,8 +8,7 @@ use crate::{
         var_order::VarOrder,
     },
 };
-
-use crate::backing_store::UniqueTable;
+use std::{cell::RefCell, collections::HashSet};
 
 pub struct StandardDecisionNNFBuilder<'a> {
     compute_table: RefCell<BackedRobinhoodTable<'a, BddNode<'a>>>,

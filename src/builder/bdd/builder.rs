@@ -1,19 +1,16 @@
-use std::cmp::Ordering;
-use std::collections::BinaryHeap;
-
-use crate::plan::bdd_plan::BddPlan;
-use crate::repr::bdd::BddNode;
-use crate::repr::cnf::Cnf;
-use crate::repr::logical_expr::LogicalExpr;
-use crate::repr::model::PartialModel;
-
-use crate::builder::BottomUpBuilder;
-
-use crate::repr::bdd::BddPtr;
-use crate::repr::ddnnf::DDNNFPtr;
-use crate::repr::var_label::VarLabel;
-
-use super::CompiledCNF;
+use crate::{
+    builder::{bdd::CompiledCNF, BottomUpBuilder},
+    plan::bdd_plan::BddPlan,
+    repr::{
+        bdd::{BddNode, BddPtr},
+        cnf::Cnf,
+        ddnnf::DDNNFPtr,
+        logical_expr::LogicalExpr,
+        model::PartialModel,
+        var_label::VarLabel,
+    },
+};
+use std::{cmp::Ordering, collections::BinaryHeap};
 
 pub trait BddBuilder<'a>: BottomUpBuilder<'a, BddPtr<'a>> {
     fn less_than(&self, a: VarLabel, b: VarLabel) -> bool;

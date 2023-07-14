@@ -1,8 +1,7 @@
 //! A generic lossy LRU cache
 //! will automatically grow in size if it hits a certain size threshold
 
-use std::fmt::Debug;
-use std::hash::Hash;
+use std::{fmt::Debug, hash::Hash};
 
 // if the LRU is GROW_RATIO% full, it will double in size on insertion
 const GROW_RATIO: f64 = 0.7;

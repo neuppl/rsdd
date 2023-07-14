@@ -1,8 +1,5 @@
-use crate::repr::cnf::Cnf;
-use crate::repr::var_label::VarLabel;
-use core::fmt::Debug;
-use core::hash::Hash;
-
+use crate::repr::{cnf::Cnf, var_label::VarLabel};
+use core::{fmt::Debug, hash::Hash};
 use std::collections::{HashMap, HashSet};
 
 #[derive(Clone, Debug)]

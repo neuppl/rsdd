@@ -1,6 +1,5 @@
-use std::cmp::Ordering;
-
 use crate::repr::{bdd::BddPtr, var_label::VarLabel};
+use std::cmp::Ordering;
 
 mod builder;
 mod robdd;

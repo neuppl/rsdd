@@ -2,9 +2,7 @@
 
 use crate::repr::var_label::VarLabel;
 use dimacs::*;
-use rand;
-use rand::rngs::ThreadRng;
-use rand::Rng;
+use rand::{self, rngs::ThreadRng, Rng};
 use std::collections::HashMap;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

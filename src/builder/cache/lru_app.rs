@@ -1,9 +1,11 @@
 //! Apply cache for ITEs that uses a dynamically-expanding LRU cache
-use crate::{repr::ddnnf::DDNNFPtr, util::lru::*};
+use crate::{
+    builder::cache::{ite::Ite, LruTable},
+    repr::ddnnf::DDNNFPtr,
+    util::lru::*,
+};
 use rustc_hash::FxHasher;
 use std::hash::{Hash, Hasher};
-
-use super::{ite::Ite, LruTable};
 
 const INITIAL_CAPACITY: usize = 16; // given as a power of two
 

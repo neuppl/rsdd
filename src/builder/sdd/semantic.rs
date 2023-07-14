@@ -1,20 +1,23 @@
-use std::cell::RefCell;
-use std::collections::{HashMap, HashSet};
-use std::hash::{Hash, Hasher};
-
+use crate::{
+    backing_store::BackedRobinhoodTable,
+    builder::{
+        cache::ite::Ite,
+        sdd::{SddBuilder, SddBuilderStats},
+    },
+    repr::{
+        ddnnf::{create_semantic_hash_map, DDNNFPtr},
+        sdd::{BinarySDD, SddAnd, SddOr, SddPtr},
+        vtree::{VTree, VTreeIndex, VTreeManager},
+        wmc::WmcParams,
+    },
+    util::semirings::FiniteField,
+};
 use rustc_hash::FxHasher;
-
-use crate::backing_store::BackedRobinhoodTable;
-use crate::builder::cache::ite::Ite;
-use crate::repr::ddnnf::{create_semantic_hash_map, DDNNFPtr};
-use crate::repr::sdd::BinarySDD;
-use crate::repr::sdd::SddPtr;
-use crate::repr::sdd::{SddAnd, SddOr};
-use crate::repr::vtree::{VTree, VTreeIndex, VTreeManager};
-use crate::repr::wmc::WmcParams;
-use crate::util::semirings::FiniteField;
-
-use super::builder::{SddBuilder, SddBuilderStats};
+use std::{
+    cell::RefCell,
+    collections::{HashMap, HashSet},
+    hash::{Hash, Hasher},
+};
 
 pub struct SemanticSddBuilder<'a, const P: u128> {
     vtree: VTreeManager,

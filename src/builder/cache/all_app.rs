@@ -1,10 +1,10 @@
 //! Apply cache for BDD operations that stores all ITEs
 
+use crate::{
+    builder::cache::{ite::Ite, LruTable},
+    repr::ddnnf::DDNNFPtr,
+};
 use rustc_hash::FxHashMap;
-
-use crate::repr::ddnnf::DDNNFPtr;
-
-use super::{ite::Ite, LruTable};
 
 /// An Ite structure, assumed to be in standard form.
 /// The top-level data structure that caches applications

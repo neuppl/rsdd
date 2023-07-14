@@ -1,21 +1,23 @@
 //! A representation of a conjunctive normal form (CNF)
 
-use crate::repr::var_label::{Literal, VarLabel};
-use crate::repr::var_order::VarOrder;
-use crate::util::semirings::Semiring;
-use petgraph::prelude::UnGraph;
-use rand;
-use rand::rngs::ThreadRng;
-use rand::Rng;
-use std::cmp::{max, min};
-use std::collections::HashSet;
-use std::fmt;
-extern crate quickcheck;
-use self::quickcheck::{Arbitrary, Gen};
-use crate::repr::model::PartialModel;
+use crate::{
+    repr::{
+        model::PartialModel,
+        var_label::{Literal, VarLabel},
+        var_order::VarOrder,
+        wmc::WmcParams,
+    },
+    util::semirings::Semiring,
+};
 use petgraph::graph::NodeIndex;
-
-use super::wmc::WmcParams;
+use petgraph::prelude::UnGraph;
+use quickcheck::{Arbitrary, Gen};
+use rand::{self, rngs::ThreadRng, Rng};
+use std::{
+    cmp::{max, min},
+    collections::HashSet,
+    fmt,
+};
 
 // number of primes to consider during CNF hashing
 const NUM_PRIMES: usize = 2;

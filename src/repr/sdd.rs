@@ -13,12 +13,8 @@ use crate::{
     },
     util::semirings::FiniteField,
 };
-
-use std::fmt::Debug;
-use std::{collections::HashSet, ptr};
+use std::{collections::HashSet, fmt::Debug, hash::Hash, ptr};
 use SddPtr::*;
-
-use std::hash::Hash;
 
 pub use self::binary_sdd::*;
 pub use self::sdd_or::*;
