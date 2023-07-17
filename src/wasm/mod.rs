@@ -1,7 +1,7 @@
 use crate::{
     builder::{
         bdd::{BddBuilder, RobddBuilder},
-        cache::lru_app::BddApplyTable,
+        cache::{all_app::AllTable, lru_app::BddApplyTable},
         sdd::{CompressionSddBuilder, SddBuilder},
     },
     constants::primes,
@@ -65,7 +65,7 @@ pub fn bdd_with_var_order(cnf_input: String, order: &[u64]) -> String {
 
     let var_order = VarOrder::new(order.iter().map(|v| VarLabel::new(*v)).collect());
 
-    let builder = RobddBuilder::new(var_order, BddApplyTable::new(21));
+    let builder = RobddBuilder::new(var_order, AllTable::new());
     let bdd = builder.compile_cnf(&cnf);
 
     let json = BDDSerializer::from_bdd(bdd);
