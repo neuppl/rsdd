@@ -31,7 +31,6 @@ wasm-bindgen = { version = "0.2.84" }
 # example/test-only
 [dev-dependencies]
 clap = { version = "4.2.1", features = ["derive"] }
-rsgm = { git = "https://github.com/neuppl/rsgm" }
 serde_json = { version = "1.0.81" }
 
 [lib]
@@ -53,10 +52,6 @@ rpath = false
 [[example]]
 name = "one_shot_benchmark"
 path = "examples/one_shot_benchmark.rs"
-
-[[example]]
-name = "bayesian_network_compiler"
-path = "examples/bayesian_network_compiler.rs"
 
 [[example]]
 name = "semantic_hash_experiment"
