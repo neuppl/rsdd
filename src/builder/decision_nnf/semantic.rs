@@ -31,7 +31,7 @@ impl<'a, const P: u128> DecisionNNFBuilder<'a> for SemanticDecisionNNFBuilder<'a
     fn get_or_insert(&'a self, bdd: BddNode<'a>) -> BddPtr<'a> {
         let semantic_hash = bdd.semantic_hash(&self.order, &self.map);
 
-        if let Some(bdd) = self.check_cached_hash_and_neg(semantic_hash) {
+        if let Some(bdd) = self.check_cached_hash_and_neg(semantic_hash, bdd) {
             return bdd;
         }
 
@@ -45,7 +45,7 @@ impl<'a, const P: u128> DecisionNNFBuilder<'a> for SemanticDecisionNNFBuilder<'a
 
         unsafe {
             let tbl = &mut *self.compute_table.as_ptr();
-            BddPtr::Reg(tbl.get_or_insert_by_hash(hash, bdd, true))
+            BddPtr::Reg(tbl.sized_get_or_insert_by_hash(hash, bdd, true))
         }
     }
 
@@ -80,14 +80,18 @@ impl<'a, const P: u128> SemanticDecisionNNFBuilder<'a, P> {
         }
     }
 
-    fn check_cached_hash_and_neg(&self, semantic_hash: FiniteField<P>) -> Option<BddPtr> {
+    fn check_cached_hash_and_neg(
+        &'a self,
+        semantic_hash: FiniteField<P>,
+        bdd: &'a BddNode<'a>,
+    ) -> Option<BddPtr> {
         // check regular hash
         let mut hasher = FxHasher::default();
         semantic_hash.value().hash(&mut hasher);
         let hash = hasher.finish();
         unsafe {
             let tbl = &mut *self.compute_table.as_ptr();
-            if let Some(bdd) = tbl.get_by_hash(hash) {
+            if let Some(bdd) = tbl.sized_get_by_hash(hash, bdd) {
                 return Some(BddPtr::Reg(bdd));
             }
         }
@@ -99,7 +103,7 @@ impl<'a, const P: u128> SemanticDecisionNNFBuilder<'a, P> {
         let hash = hasher.finish();
         unsafe {
             let tbl = &mut *self.compute_table.as_ptr();
-            if let Some(bdd) = tbl.get_by_hash(hash) {
+            if let Some(bdd) = tbl.sized_get_by_hash(hash, bdd) {
                 return Some(BddPtr::Compl(bdd));
             }
         }

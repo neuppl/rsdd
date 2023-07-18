@@ -1,6 +1,7 @@
 //! Binary decision diagram representation
 
 use crate::{
+    backing_store::AbstractlySized,
     repr::ddnnf::{DDNNFPtr, DDNNF},
     repr::model::PartialModel,
     repr::var_label::{Literal, VarLabel, VarSet},
@@ -1119,5 +1120,11 @@ impl<'a> Clone for BddNode<'a> {
 impl<'a> Ord for BddNode<'a> {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         self.partial_cmp(other).unwrap()
+    }
+}
+
+impl<'a> AbstractlySized for BddNode<'a> {
+    fn abstract_size(&self) -> usize {
+        BddPtr::Reg(self).count_nodes()
     }
 }

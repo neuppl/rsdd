@@ -1,7 +1,10 @@
 //! A unique table based on a bump allocator and robin-hood hashing
 //! this is the primary unique table for storing all nodes
 
-use crate::{backing_store::UniqueTable, util::*};
+use crate::{
+    backing_store::{AbstractlySized, UniqueTable},
+    util::*,
+};
 use bumpalo::Bump;
 use rustc_hash::FxHasher;
 use std::{
@@ -233,6 +236,103 @@ impl<'a, T: Eq + Hash + Clone> BackedRobinhoodTable<'a, T> {
                 let cur_itm = self.tbl[pos].clone();
                 if hash == cur_itm.hash {
                     self.hits += 1;
+                    return cur_itm.ptr;
+                }
+
+                if cur_itm.psl < psl {
+                    return None;
+                }
+                psl += 1;
+                pos = (pos + 1) % self.cap;
+            } else {
+                return None;
+            }
+        }
+    }
+}
+
+impl<'a, T: Eq + Hash + Clone + AbstractlySized> BackedRobinhoodTable<'a, T> {
+    pub fn sized_get_or_insert_by_hash(
+        &'a mut self,
+        hash: u64,
+        elem: T,
+        equality_by_hash: bool,
+    ) -> &'a T {
+        if (self.len + 1) as f64 > (self.cap as f64 * LOAD_FACTOR) {
+            self.grow();
+        }
+
+        // the current index into the array
+        let mut pos: usize = (hash as usize) % self.cap;
+        // the distance this item is from its desired location
+        let mut psl = 0;
+
+        loop {
+            if self.is_occupied(pos) {
+                let cur_itm = self.tbl[pos].clone();
+                // first check the hashes to see if these elements could
+                // possibly be equal; if they are, check if the items are
+                // equal and return the found pointer if so
+                if hash == cur_itm.hash {
+                    println!("collision");
+                    let found: &T = cur_itm.ptr.unwrap();
+                    if equality_by_hash || *found == elem {
+                        let diff = (elem.abstract_size() as i64)
+                            - (cur_itm.ptr.unwrap().abstract_size() as i64);
+                        if diff != 0 {
+                            println!("size difference (g); delta: {}", diff);
+                        }
+                        self.hits += 1;
+                        return found;
+                    }
+                }
+
+                // not equal; begin probing
+                if cur_itm.psl < psl {
+                    // elem is not in the table; insert it at pos and propagate
+                    // the item that is currently here
+                    self.propagate(cur_itm, pos);
+                    let ptr = self.alloc.alloc(elem);
+                    let entry = HashTableElement::new(ptr, hash, psl);
+                    self.len += 1;
+                    self.tbl[pos] = entry;
+                    return ptr;
+                }
+                psl += 1;
+                pos = (pos + 1) % self.cap; // wrap to the beginning of the array
+            } else {
+                // this element is unique, so place it in the current spot
+                let ptr = self.alloc.alloc(elem);
+                let entry = HashTableElement::new(ptr, hash, psl);
+                self.len += 1;
+                self.tbl[pos] = entry;
+                return ptr;
+            }
+        }
+    }
+
+    pub fn sized_get_by_hash(&'a mut self, hash: u64, elem: T) -> Option<&'a T> {
+        // the current index into the array
+        let mut pos: usize = (hash as usize) % self.cap;
+        // the distance this item is from its desired location
+        let mut psl = 0;
+
+        loop {
+            if self.is_occupied(pos) {
+                let cur_itm = self.tbl[pos].clone();
+                if hash == cur_itm.hash {
+                    self.hits += 1;
+
+                    let diff = (elem.abstract_size() as i64)
+                        - (cur_itm.ptr.unwrap().abstract_size() as i64);
+                    if diff != 0 {
+                        println!("size difference (g); delta: {}", diff);
+                    }
+                    if diff < 0 {
+                        println!("smaller element found ... replacing");
+                        let ptr = self.alloc.alloc(elem);
+                        self.tbl[pos] = HashTableElement::new(ptr, hash, psl);
+                    }
                     return cur_itm.ptr;
                 }
 
