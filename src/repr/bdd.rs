@@ -326,12 +326,13 @@ impl<'a> BddPtr<'a> {
     }
 
     /// Gets the scratch value stored in `&self`
-    ///
-    /// Panics if not node.
     pub fn get_scratch<T: ?Sized + Clone + 'static>(&self) -> Option<T> {
         match self {
             Compl(n) | Reg(n) => {
                 if self.is_scratch_cleared() {
+                    return None;
+                }
+                if n.data.borrow().is_none() {
                     return None;
                 }
                 // println!("dereferencing {:?}", n.data.as_ptr());
@@ -369,6 +370,7 @@ impl<'a> BddPtr<'a> {
         // return true;
         match self {
             Compl(n) | Reg(n) => n.data.borrow().is_none(),
+            // && n.low.is_scratch_cleared() && n.high.is_scratch_cleared(),
             PtrTrue => true,
             PtrFalse => true,
         }

@@ -280,7 +280,7 @@ impl<'a, T: Eq + Hash + Clone + AbstractlySized> BackedRobinhoodTable<'a, T> {
                         let diff = (elem.abstract_size() as i64)
                             - (cur_itm.ptr.unwrap().abstract_size() as i64);
                         if diff != 0 {
-                            println!("size difference (g); delta: {}", diff);
+                            println!("size difference (g/i); delta: {}", diff);
                         }
                         self.hits += 1;
                         return found;
@@ -325,13 +325,12 @@ impl<'a, T: Eq + Hash + Clone + AbstractlySized> BackedRobinhoodTable<'a, T> {
 
                     let diff = (elem.abstract_size() as i64)
                         - (cur_itm.ptr.unwrap().abstract_size() as i64);
-                    if diff != 0 {
-                        println!("size difference (g); delta: {}", diff);
-                    }
+
                     if diff < 0 {
-                        println!("smaller element found ... replacing");
+                        println!("smaller element found (diff: {}) ... replacing", diff);
                         let ptr = self.alloc.alloc(elem);
                         self.tbl[pos] = HashTableElement::new(ptr, hash, psl);
+                        return Some(ptr);
                     }
                     return cur_itm.ptr;
                 }

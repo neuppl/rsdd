@@ -73,6 +73,8 @@ fn compare_sem_and_std(cnf: &Cnf, order: &VarOrder) -> (usize, usize) {
     let sem_nodes = sem_dnnf.count_nodes();
     let std_nodes = std_dnnf.count_nodes();
 
+    println!("===");
+
     println!(
         "sem/std size ratio: {:.4}x ({} / {})",
         (sem_nodes as f64 / std_nodes as f64),
@@ -92,7 +94,49 @@ fn compare_sem_and_std(cnf: &Cnf, order: &VarOrder) -> (usize, usize) {
         std_time
     );
 
+    println!("===\nRebuilding...");
+    let rebuilt = rebuild_and_compare(&sem_builder, &sem_dnnf);
+    let rebuilt_nodes: usize = rebuilt.count_nodes();
+    println!("FINAL STATS");
+    println!(
+        "rebuilt/sem size ratio: {:.4}x ({} / {})",
+        (rebuilt_nodes as f64 / sem_nodes as f64),
+        rebuilt_nodes,
+        sem_nodes
+    );
+
+    if diff_by_wmc(cnf.num_vars(), order, std_dnnf, rebuilt) > 0.0001 {
+        println!(
+            "error on rebuild {}\n std bdd: {}\nsem bdd: {}",
+            cnf,
+            std_dnnf.to_string_debug(),
+            rebuilt.to_string_debug()
+        );
+    }
+
     (sem_nodes, std_nodes)
+}
+
+fn rebuild_and_compare<'a, const P: u128>(
+    builder: &'a SemanticDecisionNNFBuilder<'a, P>,
+    dnnf: &BddPtr<'a>,
+) -> BddPtr<'a> {
+    println!("\nRebuilding...");
+    let og_nodes = dnnf.count_nodes();
+    let rebuilt = builder.rebuild(*dnnf);
+    let rebuilt_nodes = rebuilt.count_nodes();
+    println!(
+        "rebuilt/sem size ratio: {:.4}x ({} / {})",
+        (rebuilt_nodes as f64 / og_nodes as f64),
+        rebuilt_nodes,
+        og_nodes
+    );
+
+    if og_nodes != rebuilt_nodes {
+        return rebuild_and_compare(builder, &rebuilt);
+    }
+
+    rebuilt
 }
 
 struct RandomVarOrders {
