@@ -89,7 +89,7 @@ impl<'a> BinarySDD<'a> {
         h
     }
 
-    pub fn get_scratch<T: ?Sized + Clone + 'static>(&self) -> Option<T>
+    pub fn scratch<T: ?Sized + Clone + 'static>(&self) -> Option<T>
     where
         T: Clone,
     {

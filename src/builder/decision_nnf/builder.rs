@@ -159,7 +159,7 @@ pub trait DecisionNNFBuilder<'a>: TopDownBuilder<'a, BddPtr<'a>> {
             }
             BddPtr::Reg(node) | BddPtr::Compl(node) => {
                 // check cache
-                if let Some(v) = bdd.get_scratch::<BddPtr>() {
+                if let Some(v) = bdd.scratch::<BddPtr>() {
                     return if bdd.is_neg() { v.neg() } else { v };
                 }
 

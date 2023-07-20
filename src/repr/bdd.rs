@@ -327,7 +327,7 @@ impl<'a> BddPtr<'a> {
     /// Gets the scratch value stored in `&self`
     ///
     /// Panics if not node.
-    pub fn get_scratch<T: ?Sized + Clone + 'static>(&self) -> Option<T> {
+    pub fn scratch<T: ?Sized + Clone + 'static>(&self) -> Option<T> {
         match self {
             Compl(n) | Reg(n) => {
                 if self.is_scratch_cleared() {
@@ -352,7 +352,7 @@ impl<'a> BddPtr<'a> {
     /// Panics if not a node.
     ///
     /// Invariant: values stored in `set_scratch` must not outlive
-    /// the provided allocator `alloc` (i.e., calling `get_scratch`
+    /// the provided allocator `alloc` (i.e., calling `scratch`
     /// involves dereferencing a pointer stored in `alloc`)
     pub fn set_scratch<T: 'static>(&self, v: T) {
         match self {
@@ -461,7 +461,7 @@ impl<'a> BddPtr<'a> {
                     res
                 };
 
-                match self.get_scratch::<(Option<T>, Option<T>)>() {
+                match self.scratch::<(Option<T>, Option<T>)>() {
                     // If complemented and accumulated, use the already memoized value
                     Some((Some(v), _)) if self.is_neg() => v,
                     // Same for not complemented
@@ -964,7 +964,7 @@ impl<'a> DDNNFPtr<'a> for BddPtr<'a> {
                         or_v
                     };
 
-                    match ptr.get_scratch::<DDNNFCache<T>>() {
+                    match ptr.scratch::<DDNNFCache<T>>() {
                         // first, check if cached; explicit arms here for clarity
                         Some((Some(l), Some(h))) => {
                             if ptr.is_neg() {
@@ -994,7 +994,7 @@ impl<'a> DDNNFPtr<'a> for BddPtr<'a> {
             if ptr.is_const() {
                 return;
             }
-            match ptr.get_scratch::<usize>() {
+            match ptr.scratch::<usize>() {
                 Some(_) => (),
                 None => {
                     // found a new node

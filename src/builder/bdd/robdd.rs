@@ -198,7 +198,7 @@ impl<'a, T: LruTable<'a, BddPtr<'a>>> RobddBuilder<'a, T> {
                 }
 
                 // check cache
-                match bdd.get_scratch::<usize>() {
+                match bdd.scratch::<usize>() {
                     None => (),
                     Some(v) => {
                         return if bdd.is_neg() {

@@ -84,11 +84,11 @@ impl<'a> SddPtr<'a> {
     }
 
     /// Gets the scratch value stored in `&self`
-    pub fn get_scratch<T: ?Sized + Clone + 'static>(&self) -> Option<T> {
+    pub fn scratch<T: ?Sized + Clone + 'static>(&self) -> Option<T> {
         match self {
             PtrTrue | PtrFalse | Var(_, _) => None,
-            BDD(bdd) | ComplBDD(bdd) => bdd.get_scratch(),
-            Reg(or) | Compl(or) => or.get_scratch(),
+            BDD(bdd) | ComplBDD(bdd) => bdd.scratch(),
+            Reg(or) | Compl(or) => or.scratch(),
         }
     }
 
@@ -97,7 +97,7 @@ impl<'a> SddPtr<'a> {
     /// Panics if not a node.
     ///
     /// Invariant: values stored in `set_scratch` must not outlive
-    /// the provided allocator `alloc` (i.e., calling `get_scratch`
+    /// the provided allocator `alloc` (i.e., calling `scratch`
     /// involves dereferencing a pointer stored in `alloc`)
     pub fn set_scratch<T: 'static>(&self, v: T) {
         match self {
@@ -328,7 +328,7 @@ impl<'a> DDNNFPtr<'a> for SddPtr<'a> {
                         or_v
                     };
 
-                    match ptr.get_scratch::<DDNNFCache<T>>() {
+                    match ptr.scratch::<DDNNFCache<T>>() {
                         // first, check if cached; explicit arms here for clarity
                         Some((Some(l), Some(h))) => {
                             if ptr.is_neg() {
@@ -358,7 +358,7 @@ impl<'a> DDNNFPtr<'a> for SddPtr<'a> {
             if ptr.is_const() || ptr.is_var() {
                 return 0;
             }
-            match ptr.get_scratch::<usize>() {
+            match ptr.scratch::<usize>() {
                 Some(_) => 0,
                 None => {
                     // found a new node
