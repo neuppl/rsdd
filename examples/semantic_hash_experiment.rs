@@ -213,7 +213,7 @@ fn main() {
 
     let cnf_input = fs::read_to_string(args.file).expect("Should have been able to read the file");
 
-    let cnf = Cnf::from_file(cnf_input);
+    let cnf = Cnf::from_dimacs(&cnf_input);
     let range: Vec<usize> = (0..cnf.num_vars()).collect();
     let binding = range
         .iter()

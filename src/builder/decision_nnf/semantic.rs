@@ -125,7 +125,7 @@ mod tests {
         1 2 0
         ";
 
-        let cnf = Cnf::from_file(String::from(CNF));
+        let cnf = Cnf::from_dimacs(CNF);
 
         let linear_order = VarOrder::linear_order(cnf.num_vars());
 

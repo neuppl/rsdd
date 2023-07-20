@@ -401,9 +401,8 @@ fn from_dtree_is_valid_vtree() {
     let cnf_input = "p cnf 3 6
     1 2 3 4 0
     -2 -3 4 5 0
-    -4 -5 6 6 0"
-        .to_string();
-    let cnf = super::cnf::Cnf::from_file(cnf_input);
+    -4 -5 6 6 0";
+    let cnf = super::cnf::Cnf::from_dimacs(cnf_input);
     let dtree = DTree::from_cnf(&cnf, &cnf.min_fill_order());
     let vtree = VTree::from_dtree(&dtree).unwrap();
     println!("{:?}", VTree::flatten_vtree(&vtree));

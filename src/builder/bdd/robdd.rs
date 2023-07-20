@@ -613,8 +613,8 @@ mod tests {
     #[test]
     fn test_ite_1() {
         let builder = RobddBuilder::<AllTable<BddPtr>>::new_default_order(16);
-        let c1 = Cnf::from_string(String::from("(1 || 2) && (0 || -2)"));
-        let c2 = Cnf::from_string(String::from("(0 || 1) && (-4 || -7)"));
+        let c1 = Cnf::from_string("(1 || 2) && (0 || -2)");
+        let c2 = Cnf::from_string("(0 || 1) && (-4 || -7)");
         let cnf1 = builder.compile_cnf(&c1);
         let cnf2 = builder.compile_cnf(&c2);
         let iff1 = builder.iff(cnf1, cnf2);
@@ -641,7 +641,7 @@ mod tests {
         p cnf 3 1
         1 2 3 0
         ";
-        let cnf = Cnf::from_file(String::from(CNF));
+        let cnf = Cnf::from_dimacs(CNF);
 
         let builder = RobddBuilder::<AllTable<BddPtr>>::new_default_order(cnf.num_vars());
 
@@ -672,7 +672,7 @@ mod tests {
         -1 2 0
         1 -2 0
         ";
-        let cnf = Cnf::from_file(String::from(CNF));
+        let cnf = Cnf::from_dimacs(CNF);
 
         let builder = RobddBuilder::<AllTable<BddPtr>>::new_default_order(cnf.num_vars());
 
@@ -700,7 +700,7 @@ mod tests {
         -2 -3 4 5 0
         -4 -5 6 6 0
         ";
-        let cnf = Cnf::from_file(String::from(CNF));
+        let cnf = Cnf::from_dimacs(CNF);
 
         let builder = RobddBuilder::<AllTable<BddPtr>>::new_default_order(cnf.num_vars());
 

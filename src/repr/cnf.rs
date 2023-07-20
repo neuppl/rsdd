@@ -294,9 +294,9 @@ impl Cnf {
         }
     }
 
-    pub fn from_file(input: String) -> Cnf {
+    pub fn from_dimacs(input: &str) -> Cnf {
         use dimacs::*;
-        let (_, cvec) = match parse_dimacs(&input).unwrap() {
+        let (_, cvec) = match parse_dimacs(input).unwrap() {
             Instance::Cnf { num_vars, clauses } => (num_vars, clauses),
             Instance::Sat {
                 num_vars: _,
@@ -329,7 +329,7 @@ impl Cnf {
     /// - Each clause in its own parenthesis and separated by &&
     /// - Each literal separated by ||
     /// - Literal negation implied by "-"
-    pub fn from_string(s: String) -> Cnf {
+    pub fn from_string(s: &str) -> Cnf {
         let clauses = s.split("&&");
         let mut clause_vec: Vec<Vec<Literal>> = Vec::new();
         for clause in clauses {
