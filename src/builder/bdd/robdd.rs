@@ -153,7 +153,7 @@ impl<'a, T: LruTable<'a, BddPtr<'a>>> RobddBuilder<'a, T> {
 
     /// Get the current variable order
     #[inline]
-    pub fn get_order(&self) -> &VarOrder {
+    pub fn order(&self) -> &VarOrder {
         // TODO fix this, it doesn't need to be unsafe
         unsafe { &*self.order.as_ptr() }
     }
@@ -198,7 +198,7 @@ impl<'a, T: LruTable<'a, BddPtr<'a>>> RobddBuilder<'a, T> {
                 }
 
                 // check cache
-                match bdd.get_scratch::<usize>() {
+                match bdd.scratch::<usize>() {
                     None => (),
                     Some(v) => {
                         return if bdd.is_neg() {
@@ -252,7 +252,7 @@ impl<'a, T: LruTable<'a, BddPtr<'a>>> RobddBuilder<'a, T> {
         // TODO: optimize this
         let mut bdd = bdd;
         for m in m.assignment_iter() {
-            bdd = self.condition(bdd, m.get_label(), m.get_polarity());
+            bdd = self.condition(bdd, m.label(), m.polarity());
         }
         bdd
     }
@@ -387,7 +387,7 @@ mod tests {
             (VarLabel::new(1), (RealSemiring(0.1), RealSemiring(0.9))),
         ]);
         let params = WmcParams::new(weights);
-        let wmc = r1.wmc(builder.get_order().borrow(), &params);
+        let wmc = r1.wmc(builder.order().borrow(), &params);
         assert!((wmc.0 - (1.0 - 0.2 * 0.1)).abs() < 0.000001);
     }
 
@@ -605,7 +605,7 @@ mod tests {
         let and1 = builder.and(iff1, iff2);
         let f = builder.and(and1, obs);
         assert_eq!(
-            f.wmc(builder.get_order().borrow(), &wmc).0,
+            f.wmc(builder.order().borrow(), &wmc).0,
             0.2 * 0.3 + 0.2 * 0.7 + 0.8 * 0.3
         );
     }
@@ -655,9 +655,9 @@ mod tests {
             (VarLabel::new(2), (FiniteField::new(1), FiniteField::new(1))),
         ]));
 
-        let unsmoothed_model_count = bdd.wmc(builder.get_order(), &weights);
+        let unsmoothed_model_count = bdd.wmc(builder.order(), &weights);
 
-        let smoothed_model_count = smoothed.wmc(builder.get_order(), &weights);
+        let smoothed_model_count = smoothed.wmc(builder.order(), &weights);
 
         assert_eq!(unsmoothed_model_count.value(), 3);
         assert_eq!(smoothed_model_count.value(), 7);
@@ -681,7 +681,7 @@ mod tests {
         let smoothed = builder.smooth(bdd, cnf.num_vars());
 
         let weighted_model_count = smoothed.wmc(
-            builder.get_order(),
+            builder.order(),
             &WmcParams::<RealSemiring>::new(HashMap::from_iter([
                 (VarLabel::new(0), (RealSemiring(0.4), RealSemiring(0.6))),
                 (VarLabel::new(1), (RealSemiring(0.3), RealSemiring(0.7))),
@@ -709,7 +709,7 @@ mod tests {
         let smoothed = builder.smooth(bdd, cnf.num_vars());
 
         let model_count = smoothed.wmc(
-            builder.get_order(),
+            builder.order(),
             &WmcParams::<FiniteField<1000001>>::new(HashMap::from_iter([
                 (VarLabel::new(0), (FiniteField::new(1), FiniteField::new(1))),
                 (VarLabel::new(1), (FiniteField::new(1), FiniteField::new(1))),
@@ -722,7 +722,7 @@ mod tests {
 
         // TODO: this WMC test is broken. not sure why :(
         // let weighted_model_count = smoothed.wmc(
-        //     builder.get_order(),
+        //     builder.order(),
         //     &WmcParams::new(HashMap::from_iter([
         //         // (VarLabel::new(0), (RealSemiring(0.10), RealSemiring(0.05))),
         //         // (VarLabel::new(1), (RealSemiring(0.20), RealSemiring(0.15))),

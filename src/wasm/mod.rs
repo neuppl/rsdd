@@ -102,7 +102,7 @@ pub fn demo_model_count_sdd(cnf_input: String) -> Result<JsValue, JsValue> {
 
     let mut params: WmcParams<FiniteField<{ primes::U32_TINY }>> = WmcParams::default();
 
-    for v in 0..builder.get_vtree_manager().num_vars() + 1 {
+    for v in 0..builder.vtree_manager().num_vars() + 1 {
         params.set_weight(
             VarLabel::new_usize(v),
             FiniteField::new(1),
@@ -110,7 +110,7 @@ pub fn demo_model_count_sdd(cnf_input: String) -> Result<JsValue, JsValue> {
         )
     }
 
-    let model_count = sdd.wmc(builder.get_vtree_manager(), &params);
+    let model_count = sdd.wmc(builder.vtree_manager(), &params);
 
     let res = SddModelCountResult {
         model_count: model_count.value(),

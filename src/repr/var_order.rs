@@ -195,11 +195,6 @@ impl VarOrder {
         }
     }
 
-    /// Produces a vector of variable positions indexed by
-    pub fn get_var_to_pos_vec(&self) -> Vec<usize> {
-        self.var_to_pos.clone()
-    }
-
     /// Gets the variable that occurs last in the order
     /// ```
     /// # use rsdd::repr::var_order::VarOrder;

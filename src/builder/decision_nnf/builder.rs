@@ -39,10 +39,10 @@ pub trait DecisionNNFBuilder<'a>: TopDownBuilder<'a, BddPtr<'a>> {
         }
         let mut sub = nnf;
         for l in literals {
-            let node = if l.get_polarity() {
-                BddNode::new(l.get_label(), BddPtr::false_ptr(), sub)
+            let node = if l.polarity() {
+                BddNode::new(l.label(), BddPtr::false_ptr(), sub)
             } else {
-                BddNode::new(l.get_label(), sub, BddPtr::false_ptr())
+                BddNode::new(l.label(), sub, BddPtr::false_ptr())
             };
             sub = self.get_or_insert(node);
         }
@@ -73,7 +73,7 @@ pub trait DecisionNNFBuilder<'a>: TopDownBuilder<'a, BddPtr<'a>> {
         }
 
         // check cache
-        let hashed = sat.get_cur_hash();
+        let hashed = sat.cur_hash();
         match cache.get(&hashed) {
             None => (),
             Some(v) => {
@@ -85,14 +85,14 @@ pub trait DecisionNNFBuilder<'a>: TopDownBuilder<'a, BddPtr<'a>> {
         let high_bdd = match sat.decide(Literal::new(cur_v, true)) {
             DecisionResult::UNSAT => BddPtr::false_ptr(),
             DecisionResult::SAT => {
-                let new_assgn = sat.get_difference().filter(|x| x.get_label() != cur_v);
+                let new_assgn = sat.difference_iter().filter(|x| x.label() != cur_v);
                 let r = self.conjoin_implied(new_assgn, BddPtr::true_ptr());
                 sat.pop();
                 r
             }
             DecisionResult::Unknown => {
                 let sub = self.topdown_h(cnf, sat, level + 1, cache);
-                let new_assgn = sat.get_difference().filter(|x| x.get_label() != cur_v);
+                let new_assgn = sat.difference_iter().filter(|x| x.label() != cur_v);
                 let r = self.conjoin_implied(new_assgn, sub);
                 sat.pop();
                 r
@@ -101,14 +101,14 @@ pub trait DecisionNNFBuilder<'a>: TopDownBuilder<'a, BddPtr<'a>> {
         let low_bdd = match sat.decide(Literal::new(cur_v, false)) {
             DecisionResult::UNSAT => BddPtr::false_ptr(),
             DecisionResult::SAT => {
-                let new_assgn = sat.get_difference().filter(|x| x.get_label() != cur_v);
+                let new_assgn = sat.difference_iter().filter(|x| x.label() != cur_v);
                 let r = self.conjoin_implied(new_assgn, BddPtr::true_ptr());
                 sat.pop();
                 r
             }
             DecisionResult::Unknown => {
                 let sub = self.topdown_h(cnf, sat, level + 1, cache);
-                let new_assgn = sat.get_difference().filter(|x| x.get_label() != cur_v);
+                let new_assgn = sat.difference_iter().filter(|x| x.label() != cur_v);
                 let r = self.conjoin_implied(new_assgn, sub);
                 sat.pop();
                 r
@@ -135,11 +135,11 @@ pub trait DecisionNNFBuilder<'a>: TopDownBuilder<'a, BddPtr<'a>> {
         let mut r = self.topdown_h(cnf, &mut sat, 0, &mut FxHashMap::default());
 
         // conjoin in any initially implied literals
-        for l in sat.get_difference() {
-            let node = if l.get_polarity() {
-                BddNode::new(l.get_label(), BddPtr::false_ptr(), r)
+        for l in sat.difference_iter() {
+            let node = if l.polarity() {
+                BddNode::new(l.label(), BddPtr::false_ptr(), r)
             } else {
-                BddNode::new(l.get_label(), r, BddPtr::false_ptr())
+                BddNode::new(l.label(), r, BddPtr::false_ptr())
             };
             r = self.get_or_insert(node);
         }
@@ -159,7 +159,7 @@ pub trait DecisionNNFBuilder<'a>: TopDownBuilder<'a, BddPtr<'a>> {
             }
             BddPtr::Reg(node) | BddPtr::Compl(node) => {
                 // check cache
-                if let Some(v) = bdd.get_scratch::<BddPtr>() {
+                if let Some(v) = bdd.scratch::<BddPtr>() {
                     return if bdd.is_neg() { v.neg() } else { v };
                 }
 

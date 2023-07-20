@@ -84,7 +84,7 @@ pub trait DDNNFPtr<'a>: Clone + Debug + PartialEq + Eq + Hash + Copy {
                 True => params.one,
                 False => params.zero,
                 Lit(lbl, polarity) => {
-                    let (low_w, high_w) = params.get_var_weight(lbl);
+                    let (low_w, high_w) = params.var_weight(lbl);
                     if polarity {
                         *high_w
                     } else {

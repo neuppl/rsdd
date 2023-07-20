@@ -36,8 +36,8 @@ pub struct Literal {
 }
 
 BITFIELD!(Literal data : u64 [
-    label set_label[0..63],
-    polarity set_polarity[63..64],
+    raw_label set_label[0..63],
+    raw_polarity set_polarity[63..64],
 ]);
 
 impl Literal {
@@ -59,10 +59,10 @@ impl Literal {
     ///
     /// let lit = Literal::new(VarLabel::new(0), true);
     ///
-    /// assert_eq!(lit.get_label(), VarLabel::new(0))
+    /// assert_eq!(lit.label(), VarLabel::new(0))
     /// ```
-    pub fn get_label(&self) -> VarLabel {
-        VarLabel(self.label())
+    pub fn label(&self) -> VarLabel {
+        VarLabel(self.raw_label())
     }
 
     /// ```
@@ -71,11 +71,11 @@ impl Literal {
     /// let lit1 = Literal::new(VarLabel::new(0), true);
     /// let lit2 = Literal::new(VarLabel::new(0), false);
     ///
-    /// assert!(lit1.get_polarity());
-    /// assert!(!lit2.get_polarity());
+    /// assert!(lit1.polarity());
+    /// assert!(!lit2.polarity());
     /// ```
-    pub fn get_polarity(&self) -> bool {
-        self.polarity() == 1
+    pub fn polarity(&self) -> bool {
+        self.raw_polarity() == 1
     }
 
     /// ```
@@ -87,7 +87,7 @@ impl Literal {
     /// assert!(lit1.implies_true(&lit2));
     /// ```
     pub fn implies_true(&self, other: &Literal) -> bool {
-        self.get_label() == other.get_label() && self.get_polarity() == other.get_polarity()
+        self.label() == other.label() && self.polarity() == other.polarity()
     }
 
     /// ```
@@ -99,7 +99,7 @@ impl Literal {
     /// assert!(lit1.implies_false(&lit2));
     /// ```
     pub fn implies_false(&self, other: &Literal) -> bool {
-        self.get_label() == other.get_label() && self.get_polarity() != other.get_polarity()
+        self.label() == other.label() && self.polarity() != other.polarity()
     }
 
     /// ```
@@ -111,15 +111,15 @@ impl Literal {
     /// assert_eq!(lit1.negated(), lit2);
     /// ```
     pub fn negated(&self) -> Literal {
-        Literal::new(self.get_label(), !self.get_polarity())
+        Literal::new(self.label(), !self.polarity())
     }
 }
 
 impl fmt::Debug for Literal {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Literal")
-            .field("label", &self.get_label())
-            .field("polarity", &self.get_polarity())
+            .field("label", &self.label())
+            .field("polarity", &self.polarity())
             .finish()
     }
 }

@@ -31,12 +31,12 @@ impl VTree {
         }
     }
 
-    pub fn get_all_vars(&self) -> HashSet<usize> {
+    pub fn all_vars(&self) -> HashSet<usize> {
         match self {
             BTree::Leaf(v) => HashSet::from([v.value_usize()]),
             BTree::Node((), l, r) => {
-                let lvar = l.get_all_vars();
-                let rvar = r.get_all_vars();
+                let lvar = l.all_vars();
+                let rvar = r.all_vars();
                 &lvar | &rvar
             }
         }
@@ -309,7 +309,7 @@ pub struct VTreeManager {
     /// a mapping from BFS indexes to DFS indexes
     bfs_to_dfs: Vec<usize>,
     /// maps an Sdd VarLabel into its vtree index in the depth-first order
-    vtree_idx: Vec<usize>,
+    vtree_index: Vec<usize>,
     index_lookup: Vec<VTree>,
     lca: LeastCommonAncestor,
 }
@@ -333,7 +333,7 @@ impl VTreeManager {
             dfs_to_bfs: tree.dfs_to_bfs_mapping(),
             bfs_to_dfs: tree.bfs_to_dfs_mapping(),
             index_lookup,
-            vtree_idx: vtree_lookup,
+            vtree_index: vtree_lookup,
             lca: LeastCommonAncestor::new(&tree),
             tree,
         }
@@ -352,25 +352,25 @@ impl VTreeManager {
     }
 
     /// Given a vtree index, produce a pointer to the vtree this corresponds with
-    pub fn get_idx(&self, idx: VTreeIndex) -> &VTree {
+    pub fn vtree(&self, idx: VTreeIndex) -> &VTree {
         &(self.index_lookup[idx.0])
     }
 
     /// Find the index into self.vtree that contains the label `lbl`
     /// panics if this does not exist.
-    pub fn get_varlabel_idx(&self, lbl: VarLabel) -> VTreeIndex {
-        VTreeIndex(self.vtree_idx[lbl.value_usize()])
+    pub fn var_index(&self, lbl: VarLabel) -> VTreeIndex {
+        VTreeIndex(self.vtree_index[lbl.value_usize()])
     }
 
     /// true if a is prime to b
     /// panics if either is constant
     pub fn is_prime(&self, a: SddPtr, b: SddPtr) -> bool {
         let a_vtree = match a {
-            SddPtr::Var(label, _) => self.get_varlabel_idx(label),
+            SddPtr::Var(label, _) => self.var_index(label),
             _ => a.vtree(),
         };
         let b_vtree = match b {
-            SddPtr::Var(label, _) => self.get_varlabel_idx(label),
+            SddPtr::Var(label, _) => self.var_index(label),
             _ => b.vtree(),
         };
         self.is_prime_index(a_vtree, b_vtree)
@@ -379,7 +379,7 @@ impl VTreeManager {
     /// true if a is prime to b
     /// panics if either is constant
     pub fn is_prime_var(&self, a: VarLabel, b: VarLabel) -> bool {
-        self.is_prime_index(self.get_varlabel_idx(a), self.get_varlabel_idx(b))
+        self.is_prime_index(self.var_index(a), self.var_index(b))
     }
 
     /// true if the vtree index `l` is prime to `r`
@@ -392,7 +392,7 @@ impl VTreeManager {
 
     /// produces the number of variables allocated by this vtree
     pub fn num_vars(&self) -> usize {
-        self.vtree_root().get_all_vars().into_iter().max().unwrap()
+        self.vtree_root().all_vars().into_iter().max().unwrap()
     }
 }
 

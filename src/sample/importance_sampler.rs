@@ -16,7 +16,7 @@ pub trait ImportanceSampler<Sample: std::fmt::Debug + Clone, State: std::fmt::De
 
     /// Gives a unique index that corresponds to this particular state
     /// Used for automated testing, this can be inefficient
-    fn get_state_index(&self, state: &State) -> usize;
+    fn state_index(&self, state: &State) -> usize;
 
     /// Generates a vector of the probability of every state indexed by the
     /// state index

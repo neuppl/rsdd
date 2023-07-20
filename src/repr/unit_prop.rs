@@ -104,15 +104,15 @@ impl UnitPropagate {
                 implied.push(c[0]);
                 continue;
             }
-            if c[1].get_polarity() {
-                watch_list_pos[c[1].get_label().value() as usize].push(idx)
+            if c[1].polarity() {
+                watch_list_pos[c[1].label().value() as usize].push(idx)
             } else {
-                watch_list_neg[c[1].get_label().value() as usize].push(idx)
+                watch_list_neg[c[1].label().value() as usize].push(idx)
             }
-            if c[0].get_polarity() {
-                watch_list_pos[c[0].get_label().value() as usize].push(idx)
+            if c[0].polarity() {
+                watch_list_pos[c[0].label().value() as usize].push(idx)
             } else {
-                watch_list_neg[c[0].get_label().value() as usize].push(idx)
+                watch_list_neg[c[0].label().value() as usize].push(idx)
             }
         }
 
@@ -140,10 +140,10 @@ impl UnitPropagate {
     /// returns true if success, false if UNSAT
     fn decide(&mut self, mut cur_state: PartialModel, new_assignment: Literal) -> UnitPropResult {
         // if already assigned, check if consistent -- if not, return unsat
-        match cur_state.get(new_assignment.get_label()) {
+        match cur_state.get(new_assignment.label()) {
             None => (),
             Some(v) => {
-                if v == new_assignment.get_polarity() {
+                if v == new_assignment.polarity() {
                     return UnitPropResult::PartialSAT(cur_state);
                 } else {
                     return UnitPropResult::UNSAT;
@@ -152,9 +152,9 @@ impl UnitPropagate {
         };
 
         // update the value of the decided variable in the partial model
-        cur_state.set(new_assignment.get_label(), new_assignment.get_polarity());
+        cur_state.set(new_assignment.label(), new_assignment.polarity());
 
-        let var_idx = new_assignment.get_label().value() as usize;
+        let var_idx = new_assignment.label().value() as usize;
 
         // track a list of all discovered implications
         // indexes over the watchers for the current literal
@@ -164,14 +164,14 @@ impl UnitPropagate {
         loop {
             // first check if there are any watchers; if no watchers left, break
 
-            if new_assignment.get_polarity() {
+            if new_assignment.polarity() {
                 if watcher_idx >= self.watch_list_neg[var_idx].len() {
                     break;
                 }
             } else if watcher_idx >= self.watch_list_pos[var_idx].len() {
                 break;
             }
-            let clause = if new_assignment.get_polarity() {
+            let clause = if new_assignment.polarity() {
                 &self.cnf.clauses()[self.watch_list_neg[var_idx][watcher_idx]]
             } else {
                 &self.cnf.clauses()[self.watch_list_pos[var_idx][watcher_idx]]
@@ -181,8 +181,8 @@ impl UnitPropagate {
             // move onto the next watcher
             let mut is_sat = false;
             for lit in clause.iter() {
-                match cur_state.get(lit.get_label()) {
-                    Some(v) if lit.get_polarity() == v => {
+                match cur_state.get(lit.label()) {
+                    Some(v) if lit.polarity() == v => {
                         watcher_idx += 1;
                         is_sat = true;
                         break;
@@ -195,9 +195,7 @@ impl UnitPropagate {
             }
 
             // gather a list of all remaining unassigned literals in the current clause
-            let mut remaining_lits = clause
-                .iter()
-                .filter(|x| cur_state.get(x.get_label()).is_none());
+            let mut remaining_lits = clause.iter().filter(|x| cur_state.get(x.label()).is_none());
 
             let num_remaining = remaining_lits.clone().count();
             if num_remaining == 0 {
@@ -217,21 +215,17 @@ impl UnitPropagate {
             } else {
                 // num_remaining > 1, find a new literal to watch
                 // first, find a new literal to watch
-                let candidate_unwatched: LitIdx = remaining_lits
-                    .clone()
-                    .next()
-                    .unwrap()
-                    .get_label()
-                    .value_usize();
+                let candidate_unwatched: LitIdx =
+                    remaining_lits.clone().next().unwrap().label().value_usize();
                 // check if candidate_unwatched is already being watched; if it
                 // is, pick another literal to watch
-                let prev_watcher: ClauseIdx = if new_assignment.get_polarity() {
+                let prev_watcher: ClauseIdx = if new_assignment.polarity() {
                     self.watch_list_neg[var_idx][watcher_idx]
                 } else {
                     self.watch_list_pos[var_idx][watcher_idx]
                 };
 
-                let new_lit: &Literal = if new_assignment.get_polarity() {
+                let new_lit: &Literal = if new_assignment.polarity() {
                     if self.watch_list_pos[candidate_unwatched].contains(&prev_watcher) {
                         remaining_lits.nth(1).unwrap()
                     } else {
@@ -243,16 +237,16 @@ impl UnitPropagate {
                     remaining_lits.next().unwrap()
                 };
 
-                let new_loc = new_lit.get_label().value_usize();
+                let new_loc = new_lit.label().value_usize();
 
-                if new_assignment.get_polarity() {
+                if new_assignment.polarity() {
                     self.watch_list_neg[var_idx].swap_remove(watcher_idx);
                 } else {
                     self.watch_list_pos[var_idx].swap_remove(watcher_idx);
                 };
 
                 // now add the new one
-                if new_lit.get_polarity() {
+                if new_lit.polarity() {
                     self.watch_list_pos[new_loc].push(prev_watcher);
                 } else {
                     self.watch_list_neg[new_loc].push(prev_watcher);
@@ -307,18 +301,18 @@ impl SATSolver {
 
         // first handle subsumed clause case (case 2)
         for lit in new_model.difference(&self.top_state().model) {
-            let matching_polarity = if lit.get_polarity() {
+            let matching_polarity = if lit.polarity() {
                 &self.contains_pos_lit
             } else {
                 &self.contains_neg_lit
             };
-            for clause_idx in matching_polarity[lit.get_label().value_usize()].iter() {
+            for clause_idx in matching_polarity[lit.label().value_usize()].iter() {
                 if new_set.contains(clause_idx) {
                     continue;
                 }
                 new_set.insert(clause_idx);
                 for (clause_lit, weight) in self.clauses[clause_idx].iter() {
-                    if !self.top_state().model.is_set(clause_lit.get_label()) {
+                    if !self.top_state().model.is_set(clause_lit.label()) {
                         hash = hash.wrapping_mul(*weight);
                     }
                 }
@@ -327,18 +321,18 @@ impl SATSolver {
 
         // now handle case 3
         for lit in new_model.difference(&self.top_state().model) {
-            let opposite_polarity = if lit.get_polarity() {
+            let opposite_polarity = if lit.polarity() {
                 &self.contains_neg_lit
             } else {
                 &self.contains_pos_lit
             };
-            for clause_idx in opposite_polarity[lit.get_label().value_usize()].iter() {
+            for clause_idx in opposite_polarity[lit.label().value_usize()].iter() {
                 if new_set.contains(clause_idx) {
                     // avoid double-counting
                     continue;
                 }
                 for (clause_lit, weight) in self.clauses[clause_idx].iter() {
-                    if clause_lit.get_label() == lit.get_label() {
+                    if clause_lit.label() == lit.label() {
                         hash = hash.wrapping_mul(*weight);
                         break;
                     }
@@ -371,8 +365,8 @@ impl SATSolver {
                 let i = clauses.iter().filter(|clause| {
                     for i in 0..clause.len() {
                         for j in (i + 1)..clause.len() {
-                            if clause[i].get_label() == clause[j].get_label()
-                                && clause[i].get_polarity() != clause[j].get_polarity()
+                            if clause[i].label() == clause[j].label()
+                                && clause[i].polarity() != clause[j].polarity()
                             {
                                 return false;
                             }
@@ -404,10 +398,10 @@ impl SATSolver {
 
                 for (clause_idx, clause) in clauses.iter().enumerate() {
                     for lit in clause.iter() {
-                        if lit.0.get_polarity() {
-                            pos_lit[lit.0.get_label().value_usize()].insert(clause_idx);
+                        if lit.0.polarity() {
+                            pos_lit[lit.0.label().value_usize()].insert(clause_idx);
                         } else {
-                            neg_lit[lit.0.get_label().value_usize()].insert(clause_idx);
+                            neg_lit[lit.0.label().value_usize()].insert(clause_idx);
                         }
                     }
                 }
@@ -470,13 +464,13 @@ impl SATSolver {
 
     /// Get an iterator over the difference between the units implied at
     /// the top and second-to-top decision
-    pub fn get_difference(&self) -> impl Iterator<Item = Literal> + '_ {
+    pub fn difference_iter(&self) -> impl Iterator<Item = Literal> + '_ {
         self.top_state()
             .model
             .difference(&self.state_stack[self.state_stack.len() - 2].model)
     }
 
-    pub fn get_cur_hash(&self) -> u128 {
+    pub fn cur_hash(&self) -> u128 {
         self.top_state().hash
     }
 
