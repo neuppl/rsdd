@@ -326,7 +326,7 @@ impl<'a> BddPtr<'a> {
     }
 
     /// Gets the scratch value stored in `&self`
-    pub fn get_scratch<T: ?Sized + Clone + 'static>(&self) -> Option<T> {
+    pub fn scratch<T: ?Sized + Clone + 'static>(&self) -> Option<T> {
         match self {
             Compl(n) | Reg(n) => {
                 if self.is_scratch_cleared() {
@@ -354,7 +354,7 @@ impl<'a> BddPtr<'a> {
     /// Panics if not a node.
     ///
     /// Invariant: values stored in `set_scratch` must not outlive
-    /// the provided allocator `alloc` (i.e., calling `get_scratch`
+    /// the provided allocator `alloc` (i.e., calling `scratch`
     /// involves dereferencing a pointer stored in `alloc`)
     pub fn set_scratch<T: 'static>(&self, v: T) {
         match self {
@@ -464,7 +464,7 @@ impl<'a> BddPtr<'a> {
                     res
                 };
 
-                match self.get_scratch::<(Option<T>, Option<T>)>() {
+                match self.scratch::<(Option<T>, Option<T>)>() {
                     // If complemented and accumulated, use the already memoized value
                     Some((Some(v), _)) if self.is_neg() => v,
                     // Same for not complemented
@@ -502,7 +502,7 @@ impl<'a> BddPtr<'a> {
     ) -> RealSemiring {
         let mut v = self.bdd_fold(
             &|varlabel, low, high| {
-                let (low_w, high_w) = wmc.get_var_weight(varlabel);
+                let (low_w, high_w) = wmc.var_weight(varlabel);
                 match partial_map_assgn.get(varlabel) {
                     None => {
                         if map_vars.contains(varlabel.value_usize()) {
@@ -520,8 +520,8 @@ impl<'a> BddPtr<'a> {
         );
         // multiply in weights of all variables in the partial assignment
         for lit in partial_map_assgn.assignment_iter() {
-            let (l, h) = wmc.get_var_weight(lit.get_label());
-            if lit.get_polarity() {
+            let (l, h) = wmc.var_weight(lit.label());
+            if lit.polarity() {
                 v = v * (*h);
             } else {
                 v = v * (*l);
@@ -620,7 +620,7 @@ impl<'a> BddPtr<'a> {
         self.bdd_fold(
             &|varlabel, low: ExpectedUtility, high: ExpectedUtility| {
                 // get True and False weights for VarLabel
-                let (false_w, true_w) = wmc.get_var_weight(varlabel);
+                let (false_w, true_w) = wmc.var_weight(varlabel);
                 // Check if our partial model has already assigned my variable.
                 match partial_decisions.get(varlabel) {
                     // If not...
@@ -738,8 +738,8 @@ impl<'a> BddPtr<'a> {
     {
         let mut partial_join_acc = T::one();
         for lit in partial_join_assgn.assignment_iter() {
-            let (l, h) = wmc.get_var_weight(lit.get_label());
-            if lit.get_polarity() {
+            let (l, h) = wmc.var_weight(lit.label());
+            if lit.polarity() {
                 partial_join_acc = partial_join_acc * (*h);
             } else {
                 partial_join_acc = partial_join_acc * (*l);
@@ -749,7 +749,7 @@ impl<'a> BddPtr<'a> {
         let v = self.bdd_fold(
             &|varlabel, low: T, high: T| {
                 // get True and False weights for node VarLabel
-                let (w_l, w_h) = wmc.get_var_weight(varlabel);
+                let (w_l, w_h) = wmc.var_weight(varlabel);
                 // Check if our partial model has already assigned the node.
                 match partial_join_assgn.get(varlabel) {
                     // If not...
@@ -967,7 +967,7 @@ impl<'a> DDNNFPtr<'a> for BddPtr<'a> {
                         or_v
                     };
 
-                    match ptr.get_scratch::<DDNNFCache<T>>() {
+                    match ptr.scratch::<DDNNFCache<T>>() {
                         // first, check if cached; explicit arms here for clarity
                         Some((Some(l), Some(h))) => {
                             if ptr.is_neg() {
@@ -997,7 +997,7 @@ impl<'a> DDNNFPtr<'a> for BddPtr<'a> {
             if ptr.is_const() {
                 return;
             }
-            match ptr.get_scratch::<usize>() {
+            match ptr.scratch::<usize>() {
                 Some(_) => (),
                 None => {
                     // found a new node
@@ -1052,7 +1052,7 @@ impl<'a> BddNode<'a> {
         order: &VarOrder,
         map: &WmcParams<FiniteField<P>>,
     ) -> FiniteField<P> {
-        let (low_w, high_w) = map.get_var_weight(self.var);
+        let (low_w, high_w) = map.var_weight(self.var);
         self.low.cached_semantic_hash(order, map) * (*low_w)
             + self.high.cached_semantic_hash(order, map) * (*high_w)
     }

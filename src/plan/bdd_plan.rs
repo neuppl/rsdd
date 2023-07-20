@@ -78,11 +78,11 @@ impl BddPlan {
                 if clause.is_empty() {
                     Self::ConstFalse
                 } else if clause.len() == 1 {
-                    Self::literal(clause[0].get_label(), clause[0].get_polarity())
+                    Self::literal(clause[0].label(), clause[0].polarity())
                 } else {
-                    let first_lit = Self::literal(clause[0].get_label(), clause[0].get_polarity());
+                    let first_lit = Self::literal(clause[0].label(), clause[0].polarity());
                     clause.iter().skip(1).fold(first_lit, |acc, i| {
-                        let new_l = Self::literal(i.get_label(), i.get_polarity());
+                        let new_l = Self::literal(i.label(), i.polarity());
                         Self::or(acc, new_l)
                     })
                 }

@@ -185,70 +185,28 @@ p cnf 2 1
 2 3 4 5 6 7 8 0
 ";
 
-fn get_canonical_forms() -> Vec<(Cnf, Cnf)> {
+fn canonical_forms() -> Vec<(Cnf, Cnf)> {
     vec![
-        (
-            Cnf::from_file(String::from(C1_A)),
-            Cnf::from_file(String::from(C1_B)),
-        ),
-        (
-            Cnf::from_file(String::from(C2_A)),
-            Cnf::from_file(String::from(C2_B)),
-        ),
-        (
-            Cnf::from_file(String::from(C3_A)),
-            Cnf::from_file(String::from(C3_B)),
-        ),
-        (
-            Cnf::from_file(String::from(C4_A)),
-            Cnf::from_file(String::from(C4_B)),
-        ),
-        (
-            Cnf::from_file(String::from(C5_A)),
-            Cnf::from_file(String::from(C5_B)),
-        ),
-        (
-            Cnf::from_file(String::from(C6_A)),
-            Cnf::from_file(String::from(C6_B)),
-        ),
-        (
-            Cnf::from_file(String::from(C7_A)),
-            Cnf::from_file(String::from(C7_B)),
-        ),
-        (
-            Cnf::from_file(String::from(C8_A)),
-            Cnf::from_file(String::from(C8_B)),
-        ),
-        (
-            Cnf::from_file(String::from(C9_A)),
-            Cnf::from_file(String::from(C9_B)),
-        ),
-        (
-            Cnf::from_file(String::from(C10_A)),
-            Cnf::from_file(String::from(C10_B)),
-        ),
-        (
-            Cnf::from_file(String::from(C11_A)),
-            Cnf::from_file(String::from(C11_B)),
-        ),
-        (
-            Cnf::from_file(String::from(C12_A)),
-            Cnf::from_file(String::from(C12_B)),
-        ),
-        (
-            Cnf::from_file(String::from(C13_A)),
-            Cnf::from_file(String::from(C13_B)),
-        ),
-        (
-            Cnf::from_file(String::from(C14_A)),
-            Cnf::from_file(String::from(C14_B)),
-        ),
+        (Cnf::from_dimacs(C1_A), Cnf::from_dimacs(C1_B)),
+        (Cnf::from_dimacs(C2_A), Cnf::from_dimacs(C2_B)),
+        (Cnf::from_dimacs(C3_A), Cnf::from_dimacs(C3_B)),
+        (Cnf::from_dimacs(C4_A), Cnf::from_dimacs(C4_B)),
+        (Cnf::from_dimacs(C5_A), Cnf::from_dimacs(C5_B)),
+        (Cnf::from_dimacs(C6_A), Cnf::from_dimacs(C6_B)),
+        (Cnf::from_dimacs(C7_A), Cnf::from_dimacs(C7_B)),
+        (Cnf::from_dimacs(C8_A), Cnf::from_dimacs(C8_B)),
+        (Cnf::from_dimacs(C9_A), Cnf::from_dimacs(C9_B)),
+        (Cnf::from_dimacs(C10_A), Cnf::from_dimacs(C10_B)),
+        (Cnf::from_dimacs(C11_A), Cnf::from_dimacs(C11_B)),
+        (Cnf::from_dimacs(C12_A), Cnf::from_dimacs(C12_B)),
+        (Cnf::from_dimacs(C13_A), Cnf::from_dimacs(C13_B)),
+        (Cnf::from_dimacs(C14_A), Cnf::from_dimacs(C14_B)),
     ]
 }
 
 #[test]
 fn test_bdd_canonicity() {
-    for (cnf1, cnf2) in get_canonical_forms().into_iter() {
+    for (cnf1, cnf2) in canonical_forms().into_iter() {
         let builder = RobddBuilder::<AllTable<BddPtr>>::new_default_order(cnf1.num_vars());
         let r1 = builder.compile_cnf(&cnf1);
         let r2 = builder.compile_cnf(&cnf2);
@@ -265,7 +223,7 @@ fn test_bdd_canonicity() {
 
 #[test]
 fn test_sdd_canonicity() {
-    for (cnf1, cnf2) in get_canonical_forms().into_iter() {
+    for (cnf1, cnf2) in canonical_forms().into_iter() {
         let v: Vec<VarLabel> = (0..cnf1.num_vars())
             .map(|x| VarLabel::new(x as u64))
             .collect();
@@ -286,7 +244,7 @@ fn test_sdd_canonicity() {
 
 #[test]
 fn test_sdd_is_canonical() {
-    for (cnf1, cnf2) in get_canonical_forms().into_iter() {
+    for (cnf1, cnf2) in canonical_forms().into_iter() {
         let v: Vec<VarLabel> = (0..cnf1.num_vars())
             .map(|x| VarLabel::new(x as u64))
             .collect();
@@ -413,7 +371,7 @@ mod test_bdd_builder {
             let builder = super::RobddBuilder::<AllTable<BddPtr>>::new_default_order(c1.num_vars());
             let weight = create_semantic_hash_map::<{primes::U32_SMALL}>(c1.num_vars());
             let cnf1 = builder.compile_cnf(&c1);
-            let bddres = cnf1.wmc(builder.get_order(), &weight);
+            let bddres = cnf1.wmc(builder.order(), &weight);
             let cnfres = c1.wmc(&weight);
             TestResult::from_bool(bddres == cnfres)
         }
@@ -427,7 +385,7 @@ mod test_bdd_builder {
             let map : WmcParams<rsdd::util::semirings::FiniteField<{primes::U32_SMALL}>>= create_semantic_hash_map(c1.num_vars());
             let bdd = bdd_builder.compile_cnf(&c1);
             let sdd = sdd_builder.compile_cnf(&c1);
-            bdd.semantic_hash(bdd_builder.get_order(), &map) == sdd.semantic_hash(sdd_builder.get_vtree_manager(), &map)
+            bdd.semantic_hash(bdd_builder.order(), &map) == sdd.semantic_hash(sdd_builder.vtree_manager(), &map)
         }
     }
 
@@ -443,7 +401,7 @@ mod test_bdd_builder {
             let map : WmcParams<rsdd::util::semirings::FiniteField<{primes::U32_SMALL}>>= create_semantic_hash_map(c1.num_vars());
             let bdd = bdd_builder.compile_cnf(&c1);
             let sdd = sdd_builder.compile_cnf(&c1);
-            bdd.semantic_hash(bdd_builder.get_order(), &map) == sdd.semantic_hash(sdd_builder.get_vtree_manager(), &map)
+            bdd.semantic_hash(bdd_builder.order(), &map) == sdd.semantic_hash(sdd_builder.vtree_manager(), &map)
         }
     }
 
@@ -463,8 +421,8 @@ mod test_bdd_builder {
             let dnnf = builder2.compile_cnf_topdown(&c1);
 
             let bddwmc = super::repr::wmc::WmcParams::new(weight_map);
-            let bddres = cnf1.wmc(builder.get_order(),  &bddwmc);
-            let dnnfres = dnnf.wmc(builder.get_order(), &bddwmc);
+            let bddres = cnf1.wmc(builder.order(),  &bddwmc);
+            let dnnfres = dnnf.wmc(builder.order(), &bddwmc);
             let eps = f64::abs(bddres.0 - dnnfres.0) < 0.0001;
             if !eps {
               println!("error on input {}: bddres {}, cnfres {}\n topdown bdd: {}\nbottom-up bdd: {}",
@@ -486,8 +444,8 @@ mod test_bdd_builder {
             let bddwmc = super::repr::wmc::WmcParams::new(weight_map);
             let cnf1 = builder1.compile_cnf(&c1);
             let cnf2 = builder2.compile_cnf(&c1);
-            let wmc1 = cnf1.wmc(builder1.get_order(), &bddwmc);
-            let wmc2 = cnf2.wmc(builder2.get_order(), &bddwmc);
+            let wmc1 = cnf1.wmc(builder1.order(), &bddwmc);
+            let wmc2 = cnf2.wmc(builder2.order(), &bddwmc);
             TestResult::from_bool(f64::abs(wmc1.0 - wmc2.0) < 0.00001)
         }
     }
@@ -525,7 +483,7 @@ mod test_bdd_builder {
                 let mut conj = builder.and(x, y);
                 conj = builder.and(conj, z);
                 conj = builder.and(conj, cnf);
-                let poss_max = conj.wmc(builder.get_order(), &wmc);
+                let poss_max = conj.wmc(builder.order(), &wmc);
                 if poss_max.0 > max {
                     max = poss_max.0;
                     max_assgn.set(VarLabel::new(0), *v1);
@@ -555,7 +513,7 @@ mod test_bdd_builder {
             let mut conj = builder.and(v0, v1);
             conj = builder.and(conj, v2);
             conj = builder.and(conj, cnf);
-            let poss_max = conj.wmc(builder.get_order(), &wmc);
+            let poss_max = conj.wmc(builder.order(), &wmc);
             if f64::abs(poss_max.0 - max) > 0.0001 {
                 pm_check = false;
             }
@@ -565,7 +523,7 @@ mod test_bdd_builder {
             let mut conj2 = builder.and(w0, w1);
             conj2 = builder.and(conj2, w2);
             builder.and(conj2, cnf);
-            let poss_max2 = conj.wmc(builder.get_order(), &wmc);
+            let poss_max2 = conj.wmc(builder.order(), &wmc);
             if f64::abs(poss_max2.0 - max) > 0.0001 {
                 pm_check = false;
             }
@@ -635,7 +593,7 @@ mod test_bdd_builder {
                 let mut conj = builder.and(x, y);
                 conj = builder.and(conj, z);
                 conj = builder.and(conj, cnf);
-                let poss_max = conj.wmc(builder.get_order(), &wmc);
+                let poss_max = conj.wmc(builder.order(), &wmc);
                 if poss_max.1 > max {
                     max = poss_max.1;
                     max_assgn.set(decisions[0], *v1);
@@ -670,7 +628,7 @@ mod test_bdd_builder {
             let mut conj = builder.and(v0, v1);
             conj = builder.and(conj, v2);
             conj = builder.and(conj, cnf);
-            let poss_max = conj.wmc(builder.get_order(), &wmc);
+            let poss_max = conj.wmc(builder.order(), &wmc);
             if f64::abs(poss_max.1 - max) > 0.0001 {
                 pm_check = false;
             }
@@ -680,7 +638,7 @@ mod test_bdd_builder {
             let mut conj2 = builder.and(w0, w1);
             conj2 = builder.and(conj2, w2);
             builder.and(conj2, cnf);
-            let poss_max2 = conj.wmc(builder.get_order(), &wmc);
+            let poss_max2 = conj.wmc(builder.order(), &wmc);
             if f64::abs(poss_max2.1 - max) > 0.0001 {
                 pm_check = false;
             }
@@ -701,7 +659,7 @@ mod test_bdd_builder {
             // they are with the property that pos_weight + neg_weight = 1
             let map = create_semantic_hash_map::<{primes::U32_SMALL}>(cnf.num_vars());
 
-            bdd.semantic_hash(builder.get_order(), &map) == smoothed.semantic_hash(builder.get_order(), &map)
+            bdd.semantic_hash(builder.order(), &map) == smoothed.semantic_hash(builder.order(), &map)
         }
     }
 }
@@ -801,12 +759,12 @@ mod test_sdd_builder {
            let order : Vec<VarLabel> = (0..cnf.num_vars()).map(|x| VarLabel::new(x as u64)).collect();
            let builder = super::CompressionSddBuilder::new(VTree::even_split(&order, 3));
            let cnf_sdd = builder.compile_cnf(&cnf);
-           let sdd_res = cnf_sdd.semantic_hash(builder.get_vtree_manager(), &weight_map);
+           let sdd_res = cnf_sdd.semantic_hash(builder.vtree_manager(), &weight_map);
 
 
             let bdd_builder = RobddBuilder::<AllTable<BddPtr>>::new_default_order(cnf.num_vars());
             let cnf_bdd = bdd_builder.compile_cnf(&cnf);
-            let bdd_res = cnf_bdd.semantic_hash(bdd_builder.get_order(), &weight_map);
+            let bdd_res = cnf_bdd.semantic_hash(bdd_builder.order(), &weight_map);
             assert_eq!(bdd_res, sdd_res);
             TestResult::passed()
         }
@@ -826,12 +784,12 @@ mod test_sdd_builder {
             let weight_map = create_semantic_hash_map::<{primes::U32_SMALL}>(cnf.num_vars());
             let builder = super::CompressionSddBuilder::new(vtree);
             let cnf_sdd = builder.compile_cnf(&cnf);
-            let sdd_res = cnf_sdd.semantic_hash(builder.get_vtree_manager(), &weight_map);
+            let sdd_res = cnf_sdd.semantic_hash(builder.vtree_manager(), &weight_map);
 
 
             let bdd_builder = RobddBuilder::<AllTable<BddPtr>>::new_default_order(cnf.num_vars());
             let cnf_bdd = bdd_builder.compile_cnf(&cnf);
-            let bdd_res = cnf_bdd.semantic_hash(bdd_builder.get_order(), &weight_map);
+            let bdd_res = cnf_bdd.semantic_hash(bdd_builder.order(), &weight_map);
             assert_eq!(bdd_res, sdd_res);
             TestResult::passed()
         }
@@ -914,8 +872,8 @@ mod test_sdd_builder {
 
             let map : WmcParams<FiniteField<{primes::U32_SMALL}>> = create_semantic_hash_map(builder1.num_vars());
 
-            let h1 = c1.semantic_hash(builder1.get_vtree_manager(), &map);
-            let h2 = c2.semantic_hash(builder2.get_vtree_manager(), &map);
+            let h1 = c1.semantic_hash(builder1.vtree_manager(), &map);
+            let h2 = c2.semantic_hash(builder2.vtree_manager(), &map);
 
             h1 == h2
         }
@@ -941,8 +899,8 @@ mod test_sdd_builder {
 
             let map : WmcParams<FiniteField<{primes::U32_SMALL}>> = create_semantic_hash_map(compr_builder.num_vars());
 
-            let compr_h = compr_cnf.semantic_hash(compr_builder.get_vtree_manager(), &map);
-            let uncompr_h = uncompr_cnf.semantic_hash(uncompr_builder.get_vtree_manager(), &map);
+            let compr_h = compr_cnf.semantic_hash(compr_builder.vtree_manager(), &map);
+            let uncompr_h = uncompr_cnf.semantic_hash(uncompr_builder.vtree_manager(), &map);
 
             if compr_h != uncompr_h {
                 println!("not equal! hashes: compr: {compr_h}, uncompr: {uncompr_h}");
@@ -1027,7 +985,7 @@ mod test_sdd_builder {
             let map : WmcParams<FiniteField<{primes::U32_SMALL}>>= create_semantic_hash_map(builder.num_vars());
             let mut seen_hashes : HashMap<u128, SddPtr> = HashMap::new();
             for sdd in builder.node_iter() {
-                let hash = sdd.semantic_hash(builder.get_vtree_manager(), &map);
+                let hash = sdd.semantic_hash(builder.vtree_manager(), &map);
                 if seen_hashes.contains_key(&hash.value()) {
                     let c = seen_hashes.get(&hash.value()).unwrap();
                     println!("cnf: {}", c1);
@@ -1053,7 +1011,7 @@ mod test_sdd_builder {
             let map : WmcParams<FiniteField<{primes::U32_SMALL}>>= create_semantic_hash_map(builder.num_vars());
             let mut seen_hashes : HashMap<u128, SddPtr> = HashMap::new();
             for sdd in builder.node_iter() {
-                let hash = sdd.semantic_hash(builder.get_vtree_manager(), &map);
+                let hash = sdd.semantic_hash(builder.vtree_manager(), &map);
 
                 // see the hash itself
                 if seen_hashes.contains_key(&hash.value()) {
@@ -1105,8 +1063,8 @@ mod test_sdd_builder {
             let sdd = builder.compile_cnf(&c1);
             let compl = sdd.neg();
 
-            let sdd_hash = sdd.semantic_hash(builder.get_vtree_manager(), &map);
-            let compl_hash = compl.semantic_hash(builder.get_vtree_manager(), &map);
+            let sdd_hash = sdd.semantic_hash(builder.vtree_manager(), &map);
+            let compl_hash = compl.semantic_hash(builder.vtree_manager(), &map);
 
             let sum = (sdd_hash + compl_hash).value();
 

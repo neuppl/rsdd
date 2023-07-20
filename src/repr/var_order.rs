@@ -6,7 +6,7 @@ use crate::{
     repr::{bdd::BddPtr, var_label::VarLabel},
     util,
 };
-use std::{fmt::Display, slice::Iter};
+use std::fmt::Display;
 
 #[derive(Debug, Clone)]
 pub struct VarOrder {
@@ -139,12 +139,6 @@ impl VarOrder {
         }
     }
 
-    /// Produces an iterator of var -> position, where the
-    /// result\[i\] gives the position of variable i in the order
-    pub fn order_iter(&self) -> Iter<usize> {
-        self.var_to_pos.iter()
-    }
-
     /// Iterate through the variables in the order in which they appear in the order
     pub fn in_order_iter(&self) -> impl Iterator<Item = VarLabel> + '_ {
         self.pos_to_var.iter().map(|x| VarLabel::new_usize(*x))
@@ -193,11 +187,6 @@ impl VarOrder {
                 a, b, c
             ),
         }
-    }
-
-    /// Produces a vector of variable positions indexed by
-    pub fn get_var_to_pos_vec(&self) -> Vec<usize> {
-        self.var_to_pos.clone()
     }
 
     /// Gets the variable that occurs last in the order

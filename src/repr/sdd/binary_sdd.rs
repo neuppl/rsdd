@@ -18,7 +18,7 @@ use std::{
 #[derive(Debug)]
 pub struct BinarySDD<'a> {
     label: VarLabel,
-    vtree: VTreeIndex,
+    index: VTreeIndex,
     low: SddPtr<'a>,
     high: SddPtr<'a>,
 
@@ -32,21 +32,21 @@ impl<'a> BinarySDD<'a> {
         label: VarLabel,
         low: SddPtr<'a>,
         high: SddPtr<'a>,
-        vtree: VTreeIndex,
+        index: VTreeIndex,
     ) -> BinarySDD<'a> {
         BinarySDD {
             label,
             low,
             high,
-            vtree,
+            index,
             semantic_hash: RefCell::new(None),
             scratch: RefCell::new(None),
         }
     }
 
     #[inline]
-    pub fn vtree(&self) -> VTreeIndex {
-        self.vtree
+    pub fn index(&self) -> VTreeIndex {
+        self.index
     }
 
     #[inline]
@@ -69,7 +69,7 @@ impl<'a> BinarySDD<'a> {
         vtree: &VTreeManager,
         map: &WmcParams<FiniteField<P>>,
     ) -> FiniteField<P> {
-        let (low_w, high_w) = map.get_var_weight(self.label());
+        let (low_w, high_w) = map.var_weight(self.label());
         self.low().cached_semantic_hash(vtree, map) * (*low_w)
             + self.high().cached_semantic_hash(vtree, map) * (*high_w)
     }
@@ -89,7 +89,7 @@ impl<'a> BinarySDD<'a> {
         h
     }
 
-    pub fn get_scratch<T: ?Sized + Clone + 'static>(&self) -> Option<T>
+    pub fn scratch<T: ?Sized + Clone + 'static>(&self) -> Option<T>
     where
         T: Clone,
     {
@@ -124,7 +124,7 @@ impl<'a> BinarySDD<'a> {
 
 impl<'a> Hash for BinarySDD<'a> {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.vtree.hash(state);
+        self.index.hash(state);
         self.label.hash(state);
         self.low.hash(state);
         self.high.hash(state);
@@ -133,7 +133,7 @@ impl<'a> Hash for BinarySDD<'a> {
 
 impl<'a> PartialEq for BinarySDD<'a> {
     fn eq(&self, other: &Self) -> bool {
-        self.vtree == other.vtree
+        self.index == other.index
             && self.low == other.low
             && self.high == other.high
             && self.label == other.label
@@ -154,7 +154,7 @@ impl<'a> Ord for BinarySDD<'a> {
             core::cmp::Ordering::Equal => {}
             ord => return ord,
         }
-        match self.vtree.cmp(&other.vtree) {
+        match self.index.cmp(&other.index) {
             core::cmp::Ordering::Equal => {}
             ord => return ord,
         }
@@ -174,7 +174,7 @@ impl<'a> Clone for BinarySDD<'a> {
     fn clone(&self) -> Self {
         Self {
             label: self.label,
-            vtree: self.vtree,
+            index: self.index,
             low: self.low,
             high: self.high,
             scratch: RefCell::new(None),

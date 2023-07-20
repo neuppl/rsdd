@@ -79,7 +79,7 @@ struct BenchResult {
 }
 
 fn compile_topdown_nnf(str: String, _args: &Args) -> BenchResult {
-    let cnf = Cnf::from_file(str);
+    let cnf = Cnf::from_dimacs(&str);
     let order = VarOrder::linear_order(cnf.num_vars());
     let builder = StandardDecisionNNFBuilder::new(order);
     // let order = cnf.force_order();
@@ -92,7 +92,7 @@ fn compile_topdown_nnf(str: String, _args: &Args) -> BenchResult {
 }
 
 fn compile_sdd_dtree(str: String, _args: &Args) -> BenchResult {
-    let cnf = Cnf::from_file(str);
+    let cnf = Cnf::from_dimacs(&str);
     let dtree = DTree::from_cnf(&cnf, &cnf.min_fill_order());
     let vtree = VTree::from_dtree(&dtree).unwrap();
     let builder = CompressionSddBuilder::new(vtree.clone());
@@ -119,7 +119,7 @@ fn compile_sdd_dtree(str: String, _args: &Args) -> BenchResult {
 }
 
 fn compile_sdd_rightlinear(str: String, _args: &Args) -> BenchResult {
-    let cnf = Cnf::from_file(str);
+    let cnf = Cnf::from_dimacs(&str);
     let o: Vec<VarLabel> = (0..cnf.num_vars())
         .map(|x| VarLabel::new(x as u64))
         .collect();
@@ -148,7 +148,7 @@ fn compile_sdd_rightlinear(str: String, _args: &Args) -> BenchResult {
 }
 
 fn compile_bdd(str: String, _args: &Args) -> BenchResult {
-    let cnf = Cnf::from_file(str);
+    let cnf = Cnf::from_dimacs(&str);
     let builder = RobddBuilder::<BddApplyTable<BddPtr>>::new_default_order_lru(cnf.num_vars());
     let bdd = builder.compile_cnf(&cnf);
 
@@ -166,7 +166,7 @@ fn compile_bdd(str: String, _args: &Args) -> BenchResult {
 }
 
 fn compile_bdd_dtree(str: String, _args: &Args) -> BenchResult {
-    let cnf = Cnf::from_file(str);
+    let cnf = Cnf::from_dimacs(&str);
     let order = cnf.min_fill_order();
     let dtree = DTree::from_cnf(&cnf, &order);
     let builder =

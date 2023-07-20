@@ -70,7 +70,7 @@ impl<'a> SddPtr<'a> {
             PtrTrue => FiniteField::new(1),
             PtrFalse => FiniteField::new(0),
             Var(label, polarity) => {
-                let (l_w, h_w) = map.get_var_weight(*label);
+                let (l_w, h_w) = map.var_weight(*label);
                 if *polarity {
                     *h_w
                 } else {
@@ -84,11 +84,11 @@ impl<'a> SddPtr<'a> {
     }
 
     /// Gets the scratch value stored in `&self`
-    pub fn get_scratch<T: ?Sized + Clone + 'static>(&self) -> Option<T> {
+    pub fn scratch<T: ?Sized + Clone + 'static>(&self) -> Option<T> {
         match self {
             PtrTrue | PtrFalse | Var(_, _) => None,
-            BDD(bdd) | ComplBDD(bdd) => bdd.get_scratch(),
-            Reg(or) | Compl(or) => or.get_scratch(),
+            BDD(bdd) | ComplBDD(bdd) => bdd.scratch(),
+            Reg(or) | Compl(or) => or.scratch(),
         }
     }
 
@@ -97,7 +97,7 @@ impl<'a> SddPtr<'a> {
     /// Panics if not a node.
     ///
     /// Invariant: values stored in `set_scratch` must not outlive
-    /// the provided allocator `alloc` (i.e., calling `get_scratch`
+    /// the provided allocator `alloc` (i.e., calling `scratch`
     /// involves dereferencing a pointer stored in `alloc`)
     pub fn set_scratch<T: 'static>(&self, v: T) {
         match self {
@@ -111,7 +111,7 @@ impl<'a> SddPtr<'a> {
         match self {
             PtrTrue | PtrFalse | Var(_, _) => true,
             BDD(bdd) | ComplBDD(bdd) => bdd.is_scratch_cleared(),
-            Reg(or) | Compl(or) => or.scratch.borrow().is_none(),
+            Reg(or) | Compl(or) => or.is_scratch_cleared(),
         }
     }
 
@@ -179,27 +179,12 @@ impl<'a> SddPtr<'a> {
         SddNodeIter::new(*self)
     }
 
-    /// gets the total number of nodes that are a child to this SDD
-    pub fn num_child_nodes(&self) -> usize {
-        match &self {
-            PtrTrue | PtrFalse | Var(_, _) => 1,
-            BDD(or) | ComplBDD(or) => 1 + or.low().num_child_nodes() + or.high().num_child_nodes(),
-            Compl(or) | Reg(or) => {
-                1 + or
-                    .nodes
-                    .iter()
-                    .map(|n| 1 + n.prime.num_child_nodes() + n.sub.num_child_nodes())
-                    .sum::<usize>()
-            }
-        }
-    }
-
     /// retrieve the vtree index (as its index in a left-first depth-first traversal)
     ///
     /// panics if this is not a node
     pub fn vtree(&self) -> VTreeIndex {
         match self {
-            BDD(bdd) | ComplBDD(bdd) => bdd.vtree(),
+            BDD(bdd) | ComplBDD(bdd) => bdd.index(),
             Reg(or) | Compl(or) => or.index(),
             _ => panic!("called vtree() on a constant"),
         }
@@ -223,14 +208,14 @@ impl<'a> SddPtr<'a> {
             }
             Reg(or) | Compl(or) => {
                 let mut visited_sdds: HashSet<SddPtr> = HashSet::new();
-                for and in or.nodes.iter() {
+                for and in or.iter() {
                     if visited_sdds.contains(&and.sub) {
                         return false;
                     }
                     visited_sdds.insert(and.sub);
                 }
 
-                or.nodes.iter().all(|and| and.prime.is_compressed())
+                or.iter().all(|and| and.prime.is_compressed())
             }
         }
     }
@@ -253,7 +238,7 @@ impl<'a> SddPtr<'a> {
                 // and an arbitrary prime. we are looking for untrimmed decomposition pairs of the form (a, T) and (~a, F)
                 let mut visited_primes: HashSet<SddPtr> = HashSet::new();
 
-                for and in or.nodes.iter() {
+                for and in or.iter() {
                     let prime = and.prime;
 
                     // decomposition of the form (T, a)
@@ -274,7 +259,7 @@ impl<'a> SddPtr<'a> {
                     visited_primes.insert(prime.neg());
                 }
 
-                or.nodes.iter().all(|s| s.prime.is_trimmed())
+                or.iter().all(|s| s.prime.is_trimmed())
             }
         }
     }
@@ -328,7 +313,7 @@ impl<'a> DDNNFPtr<'a> for SddPtr<'a> {
                         or_v
                     };
 
-                    match ptr.get_scratch::<DDNNFCache<T>>() {
+                    match ptr.scratch::<DDNNFCache<T>>() {
                         // first, check if cached; explicit arms here for clarity
                         Some((Some(l), Some(h))) => {
                             if ptr.is_neg() {
@@ -355,16 +340,17 @@ impl<'a> DDNNFPtr<'a> for SddPtr<'a> {
     fn count_nodes(&self) -> usize {
         debug_assert!(self.is_scratch_cleared());
         fn count_h(ptr: SddPtr) -> usize {
-            if ptr.is_const() || ptr.is_var() {
-                return 0;
-            }
-            match ptr.get_scratch::<usize>() {
-                Some(_) => 0,
-                None => {
-                    // found a new node
+            match ptr {
+                PtrTrue | PtrFalse | Var(_, _) => 0,
+                BDD(_) | ComplBDD(_) | Reg(_) | Compl(_) if ptr.scratch::<usize>().is_some() => 0,
+                BDD(node) | ComplBDD(node) => {
+                    ptr.set_scratch::<usize>(0);
+                    1 + count_h(node.low()) + 1 + count_h(node.high())
+                }
+                Reg(or) | Compl(or) => {
                     ptr.set_scratch::<usize>(0);
                     let mut c = 0;
-                    for a in ptr.node_iter() {
+                    for a in or.iter() {
                         c += count_h(a.sub());
                         c += count_h(a.prime());
                         c += 1;
@@ -433,7 +419,7 @@ fn is_compressed_simple_bdd() {
         VarLabel::new(2),
         a,
         b,
-        vtree_manager.get_varlabel_idx(VarLabel::new(2)),
+        vtree_manager.var_index(VarLabel::new(2)),
     );
     let binary_sdd_ptr = &mut binary_sdd;
     let bdd_ptr = SddPtr::BDD(binary_sdd_ptr);
@@ -453,7 +439,7 @@ fn is_compressed_simple_bdd_duplicate() {
         VarLabel::new(2),
         a,
         a, // duplicate with low - not compressed!
-        vtree_manager.get_varlabel_idx(VarLabel::new(2)),
+        vtree_manager.var_index(VarLabel::new(2)),
     );
     let binary_sdd_ptr = &mut binary_sdd;
     let bdd_ptr = SddPtr::BDD(binary_sdd_ptr);

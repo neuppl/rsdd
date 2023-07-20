@@ -105,7 +105,7 @@ impl DTree {
                 vars,
             } => {
                 for c in clause.iter() {
-                    vars.insert(c.get_label());
+                    vars.insert(c.label());
                 }
             }
         }
@@ -227,7 +227,7 @@ impl DTree {
 
 #[test]
 fn test_dtree() {
-    let cnf = Cnf::from_string(String::from("(1 || -2) && (2 || 3) && (3 || 4) "));
+    let cnf = Cnf::from_string("(1 || -2) && (2 || 3) && (3 || 4) ");
     // let cnf = Cnf::from_string(String::from("(1 || -2 || 3) && (2 || 3)"));
     // let cnf = Cnf::from_string(String::from("(3 || 4) && (1 || 2) "));
     println!("cnf: {:?}", cnf.to_string());
