@@ -111,7 +111,7 @@ impl<'a> SddPtr<'a> {
         match self {
             PtrTrue | PtrFalse | Var(_, _) => true,
             BDD(bdd) | ComplBDD(bdd) => bdd.is_scratch_cleared(),
-            Reg(or) | Compl(or) => or.scratch.borrow().is_none(),
+            Reg(or) | Compl(or) => or.is_scratch_cleared(),
         }
     }
 

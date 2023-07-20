@@ -19,8 +19,8 @@ pub struct SddOr<'a> {
     pub nodes: Vec<SddAnd<'a>>,
 
     // scratch
-    pub scratch: RefCell<Option<Box<dyn Any>>>,
-    pub semantic_hash: RefCell<Option<u128>>,
+    scratch: RefCell<Option<Box<dyn Any>>>,
+    semantic_hash: RefCell<Option<u128>>,
 }
 
 impl<'a> SddOr<'a> {
