@@ -517,8 +517,8 @@ impl<'a> BddPtr<'a> {
         );
         // multiply in weights of all variables in the partial assignment
         for lit in partial_map_assgn.assignment_iter() {
-            let (l, h) = wmc.var_weight(lit.get_label());
-            if lit.get_polarity() {
+            let (l, h) = wmc.var_weight(lit.label());
+            if lit.polarity() {
                 v = v * (*h);
             } else {
                 v = v * (*l);
@@ -735,8 +735,8 @@ impl<'a> BddPtr<'a> {
     {
         let mut partial_join_acc = T::one();
         for lit in partial_join_assgn.assignment_iter() {
-            let (l, h) = wmc.var_weight(lit.get_label());
-            if lit.get_polarity() {
+            let (l, h) = wmc.var_weight(lit.label());
+            if lit.polarity() {
                 partial_join_acc = partial_join_acc * (*h);
             } else {
                 partial_join_acc = partial_join_acc * (*l);

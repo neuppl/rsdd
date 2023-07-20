@@ -117,7 +117,7 @@ pub trait SddBuilder<'a>: BottomUpBuilder<'a, SddPtr<'a>> {
     /// a is prime to b
     fn and_indep(&'a self, a: SddPtr<'a>, b: SddPtr<'a>, lca: VTreeIndex) -> SddPtr<'a> {
         // check if this is a right-linear fragment and construct the relevant SDD type
-        if self.vtree_manager().get_idx(lca).is_right_linear() {
+        if self.vtree_manager().vtree(lca).is_right_linear() {
             // a is a right-linear decision for b; construct a binary decision
             let bdd = match a {
                 SddPtr::Var(label, true) => BinarySDD::new(label, SddPtr::false_ptr(), b, lca),
@@ -251,7 +251,7 @@ pub trait SddBuilder<'a>: BottomUpBuilder<'a, SddPtr<'a>> {
         // check if a and b are both binary SDDs; if so, we apply BDD conjunction here
 
         if let SddPtr::BDD(or) | SddPtr::ComplBDD(or) = a {
-            if self.vtree_manager().get_idx(lca).is_right_linear() {
+            if self.vtree_manager().vtree(lca).is_right_linear() {
                 let l = self.and(a.low(), b.low());
                 let h = self.and(a.high(), b.high());
                 return self.unique_bdd(BinarySDD::new(or.label(), l, h, lca));
@@ -326,9 +326,9 @@ pub trait SddBuilder<'a>: BottomUpBuilder<'a, SddPtr<'a>> {
         match ptr {
             SddPtr::Var(lbl, _) => {
                 let idx = self.vtree_manager().var_index(lbl);
-                self.vtree_manager().get_idx(idx)
+                self.vtree_manager().vtree(idx)
             }
-            SddPtr::Compl(_) | SddPtr::Reg(_) => self.vtree_manager().get_idx(ptr.vtree()),
+            SddPtr::Compl(_) | SddPtr::Reg(_) => self.vtree_manager().vtree(ptr.vtree()),
             _ => panic!("called vtree on constant"),
         }
     }
@@ -359,10 +359,7 @@ pub trait SddBuilder<'a>: BottomUpBuilder<'a, SddPtr<'a>> {
             let fst1 = c1
                 .iter()
                 .max_by(|l1, l2| {
-                    if self
-                        .vtree_manager()
-                        .is_prime_var(l1.get_label(), l2.get_label())
-                    {
+                    if self.vtree_manager().is_prime_var(l1.label(), l2.label()) {
                         Ordering::Less
                     } else {
                         Ordering::Equal
@@ -372,10 +369,7 @@ pub trait SddBuilder<'a>: BottomUpBuilder<'a, SddPtr<'a>> {
             let fst2 = c2
                 .iter()
                 .max_by(|l1, l2| {
-                    if self
-                        .vtree_manager()
-                        .is_prime_var(l1.get_label(), l2.get_label())
-                    {
+                    if self.vtree_manager().is_prime_var(l1.label(), l2.label()) {
                         Ordering::Less
                     } else {
                         Ordering::Equal
@@ -384,7 +378,7 @@ pub trait SddBuilder<'a>: BottomUpBuilder<'a, SddPtr<'a>> {
                 .unwrap();
             if self
                 .vtree_manager()
-                .is_prime_var(fst1.get_label(), fst2.get_label())
+                .is_prime_var(fst1.label(), fst2.label())
             {
                 Ordering::Less
             } else {
@@ -393,10 +387,10 @@ pub trait SddBuilder<'a>: BottomUpBuilder<'a, SddPtr<'a>> {
         });
 
         for lit_vec in cnf_sorted.iter() {
-            let (vlabel, val) = (lit_vec[0].get_label(), lit_vec[0].get_polarity());
+            let (vlabel, val) = (lit_vec[0].label(), lit_vec[0].polarity());
             let mut bdd = SddPtr::Var(vlabel, val);
             for lit in lit_vec {
-                let (vlabel, val) = (lit.get_label(), lit.get_polarity());
+                let (vlabel, val) = (lit.label(), lit.polarity());
                 let var = SddPtr::Var(vlabel, val);
                 bdd = self.or(bdd, var);
             }

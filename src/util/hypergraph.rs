@@ -235,7 +235,7 @@ pub fn from_cnf(cnf: &Cnf) -> Hypergraph<VarLabel> {
         let hedge = clause
             .iter()
             .map(|l| {
-                let var = l.get_label();
+                let var = l.label();
                 vars.insert(var);
                 var
             })

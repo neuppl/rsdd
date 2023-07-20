@@ -74,10 +74,10 @@ impl<T: Semiring> WmcParams<T> {
     pub fn assignment_weight(&self, assgn: &[Literal]) -> T {
         let mut prod = self.one;
         for lit in assgn.iter() {
-            if lit.get_polarity() {
-                prod = prod * self.var_to_val[lit.get_label().value_usize()].unwrap().1
+            if lit.polarity() {
+                prod = prod * self.var_to_val[lit.label().value_usize()].unwrap().1
             } else {
-                prod = prod * self.var_to_val[lit.get_label().value_usize()].unwrap().0
+                prod = prod * self.var_to_val[lit.label().value_usize()].unwrap().0
             }
         }
         prod

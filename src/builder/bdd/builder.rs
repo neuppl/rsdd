@@ -51,12 +51,12 @@ pub trait BddBuilder<'a>: BottomUpBuilder<'a, BddPtr<'a>> {
         for clause in clauses.iter() {
             let mut cur_ptr = BddPtr::false_ptr();
             for lit in clause.iter() {
-                match assgn.get(lit.get_label()) {
+                match assgn.get(lit.label()) {
                     None => {
-                        let new_v = self.var(lit.get_label(), lit.get_polarity());
+                        let new_v = self.var(lit.label(), lit.polarity());
                         cur_ptr = self.or(new_v, cur_ptr);
                     }
-                    Some(v) if v == lit.get_polarity() => {
+                    Some(v) if v == lit.polarity() => {
                         cur_ptr = BddPtr::true_ptr();
                         break;
                     }
@@ -99,7 +99,7 @@ pub trait BddBuilder<'a>: BottomUpBuilder<'a, BddPtr<'a>> {
             let fst1 = c1
                 .iter()
                 .max_by(|l1, l2| {
-                    if self.less_than(l1.get_label(), l2.get_label()) {
+                    if self.less_than(l1.label(), l2.label()) {
                         Ordering::Less
                     } else {
                         Ordering::Equal
@@ -109,14 +109,14 @@ pub trait BddBuilder<'a>: BottomUpBuilder<'a, BddPtr<'a>> {
             let fst2 = c2
                 .iter()
                 .max_by(|l1, l2| {
-                    if self.less_than(l1.get_label(), l2.get_label()) {
+                    if self.less_than(l1.label(), l2.label()) {
                         Ordering::Less
                     } else {
                         Ordering::Equal
                     }
                 })
                 .unwrap();
-            if self.less_than(fst1.get_label(), fst2.get_label()) {
+            if self.less_than(fst1.label(), fst2.label()) {
                 Ordering::Less
             } else {
                 Ordering::Equal
@@ -124,10 +124,10 @@ pub trait BddBuilder<'a>: BottomUpBuilder<'a, BddPtr<'a>> {
         });
 
         for lit_vec in cnf_sorted.iter() {
-            let (vlabel, val) = (lit_vec[0].get_label(), lit_vec[0].get_polarity());
+            let (vlabel, val) = (lit_vec[0].label(), lit_vec[0].polarity());
             let mut bdd = self.var(vlabel, val);
             for lit in lit_vec {
-                let (vlabel, val) = (lit.get_label(), lit.get_polarity());
+                let (vlabel, val) = (lit.label(), lit.polarity());
                 let var = self.var(vlabel, val);
                 bdd = self.or(bdd, var);
             }

@@ -131,12 +131,12 @@ impl CnfHasher {
     }
 
     pub fn decide(&mut self, lit: Literal) {
-        if lit.get_polarity() {
-            for clause_idx in self.pos_lits[lit.get_label().value_usize()].iter() {
+        if lit.polarity() {
+            for clause_idx in self.pos_lits[lit.label().value_usize()].iter() {
                 self.state.last_mut().unwrap().remove(clause_idx);
             }
         } else {
-            for clause_idx in self.neg_lits[lit.get_label().value_usize()].iter() {
+            for clause_idx in self.neg_lits[lit.label().value_usize()].iter() {
                 self.state.last_mut().unwrap().remove(clause_idx);
             }
         }
@@ -269,7 +269,7 @@ impl Cnf {
             .filter(|clause| !clause.is_empty())
             .map(|clause| {
                 let mut clause = clause.clone();
-                clause.sort_by_key(|a| a.get_label().value());
+                clause.sort_by_key(|a| a.label().value());
                 clause.dedup();
                 clause
             })
@@ -280,7 +280,7 @@ impl Cnf {
             .map(|clause| {
                 clause
                     .iter()
-                    .map(|lit| lit.get_label().value() + 1)
+                    .map(|lit| lit.label().value() + 1)
                     .max()
                     .unwrap_or(0)
             })
@@ -398,8 +398,8 @@ impl Cnf {
         for clause in self.clauses.iter() {
             let mut clause_sat = false;
             for lit in clause.iter() {
-                let assgn = assignment[lit.label() as usize];
-                if lit.get_polarity() == assgn {
+                let assgn = assignment[lit.label().value() as usize];
+                if lit.polarity() == assgn {
                     clause_sat = true;
                 }
             }
@@ -416,8 +416,8 @@ impl Cnf {
         for clause in self.clauses.iter() {
             let mut clause_sat = false;
             for lit in clause.iter() {
-                if let Some(assgn) = partial_assignment.get(lit.get_label()) {
-                    if lit.get_polarity() == assgn {
+                if let Some(assgn) = partial_assignment.get(lit.label()) {
+                    if lit.polarity() == assgn {
                         clause_sat = true;
                     }
                 }
@@ -440,7 +440,7 @@ impl Cnf {
             // find the two variables in the clause which are farthest
             // from each other in the order
             for lit in clause.iter() {
-                let this_pos = lbl_to_pos[lit.get_label().value() as usize];
+                let this_pos = lbl_to_pos[lit.label().value() as usize];
                 min_pos = min(this_pos, min_pos);
                 max_pos = max(this_pos, max_pos);
             }
@@ -455,7 +455,7 @@ impl Cnf {
     /// 13th ACM Great Lakes symposium on VLSI. 2003.
     fn center_of_gravity(&self, clause: &[Literal], lbl_to_pos: &[usize]) -> f64 {
         let sum = clause.iter().fold(0, |acc, &lbl| {
-            lbl_to_pos[lbl.get_label().value() as usize] + acc
+            lbl_to_pos[lbl.label().value() as usize] + acc
         });
 
         (sum as f64) / (clause.len() as f64)
@@ -524,9 +524,8 @@ impl Cnf {
             }
             for (idx, clause) in self.clauses.iter().enumerate() {
                 for &lit in clause.iter() {
-                    let (cur_total, num_edges) = update[lit.get_label().value() as usize];
-                    update[lit.get_label().value() as usize] =
-                        (cur_total + cog[idx], num_edges + 1);
+                    let (cur_total, num_edges) = update[lit.label().value() as usize];
+                    update[lit.label().value() as usize] = (cur_total + cog[idx], num_edges + 1);
                 }
             }
             let avg_cog: Vec<f64> = update
@@ -563,18 +562,17 @@ impl Cnf {
             .iter()
             .filter_map(|clause| {
                 // first, check if there is a true literal -- if there is, filter out this clause
-                if clause.iter().any(|outer| {
-                    outer.get_label() == lit.get_label()
-                        && outer.get_polarity() == lit.get_polarity()
-                }) {
+                if clause
+                    .iter()
+                    .any(|outer| outer.label() == lit.label() && outer.polarity() == lit.polarity())
+                {
                     None
                 } else {
                     // next, filter out clauses with false literals
                     let filtered: Vec<Literal> = clause
                         .iter()
                         .filter(|outer| {
-                            !(lit.get_label() == outer.get_label()
-                                && lit.get_polarity() != outer.get_polarity())
+                            !(lit.label() == outer.label() && lit.polarity() != outer.polarity())
                         })
                         .copied()
                         .collect();
@@ -595,8 +593,8 @@ impl Cnf {
             // for every pair of literals in the clause, add an edge
             for i in 0..c.len() {
                 for j in i..c.len() {
-                    let a = NodeIndex::new(c[i].get_label().value_usize());
-                    let b = NodeIndex::new(c[j].get_label().value_usize());
+                    let a = NodeIndex::new(c[i].label().value_usize());
+                    let b = NodeIndex::new(c[j].label().value_usize());
                     if !g.contains_edge(a, b) {
                         g.add_edge(a, b, ());
                     }
@@ -633,8 +631,8 @@ impl Cnf {
             for lit in clause.iter() {
                 let lit_str = format!(
                     "{}{}",
-                    if lit.get_polarity() { "" } else { "-" },
-                    lit.get_label().value_usize() + 1
+                    if lit.polarity() { "" } else { "-" },
+                    lit.label().value_usize() + 1
                 );
                 if clause_str.is_empty() {
                     clause_str = lit_str;
@@ -649,7 +647,7 @@ impl Cnf {
 
     /// get a hasher for this CNF
     /// may be expensive on first call; future calls are amortized
-    pub fn get_hasher(&self) -> &CnfHasher {
+    pub fn hasher(&self) -> &CnfHasher {
         &self.hasher
     }
 
@@ -657,7 +655,7 @@ impl Cnf {
     pub fn var_in_cnf(&self, v: VarLabel) -> bool {
         let list_of_lits: Vec<Literal> = self.clauses.clone().into_iter().flatten().collect();
         for l in &list_of_lits {
-            if l.get_label() == v {
+            if l.label() == v {
                 return true;
             }
         }
@@ -694,8 +692,8 @@ impl fmt::Display for Cnf {
             for lit in clause.iter() {
                 let lit_str = format!(
                     "{}{}",
-                    if lit.get_polarity() { "" } else { "!" },
-                    lit.get_label().value()
+                    if lit.polarity() { "" } else { "!" },
+                    lit.label().value()
                 );
                 if clause_str.is_empty() {
                     clause_str = lit_str;

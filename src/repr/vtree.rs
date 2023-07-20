@@ -352,7 +352,7 @@ impl VTreeManager {
     }
 
     /// Given a vtree index, produce a pointer to the vtree this corresponds with
-    pub fn get_idx(&self, idx: VTreeIndex) -> &VTree {
+    pub fn vtree(&self, idx: VTreeIndex) -> &VTree {
         &(self.index_lookup[idx.0])
     }
 

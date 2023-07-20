@@ -42,7 +42,7 @@ impl PartialModel {
     pub fn from_litvec(assignments: &[Literal], num_vars: usize) -> PartialModel {
         let mut init_assgn = vec![None; num_vars];
         for assgn in assignments {
-            init_assgn[assgn.get_label().value_usize()] = Some(assgn.get_polarity());
+            init_assgn[assgn.label().value_usize()] = Some(assgn.polarity());
         }
         Self::from_vec(init_assgn)
     }
@@ -75,15 +75,15 @@ impl PartialModel {
     }
 
     pub fn lit_implied(&self, lit: Literal) -> bool {
-        match self.get(lit.get_label()) {
-            Some(v) => v == lit.get_polarity(),
+        match self.get(lit.label()) {
+            Some(v) => v == lit.polarity(),
             None => false,
         }
     }
 
     pub fn lit_neg_implied(&self, lit: Literal) -> bool {
-        match self.get(lit.get_label()) {
-            Some(v) => v != lit.get_polarity(),
+        match self.get(lit.label()) {
+            Some(v) => v != lit.polarity(),
             None => false,
         }
     }

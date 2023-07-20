@@ -105,7 +105,7 @@ impl DTree {
                 vars,
             } => {
                 for c in clause.iter() {
-                    vars.insert(c.get_label());
+                    vars.insert(c.label());
                 }
             }
         }

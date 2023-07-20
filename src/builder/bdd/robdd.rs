@@ -252,7 +252,7 @@ impl<'a, T: LruTable<'a, BddPtr<'a>>> RobddBuilder<'a, T> {
         // TODO: optimize this
         let mut bdd = bdd;
         for m in m.assignment_iter() {
-            bdd = self.condition(bdd, m.get_label(), m.get_polarity());
+            bdd = self.condition(bdd, m.label(), m.polarity());
         }
         bdd
     }
