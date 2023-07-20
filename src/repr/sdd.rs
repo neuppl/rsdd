@@ -179,27 +179,12 @@ impl<'a> SddPtr<'a> {
         SddNodeIter::new(*self)
     }
 
-    /// gets the total number of nodes that are a child to this SDD
-    pub fn num_child_nodes(&self) -> usize {
-        match &self {
-            PtrTrue | PtrFalse | Var(_, _) => 1,
-            BDD(or) | ComplBDD(or) => 1 + or.low().num_child_nodes() + or.high().num_child_nodes(),
-            Compl(or) | Reg(or) => {
-                1 + or
-                    .nodes
-                    .iter()
-                    .map(|n| 1 + n.prime.num_child_nodes() + n.sub.num_child_nodes())
-                    .sum::<usize>()
-            }
-        }
-    }
-
     /// retrieve the vtree index (as its index in a left-first depth-first traversal)
     ///
     /// panics if this is not a node
     pub fn vtree(&self) -> VTreeIndex {
         match self {
-            BDD(bdd) | ComplBDD(bdd) => bdd.vtree(),
+            BDD(bdd) | ComplBDD(bdd) => bdd.index(),
             Reg(or) | Compl(or) => or.index(),
             _ => panic!("called vtree() on a constant"),
         }
@@ -223,14 +208,14 @@ impl<'a> SddPtr<'a> {
             }
             Reg(or) | Compl(or) => {
                 let mut visited_sdds: HashSet<SddPtr> = HashSet::new();
-                for and in or.nodes.iter() {
+                for and in or.iter() {
                     if visited_sdds.contains(&and.sub) {
                         return false;
                     }
                     visited_sdds.insert(and.sub);
                 }
 
-                or.nodes.iter().all(|and| and.prime.is_compressed())
+                or.iter().all(|and| and.prime.is_compressed())
             }
         }
     }
@@ -253,7 +238,7 @@ impl<'a> SddPtr<'a> {
                 // and an arbitrary prime. we are looking for untrimmed decomposition pairs of the form (a, T) and (~a, F)
                 let mut visited_primes: HashSet<SddPtr> = HashSet::new();
 
-                for and in or.nodes.iter() {
+                for and in or.iter() {
                     let prime = and.prime;
 
                     // decomposition of the form (T, a)
@@ -274,7 +259,7 @@ impl<'a> SddPtr<'a> {
                     visited_primes.insert(prime.neg());
                 }
 
-                or.nodes.iter().all(|s| s.prime.is_trimmed())
+                or.iter().all(|s| s.prime.is_trimmed())
             }
         }
     }
@@ -355,16 +340,17 @@ impl<'a> DDNNFPtr<'a> for SddPtr<'a> {
     fn count_nodes(&self) -> usize {
         debug_assert!(self.is_scratch_cleared());
         fn count_h(ptr: SddPtr) -> usize {
-            if ptr.is_const() || ptr.is_var() {
-                return 0;
-            }
-            match ptr.scratch::<usize>() {
-                Some(_) => 0,
-                None => {
-                    // found a new node
+            match ptr {
+                PtrTrue | PtrFalse | Var(_, _) => 0,
+                BDD(_) | ComplBDD(_) | Reg(_) | Compl(_) if ptr.scratch::<usize>().is_some() => 0,
+                BDD(node) | ComplBDD(node) => {
+                    ptr.set_scratch::<usize>(0);
+                    1 + count_h(node.low()) + 1 + count_h(node.high())
+                }
+                Reg(or) | Compl(or) => {
                     ptr.set_scratch::<usize>(0);
                     let mut c = 0;
-                    for a in ptr.node_iter() {
+                    for a in or.iter() {
                         c += count_h(a.sub());
                         c += count_h(a.prime());
                         c += 1;

@@ -89,7 +89,6 @@ impl SDDSerializer {
             }
             SddPtr::Compl(or) | SddPtr::Reg(or) => {
                 let o: Vec<SDDAnd> = or
-                    .nodes
                     .iter()
                     .map(|and| {
                         let p = SDDSerializer::serialize_helper(and.prime(), table, nodes);
