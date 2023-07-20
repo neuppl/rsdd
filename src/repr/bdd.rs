@@ -499,7 +499,7 @@ impl<'a> BddPtr<'a> {
     ) -> RealSemiring {
         let mut v = self.bdd_fold(
             &|varlabel, low, high| {
-                let (low_w, high_w) = wmc.get_var_weight(varlabel);
+                let (low_w, high_w) = wmc.var_weight(varlabel);
                 match partial_map_assgn.get(varlabel) {
                     None => {
                         if map_vars.contains(varlabel.value_usize()) {
@@ -517,7 +517,7 @@ impl<'a> BddPtr<'a> {
         );
         // multiply in weights of all variables in the partial assignment
         for lit in partial_map_assgn.assignment_iter() {
-            let (l, h) = wmc.get_var_weight(lit.get_label());
+            let (l, h) = wmc.var_weight(lit.get_label());
             if lit.get_polarity() {
                 v = v * (*h);
             } else {
@@ -617,7 +617,7 @@ impl<'a> BddPtr<'a> {
         self.bdd_fold(
             &|varlabel, low: ExpectedUtility, high: ExpectedUtility| {
                 // get True and False weights for VarLabel
-                let (false_w, true_w) = wmc.get_var_weight(varlabel);
+                let (false_w, true_w) = wmc.var_weight(varlabel);
                 // Check if our partial model has already assigned my variable.
                 match partial_decisions.get(varlabel) {
                     // If not...
@@ -735,7 +735,7 @@ impl<'a> BddPtr<'a> {
     {
         let mut partial_join_acc = T::one();
         for lit in partial_join_assgn.assignment_iter() {
-            let (l, h) = wmc.get_var_weight(lit.get_label());
+            let (l, h) = wmc.var_weight(lit.get_label());
             if lit.get_polarity() {
                 partial_join_acc = partial_join_acc * (*h);
             } else {
@@ -746,7 +746,7 @@ impl<'a> BddPtr<'a> {
         let v = self.bdd_fold(
             &|varlabel, low: T, high: T| {
                 // get True and False weights for node VarLabel
-                let (w_l, w_h) = wmc.get_var_weight(varlabel);
+                let (w_l, w_h) = wmc.var_weight(varlabel);
                 // Check if our partial model has already assigned the node.
                 match partial_join_assgn.get(varlabel) {
                     // If not...
@@ -1049,7 +1049,7 @@ impl<'a> BddNode<'a> {
         order: &VarOrder,
         map: &WmcParams<FiniteField<P>>,
     ) -> FiniteField<P> {
-        let (low_w, high_w) = map.get_var_weight(self.var);
+        let (low_w, high_w) = map.var_weight(self.var);
         self.low.cached_semantic_hash(order, map) * (*low_w)
             + self.high.cached_semantic_hash(order, map) * (*high_w)
     }

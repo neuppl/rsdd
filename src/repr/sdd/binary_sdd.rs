@@ -69,7 +69,7 @@ impl<'a> BinarySDD<'a> {
         vtree: &VTreeManager,
         map: &WmcParams<FiniteField<P>>,
     ) -> FiniteField<P> {
-        let (low_w, high_w) = map.get_var_weight(self.label());
+        let (low_w, high_w) = map.var_weight(self.label());
         self.low().cached_semantic_hash(vtree, map) * (*low_w)
             + self.high().cached_semantic_hash(vtree, map) * (*high_w)
     }

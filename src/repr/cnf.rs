@@ -471,7 +471,7 @@ impl Cnf {
         let mut total: T = T::zero();
         let mut weight_vec = Vec::new();
         for i in 0..self.num_vars() {
-            weight_vec.push(weights.get_var_weight(VarLabel::new(i as u64)));
+            weight_vec.push(weights.var_weight(VarLabel::new(i as u64)));
         }
         for assgn in AssignmentIter::new(self.num_vars()) {
             if assgn.is_empty() {

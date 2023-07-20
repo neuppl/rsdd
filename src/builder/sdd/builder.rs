@@ -27,7 +27,7 @@ pub struct SddBuilderStats {
 
 pub trait SddBuilder<'a>: BottomUpBuilder<'a, SddPtr<'a>> {
     // internal data structures
-    fn get_vtree_manager(&self) -> &VTreeManager;
+    fn vtree_manager(&self) -> &VTreeManager;
 
     fn app_cache_get(&self, and: &SddAnd<'a>) -> Option<SddPtr<'a>>;
     fn app_cache_insert(&self, and: SddAnd<'a>, ptr: SddPtr<'a>);
@@ -117,7 +117,7 @@ pub trait SddBuilder<'a>: BottomUpBuilder<'a, SddPtr<'a>> {
     /// a is prime to b
     fn and_indep(&'a self, a: SddPtr<'a>, b: SddPtr<'a>, lca: VTreeIndex) -> SddPtr<'a> {
         // check if this is a right-linear fragment and construct the relevant SDD type
-        if self.get_vtree_manager().get_idx(lca).is_right_linear() {
+        if self.vtree_manager().get_idx(lca).is_right_linear() {
             // a is a right-linear decision for b; construct a binary decision
             let bdd = match a {
                 SddPtr::Var(label, true) => BinarySDD::new(label, SddPtr::false_ptr(), b, lca),
@@ -251,7 +251,7 @@ pub trait SddBuilder<'a>: BottomUpBuilder<'a, SddPtr<'a>> {
         // check if a and b are both binary SDDs; if so, we apply BDD conjunction here
 
         if let SddPtr::BDD(or) | SddPtr::ComplBDD(or) = a {
-            if self.get_vtree_manager().get_idx(lca).is_right_linear() {
+            if self.vtree_manager().get_idx(lca).is_right_linear() {
                 let l = self.and(a.low(), b.low());
                 let h = self.and(a.high(), b.high());
                 return self.unique_bdd(BinarySDD::new(or.label(), l, h, lca));
@@ -318,28 +318,24 @@ pub trait SddBuilder<'a>: BottomUpBuilder<'a, SddPtr<'a>> {
 
     // helpers
 
-    fn get_vtree_root(&self) -> &VTree {
-        self.get_vtree_manager().vtree_root()
-    }
-
     fn num_vars(&self) -> usize {
-        self.get_vtree_manager().num_vars()
+        self.vtree_manager().num_vars()
     }
 
-    fn get_vtree(&self, ptr: SddPtr) -> &VTree {
+    fn vtree(&self, ptr: SddPtr) -> &VTree {
         match ptr {
             SddPtr::Var(lbl, _) => {
-                let idx = self.get_vtree_manager().get_varlabel_idx(lbl);
-                self.get_vtree_manager().get_idx(idx)
+                let idx = self.vtree_manager().var_index(lbl);
+                self.vtree_manager().get_idx(idx)
             }
-            SddPtr::Compl(_) | SddPtr::Reg(_) => self.get_vtree_manager().get_idx(ptr.vtree()),
+            SddPtr::Compl(_) | SddPtr::Reg(_) => self.vtree_manager().get_idx(ptr.vtree()),
             _ => panic!("called vtree on constant"),
         }
     }
 
-    fn get_vtree_idx(&self, ptr: SddPtr) -> VTreeIndex {
+    fn vtree_index(&self, ptr: SddPtr) -> VTreeIndex {
         match ptr {
-            SddPtr::Var(lbl, _) => self.get_vtree_manager().get_varlabel_idx(lbl),
+            SddPtr::Var(lbl, _) => self.vtree_manager().var_index(lbl),
             SddPtr::BDD(_) | SddPtr::ComplBDD(_) | SddPtr::Compl(_) | SddPtr::Reg(_) => ptr.vtree(),
             _ => panic!("called vtree on constant"),
         }
@@ -364,7 +360,7 @@ pub trait SddBuilder<'a>: BottomUpBuilder<'a, SddPtr<'a>> {
                 .iter()
                 .max_by(|l1, l2| {
                     if self
-                        .get_vtree_manager()
+                        .vtree_manager()
                         .is_prime_var(l1.get_label(), l2.get_label())
                     {
                         Ordering::Less
@@ -377,7 +373,7 @@ pub trait SddBuilder<'a>: BottomUpBuilder<'a, SddPtr<'a>> {
                 .iter()
                 .max_by(|l1, l2| {
                     if self
-                        .get_vtree_manager()
+                        .vtree_manager()
                         .is_prime_var(l1.get_label(), l2.get_label())
                     {
                         Ordering::Less
@@ -387,7 +383,7 @@ pub trait SddBuilder<'a>: BottomUpBuilder<'a, SddPtr<'a>> {
                 })
                 .unwrap();
             if self
-                .get_vtree_manager()
+                .vtree_manager()
                 .is_prime_var(fst1.get_label(), fst2.get_label())
             {
                 Ordering::Less
@@ -568,10 +564,10 @@ where
         };
 
         // normalize so `a` is always prime if possible
-        let (a, b) = if self.get_vtree_idx(a) == self.get_vtree_idx(b)
+        let (a, b) = if self.vtree_index(a) == self.vtree_index(b)
             || self
-                .get_vtree_manager()
-                .is_prime_index(self.get_vtree_idx(a), self.get_vtree_idx(b))
+                .vtree_manager()
+                .is_prime_index(self.vtree_index(a), self.vtree_index(b))
         {
             (a, b)
         } else {
@@ -583,9 +579,9 @@ where
             return x;
         }
 
-        let av = self.get_vtree_idx(a);
-        let bv = self.get_vtree_idx(b);
-        let lca = self.get_vtree_manager().lca(av, bv);
+        let av = self.vtree_index(a);
+        let bv = self.vtree_index(b);
+        let lca = self.vtree_manager().lca(av, bv);
 
         // now we determine the current iterator for primes and subs
         // consider the following example vtree:
@@ -670,7 +666,7 @@ where
 
     /// Computes the SDD representing the logical function `if f then g else h`
     fn ite(&'a self, f: SddPtr<'a>, g: SddPtr<'a>, h: SddPtr<'a>) -> SddPtr<'a> {
-        let ite = Ite::new(|a, b| self.get_vtree_manager().is_prime(a, b), f, g, h);
+        let ite = Ite::new(|a, b| self.vtree_manager().is_prime(a, b), f, g, h);
         if let Ite::IteConst(f) = ite {
             return f;
         }

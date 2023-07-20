@@ -38,7 +38,7 @@ pub struct SemanticSddBuilder<'a, const P: u128> {
 
 impl<'a, const P: u128> SddBuilder<'a> for SemanticSddBuilder<'a, P> {
     #[inline]
-    fn get_vtree_manager(&self) -> &VTreeManager {
+    fn vtree_manager(&self) -> &VTreeManager {
         &self.vtree
     }
 
@@ -260,8 +260,8 @@ fn prob_equiv_sdd_demorgan() {
     let map: WmcParams<FiniteField<{ primes::U32_SMALL }>> =
         create_semantic_hash_map(builder.num_vars());
 
-    let sh1 = res.cached_semantic_hash(builder.get_vtree_manager(), &map);
-    let sh2 = expected.cached_semantic_hash(builder.get_vtree_manager(), &map);
+    let sh1 = res.cached_semantic_hash(builder.vtree_manager(), &map);
+    let sh2 = expected.cached_semantic_hash(builder.vtree_manager(), &map);
 
     assert!(sh1 == sh2, "Not eq:\nGot: {:?}\nExpected: {:?}", sh1, sh2);
 }

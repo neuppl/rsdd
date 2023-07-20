@@ -85,14 +85,14 @@ pub trait DecisionNNFBuilder<'a>: TopDownBuilder<'a, BddPtr<'a>> {
         let high_bdd = match sat.decide(Literal::new(cur_v, true)) {
             DecisionResult::UNSAT => BddPtr::false_ptr(),
             DecisionResult::SAT => {
-                let new_assgn = sat.get_difference().filter(|x| x.get_label() != cur_v);
+                let new_assgn = sat.difference_iter().filter(|x| x.get_label() != cur_v);
                 let r = self.conjoin_implied(new_assgn, BddPtr::true_ptr());
                 sat.pop();
                 r
             }
             DecisionResult::Unknown => {
                 let sub = self.topdown_h(cnf, sat, level + 1, cache);
-                let new_assgn = sat.get_difference().filter(|x| x.get_label() != cur_v);
+                let new_assgn = sat.difference_iter().filter(|x| x.get_label() != cur_v);
                 let r = self.conjoin_implied(new_assgn, sub);
                 sat.pop();
                 r
@@ -101,14 +101,14 @@ pub trait DecisionNNFBuilder<'a>: TopDownBuilder<'a, BddPtr<'a>> {
         let low_bdd = match sat.decide(Literal::new(cur_v, false)) {
             DecisionResult::UNSAT => BddPtr::false_ptr(),
             DecisionResult::SAT => {
-                let new_assgn = sat.get_difference().filter(|x| x.get_label() != cur_v);
+                let new_assgn = sat.difference_iter().filter(|x| x.get_label() != cur_v);
                 let r = self.conjoin_implied(new_assgn, BddPtr::true_ptr());
                 sat.pop();
                 r
             }
             DecisionResult::Unknown => {
                 let sub = self.topdown_h(cnf, sat, level + 1, cache);
-                let new_assgn = sat.get_difference().filter(|x| x.get_label() != cur_v);
+                let new_assgn = sat.difference_iter().filter(|x| x.get_label() != cur_v);
                 let r = self.conjoin_implied(new_assgn, sub);
                 sat.pop();
                 r
@@ -135,7 +135,7 @@ pub trait DecisionNNFBuilder<'a>: TopDownBuilder<'a, BddPtr<'a>> {
         let mut r = self.topdown_h(cnf, &mut sat, 0, &mut FxHashMap::default());
 
         // conjoin in any initially implied literals
-        for l in sat.get_difference() {
+        for l in sat.difference_iter() {
             let node = if l.get_polarity() {
                 BddNode::new(l.get_label(), BddPtr::false_ptr(), r)
             } else {

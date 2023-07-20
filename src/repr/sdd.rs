@@ -70,7 +70,7 @@ impl<'a> SddPtr<'a> {
             PtrTrue => FiniteField::new(1),
             PtrFalse => FiniteField::new(0),
             Var(label, polarity) => {
-                let (l_w, h_w) = map.get_var_weight(*label);
+                let (l_w, h_w) = map.var_weight(*label);
                 if *polarity {
                     *h_w
                 } else {
@@ -433,7 +433,7 @@ fn is_compressed_simple_bdd() {
         VarLabel::new(2),
         a,
         b,
-        vtree_manager.get_varlabel_idx(VarLabel::new(2)),
+        vtree_manager.var_index(VarLabel::new(2)),
     );
     let binary_sdd_ptr = &mut binary_sdd;
     let bdd_ptr = SddPtr::BDD(binary_sdd_ptr);
@@ -453,7 +453,7 @@ fn is_compressed_simple_bdd_duplicate() {
         VarLabel::new(2),
         a,
         a, // duplicate with low - not compressed!
-        vtree_manager.get_varlabel_idx(VarLabel::new(2)),
+        vtree_manager.var_index(VarLabel::new(2)),
     );
     let binary_sdd_ptr = &mut binary_sdd;
     let bdd_ptr = SddPtr::BDD(binary_sdd_ptr);

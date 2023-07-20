@@ -470,7 +470,7 @@ impl SATSolver {
 
     /// Get an iterator over the difference between the units implied at
     /// the top and second-to-top decision
-    pub fn get_difference(&self) -> impl Iterator<Item = Literal> + '_ {
+    pub fn difference_iter(&self) -> impl Iterator<Item = Literal> + '_ {
         self.top_state()
             .model
             .difference(&self.state_stack[self.state_stack.len() - 2].model)

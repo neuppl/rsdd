@@ -1,4 +1,4 @@
-use crate::repr::{bdd::BddPtr, var_label::VarLabel};
+use crate::repr::bdd::BddPtr;
 use std::cmp::Ordering;
 
 mod builder;
@@ -33,20 +33,5 @@ impl<'a> Ord for CompiledCNF<'a> {
 impl<'a> PartialOrd for CompiledCNF<'a> {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
-    }
-}
-
-#[derive(Debug)]
-pub struct Assignment {
-    assignments: Vec<bool>,
-}
-
-impl Assignment {
-    pub fn new(assignments: Vec<bool>) -> Assignment {
-        Assignment { assignments }
-    }
-
-    pub fn get_assignment(&self, var: VarLabel) -> bool {
-        self.assignments[var.value() as usize]
     }
 }

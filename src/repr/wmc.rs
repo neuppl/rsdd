@@ -36,7 +36,7 @@ impl<T: Semiring> WmcParams<T> {
     ///     Literal::new(VarLabel::new(1), true),
     /// ];
     ///
-    /// assert_eq!(params.get_weight(&all_true).0, 0.7)
+    /// assert_eq!(params.assignment_weight(&all_true).0, 0.7)
     /// ```
     pub fn new(var_to_val: HashMap<VarLabel, (T, T)>) -> WmcParams<T> {
         let mut var_to_val_vec: Vec<Option<(T, T)>> = vec![None; var_to_val.len()];
@@ -69,9 +69,9 @@ impl<T: Semiring> WmcParams<T> {
     ///     Literal::new(VarLabel::new(1), true),
     /// ];
     ///
-    /// assert_eq!(params.get_weight(&all_true).0, 0.7)
+    /// assert_eq!(params.assignment_weight(&all_true).0, 0.7)
     /// ```
-    pub fn get_weight(&self, assgn: &[Literal]) -> T {
+    pub fn assignment_weight(&self, assgn: &[Literal]) -> T {
         let mut prod = self.one;
         for lit in assgn.iter() {
             if lit.get_polarity() {
@@ -101,10 +101,10 @@ impl<T: Semiring> WmcParams<T> {
     ///     Literal::new(VarLabel::new(1), true),
     /// ];
     ///
-    /// assert_eq!(params.get_weight(&all_true).0, 0.7);
+    /// assert_eq!(params.assignment_weight(&all_true).0, 0.7);
     ///
     /// params.set_weight(VarLabel::new(1), RealSemiring(0.5), RealSemiring(0.5));
-    /// assert_eq!(params.get_weight(&all_true).0, 0.5);
+    /// assert_eq!(params.assignment_weight(&all_true).0, 0.5);
     /// ```
     pub fn set_weight(&mut self, lbl: VarLabel, low: T, high: T) {
         let n = lbl.value_usize();
@@ -127,10 +127,10 @@ impl<T: Semiring> WmcParams<T> {
     ///
     /// let params = WmcParams::<RealSemiring>::new(weights);
     ///
-    /// assert_eq!(*params.get_var_weight(VarLabel::new(1)), (RealSemiring(0.3), RealSemiring(0.7)))
+    /// assert_eq!(*params.var_weight(VarLabel::new(1)), (RealSemiring(0.3), RealSemiring(0.7)))
     /// ```
     // gives you the weight of `(low, high)` literals for a given VarLabel
-    pub fn get_var_weight(&self, label: VarLabel) -> &(T, T) {
+    pub fn var_weight(&self, label: VarLabel) -> &(T, T) {
         return (self.var_to_val[label.value_usize()]).as_ref().unwrap();
     }
 }
