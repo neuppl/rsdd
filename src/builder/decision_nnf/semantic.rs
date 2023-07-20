@@ -41,6 +41,8 @@ impl<'a, const P: u128> DecisionNNFBuilder<'a> for SemanticDecisionNNFBuilder<'a
                 .value()
                 .hash(&mut hasher);
             hasher.finish()
+
+            // bdd.semantic_hash(&self.order, &self.map).value() as u64
         };
 
         unsafe {
@@ -80,11 +82,31 @@ impl<'a, const P: u128> SemanticDecisionNNFBuilder<'a, P> {
         }
     }
 
-    pub fn rebuild(&'a self, bdd: BddPtr) -> BddPtr {
+    pub fn rebuild(&'a self, bdd: BddPtr<'a>) -> BddPtr<'a> {
         match bdd {
             BddPtr::PtrTrue => BddPtr::PtrTrue,
             BddPtr::PtrFalse => BddPtr::PtrFalse,
             BddPtr::Reg(node) => {
+                // let semantic_hash = bdd.semantic_hash(&self.order, &self.map);
+
+                // if let Some(bdd) = self.check_cached_hash_and_neg(semantic_hash, BddNode::new(node.var, node.low, node.high)) {
+                //     match bdd {
+                //         BddPtr::PtrTrue => return BddPtr::PtrTrue,
+                //         BddPtr::PtrFalse => return BddPtr::PtrFalse,
+                //         BddPtr::Reg(node) => {
+                //             let new_node =
+                //                 BddNode::new(node.var, self.rebuild(node.low), self.rebuild(node.high));
+                //             return self.get_or_insert(new_node)
+                //         }
+                //         BddPtr::Compl(node) => {
+                //             let new_node =
+                //                 BddNode::new(node.var, self.rebuild(node.low), self.rebuild(node.high));
+                //             return self.get_or_insert(new_node).neg()
+                //         }
+                //     }
+                // }
+                // panic!("unreachable");
+
                 let new_node =
                     BddNode::new(node.var, self.rebuild(node.low), self.rebuild(node.high));
                 self.get_or_insert(new_node)
@@ -102,6 +124,8 @@ impl<'a, const P: u128> SemanticDecisionNNFBuilder<'a, P> {
         let mut hasher = FxHasher::default();
         semantic_hash.value().hash(&mut hasher);
         let hash = hasher.finish();
+        // let hash = semantic_hash.value() as u64;
+
         unsafe {
             let tbl = &mut *self.compute_table.as_ptr();
             if let Some(bdd) = tbl.sized_get_by_hash(hash, bdd.clone()) {
@@ -114,6 +138,8 @@ impl<'a, const P: u128> SemanticDecisionNNFBuilder<'a, P> {
         let mut hasher = FxHasher::default();
         semantic_hash.value().hash(&mut hasher);
         let hash = hasher.finish();
+        // let hash = semantic_hash.value() as u64;
+
         unsafe {
             let tbl = &mut *self.compute_table.as_ptr();
             if let Some(bdd) = tbl.sized_get_by_hash(hash, bdd) {

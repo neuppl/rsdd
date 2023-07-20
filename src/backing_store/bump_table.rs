@@ -323,11 +323,16 @@ impl<'a, T: Eq + Hash + Clone + AbstractlySized> BackedRobinhoodTable<'a, T> {
                 if hash == cur_itm.hash {
                     self.hits += 1;
 
-                    let diff = (elem.abstract_size() as i64)
-                        - (cur_itm.ptr.unwrap().abstract_size() as i64);
+                    let e = elem.abstract_size() as i64;
+                    let c = cur_itm.ptr.unwrap().abstract_size() as i64;
+
+                    let diff = e - c;
 
                     if diff < 0 {
-                        println!("smaller element found (diff: {}) ... replacing", diff);
+                        println!(
+                            "replacing table elem (diff: {}; new: {}; old {})",
+                            diff, e, c
+                        );
                         let ptr = self.alloc.alloc(elem);
                         self.tbl[pos] = HashTableElement::new(ptr, hash, psl);
                         return Some(ptr);

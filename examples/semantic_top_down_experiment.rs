@@ -73,8 +73,11 @@ fn compare_sem_and_std(cnf: &Cnf, order: &VarOrder) -> (usize, usize) {
     let sem_nodes = sem_dnnf.count_nodes();
     let std_nodes = std_dnnf.count_nodes();
 
-    println!("===");
+    println!("===\nRebuilding sem...");
+    let rebuilt_sem = rebuild_and_compare(&sem_builder, &sem_dnnf);
+    let rebuilt_sem_nodes: usize = rebuilt_sem.count_nodes();
 
+    println!("\n\n===FINAL STATS===");
     println!(
         "sem/std size ratio: {:.4}x ({} / {})",
         (sem_nodes as f64 / std_nodes as f64),
@@ -93,28 +96,24 @@ fn compare_sem_and_std(cnf: &Cnf, order: &VarOrder) -> (usize, usize) {
         sem_time,
         std_time
     );
-
-    println!("===\nRebuilding...");
-    let rebuilt = rebuild_and_compare(&sem_builder, &sem_dnnf);
-    let rebuilt_nodes: usize = rebuilt.count_nodes();
-    println!("FINAL STATS");
+    println!("===");
     println!(
-        "rebuilt/sem size ratio: {:.4}x ({} / {})",
-        (rebuilt_nodes as f64 / sem_nodes as f64),
-        rebuilt_nodes,
+        "sem rebuilt/sem size ratio: {:.4}x ({} / {})",
+        (rebuilt_sem_nodes as f64 / sem_nodes as f64),
+        rebuilt_sem_nodes,
         sem_nodes
     );
 
-    if diff_by_wmc(cnf.num_vars(), order, std_dnnf, rebuilt) > 0.0001 {
+    if diff_by_wmc(cnf.num_vars(), order, std_dnnf, rebuilt_sem) > 0.0001 {
         println!(
-            "error on rebuild {}\n std bdd: {}\nsem bdd: {}",
+            "error on sem rebuild {}\n std bdd: {}\nsem bdd: {}",
             cnf,
             std_dnnf.to_string_debug(),
-            rebuilt.to_string_debug()
+            rebuilt_sem.to_string_debug()
         );
     }
 
-    (sem_nodes, std_nodes)
+    (rebuilt_sem_nodes, std_nodes)
 }
 
 fn rebuild_and_compare<'a, const P: u128>(
