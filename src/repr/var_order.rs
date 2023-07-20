@@ -6,7 +6,7 @@ use crate::{
     repr::{bdd::BddPtr, var_label::VarLabel},
     util,
 };
-use std::{fmt::Display, slice::Iter};
+use std::fmt::Display;
 
 #[derive(Debug, Clone)]
 pub struct VarOrder {
@@ -137,12 +137,6 @@ impl VarOrder {
                 }
             }
         }
-    }
-
-    /// Produces an iterator of var -> position, where the
-    /// result\[i\] gives the position of variable i in the order
-    pub fn order_iter(&self) -> Iter<usize> {
-        self.var_to_pos.iter()
     }
 
     /// Iterate through the variables in the order in which they appear in the order

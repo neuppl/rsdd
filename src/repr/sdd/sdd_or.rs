@@ -16,7 +16,7 @@ use std::{
 #[derive(Debug)]
 pub struct SddOr<'a> {
     index: VTreeIndex,
-    pub nodes: Vec<SddAnd<'a>>,
+    nodes: Vec<SddAnd<'a>>,
 
     // scratch
     scratch: RefCell<Option<Box<dyn Any>>>,
@@ -36,6 +36,10 @@ impl<'a> SddOr<'a> {
     #[inline]
     pub fn index(&self) -> VTreeIndex {
         self.index
+    }
+
+    pub fn iter(&self) -> std::slice::Iter<'_, SddAnd<'_>> {
+        self.nodes.iter()
     }
 
     pub fn semantic_hash<const P: u128>(

@@ -104,7 +104,7 @@ pub trait SddBuilder<'a>: BottomUpBuilder<'a, SddPtr<'a>> {
         if bdd.high().is_neg() || self.is_false(bdd.high()) || bdd.high().is_neg_var() {
             let low = bdd.low().neg();
             let high = bdd.high().neg();
-            let neg_bdd = BinarySDD::new(bdd.label(), low, high, bdd.vtree());
+            let neg_bdd = BinarySDD::new(bdd.label(), low, high, bdd.index());
 
             return self.get_or_insert_bdd(neg_bdd).neg();
         }
@@ -146,11 +146,11 @@ pub trait SddBuilder<'a>: BottomUpBuilder<'a, SddPtr<'a>> {
             SddPtr::BDD(bdd) | SddPtr::ComplBDD(bdd) => {
                 let l = self.and(r.low(), d);
                 let h = self.and(r.high(), d);
-                self.unique_bdd(BinarySDD::new(bdd.label(), l, h, bdd.vtree()))
+                self.unique_bdd(BinarySDD::new(bdd.label(), l, h, bdd.index()))
             }
             SddPtr::Reg(or) | SddPtr::Compl(or) => {
-                let mut v: Vec<SddAnd> = Vec::with_capacity(or.nodes.len());
-                for a in or.nodes.iter() {
+                let mut v: Vec<SddAnd> = Vec::with_capacity(or.iter().len());
+                for a in or.iter() {
                     let root_p = a.prime();
                     let root_s = a.sub();
                     let root_s = if r.is_neg() { root_s.neg() } else { root_s };
@@ -487,7 +487,7 @@ pub trait SddBuilder<'a>: BottomUpBuilder<'a, SddPtr<'a>> {
                 }
                 SddPtr::Reg(or) | SddPtr::Compl(or) => {
                     let mut doc: Doc<BoxDoc> = Doc::from("");
-                    for a in or.nodes.iter() {
+                    for a in or.iter() {
                         let sub = a.sub();
                         let prime = a.prime();
                         let s = if ptr.is_neg() { sub.neg() } else { sub };
