@@ -187,62 +187,20 @@ p cnf 2 1
 
 fn get_canonical_forms() -> Vec<(Cnf, Cnf)> {
     vec![
-        (
-            Cnf::from_file(String::from(C1_A)),
-            Cnf::from_file(String::from(C1_B)),
-        ),
-        (
-            Cnf::from_file(String::from(C2_A)),
-            Cnf::from_file(String::from(C2_B)),
-        ),
-        (
-            Cnf::from_file(String::from(C3_A)),
-            Cnf::from_file(String::from(C3_B)),
-        ),
-        (
-            Cnf::from_file(String::from(C4_A)),
-            Cnf::from_file(String::from(C4_B)),
-        ),
-        (
-            Cnf::from_file(String::from(C5_A)),
-            Cnf::from_file(String::from(C5_B)),
-        ),
-        (
-            Cnf::from_file(String::from(C6_A)),
-            Cnf::from_file(String::from(C6_B)),
-        ),
-        (
-            Cnf::from_file(String::from(C7_A)),
-            Cnf::from_file(String::from(C7_B)),
-        ),
-        (
-            Cnf::from_file(String::from(C8_A)),
-            Cnf::from_file(String::from(C8_B)),
-        ),
-        (
-            Cnf::from_file(String::from(C9_A)),
-            Cnf::from_file(String::from(C9_B)),
-        ),
-        (
-            Cnf::from_file(String::from(C10_A)),
-            Cnf::from_file(String::from(C10_B)),
-        ),
-        (
-            Cnf::from_file(String::from(C11_A)),
-            Cnf::from_file(String::from(C11_B)),
-        ),
-        (
-            Cnf::from_file(String::from(C12_A)),
-            Cnf::from_file(String::from(C12_B)),
-        ),
-        (
-            Cnf::from_file(String::from(C13_A)),
-            Cnf::from_file(String::from(C13_B)),
-        ),
-        (
-            Cnf::from_file(String::from(C14_A)),
-            Cnf::from_file(String::from(C14_B)),
-        ),
+        (Cnf::from_dimacs(C1_A), Cnf::from_dimacs(C1_B)),
+        (Cnf::from_dimacs(C2_A), Cnf::from_dimacs(C2_B)),
+        (Cnf::from_dimacs(C3_A), Cnf::from_dimacs(C3_B)),
+        (Cnf::from_dimacs(C4_A), Cnf::from_dimacs(C4_B)),
+        (Cnf::from_dimacs(C5_A), Cnf::from_dimacs(C5_B)),
+        (Cnf::from_dimacs(C6_A), Cnf::from_dimacs(C6_B)),
+        (Cnf::from_dimacs(C7_A), Cnf::from_dimacs(C7_B)),
+        (Cnf::from_dimacs(C8_A), Cnf::from_dimacs(C8_B)),
+        (Cnf::from_dimacs(C9_A), Cnf::from_dimacs(C9_B)),
+        (Cnf::from_dimacs(C10_A), Cnf::from_dimacs(C10_B)),
+        (Cnf::from_dimacs(C11_A), Cnf::from_dimacs(C11_B)),
+        (Cnf::from_dimacs(C12_A), Cnf::from_dimacs(C12_B)),
+        (Cnf::from_dimacs(C13_A), Cnf::from_dimacs(C13_B)),
+        (Cnf::from_dimacs(C14_A), Cnf::from_dimacs(C14_B)),
     ]
 }
 

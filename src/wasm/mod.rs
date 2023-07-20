@@ -33,7 +33,7 @@ pub struct SddModelCountResult {
 // used in: https://github.com/mattxwang/indecision
 #[wasm_bindgen]
 pub fn vtree(cnf_input: String, vtree_type_input: JsValue) -> Result<JsValue, JsValue> {
-    let cnf = Cnf::from_file(cnf_input);
+    let cnf = Cnf::from_dimacs(&cnf_input);
 
     let vtree_type: VTreeType = serde_wasm_bindgen::from_value(vtree_type_input)?;
 
@@ -47,7 +47,7 @@ pub fn vtree(cnf_input: String, vtree_type_input: JsValue) -> Result<JsValue, Js
 // used in: https://github.com/mattxwang/indecision
 #[wasm_bindgen]
 pub fn bdd(cnf_input: String) -> String {
-    let cnf = Cnf::from_file(cnf_input);
+    let cnf = Cnf::from_dimacs(&cnf_input);
 
     let builder: RobddBuilder<'_, BddApplyTable<BddPtr<'_>>> =
         RobddBuilder::<BddApplyTable<BddPtr>>::new_default_order_lru(cnf.num_vars());
@@ -61,7 +61,7 @@ pub fn bdd(cnf_input: String) -> String {
 // used in: https://github.com/mattxwang/indecision
 #[wasm_bindgen]
 pub fn bdd_with_var_order(cnf_input: String, order: &[u64]) -> String {
-    let cnf = Cnf::from_file(cnf_input);
+    let cnf = Cnf::from_dimacs(&cnf_input);
 
     let var_order = VarOrder::new(order.iter().map(|v| VarLabel::new(*v)).collect());
 
@@ -76,7 +76,7 @@ pub fn bdd_with_var_order(cnf_input: String, order: &[u64]) -> String {
 // used in: https://github.com/mattxwang/indecision
 #[wasm_bindgen]
 pub fn sdd(cnf_input: String, vtree_type_input: JsValue) -> Result<JsValue, JsValue> {
-    let cnf = Cnf::from_file(cnf_input);
+    let cnf = Cnf::from_dimacs(&cnf_input);
 
     let vtree_type: VTreeType = serde_wasm_bindgen::from_value(vtree_type_input)?;
 
@@ -93,7 +93,7 @@ pub fn sdd(cnf_input: String, vtree_type_input: JsValue) -> Result<JsValue, JsVa
 // used in rsdd-docs
 #[wasm_bindgen]
 pub fn demo_model_count_sdd(cnf_input: String) -> Result<JsValue, JsValue> {
-    let cnf = Cnf::from_file(cnf_input);
+    let cnf = Cnf::from_dimacs(&cnf_input);
 
     let vtree = build_vtree(&cnf, VTreeType::FromDTreeLinear);
 

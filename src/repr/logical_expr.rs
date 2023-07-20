@@ -29,8 +29,19 @@ impl LogicalExpr {
     /// -54 37 0
     /// ...
     /// Where negative indicates a false variable, 0 is line end
-    pub fn from_dimacs(input: String) -> LogicalExpr {
-        let (_, cvec) = match parse_dimacs(&input).unwrap() {
+    /// ```
+    /// use rsdd::repr::logical_expr::LogicalExpr;
+    ///
+    /// static CNF: &str = r#"
+    /// p cnf 3 1
+    /// 1 -2 3 0
+    /// "#;
+    ///
+    /// let expr = LogicalExpr::from_dimacs(CNF);
+    /// assert!(matches!(expr, LogicalExpr::Or(_, _)));
+    /// ```
+    pub fn from_dimacs(input: &str) -> LogicalExpr {
+        let (_, cvec) = match parse_dimacs(input).unwrap() {
             Instance::Cnf { num_vars, clauses } => (num_vars, clauses),
             Instance::Sat {
                 num_vars: _,
@@ -109,7 +120,35 @@ impl LogicalExpr {
             })
     }
 
-    /// Evaluates a boolean expression
+    /// Evaluates a boolean expression.
+    /// ```
+    /// use rsdd::repr::logical_expr::LogicalExpr;
+    /// use rsdd::repr::var_label::VarLabel;
+    /// use std::collections::HashMap;
+    ///
+    /// static CNF: &str = r#"
+    /// p cnf 3 1
+    /// 1 -2 3 0
+    /// "#;
+    ///
+    /// let expr = LogicalExpr::from_dimacs(CNF);
+    ///
+    /// assert!(expr.eval(
+    ///     &HashMap::from([
+    ///         (VarLabel::new(1), true),
+    ///         (VarLabel::new(2), true),
+    ///         (VarLabel::new(3), true)
+    ///     ])
+    /// ));
+    ///
+    /// assert!(!expr.eval(
+    ///     &HashMap::from([
+    ///         (VarLabel::new(1), false),
+    ///         (VarLabel::new(2), true),
+    ///         (VarLabel::new(3), false)
+    ///     ])
+    /// ));
+    /// ```
     pub fn eval(&self, values: &HashMap<VarLabel, bool>) -> bool {
         match &self {
             LogicalExpr::Literal(lbl, polarity) => {
