@@ -262,7 +262,7 @@ where
     /// # use rsdd::builder::BottomUpBuilder;
     /// # use rsdd::repr::var_label::VarLabel;
     /// # use rsdd::repr::ddnnf::DDNNFPtr;
-    /// # use rsdd::builder::cache::all_app::AllIteTable;
+    /// # use rsdd::builder::cache::AllIteTable;
     /// # use rsdd::repr::bdd::BddPtr;
     /// let mut builder = RobddBuilder::<AllIteTable<BddPtr>>::new_with_linear_order(10);
     /// let lbl_a = builder.new_label();

@@ -1,7 +1,7 @@
 use crate::{
     backing_store::{BackedRobinhoodTable, UniqueTable},
     builder::{
-        cache::{all_app::AllIteTable, ite::Ite, IteTable},
+        cache::{AllIteTable, Ite, IteTable},
         sdd::{SddBuilder, SddBuilderStats},
         BottomUpBuilder,
     },

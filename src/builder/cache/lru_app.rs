@@ -1,6 +1,6 @@
 //! Apply cache for ITEs that uses a dynamically-expanding LRU cache
 use crate::{
-    builder::cache::{ite::Ite, IteTable},
+    builder::cache::{Ite, IteTable},
     repr::ddnnf::DDNNFPtr,
     util::lru::*,
 };

@@ -2,7 +2,7 @@
 //! with SDDs.
 
 use crate::{
-    builder::{cache::ite::Ite, BottomUpBuilder},
+    builder::{cache::Ite, BottomUpBuilder},
     repr::{
         cnf::Cnf,
         ddnnf::DDNNFPtr,

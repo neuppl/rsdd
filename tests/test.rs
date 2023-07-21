@@ -5,7 +5,7 @@ extern crate rsdd;
 #[macro_use]
 extern crate quickcheck;
 use rsdd::builder::bdd::{BddBuilder, RobddBuilder};
-use rsdd::builder::cache::all_app::AllIteTable;
+use rsdd::builder::cache::AllIteTable;
 use rsdd::builder::sdd::{CompressionSddBuilder, SddBuilder};
 use rsdd::repr::bdd::BddPtr;
 use rsdd::repr::cnf::Cnf;
@@ -273,8 +273,8 @@ mod test_bdd_builder {
     use rand::Rng;
     use rsdd::builder::bdd::BddBuilder;
     use rsdd::builder::bdd::RobddBuilder;
-    use rsdd::builder::cache::all_app::AllIteTable;
-    use rsdd::builder::cache::lru_app::LruIteTable;
+    use rsdd::builder::cache::AllIteTable;
+    use rsdd::builder::cache::LruIteTable;
     use rsdd::builder::decision_nnf::DecisionNNFBuilder;
     use rsdd::builder::decision_nnf::StandardDecisionNNFBuilder;
     use rsdd::builder::sdd::SddBuilder;
@@ -672,7 +672,7 @@ mod test_sdd_builder {
     use rand::SeedableRng;
     use rsdd::builder::bdd::BddBuilder;
     use rsdd::builder::bdd::RobddBuilder;
-    use rsdd::builder::cache::all_app::AllIteTable;
+    use rsdd::builder::cache::AllIteTable;
     use rsdd::builder::sdd::{CompressionSddBuilder, SddBuilder, SemanticSddBuilder};
     use rsdd::builder::BottomUpBuilder;
     use rsdd::constants::primes;

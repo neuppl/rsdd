@@ -1,7 +1,7 @@
 //! Apply cache for BDD operations that stores all ITEs
 
 use crate::{
-    builder::cache::{ite::Ite, IteTable},
+    builder::cache::{Ite, IteTable},
     repr::ddnnf::DDNNFPtr,
 };
 use rustc_hash::FxHashMap;

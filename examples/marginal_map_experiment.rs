@@ -5,7 +5,7 @@ use rand::Rng;
 use rsdd::{
     builder::{
         bdd::{BddBuilder, RobddBuilder},
-        cache::all_app::AllIteTable,
+        cache::AllIteTable,
     },
     repr::{bdd::BddPtr, cnf::Cnf, var_label::VarLabel, wmc::WmcParams},
     util::semirings::RealSemiring,

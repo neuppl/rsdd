@@ -1,7 +1,7 @@
 use clap::Parser;
 use rsdd::builder::bdd::BddBuilder;
 use rsdd::builder::bdd::RobddBuilder;
-use rsdd::builder::cache::lru_app::LruIteTable;
+use rsdd::builder::cache::LruIteTable;
 use rsdd::builder::decision_nnf::DecisionNNFBuilder;
 use rsdd::builder::decision_nnf::StandardDecisionNNFBuilder;
 use rsdd::builder::sdd::{CompressionSddBuilder, SddBuilder};

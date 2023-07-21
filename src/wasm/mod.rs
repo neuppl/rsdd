@@ -1,7 +1,7 @@
 use crate::{
     builder::{
         bdd::{BddBuilder, RobddBuilder},
-        cache::all_app::AllIteTable,
+        cache::AllIteTable,
         sdd::{CompressionSddBuilder, SddBuilder},
     },
     constants::primes,

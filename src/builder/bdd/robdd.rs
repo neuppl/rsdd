@@ -2,7 +2,7 @@ use crate::{
     backing_store::{BackedRobinhoodTable, UniqueTable},
     builder::{
         bdd::{BddBuilder, BddBuilderStats},
-        cache::{ite::Ite, IteTable},
+        cache::{Ite, IteTable},
         BottomUpBuilder,
     },
     repr::{
@@ -316,7 +316,7 @@ mod tests {
     use crate::builder::BottomUpBuilder;
     use crate::repr::wmc::WmcParams;
     use crate::util::semirings::{FiniteField, RealSemiring};
-    use crate::{builder::cache::all_app::AllIteTable, repr::ddnnf::DDNNFPtr};
+    use crate::{builder::cache::AllIteTable, repr::ddnnf::DDNNFPtr};
 
     use crate::{
         builder::bdd::robdd::RobddBuilder,
