@@ -149,7 +149,7 @@ fn compile_sdd_rightlinear(str: String, _args: &Args) -> BenchResult {
 
 fn compile_bdd(str: String, _args: &Args) -> BenchResult {
     let cnf = Cnf::from_dimacs(&str);
-    let builder = RobddBuilder::<BddApplyTable<BddPtr>>::new_default_order_lru(cnf.num_vars());
+    let builder = RobddBuilder::<BddApplyTable<BddPtr>>::new_with_linear_order(cnf.num_vars());
     let bdd = builder.compile_cnf(&cnf);
 
     if let Some(path) = &_args.dump_bdd {

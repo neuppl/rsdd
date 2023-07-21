@@ -20,7 +20,7 @@
 // fn network_gen(n: usize) -> (BddPtr, RobddBuilder<AllTable<BddPtr>>, Vec<VarLabel>) {
 //     // Initialize BDD
 //     let bdd_size = (2 * n) + 2;
-//     let mut man = RobddBuilder::<AllTable<BddPtr>>::new_default_order(bdd_size);
+//     let mut man = RobddBuilder::<AllTable<BddPtr>>::new_with_linear_order(bdd_size);
 
 //     // Initialize variables in the BDD, sort into top or bottom edge
 //     let v: Vec<VarLabel> = (0..bdd_size).map(|x| VarLabel::new(x as u64)).collect();

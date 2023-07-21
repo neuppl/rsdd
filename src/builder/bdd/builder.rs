@@ -264,7 +264,7 @@ where
     /// # use rsdd::repr::ddnnf::DDNNFPtr;
     /// # use rsdd::builder::cache::all_app::AllTable;
     /// # use rsdd::repr::bdd::BddPtr;
-    /// let mut builder = RobddBuilder::<AllTable<BddPtr>>::new_default_order(10);
+    /// let mut builder = RobddBuilder::<AllTable<BddPtr>>::new_with_linear_order(10);
     /// let lbl_a = builder.new_label();
     /// let a = builder.var(lbl_a, true);
     /// let a_and_not_a = builder.and(a, a.neg());

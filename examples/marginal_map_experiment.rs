@@ -61,7 +61,7 @@ fn main() {
     println!("num vars: {}", cnf.num_vars());
 
     // TODO: allow user to pick varorder
-    let builder = RobddBuilder::<AllTable<BddPtr>>::new_default_order(cnf.num_vars());
+    let builder = RobddBuilder::<AllTable<BddPtr>>::new_with_linear_order(cnf.num_vars());
 
     let bdd = builder.compile_cnf(&cnf);
 
