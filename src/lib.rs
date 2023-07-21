@@ -20,7 +20,6 @@ pub mod builder;
 pub mod constants;
 pub mod plan;
 pub mod repr;
-pub mod sample;
 pub mod serialize;
 
 #[cfg(target_arch = "wasm32")]
