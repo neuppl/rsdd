@@ -55,7 +55,9 @@ impl<'a, T: DDNNFPtr<'a>> IteTable<'a, T> for LruIteTable<T> {
             Ite::IteConst(_) => 0, // do not cache base-cases
         }
     }
+}
 
+impl<'a, T: DDNNFPtr<'a>> LruIteTable<T> {
     fn new() -> LruIteTable<T> {
         LruIteTable {
             table: Lru::new(INITIAL_CAPACITY),

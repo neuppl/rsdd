@@ -15,14 +15,14 @@ use crate::{
 };
 use std::cell::RefCell;
 
-pub struct RobddBuilder<'a, T: IteTable<'a, BddPtr<'a>>> {
+pub struct RobddBuilder<'a, T: IteTable<'a, BddPtr<'a>> + Default> {
     compute_table: RefCell<BackedRobinhoodTable<'a, BddNode<'a>>>,
     apply_table: RefCell<T>,
     stats: RefCell<BddBuilderStats>,
     order: RefCell<VarOrder>,
 }
 
-impl<'a, T: IteTable<'a, BddPtr<'a>>> BddBuilder<'a> for RobddBuilder<'a, T> {
+impl<'a, T: IteTable<'a, BddPtr<'a>> + Default> BddBuilder<'a> for RobddBuilder<'a, T> {
     fn less_than(&self, a: VarLabel, b: VarLabel) -> bool {
         self.order.borrow().lt(a, b)
     }
@@ -93,13 +93,13 @@ impl<'a, T: IteTable<'a, BddPtr<'a>>> BddBuilder<'a> for RobddBuilder<'a, T> {
     }
 }
 
-impl<'a, T: IteTable<'a, BddPtr<'a>>> RobddBuilder<'a, T> {
+impl<'a, T: IteTable<'a, BddPtr<'a>> + Default> RobddBuilder<'a, T> {
     /// Creates a new variable manager with the specified order
     pub fn new(order: VarOrder) -> RobddBuilder<'a, T> {
         RobddBuilder {
             compute_table: RefCell::new(BackedRobinhoodTable::new()),
             order: RefCell::new(order),
-            apply_table: RefCell::new(T::new()),
+            apply_table: RefCell::new(T::default()),
             stats: RefCell::new(BddBuilderStats::new()),
         }
     }

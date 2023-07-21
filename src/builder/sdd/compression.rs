@@ -157,7 +157,7 @@ impl<'a> CompressionSddBuilder<'a> {
     pub fn new(vtree: VTree) -> CompressionSddBuilder<'a> {
         let vtree_man = VTreeManager::new(vtree);
         CompressionSddBuilder {
-            ite_cache: RefCell::new(AllIteTable::new()),
+            ite_cache: RefCell::new(AllIteTable::default()),
             app_cache: RefCell::new(HashMap::new()),
             bdd_tbl: RefCell::new(BackedRobinhoodTable::new()),
             sdd_tbl: RefCell::new(BackedRobinhoodTable::new()),
