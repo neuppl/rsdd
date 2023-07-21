@@ -55,12 +55,16 @@ impl<'a, T: DDNNFPtr<'a>> LruTable<'a, T> for BddApplyTable<T> {
             Ite::IteConst(_) => 0, // do not cache base-cases
         }
     }
-}
 
-impl<'a, T: DDNNFPtr<'a>> BddApplyTable<T> {
-    pub fn new(_num_vars: usize) -> BddApplyTable<T> {
+    fn new() -> BddApplyTable<T> {
         BddApplyTable {
             table: Lru::new(INITIAL_CAPACITY),
         }
+    }
+}
+
+impl<'a, T: DDNNFPtr<'a>> Default for BddApplyTable<T> {
+    fn default() -> Self {
+        Self::new()
     }
 }

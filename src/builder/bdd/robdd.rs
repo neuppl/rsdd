@@ -97,20 +97,20 @@ impl<'a, T: LruTable<'a, BddPtr<'a>>> RobddBuilder<'a, T> {
     /// Make a BDD manager with a default variable ordering
     pub fn new_default_order(num_vars: usize) -> RobddBuilder<'a, AllTable<BddPtr<'a>>> {
         let default_order = VarOrder::linear_order(num_vars);
-        RobddBuilder::new(default_order, AllTable::new())
+        RobddBuilder::new(default_order)
     }
 
     pub fn new_default_order_lru(num_vars: usize) -> RobddBuilder<'a, BddApplyTable<BddPtr<'a>>> {
         let default_order = VarOrder::linear_order(num_vars);
-        RobddBuilder::new(default_order, BddApplyTable::new(21))
+        RobddBuilder::new(default_order)
     }
 
     /// Creates a new variable manager with the specified order
-    pub fn new(order: VarOrder, table: T) -> RobddBuilder<'a, T> {
+    pub fn new(order: VarOrder) -> RobddBuilder<'a, T> {
         RobddBuilder {
             compute_table: RefCell::new(BackedRobinhoodTable::new()),
             order: RefCell::new(order),
-            apply_table: RefCell::new(table),
+            apply_table: RefCell::new(T::new()),
             stats: RefCell::new(BddBuilderStats::new()),
         }
     }

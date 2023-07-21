@@ -46,10 +46,8 @@ impl<'a, T: DDNNFPtr<'a>> LruTable<'a, T> for AllTable<T> {
             Ite::IteConst(f) => Some(f),
         }
     }
-}
 
-impl<'a, T: DDNNFPtr<'a>> AllTable<T> {
-    pub fn new() -> AllTable<T> {
+    fn new() -> AllTable<T> {
         AllTable {
             table: FxHashMap::default(),
         }

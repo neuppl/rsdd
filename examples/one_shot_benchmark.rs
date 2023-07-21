@@ -169,8 +169,7 @@ fn compile_bdd_dtree(str: String, _args: &Args) -> BenchResult {
     let cnf = Cnf::from_dimacs(&str);
     let order = cnf.min_fill_order();
     let dtree = DTree::from_cnf(&cnf, &order);
-    let builder =
-        RobddBuilder::<BddApplyTable<BddPtr>>::new(order, BddApplyTable::new(cnf.num_vars()));
+    let builder = RobddBuilder::<BddApplyTable<BddPtr>>::new(order);
     let plan = BddPlan::from_dtree(&dtree);
     let bdd = builder.compile_plan(&plan);
 

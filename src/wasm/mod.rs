@@ -65,7 +65,7 @@ pub fn bdd_with_var_order(cnf_input: String, order: &[u64]) -> String {
 
     let var_order = VarOrder::new(order.iter().map(|v| VarLabel::new(*v)).collect());
 
-    let builder = RobddBuilder::new(var_order, AllTable::new());
+    let builder = RobddBuilder::<AllTable<BddPtr>>::new(var_order);
     let bdd = builder.compile_cnf(&cnf);
 
     let json = BDDSerializer::from_bdd(bdd);
