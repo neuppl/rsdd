@@ -1,7 +1,7 @@
 use crate::{
     backing_store::{BackedRobinhoodTable, UniqueTable},
     builder::{
-        cache::{all_app::AllTable, ite::Ite, LruTable},
+        cache::{all_app::AllIteTable, ite::Ite, IteTable},
         sdd::{SddBuilder, SddBuilderStats},
         BottomUpBuilder,
     },
@@ -20,7 +20,7 @@ pub struct CompressionSddBuilder<'a> {
     bdd_tbl: RefCell<BackedRobinhoodTable<'a, BinarySDD<'a>>>,
     sdd_tbl: RefCell<BackedRobinhoodTable<'a, SddOr<'a>>>,
     // caches
-    ite_cache: RefCell<AllTable<SddPtr<'a>>>,
+    ite_cache: RefCell<AllIteTable<SddPtr<'a>>>,
     app_cache: RefCell<HashMap<SddAnd<'a>, SddPtr<'a>>>,
     // stats
     num_recursive_calls: RefCell<usize>,
@@ -157,7 +157,7 @@ impl<'a> CompressionSddBuilder<'a> {
     pub fn new(vtree: VTree) -> CompressionSddBuilder<'a> {
         let vtree_man = VTreeManager::new(vtree);
         CompressionSddBuilder {
-            ite_cache: RefCell::new(AllTable::new()),
+            ite_cache: RefCell::new(AllIteTable::new()),
             app_cache: RefCell::new(HashMap::new()),
             bdd_tbl: RefCell::new(BackedRobinhoodTable::new()),
             sdd_tbl: RefCell::new(BackedRobinhoodTable::new()),

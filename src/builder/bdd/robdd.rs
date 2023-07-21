@@ -2,7 +2,7 @@ use crate::{
     backing_store::{BackedRobinhoodTable, UniqueTable},
     builder::{
         bdd::{BddBuilder, BddBuilderStats},
-        cache::{ite::Ite, LruTable},
+        cache::{ite::Ite, IteTable},
         BottomUpBuilder,
     },
     repr::{
@@ -15,14 +15,14 @@ use crate::{
 };
 use std::cell::RefCell;
 
-pub struct RobddBuilder<'a, T: LruTable<'a, BddPtr<'a>>> {
+pub struct RobddBuilder<'a, T: IteTable<'a, BddPtr<'a>>> {
     compute_table: RefCell<BackedRobinhoodTable<'a, BddNode<'a>>>,
     apply_table: RefCell<T>,
     stats: RefCell<BddBuilderStats>,
     order: RefCell<VarOrder>,
 }
 
-impl<'a, T: LruTable<'a, BddPtr<'a>>> BddBuilder<'a> for RobddBuilder<'a, T> {
+impl<'a, T: IteTable<'a, BddPtr<'a>>> BddBuilder<'a> for RobddBuilder<'a, T> {
     fn less_than(&self, a: VarLabel, b: VarLabel) -> bool {
         self.order.borrow().lt(a, b)
     }
@@ -93,7 +93,7 @@ impl<'a, T: LruTable<'a, BddPtr<'a>>> BddBuilder<'a> for RobddBuilder<'a, T> {
     }
 }
 
-impl<'a, T: LruTable<'a, BddPtr<'a>>> RobddBuilder<'a, T> {
+impl<'a, T: IteTable<'a, BddPtr<'a>>> RobddBuilder<'a, T> {
     /// Creates a new variable manager with the specified order
     pub fn new(order: VarOrder) -> RobddBuilder<'a, T> {
         RobddBuilder {
@@ -316,7 +316,7 @@ mod tests {
     use crate::builder::BottomUpBuilder;
     use crate::repr::wmc::WmcParams;
     use crate::util::semirings::{FiniteField, RealSemiring};
-    use crate::{builder::cache::all_app::AllTable, repr::ddnnf::DDNNFPtr};
+    use crate::{builder::cache::all_app::AllIteTable, repr::ddnnf::DDNNFPtr};
 
     use crate::{
         builder::bdd::robdd::RobddBuilder,
@@ -326,7 +326,7 @@ mod tests {
     // check that (a \/ b) /\ a === a
     #[test]
     fn simple_equality() {
-        let builder = RobddBuilder::<AllTable<BddPtr>>::new_with_linear_order(3);
+        let builder = RobddBuilder::<AllIteTable<BddPtr>>::new_with_linear_order(3);
         let v1 = builder.var(VarLabel::new(0), true);
         let v2 = builder.var(VarLabel::new(1), true);
         let r1 = builder.or(v1, v2);
@@ -341,7 +341,7 @@ mod tests {
 
     #[test]
     fn simple_ite1() {
-        let builder = RobddBuilder::<AllTable<BddPtr>>::new_with_linear_order(3);
+        let builder = RobddBuilder::<AllIteTable<BddPtr>>::new_with_linear_order(3);
         let v1 = builder.var(VarLabel::new(0), true);
         let v2 = builder.var(VarLabel::new(1), true);
         let r1 = builder.or(v1, v2);
@@ -356,7 +356,7 @@ mod tests {
 
     #[test]
     fn test_newvar() {
-        let builder = RobddBuilder::<AllTable<BddPtr>>::new_with_linear_order(0);
+        let builder = RobddBuilder::<AllIteTable<BddPtr>>::new_with_linear_order(0);
         let l1 = builder.new_label();
         let l2 = builder.new_label();
         let v1 = builder.var(l1, true);
@@ -373,7 +373,7 @@ mod tests {
 
     #[test]
     fn test_wmc() {
-        let builder = RobddBuilder::<AllTable<BddPtr>>::new_with_linear_order(2);
+        let builder = RobddBuilder::<AllIteTable<BddPtr>>::new_with_linear_order(2);
         let v1 = builder.var(VarLabel::new(0), true);
         let v2 = builder.var(VarLabel::new(1), true);
         let r1 = builder.or(v1, v2);
@@ -388,7 +388,7 @@ mod tests {
 
     #[test]
     fn test_condition() {
-        let builder = RobddBuilder::<AllTable<BddPtr>>::new_with_linear_order(3);
+        let builder = RobddBuilder::<AllIteTable<BddPtr>>::new_with_linear_order(3);
         let v1 = builder.var(VarLabel::new(0), true);
         let v2 = builder.var(VarLabel::new(1), true);
         let r1 = builder.or(v1, v2);
@@ -398,7 +398,7 @@ mod tests {
 
     #[test]
     fn test_condition_compl() {
-        let builder = RobddBuilder::<AllTable<BddPtr>>::new_with_linear_order(3);
+        let builder = RobddBuilder::<AllIteTable<BddPtr>>::new_with_linear_order(3);
         let v1 = builder.var(VarLabel::new(0), false);
         let v2 = builder.var(VarLabel::new(1), false);
         let r1 = builder.and(v1, v2);
@@ -413,7 +413,7 @@ mod tests {
 
     #[test]
     fn test_exist() {
-        let builder = RobddBuilder::<AllTable<BddPtr>>::new_with_linear_order(3);
+        let builder = RobddBuilder::<AllIteTable<BddPtr>>::new_with_linear_order(3);
         // 1 /\ 2 /\ 3
         let v1 = builder.var(VarLabel::new(0), true);
         let v2 = builder.var(VarLabel::new(1), true);
@@ -432,7 +432,7 @@ mod tests {
 
     #[test]
     fn test_exist_compl() {
-        let builder = RobddBuilder::<AllTable<BddPtr>>::new_with_linear_order(3);
+        let builder = RobddBuilder::<AllIteTable<BddPtr>>::new_with_linear_order(3);
         // 1 /\ 2 /\ 3
         let v1 = builder.var(VarLabel::new(0), false);
         let v2 = builder.var(VarLabel::new(1), false);
@@ -452,7 +452,7 @@ mod tests {
 
     #[test]
     fn test_compose() {
-        let builder = RobddBuilder::<AllTable<BddPtr>>::new_with_linear_order(3);
+        let builder = RobddBuilder::<AllIteTable<BddPtr>>::new_with_linear_order(3);
         let v0 = builder.var(VarLabel::new(0), true);
         let v1 = builder.var(VarLabel::new(1), true);
         let v2 = builder.var(VarLabel::new(2), true);
@@ -469,7 +469,7 @@ mod tests {
 
     #[test]
     fn test_compose_2() {
-        let builder = RobddBuilder::<AllTable<BddPtr>>::new_with_linear_order(4);
+        let builder = RobddBuilder::<AllIteTable<BddPtr>>::new_with_linear_order(4);
         let v0 = builder.var(VarLabel::new(0), true);
         let v1 = builder.var(VarLabel::new(1), true);
         let v2 = builder.var(VarLabel::new(2), true);
@@ -488,7 +488,7 @@ mod tests {
 
     #[test]
     fn test_compose_3() {
-        let builder = RobddBuilder::<AllTable<BddPtr>>::new_with_linear_order(4);
+        let builder = RobddBuilder::<AllIteTable<BddPtr>>::new_with_linear_order(4);
         let v0 = builder.var(VarLabel::new(0), true);
         let v1 = builder.var(VarLabel::new(1), true);
         let v2 = builder.var(VarLabel::new(2), true);
@@ -505,7 +505,7 @@ mod tests {
 
     #[test]
     fn test_compose_4() {
-        let builder = RobddBuilder::<AllTable<BddPtr>>::new_with_linear_order(20);
+        let builder = RobddBuilder::<AllIteTable<BddPtr>>::new_with_linear_order(20);
         let v0 = builder.var(VarLabel::new(4), true);
         let v1 = builder.var(VarLabel::new(5), true);
         let v2 = builder.var(VarLabel::new(6), true);
@@ -522,7 +522,7 @@ mod tests {
 
     #[test]
     fn test_new_label() {
-        let builder = RobddBuilder::<AllTable<BddPtr>>::new_with_linear_order(0);
+        let builder = RobddBuilder::<AllIteTable<BddPtr>>::new_with_linear_order(0);
         let vlbl1 = builder.new_label();
         let vlbl2 = builder.new_label();
         let v1 = builder.var(vlbl1, false);
@@ -539,7 +539,7 @@ mod tests {
 
     #[test]
     fn circuit1() {
-        let builder = RobddBuilder::<AllTable<BddPtr>>::new_with_linear_order(3);
+        let builder = RobddBuilder::<AllIteTable<BddPtr>>::new_with_linear_order(3);
         let x = builder.var(VarLabel::new(0), false);
         let y = builder.var(VarLabel::new(1), true);
         let delta = builder.and(x, y);
@@ -559,7 +559,7 @@ mod tests {
 
     #[test]
     fn simple_cond() {
-        let builder = RobddBuilder::<AllTable<BddPtr>>::new_with_linear_order(3);
+        let builder = RobddBuilder::<AllIteTable<BddPtr>>::new_with_linear_order(3);
         let x = builder.var(VarLabel::new(0), true);
         let y = builder.var(VarLabel::new(1), false);
         let z = builder.var(VarLabel::new(2), false);
@@ -580,7 +580,7 @@ mod tests {
 
     #[test]
     fn wmc_test_2() {
-        let builder = RobddBuilder::<AllTable<BddPtr>>::new_with_linear_order(4);
+        let builder = RobddBuilder::<AllIteTable<BddPtr>>::new_with_linear_order(4);
         let x = builder.var(VarLabel::new(0), true);
         let y = builder.var(VarLabel::new(1), true);
         let f1 = builder.var(VarLabel::new(2), true);
@@ -607,7 +607,7 @@ mod tests {
 
     #[test]
     fn test_ite_1() {
-        let builder = RobddBuilder::<AllTable<BddPtr>>::new_with_linear_order(16);
+        let builder = RobddBuilder::<AllIteTable<BddPtr>>::new_with_linear_order(16);
         let c1 = Cnf::from_string("(1 || 2) && (0 || -2)");
         let c2 = Cnf::from_string("(0 || 1) && (-4 || -7)");
         let cnf1 = builder.compile_cnf(&c1);
@@ -638,7 +638,7 @@ mod tests {
         ";
         let cnf = Cnf::from_dimacs(CNF);
 
-        let builder = RobddBuilder::<AllTable<BddPtr>>::new_with_linear_order(cnf.num_vars());
+        let builder = RobddBuilder::<AllIteTable<BddPtr>>::new_with_linear_order(cnf.num_vars());
 
         let bdd = builder.compile_cnf(&cnf);
 
@@ -669,7 +669,7 @@ mod tests {
         ";
         let cnf = Cnf::from_dimacs(CNF);
 
-        let builder = RobddBuilder::<AllTable<BddPtr>>::new_with_linear_order(cnf.num_vars());
+        let builder = RobddBuilder::<AllIteTable<BddPtr>>::new_with_linear_order(cnf.num_vars());
 
         let bdd = builder.compile_cnf(&cnf);
 
@@ -697,7 +697,7 @@ mod tests {
         ";
         let cnf = Cnf::from_dimacs(CNF);
 
-        let builder = RobddBuilder::<AllTable<BddPtr>>::new_with_linear_order(cnf.num_vars());
+        let builder = RobddBuilder::<AllIteTable<BddPtr>>::new_with_linear_order(cnf.num_vars());
 
         let bdd = builder.compile_cnf(&cnf);
 

@@ -1,7 +1,7 @@
 use crate::{
     builder::{
         bdd::{BddBuilder, RobddBuilder},
-        cache::all_app::AllTable,
+        cache::all_app::AllIteTable,
         sdd::{CompressionSddBuilder, SddBuilder},
     },
     constants::primes,
@@ -49,7 +49,7 @@ pub fn vtree(cnf_input: String, vtree_type_input: JsValue) -> Result<JsValue, Js
 pub fn bdd(cnf_input: String) -> String {
     let cnf = Cnf::from_dimacs(&cnf_input);
 
-    let builder = RobddBuilder::<AllTable<BddPtr>>::new_with_linear_order(cnf.num_vars());
+    let builder = RobddBuilder::<AllIteTable<BddPtr>>::new_with_linear_order(cnf.num_vars());
     let bdd = builder.compile_cnf(&cnf);
 
     let json = BDDSerializer::from_bdd(bdd);
@@ -64,7 +64,7 @@ pub fn bdd_with_var_order(cnf_input: String, order: &[u64]) -> String {
 
     let var_order = VarOrder::new(order.iter().map(|v| VarLabel::new(*v)).collect());
 
-    let builder = RobddBuilder::<AllTable<BddPtr>>::new(var_order);
+    let builder = RobddBuilder::<AllIteTable<BddPtr>>::new(var_order);
     let bdd = builder.compile_cnf(&cnf);
 
     let json = BDDSerializer::from_bdd(bdd);

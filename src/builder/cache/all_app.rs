@@ -1,19 +1,19 @@
 //! Apply cache for BDD operations that stores all ITEs
 
 use crate::{
-    builder::cache::{ite::Ite, LruTable},
+    builder::cache::{ite::Ite, IteTable},
     repr::ddnnf::DDNNFPtr,
 };
 use rustc_hash::FxHashMap;
 
 /// An Ite structure, assumed to be in standard form.
 /// The top-level data structure that caches applications
-pub struct AllTable<T> {
+pub struct AllIteTable<T> {
     /// a vector of applications, indexed by the top label of the first pointer.
     table: FxHashMap<(T, T, T), T>,
 }
 
-impl<'a, T: DDNNFPtr<'a>> LruTable<'a, T> for AllTable<T> {
+impl<'a, T: DDNNFPtr<'a>> IteTable<'a, T> for AllIteTable<T> {
     fn hash(&self, _ite: &Ite<T>) -> u64 {
         // do nothing; the all-cache uses a hashbrown table that caches all applies
         0
@@ -47,15 +47,15 @@ impl<'a, T: DDNNFPtr<'a>> LruTable<'a, T> for AllTable<T> {
         }
     }
 
-    fn new() -> AllTable<T> {
-        AllTable {
+    fn new() -> AllIteTable<T> {
+        AllIteTable {
             table: FxHashMap::default(),
         }
     }
 }
 
-impl<'a, T: DDNNFPtr<'a>> Default for AllTable<T> {
-    fn default() -> AllTable<T> {
+impl<'a, T: DDNNFPtr<'a>> Default for AllIteTable<T> {
+    fn default() -> AllIteTable<T> {
         Self::new()
     }
 }

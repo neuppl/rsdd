@@ -1,6 +1,6 @@
 //! Apply cache for ITEs that uses a dynamically-expanding LRU cache
 use crate::{
-    builder::cache::{ite::Ite, LruTable},
+    builder::cache::{ite::Ite, IteTable},
     repr::ddnnf::DDNNFPtr,
     util::lru::*,
 };
@@ -10,12 +10,12 @@ use std::hash::{Hash, Hasher};
 const INITIAL_CAPACITY: usize = 16; // given as a power of two
 
 /// The top-level data structure that caches applications
-pub struct BddApplyTable<T: Eq + PartialEq + Clone + Hash + std::fmt::Debug> {
+pub struct LruIteTable<T: Eq + PartialEq + Clone + Hash + std::fmt::Debug> {
     /// a vector of applications, indexed by the top label of the first pointer.
     table: Lru<(T, T, T), T>,
 }
 
-impl<'a, T: DDNNFPtr<'a>> LruTable<'a, T> for BddApplyTable<T> {
+impl<'a, T: DDNNFPtr<'a>> IteTable<'a, T> for LruIteTable<T> {
     /// Insert an ite (f, g, h) into the apply table
     fn insert(&mut self, ite: Ite<T>, res: T, hash: u64) {
         match ite {
@@ -56,14 +56,14 @@ impl<'a, T: DDNNFPtr<'a>> LruTable<'a, T> for BddApplyTable<T> {
         }
     }
 
-    fn new() -> BddApplyTable<T> {
-        BddApplyTable {
+    fn new() -> LruIteTable<T> {
+        LruIteTable {
             table: Lru::new(INITIAL_CAPACITY),
         }
     }
 }
 
-impl<'a, T: DDNNFPtr<'a>> Default for BddApplyTable<T> {
+impl<'a, T: DDNNFPtr<'a>> Default for LruIteTable<T> {
     fn default() -> Self {
         Self::new()
     }

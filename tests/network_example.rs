@@ -4,7 +4,7 @@
 // extern crate rsdd;
 // use crate::repr::var_label::VarLabel;
 // use rsdd::builder::bdd_builder::RobddBuilder;
-// use rsdd::builder::cache::all_app::AllTable;
+// use rsdd::builder::cache::all_app::AllIteTable;
 // use rsdd::repr::robdd::BddPtr;
 // use rsdd::repr::ddnnf::DDNNFPtr;
 // use rsdd::repr::wmc::WmcParams;
@@ -17,10 +17,10 @@
 // // For example, network_gen(4) will generate a network with top path edges
 // // st1, t1t2, t2t3, t3t4, t4e.
 // // Output is: BDDPtr to network, associated BDDManager, Vec of edge VarLabels
-// fn network_gen(n: usize) -> (BddPtr, RobddBuilder<AllTable<BddPtr>>, Vec<VarLabel>) {
+// fn network_gen(n: usize) -> (BddPtr, RobddBuilder<AllIteTable<BddPtr>>, Vec<VarLabel>) {
 //     // Initialize BDD
 //     let bdd_size = (2 * n) + 2;
-//     let mut man = RobddBuilder::<AllTable<BddPtr>>::new_with_linear_order(bdd_size);
+//     let mut man = RobddBuilder::<AllIteTable<BddPtr>>::new_with_linear_order(bdd_size);
 
 //     // Initialize variables in the BDD, sort into top or bottom edge
 //     let v: Vec<VarLabel> = (0..bdd_size).map(|x| VarLabel::new(x as u64)).collect();
@@ -51,10 +51,10 @@
 // //         Vec of VarLabels of Decisions, VarLabel of Reward.
 // fn decisions(
 //     n: usize,
-//     mut man: RobddBuilder<AllTable<BddPtr>>,
+//     mut man: RobddBuilder<AllIteTable<BddPtr>>,
 // ) -> (
 //     BddPtr,
-//     RobddBuilder<AllTable<BddPtr>>,
+//     RobddBuilder<AllIteTable<BddPtr>>,
 //     Vec<VarLabel>,
 //     VarLabel,
 // ) {
