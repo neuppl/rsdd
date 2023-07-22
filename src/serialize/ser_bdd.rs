@@ -2,6 +2,8 @@
 
 use std::collections::HashMap;
 
+use petgraph::{dot::Dot, graph::NodeIndex, Graph};
+
 use crate::repr::{
     bdd::{BddNode, BddPtr},
     ddnnf::DDNNFPtr,
@@ -77,5 +79,69 @@ impl BDDSerializer {
             nodes,
             roots: vec![r],
         }
+    }
+
+    pub fn to_dot(&self) -> String {
+        let mut graph = Graph::<_, _>::new();
+        graph.add_node(String::from("F"));
+        graph.add_node(String::from("T"));
+
+        for node in self.nodes.iter() {
+            graph.add_node(format!("{}", node.topvar + 1));
+        }
+
+        fn node_petgraph_index(ptr: &SerBDDPtr) -> NodeIndex {
+            match ptr {
+                SerBDDPtr::Ptr { index, compl: _ } => NodeIndex::new(index + 2),
+                SerBDDPtr::True => NodeIndex::new(1),
+                SerBDDPtr::False => NodeIndex::new(0),
+            }
+        }
+
+        for (index, node) in self.nodes.iter().enumerate() {
+            graph.add_edge(
+                NodeIndex::new(index + 2),
+                node_petgraph_index(&node.low),
+                "low",
+            );
+            graph.add_edge(
+                NodeIndex::new(index + 2),
+                node_petgraph_index(&node.high),
+                "high",
+            );
+        }
+
+        format!("{:?}", Dot::with_config(&graph, &[]))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{
+        builder::{
+            bdd::{BddBuilder, RobddBuilder},
+            cache::lru_app::BddApplyTable,
+        },
+        repr::{bdd::BddPtr, cnf::Cnf},
+    };
+
+    use super::BDDSerializer;
+
+    #[test]
+    fn test_dot() {
+        static CNF: &str = "
+        p cnf 2 2
+        1 0
+        2 0
+        ";
+        let cnf = Cnf::from_dimacs(CNF);
+
+        let builder: RobddBuilder<'_, BddApplyTable<BddPtr<'_>>> =
+            RobddBuilder::<BddApplyTable<BddPtr>>::new_default_order_lru(cnf.num_vars());
+        let bdd = builder.compile_cnf(&cnf);
+
+        let serialized = BDDSerializer::from_bdd(bdd);
+
+        println!("{}", serialized.to_dot());
     }
 }

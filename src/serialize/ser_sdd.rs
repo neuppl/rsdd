@@ -2,6 +2,8 @@
 
 use std::collections::HashMap;
 
+use petgraph::{Graph, graph::NodeIndex, dot::Dot};
+
 use crate::repr::sdd::SddPtr;
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
@@ -113,5 +115,28 @@ impl SDDSerializer {
             nodes,
             roots: vec![r],
         }
+    }
+
+    pub fn to_dot(&self) -> String {
+        let mut graph = Graph::<_, _>::new();
+        graph.add_node(String::from("F"));
+        graph.add_node(String::from("T"));
+
+        for node in self.nodes.iter() {
+            graph.add_node(String::from("hi"));
+        }
+
+        fn node_petgraph_index(ptr: &SerSDDPtr) -> NodeIndex {
+            match ptr {
+                SerSDDPtr::True =>  NodeIndex::new(1),
+                SerSDDPtr::False =>  NodeIndex::new(0),
+                SerSDDPtr::Ptr { index, compl } => NodeIndex::new(index + 2),
+                SerSDDPtr::Literal { label, polarity } => todo!(),
+            }
+        }
+
+        graph.add_edge(NodeIndex::new(0), NodeIndex::new(1), String::from("hi"));
+
+        format!("{:?}", Dot::with_config(&graph, &[]))
     }
 }
