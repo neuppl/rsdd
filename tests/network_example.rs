@@ -4,7 +4,7 @@
 extern crate rsdd;
 use crate::repr::var_label::VarLabel;
 use rsdd::builder::bdd::{BddBuilder, RobddBuilder};
-use rsdd::builder::cache::all_app::AllTable;
+use rsdd::builder::cache::AllIteTable;
 use rsdd::builder::BottomUpBuilder;
 use rsdd::repr::bdd::BddPtr;
 use rsdd::repr::ddnnf::DDNNFPtr;
@@ -20,7 +20,7 @@ extern crate rand;
 // Output is: BDDPtr to network, Vec of edge VarLabels
 fn network_gen<'a>(
     n: usize,
-    builder: &'a RobddBuilder<'a, AllTable<BddPtr<'a>>>,
+    builder: &'a RobddBuilder<'a, AllIteTable<BddPtr<'a>>>,
 ) -> (BddPtr<'a>, Vec<VarLabel>) {
     // Initialize BDD
     let bdd_size = (2 * n) + 2;
@@ -54,7 +54,7 @@ fn network_gen<'a>(
 //         Vec of VarLabels of Decisions, VarLabel of Reward.
 fn decisions<'a>(
     n: usize,
-    builder: &'a RobddBuilder<'a, AllTable<BddPtr<'a>>>,
+    builder: &'a RobddBuilder<'a, AllIteTable<BddPtr<'a>>>,
 ) -> (BddPtr<'a>, Vec<VarLabel>, VarLabel) {
     // Initialize top and bottom decisions, reward
     let top_dec: Vec<(VarLabel, BddPtr)> = (0..n).map(|_x| builder.new_var(true)).collect();
@@ -160,7 +160,7 @@ fn gen() {
     let n = 4;
 
     let bdd_size = (2 * n) + 2;
-    let builder = RobddBuilder::<AllTable<BddPtr>>::new_default_order(bdd_size);
+    let builder = RobddBuilder::<AllIteTable<BddPtr>>::new_with_linear_order(bdd_size);
 
     let (network, edge_lbls) = network_gen(n, &builder);
     let (decs, dec_lbls, rw_lbls) = decisions(n, &builder);
@@ -214,7 +214,7 @@ fn sanity_check() {
     let n = 3;
 
     let bdd_size = (2 * n) + 2;
-    let builder = RobddBuilder::<AllTable<BddPtr>>::new_default_order(bdd_size);
+    let builder = RobddBuilder::<AllIteTable<BddPtr>>::new_with_linear_order(bdd_size);
 
     let (_, _) = network_gen(n, &builder);
     let (decs, _, _) = decisions(n, &builder);

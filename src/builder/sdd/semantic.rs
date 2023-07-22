@@ -1,7 +1,7 @@
 use crate::{
     backing_store::BackedRobinhoodTable,
     builder::{
-        cache::ite::Ite,
+        cache::Ite,
         sdd::{SddBuilder, SddBuilderStats},
     },
     repr::{
@@ -26,7 +26,7 @@ pub struct SemanticSddBuilder<'a, const P: u128> {
     bdd_tbl: RefCell<BackedRobinhoodTable<'a, BinarySDD<'a>>>,
     sdd_tbl: RefCell<BackedRobinhoodTable<'a, SddOr<'a>>>,
     // caches
-    // ite_cache: RefCell<AllTable<SddPtr<'a>>>,
+    // ite_cache: RefCell<AllIteTable<SddPtr<'a>>>,
     app_cache: RefCell<HashMap<u128, SddPtr<'a>>>,
     // semantic hashing
     map: WmcParams<FiniteField<P>>,
@@ -158,7 +158,7 @@ impl<'a, const P: u128> SemanticSddBuilder<'a, P> {
         SemanticSddBuilder {
             should_compress: false,
             vtree: vtree_man,
-            // ite_cache: RefCell::new(AllTable::new()),
+            // ite_cache: RefCell::new(AllIteTable::new()),
             app_cache: RefCell::new(HashMap::new()),
             bdd_tbl: RefCell::new(BackedRobinhoodTable::new()),
             sdd_tbl: RefCell::new(BackedRobinhoodTable::new()),

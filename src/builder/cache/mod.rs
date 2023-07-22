@@ -1,12 +1,14 @@
 use crate::repr::ddnnf::DDNNFPtr;
 
-use self::ite::Ite;
+mod all_app;
+mod ite;
+mod lru_app;
 
-pub mod all_app;
-pub mod ite;
-pub mod lru_app;
+pub use self::all_app::*;
+pub use self::ite::*;
+pub use self::lru_app::*;
 
-pub trait LruTable<'a, T: DDNNFPtr<'a>> {
+pub trait IteTable<'a, T: DDNNFPtr<'a>> {
     fn hash(&self, ite: &Ite<T>) -> u64;
     fn insert(&mut self, ite: Ite<T>, res: T, hash: u64);
     fn get(&self, ite: Ite<T>, hash: u64) -> Option<T>;
