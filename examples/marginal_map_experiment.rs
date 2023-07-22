@@ -5,7 +5,7 @@ use rand::Rng;
 use rsdd::{
     builder::{
         bdd::{BddBuilder, RobddBuilder},
-        cache::all_app::AllTable,
+        cache::AllIteTable,
     },
     repr::{bdd::BddPtr, cnf::Cnf, var_label::VarLabel, wmc::WmcParams},
     util::semirings::RealSemiring,
@@ -61,7 +61,7 @@ fn main() {
     println!("num vars: {}", cnf.num_vars());
 
     // TODO: allow user to pick varorder
-    let builder = RobddBuilder::<AllTable<BddPtr>>::new_default_order(cnf.num_vars());
+    let builder = RobddBuilder::<AllIteTable<BddPtr>>::new_with_linear_order(cnf.num_vars());
 
     let bdd = builder.compile_cnf(&cnf);
 

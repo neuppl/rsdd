@@ -1,7 +1,7 @@
 use clap::Parser;
 use rsdd::builder::bdd::BddBuilder;
 use rsdd::builder::bdd::RobddBuilder;
-use rsdd::builder::cache::lru_app::BddApplyTable;
+use rsdd::builder::cache::LruIteTable;
 use rsdd::builder::decision_nnf::DecisionNNFBuilder;
 use rsdd::builder::decision_nnf::StandardDecisionNNFBuilder;
 use rsdd::builder::sdd::{CompressionSddBuilder, SddBuilder};
@@ -149,7 +149,7 @@ fn compile_sdd_rightlinear(str: String, _args: &Args) -> BenchResult {
 
 fn compile_bdd(str: String, _args: &Args) -> BenchResult {
     let cnf = Cnf::from_dimacs(&str);
-    let builder = RobddBuilder::<BddApplyTable<BddPtr>>::new_default_order_lru(cnf.num_vars());
+    let builder = RobddBuilder::<LruIteTable<BddPtr>>::new_with_linear_order(cnf.num_vars());
     let bdd = builder.compile_cnf(&cnf);
 
     if let Some(path) = &_args.dump_bdd {
@@ -169,8 +169,7 @@ fn compile_bdd_dtree(str: String, _args: &Args) -> BenchResult {
     let cnf = Cnf::from_dimacs(&str);
     let order = cnf.min_fill_order();
     let dtree = DTree::from_cnf(&cnf, &order);
-    let builder =
-        RobddBuilder::<BddApplyTable<BddPtr>>::new(order, BddApplyTable::new(cnf.num_vars()));
+    let builder = RobddBuilder::<LruIteTable<BddPtr>>::new(order);
     let plan = BddPlan::from_dtree(&dtree);
     let bdd = builder.compile_plan(&plan);
 
