@@ -370,7 +370,6 @@ impl<'a> BddPtr<'a> {
         // return true;
         match self {
             Compl(n) | Reg(n) => n.data.borrow().is_none(),
-            // && n.low.is_scratch_cleared() && n.high.is_scratch_cleared(),
             PtrTrue => true,
             PtrFalse => true,
         }
