@@ -73,6 +73,11 @@ fn compare_sem_and_std(cnf: &Cnf, order: &VarOrder) -> (usize, usize) {
     let sem_nodes = sem_dnnf.count_nodes();
     let std_nodes = std_dnnf.count_nodes();
 
+    println!("===\nRebuilding sem...");
+    let rebuilt_sem = rebuild_and_compare(&sem_builder, &sem_dnnf);
+    let rebuilt_sem_nodes: usize = rebuilt_sem.count_nodes();
+
+    println!("\n\n===FINAL STATS===");
     println!(
         "sem/std size ratio: {:.4}x ({} / {})",
         (sem_nodes as f64 / std_nodes as f64),
@@ -91,8 +96,46 @@ fn compare_sem_and_std(cnf: &Cnf, order: &VarOrder) -> (usize, usize) {
         sem_time,
         std_time
     );
+    println!("===");
+    println!(
+        "sem rebuilt/sem size ratio: {:.4}x ({} / {})",
+        (rebuilt_sem_nodes as f64 / sem_nodes as f64),
+        rebuilt_sem_nodes,
+        sem_nodes
+    );
 
-    (sem_nodes, std_nodes)
+    if diff_by_wmc(cnf.num_vars(), order, std_dnnf, rebuilt_sem) > 0.0001 {
+        println!(
+            "error on sem rebuild {}\n std bdd: {}\nsem bdd: {}",
+            cnf,
+            std_dnnf.to_string_debug(),
+            rebuilt_sem.to_string_debug()
+        );
+    }
+
+    (rebuilt_sem_nodes, std_nodes)
+}
+
+fn rebuild_and_compare<'a, const P: u128>(
+    builder: &'a SemanticDecisionNNFBuilder<'a, P>,
+    dnnf: &BddPtr<'a>,
+) -> BddPtr<'a> {
+    println!("\nRebuilding...");
+    let og_nodes = dnnf.count_nodes();
+    let rebuilt = builder.rebuild(*dnnf);
+    let rebuilt_nodes = rebuilt.count_nodes();
+    println!(
+        "rebuilt/sem size ratio: {:.4}x ({} / {})",
+        (rebuilt_nodes as f64 / og_nodes as f64),
+        rebuilt_nodes,
+        og_nodes
+    );
+
+    if og_nodes != rebuilt_nodes {
+        return rebuild_and_compare(builder, &rebuilt);
+    }
+
+    rebuilt
 }
 
 struct RandomVarOrders {

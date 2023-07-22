@@ -1,6 +1,7 @@
 //! Binary decision diagram representation
 
 use crate::{
+    backing_store::AbstractlySized,
     repr::ddnnf::{DDNNFPtr, DDNNF},
     repr::model::PartialModel,
     repr::var_label::{Literal, VarLabel, VarSet},
@@ -325,12 +326,13 @@ impl<'a> BddPtr<'a> {
     }
 
     /// Gets the scratch value stored in `&self`
-    ///
-    /// Panics if not node.
     pub fn scratch<T: ?Sized + Clone + 'static>(&self) -> Option<T> {
         match self {
             Compl(n) | Reg(n) => {
                 if self.is_scratch_cleared() {
+                    return None;
+                }
+                if n.data.borrow().is_none() {
                     return None;
                 }
                 // println!("dereferencing {:?}", n.data.as_ptr());
@@ -1119,5 +1121,11 @@ impl<'a> Clone for BddNode<'a> {
 impl<'a> Ord for BddNode<'a> {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         self.partial_cmp(other).unwrap()
+    }
+}
+
+impl<'a> AbstractlySized for BddNode<'a> {
+    fn abstract_size(&self) -> usize {
+        BddPtr::Reg(self).count_nodes()
     }
 }

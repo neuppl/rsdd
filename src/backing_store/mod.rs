@@ -9,3 +9,7 @@ pub trait UniqueTable<'a, T: Eq + Hash> {
     /// use a hash to allocate space in table, but use strict equality for probing/checking
     fn get_or_insert(&'a mut self, item: T) -> &'a T;
 }
+
+pub trait AbstractlySized {
+    fn abstract_size(&self) -> usize;
+}
