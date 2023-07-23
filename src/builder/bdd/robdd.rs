@@ -304,6 +304,12 @@ impl<'a, T: IteTable<'a, BddPtr<'a>> + Default> RobddBuilder<'a, T> {
         // TODO: this num_vars should be tied to the specific BDD, not the manager
         self.smooth_helper(bdd, 0, num_vars)
     }
+
+    pub fn stats(&'a self) -> BddBuilderStats {
+        BddBuilderStats {
+            num_recursive_calls: self.stats.borrow().num_recursive_calls,
+        }
+    }
 }
 
 #[cfg(test)]
