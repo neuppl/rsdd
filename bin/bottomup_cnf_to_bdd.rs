@@ -20,6 +20,7 @@ struct Args {
 
     /// variable order for BDD.
     /// defaults to `auto_minfill`, which uses a min-fill heuristic.
+    /// allowed: `auto_minfill`, `auto_force`
     #[clap(long, value_parser, default_value_t = String::from("auto_minfill"))]
     order: String,
 
@@ -44,8 +45,9 @@ fn main() {
 
     let order = match args.order.as_str() {
         "auto_minfill" => cnf.min_fill_order(),
+        "auto_force" => cnf.force_order(),
         _ => panic!(
-            "Unknown order {} provided, expected one of: `auto_minfill`",
+            "Unknown order {} provided, expected one of: `auto_minfill`, `auto_force`",
             args.order
         ),
     };
