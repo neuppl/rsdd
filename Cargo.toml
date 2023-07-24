@@ -15,6 +15,7 @@ primal = "0.3.0"
 pretty = "0.3.3"
 quickcheck = "1.0.3"
 serde = { version = "1.0", features = ["derive"] }
+serde_sexpr = { version = "0.1.0" }
 rustc-hash = "1.1.0"
 bit-set = "0.5.3"
 segment-tree = "2.0.0"
@@ -58,6 +59,11 @@ cli = ["clap", "serde_json"]
 [[bin]]
 name = "bottomup_cnf_to_bdd"
 path = "bin/bottomup_cnf_to_bdd.rs"
+required-features = ["cli"]
+
+[[bin]]
+name = "bottomup_formula_to_bdd"
+path = "bin/bottomup_formula_to_bdd.rs"
 required-features = ["cli"]
 
 [[example]]

@@ -1,11 +1,11 @@
 //! A representation of an arbitrary logical formula
 
-use crate::repr::var_label::VarLabel;
+use crate::{repr::var_label::VarLabel, serialize::LogicalSExpr};
 use dimacs::*;
 use rand::{self, rngs::ThreadRng, Rng};
 use std::collections::HashMap;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum LogicalExpr {
     Literal(usize, bool),
     Not(Box<LogicalExpr>),
@@ -78,6 +78,54 @@ impl LogicalExpr {
             }
             e
         }
+    }
+
+    /// ```
+    /// use rsdd::repr::logical_expr::LogicalExpr;
+    /// use rsdd::serialize::LogicalSExpr;
+    ///
+    /// // this string represents X XOR Y. it exercises each branch of the match statement
+    /// // within the from_sexpr helper
+    /// let x_xor_y = String::from("(And (Or (Var X) (Var Y)) (Or (Not (Var X)) (Not (Var Y))))");
+    /// let expr = serde_sexpr::from_str::<LogicalSExpr>(&x_xor_y).unwrap();
+    ///
+    /// let manually_constructed = LogicalExpr::And(
+    ///     Box::new(LogicalExpr::Or(
+    ///         Box::new(LogicalExpr::Literal(0, true)),
+    ///         Box::new(LogicalExpr::Literal(1, true)),
+    ///     )),
+    ///     Box::new(LogicalExpr::Or(
+    ///         Box::new(LogicalExpr::Literal(0, false)),
+    ///         Box::new(LogicalExpr::Literal(1, false)),
+    ///     )),
+    /// );
+    ///
+    /// assert_eq!(LogicalExpr::from_sexpr(&expr), manually_constructed)
+    /// ```
+    pub fn from_sexpr(sexpr: &LogicalSExpr) -> LogicalExpr {
+        let mapping = sexpr.variable_mapping();
+
+        fn helper(sexpr: &LogicalSExpr, mapping: &HashMap<&String, usize>) -> LogicalExpr {
+            match sexpr {
+                LogicalSExpr::True => todo!(),
+                LogicalSExpr::False => todo!(),
+                LogicalSExpr::Var(s) => LogicalExpr::Literal(*mapping.get(s).unwrap(), true),
+                LogicalSExpr::Not(l) => match l.as_ref() {
+                    LogicalSExpr::Var(s) => LogicalExpr::Literal(*mapping.get(s).unwrap(), false),
+                    _ => LogicalExpr::Not(Box::new(helper(l.as_ref(), mapping))),
+                },
+                LogicalSExpr::Or(l, r) => LogicalExpr::Or(
+                    Box::new(helper(l.as_ref(), mapping)),
+                    Box::new(helper(r.as_ref(), mapping)),
+                ),
+                LogicalSExpr::And(l, r) => LogicalExpr::And(
+                    Box::new(helper(l.as_ref(), mapping)),
+                    Box::new(helper(r.as_ref(), mapping)),
+                ),
+            }
+        }
+
+        helper(sexpr, &mapping)
     }
 
     /// Build a random CNF expression
@@ -202,4 +250,25 @@ impl LogicalExpr {
             }
         }
     }
+}
+
+#[test]
+fn from_sexpr_e2e() {
+    // this string represents X XOR Y. it exercises each branch of the match statement
+    // within the from_sexpr helper
+    let x_xor_y = String::from("(And (Or (Var X) (Var Y)) (Or (Not (Var X)) (Not (Var Y))))");
+    let expr = serde_sexpr::from_str::<LogicalSExpr>(&x_xor_y).unwrap();
+
+    let manually_constructed = LogicalExpr::And(
+        Box::new(LogicalExpr::Or(
+            Box::new(LogicalExpr::Literal(0, true)),
+            Box::new(LogicalExpr::Literal(1, true)),
+        )),
+        Box::new(LogicalExpr::Or(
+            Box::new(LogicalExpr::Literal(0, false)),
+            Box::new(LogicalExpr::Literal(1, false)),
+        )),
+    );
+
+    assert_eq!(LogicalExpr::from_sexpr(&expr), manually_constructed)
 }
