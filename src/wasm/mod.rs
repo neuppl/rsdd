@@ -1,8 +1,9 @@
 use crate::{
     builder::{
-        bdd::{BddBuilder, RobddBuilder},
+        bdd::RobddBuilder,
         cache::AllIteTable,
         sdd::{CompressionSddBuilder, SddBuilder},
+        BottomUpBuilder,
     },
     constants::primes,
     repr::{

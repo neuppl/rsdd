@@ -3,10 +3,7 @@ use std::{collections::HashMap, fs};
 use clap::Parser;
 use rand::Rng;
 use rsdd::{
-    builder::{
-        bdd::{BddBuilder, RobddBuilder},
-        cache::AllIteTable,
-    },
+    builder::{bdd::RobddBuilder, cache::AllIteTable, BottomUpBuilder},
     repr::{bdd::BddPtr, cnf::Cnf, var_label::VarLabel, wmc::WmcParams},
     util::semirings::RealSemiring,
 };

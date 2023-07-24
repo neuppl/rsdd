@@ -4,9 +4,10 @@
 extern crate rsdd;
 #[macro_use]
 extern crate quickcheck;
-use rsdd::builder::bdd::{BddBuilder, RobddBuilder};
+use rsdd::builder::bdd::RobddBuilder;
 use rsdd::builder::cache::AllIteTable;
 use rsdd::builder::sdd::{CompressionSddBuilder, SddBuilder};
+use rsdd::builder::BottomUpBuilder;
 use rsdd::repr::bdd::BddPtr;
 use rsdd::repr::cnf::Cnf;
 use rsdd::repr::var_label::VarLabel;
@@ -670,7 +671,6 @@ mod test_sdd_builder {
     use rand::rngs::SmallRng;
     use rand::seq::SliceRandom;
     use rand::SeedableRng;
-    use rsdd::builder::bdd::BddBuilder;
     use rsdd::builder::bdd::RobddBuilder;
     use rsdd::builder::cache::AllIteTable;
     use rsdd::builder::sdd::{CompressionSddBuilder, SddBuilder, SemanticSddBuilder};

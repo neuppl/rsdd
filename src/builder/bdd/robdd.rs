@@ -318,7 +318,6 @@ mod tests {
     use std::borrow::Borrow;
     use std::collections::HashMap;
 
-    use crate::builder::bdd::builder::BddBuilder;
     use crate::builder::BottomUpBuilder;
     use crate::repr::wmc::WmcParams;
     use crate::util::semirings::{FiniteField, RealSemiring};

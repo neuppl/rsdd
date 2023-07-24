@@ -7,7 +7,10 @@ pub mod bdd;
 pub mod decision_nnf;
 pub mod sdd;
 
-use crate::repr::var_label::VarLabel;
+use crate::{
+    plan::BottomUpPlan,
+    repr::{cnf::Cnf, logical_expr::LogicalExpr, var_label::VarLabel},
+};
 
 pub trait BottomUpBuilder<'a, Ptr> {
     // constants --- can elide the input lifetimes
@@ -48,6 +51,83 @@ pub trait BottomUpBuilder<'a, Ptr> {
     /// compose g into f for variable v
     /// I.e., computes the logical function (exists v. (g <=> v) /\ f).
     fn compose(&'a self, f: Ptr, lbl: VarLabel, g: Ptr) -> Ptr;
+
+    // compilation
+
+    /// directly compile a CNF
+    fn compile_cnf(&'a self, cnf: &Cnf) -> Ptr;
+
+    /// directly compile a logical expression
+    fn compile_logical_expr(&'a self, expr: &LogicalExpr) -> Ptr {
+        match &expr {
+            LogicalExpr::Literal(lbl, polarity) => self.var(VarLabel::new(*lbl as u64), *polarity),
+            LogicalExpr::And(ref l, ref r) => {
+                let r1 = self.compile_logical_expr(l);
+                let r2 = self.compile_logical_expr(r);
+                self.and(r1, r2)
+            }
+            LogicalExpr::Or(ref l, ref r) => {
+                let r1 = self.compile_logical_expr(l);
+                let r2 = self.compile_logical_expr(r);
+                self.or(r1, r2)
+            }
+            LogicalExpr::Not(ref e) => self.negate(self.compile_logical_expr(e)),
+            LogicalExpr::Iff(ref l, ref r) => {
+                let r1 = self.compile_logical_expr(l);
+                let r2 = self.compile_logical_expr(r);
+                self.iff(r1, r2)
+            }
+            LogicalExpr::Xor(ref l, ref r) => {
+                let r1 = self.compile_logical_expr(l);
+                let r2 = self.compile_logical_expr(r);
+                self.xor(r1, r2)
+            }
+            LogicalExpr::Ite {
+                ref guard,
+                ref thn,
+                ref els,
+            } => {
+                let g = self.compile_logical_expr(guard);
+                let t = self.compile_logical_expr(thn);
+                let e = self.compile_logical_expr(els);
+                self.ite(g, t, e)
+            }
+        }
+    }
+
+    /// Compiles from a BottomUpPlan, which represents a deferred computation
+    fn compile_plan(&'a self, expr: &BottomUpPlan) -> Ptr {
+        match &expr {
+            BottomUpPlan::Literal(var, polarity) => self.var(*var, *polarity),
+            BottomUpPlan::And(ref l, ref r) => {
+                let r1 = self.compile_plan(l);
+                let r2 = self.compile_plan(r);
+                self.and(r1, r2)
+            }
+            BottomUpPlan::Or(ref l, ref r) => {
+                let r1 = self.compile_plan(l);
+                let r2 = self.compile_plan(r);
+                self.or(r1, r2)
+            }
+            BottomUpPlan::Iff(ref l, ref r) => {
+                let r1 = self.compile_plan(l);
+                let r2 = self.compile_plan(r);
+                self.iff(r1, r2)
+            }
+            BottomUpPlan::Ite(ref f, ref g, ref h) => {
+                let f = self.compile_plan(f);
+                let g = self.compile_plan(g);
+                let h = self.compile_plan(h);
+                self.ite(f, g, h)
+            }
+            BottomUpPlan::Not(ref f) => {
+                let f = self.compile_plan(f);
+                self.negate(f)
+            }
+            BottomUpPlan::ConstTrue => self.true_ptr(),
+            BottomUpPlan::ConstFalse => self.false_ptr(),
+        }
+    }
 }
 
 pub trait TopDownBuilder<'a, Ptr> {

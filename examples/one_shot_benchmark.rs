@@ -1,10 +1,10 @@
 use clap::Parser;
-use rsdd::builder::bdd::BddBuilder;
 use rsdd::builder::bdd::RobddBuilder;
 use rsdd::builder::cache::LruIteTable;
 use rsdd::builder::decision_nnf::DecisionNNFBuilder;
 use rsdd::builder::decision_nnf::StandardDecisionNNFBuilder;
 use rsdd::builder::sdd::{CompressionSddBuilder, SddBuilder};
+use rsdd::builder::BottomUpBuilder;
 use rsdd::plan::BottomUpPlan;
 use rsdd::repr::bdd::BddPtr;
 use rsdd::repr::cnf::Cnf;
