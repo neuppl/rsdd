@@ -2,10 +2,7 @@ use std::{fs, time::Instant};
 
 use clap::Parser;
 use rsdd::{
-    builder::{
-        bdd::{BddBuilder, RobddBuilder},
-        cache::LruIteTable,
-    },
+    builder::{bdd::RobddBuilder, cache::LruIteTable, BottomUpBuilder},
     plan::BottomUpPlan,
     repr::{bdd::BddPtr, cnf::Cnf, dtree::DTree},
     serialize::BDDSerializer,

@@ -6,7 +6,6 @@ use crate::{
     repr::{
         cnf::Cnf,
         ddnnf::DDNNFPtr,
-        logical_expr::LogicalExpr,
         sdd::{BinarySDD, SddAnd, SddOr, SddPtr},
         var_label::VarLabel,
         vtree::{VTree, VTreeIndex, VTreeManager},
@@ -341,69 +340,6 @@ pub trait SddBuilder<'a>: BottomUpBuilder<'a, SddPtr<'a>> {
         }
     }
 
-    /// compile an SDD from an input CNF
-    fn compile_cnf(&'a self, cnf: &Cnf) -> SddPtr<'a> {
-        let mut cvec: Vec<SddPtr> = Vec::with_capacity(cnf.clauses().len());
-        if cnf.clauses().is_empty() {
-            return SddPtr::true_ptr();
-        }
-        // check if there is an empty clause -- if so, UNSAT
-        if cnf.clauses().iter().any(|x| x.is_empty()) {
-            return SddPtr::false_ptr();
-        }
-
-        // sort the clauses based on a best-effort bottom-up ordering of clauses
-        let mut cnf_sorted = cnf.clauses().to_vec();
-        cnf_sorted.sort_by(|c1, c2| {
-            // order the clause with the first-most variable last
-            let fst1 = c1
-                .iter()
-                .max_by(|l1, l2| {
-                    if self.vtree_manager().is_prime_var(l1.label(), l2.label()) {
-                        Ordering::Less
-                    } else {
-                        Ordering::Equal
-                    }
-                })
-                .unwrap();
-            let fst2 = c2
-                .iter()
-                .max_by(|l1, l2| {
-                    if self.vtree_manager().is_prime_var(l1.label(), l2.label()) {
-                        Ordering::Less
-                    } else {
-                        Ordering::Equal
-                    }
-                })
-                .unwrap();
-            if self
-                .vtree_manager()
-                .is_prime_var(fst1.label(), fst2.label())
-            {
-                Ordering::Less
-            } else {
-                Ordering::Equal
-            }
-        });
-
-        for lit_vec in cnf_sorted.iter() {
-            let (vlabel, val) = (lit_vec[0].label(), lit_vec[0].polarity());
-            let mut bdd = SddPtr::Var(vlabel, val);
-            for lit in lit_vec {
-                let (vlabel, val) = (lit.label(), lit.polarity());
-                let var = SddPtr::Var(vlabel, val);
-                bdd = self.or(bdd, var);
-            }
-            cvec.push(bdd);
-        }
-        // now cvec has a list of all the clauses; collapse it down
-        let r = self.compile_cnf_helper(&cvec);
-        match r {
-            None => SddPtr::true_ptr(),
-            Some(x) => x,
-        }
-    }
-
     fn compile_cnf_helper(&'a self, vec: &[SddPtr<'a>]) -> Option<SddPtr<'a>> {
         if vec.is_empty() {
             None
@@ -417,47 +353,6 @@ pub trait SddBuilder<'a>: BottomUpBuilder<'a, SddPtr<'a>> {
                 (None, None) => None,
                 (Some(v), None) | (None, Some(v)) => Some(v),
                 (Some(l), Some(r)) => Some(self.and(l, r)),
-            }
-        }
-    }
-
-    // note: this is not tested
-    fn compile_logical_expr(&'a self, expr: &LogicalExpr) -> SddPtr {
-        match expr {
-            LogicalExpr::Literal(lbl, polarity) => self.var(VarLabel::new(*lbl as u64), *polarity),
-            LogicalExpr::Not(e) => {
-                let e = self.compile_logical_expr(e);
-                e.neg()
-            }
-            LogicalExpr::And(ref l, ref r) => {
-                let r1 = self.compile_logical_expr(l);
-                let r2 = self.compile_logical_expr(r);
-                self.and(r1, r2)
-            }
-            LogicalExpr::Or(ref l, ref r) => {
-                let r1 = self.compile_logical_expr(l);
-                let r2 = self.compile_logical_expr(r);
-                self.or(r1, r2)
-            }
-            LogicalExpr::Xor(ref l, ref r) => {
-                let r1 = self.compile_logical_expr(l);
-                let r2 = self.compile_logical_expr(r);
-                self.xor(r1, r2)
-            }
-            LogicalExpr::Iff(ref l, ref r) => {
-                let r1 = self.compile_logical_expr(l);
-                let r2 = self.compile_logical_expr(r);
-                self.iff(r1, r2)
-            }
-            LogicalExpr::Ite {
-                ref guard,
-                ref thn,
-                ref els,
-            } => {
-                let g = self.compile_logical_expr(guard);
-                let thn = self.compile_logical_expr(thn);
-                let els = self.compile_logical_expr(els);
-                self.ite(g, thn, els)
             }
         }
     }
@@ -704,5 +599,68 @@ where
         let iff = self.iff(var, g);
         let a = self.and(iff, f);
         self.exists(a, lbl)
+    }
+
+    /// compile an SDD from an input CNF
+    fn compile_cnf(&'a self, cnf: &Cnf) -> SddPtr<'a> {
+        let mut cvec: Vec<SddPtr> = Vec::with_capacity(cnf.clauses().len());
+        if cnf.clauses().is_empty() {
+            return SddPtr::true_ptr();
+        }
+        // check if there is an empty clause -- if so, UNSAT
+        if cnf.clauses().iter().any(|x| x.is_empty()) {
+            return SddPtr::false_ptr();
+        }
+
+        // sort the clauses based on a best-effort bottom-up ordering of clauses
+        let mut cnf_sorted = cnf.clauses().to_vec();
+        cnf_sorted.sort_by(|c1, c2| {
+            // order the clause with the first-most variable last
+            let fst1 = c1
+                .iter()
+                .max_by(|l1, l2| {
+                    if self.vtree_manager().is_prime_var(l1.label(), l2.label()) {
+                        Ordering::Less
+                    } else {
+                        Ordering::Equal
+                    }
+                })
+                .unwrap();
+            let fst2 = c2
+                .iter()
+                .max_by(|l1, l2| {
+                    if self.vtree_manager().is_prime_var(l1.label(), l2.label()) {
+                        Ordering::Less
+                    } else {
+                        Ordering::Equal
+                    }
+                })
+                .unwrap();
+            if self
+                .vtree_manager()
+                .is_prime_var(fst1.label(), fst2.label())
+            {
+                Ordering::Less
+            } else {
+                Ordering::Equal
+            }
+        });
+
+        for lit_vec in cnf_sorted.iter() {
+            let (vlabel, val) = (lit_vec[0].label(), lit_vec[0].polarity());
+            let mut bdd = SddPtr::Var(vlabel, val);
+            for lit in lit_vec {
+                let (vlabel, val) = (lit.label(), lit.polarity());
+                let var = SddPtr::Var(vlabel, val);
+                bdd = self.or(bdd, var);
+            }
+            cvec.push(bdd);
+        }
+        // now cvec has a list of all the clauses; collapse it down
+        let r = self.compile_cnf_helper(&cvec);
+        match r {
+            None => SddPtr::true_ptr(),
+            Some(x) => x,
+        }
     }
 }
