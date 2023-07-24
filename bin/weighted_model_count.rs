@@ -13,15 +13,26 @@ use rsdd::{
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize)]
-struct VariableWeight {
-    low: f64,
-    high: f64,
+struct VariableWeight<T> {
+    low: T,
+    high: T,
 }
 
 #[derive(Serialize, Deserialize)]
 struct Config {
     order: Option<Vec<String>>,
-    weights: Option<HashMap<String, VariableWeight>>,
+}
+
+impl Config {
+    fn to_var_order(&self, mapping: &HashMap<&String, usize>) -> Option<VarOrder> {
+        self.order.as_ref().map(|o| {
+            VarOrder::new(
+                o.iter()
+                    .map(|var| VarLabel::new(*mapping.get(var).unwrap() as u64))
+                    .collect(),
+            )
+        })
+    }
 }
 
 #[derive(Parser, Debug)]
@@ -67,7 +78,7 @@ fn main() {
 
     let weights = if let Some(path_to_weights) = args.weights {
         let config = fs::read_to_string(path_to_weights).unwrap();
-        serde_json::from_str::<HashMap<String, VariableWeight>>(&config).unwrap()
+        serde_json::from_str::<HashMap<String, VariableWeight<f64>>>(&config).unwrap()
     } else {
         panic!("no weights file provided");
     };
@@ -81,16 +92,7 @@ fn main() {
 
     let order = match args.ordering.as_str() {
         "linear" => VarOrder::linear_order(num_vars),
-        "manual" => {
-            let config = config.unwrap();
-            let order = config.order.unwrap();
-            VarOrder::new(
-                order
-                    .iter()
-                    .map(|var| VarLabel::new(*mapping.get(var).unwrap() as u64))
-                    .collect(),
-            )
-        }
+        "manual" => config.unwrap().to_var_order(&mapping).unwrap(),
         _ => todo!(),
     };
 
