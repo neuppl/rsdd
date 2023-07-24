@@ -6,7 +6,7 @@ use rsdd::{
         bdd::{BddBuilder, RobddBuilder},
         cache::LruIteTable,
     },
-    plan::bdd_plan::BddPlan,
+    plan::BddPlan,
     repr::{bdd::BddPtr, cnf::Cnf, dtree::DTree},
     serialize::BDDSerializer,
 };

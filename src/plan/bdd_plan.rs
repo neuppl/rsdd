@@ -16,7 +16,9 @@ pub enum BddPlan {
 }
 
 impl BddPlan {
-    #[allow(clippy::should_implement_trait)] // this is a naming thing; perhaps consider renaming this in the future?
+    // this is a naming thing; perhaps consider renaming this in the future?
+    // (but, both not and neg are std::ops, so you'll hit this clippy with both natural choices)
+    #[allow(clippy::should_implement_trait)]
     pub fn not(p: BddPlan) -> Self {
         Self::Not(Box::new(p))
     }

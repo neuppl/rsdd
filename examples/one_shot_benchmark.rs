@@ -5,7 +5,7 @@ use rsdd::builder::cache::LruIteTable;
 use rsdd::builder::decision_nnf::DecisionNNFBuilder;
 use rsdd::builder::decision_nnf::StandardDecisionNNFBuilder;
 use rsdd::builder::sdd::{CompressionSddBuilder, SddBuilder};
-use rsdd::plan::bdd_plan::BddPlan;
+use rsdd::plan::BddPlan;
 use rsdd::repr::bdd::BddPtr;
 use rsdd::repr::cnf::Cnf;
 use rsdd::repr::ddnnf::DDNNFPtr;

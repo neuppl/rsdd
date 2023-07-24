@@ -1,6 +1,6 @@
 use crate::{
     builder::{bdd::CompiledCNF, BottomUpBuilder},
-    plan::bdd_plan::BddPlan,
+    plan::BddPlan,
     repr::{
         bdd::{BddNode, BddPtr},
         cnf::Cnf,

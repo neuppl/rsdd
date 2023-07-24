@@ -1,1 +1,3 @@
-pub mod bdd_plan;
+mod bdd_plan;
+
+pub use self::bdd_plan::*;
