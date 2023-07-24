@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize)]
 struct Config {
-    order: Vec<String>,
+    order: Option<Vec<String>>,
 }
 
 #[derive(Parser, Debug)]
@@ -55,15 +55,14 @@ fn main() {
         "linear" => VarOrder::linear_order(sexpr.unique_variables().len()),
         "manual" => {
             let mapping = sexpr.variable_mapping();
-            match config {
-                Some(c) => VarOrder::new(
-                    c.order
-                        .iter()
-                        .map(|var| VarLabel::new(*mapping.get(var).unwrap() as u64))
-                        .collect(),
-                ),
-                None => panic!("error; `manual` ordering requires config, passed in with -c"),
-            }
+            let config = config.unwrap();
+            let order = config.order.unwrap();
+            VarOrder::new(
+                order
+                    .iter()
+                    .map(|var| VarLabel::new(*mapping.get(var).unwrap() as u64))
+                    .collect(),
+            )
         }
         _ => todo!(),
     };
