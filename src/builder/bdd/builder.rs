@@ -1,6 +1,6 @@
 use crate::{
     builder::{bdd::CompiledCNF, BottomUpBuilder},
-    plan::bdd_plan::BddPlan,
+    plan::BottomUpPlan,
     repr::{
         bdd::{BddNode, BddPtr},
         cnf::Cnf,
@@ -195,36 +195,36 @@ pub trait BddBuilder<'a>: BottomUpBuilder<'a, BddPtr<'a>> {
     }
 
     /// Compiles a plan into a BDD
-    fn compile_plan(&'a self, expr: &BddPlan) -> BddPtr<'a> {
+    fn compile_plan(&'a self, expr: &BottomUpPlan) -> BddPtr<'a> {
         match &expr {
-            BddPlan::Literal(var, polarity) => self.var(*var, *polarity),
-            BddPlan::And(ref l, ref r) => {
+            BottomUpPlan::Literal(var, polarity) => self.var(*var, *polarity),
+            BottomUpPlan::And(ref l, ref r) => {
                 let r1 = self.compile_plan(l);
                 let r2 = self.compile_plan(r);
                 self.and(r1, r2)
             }
-            BddPlan::Or(ref l, ref r) => {
+            BottomUpPlan::Or(ref l, ref r) => {
                 let r1 = self.compile_plan(l);
                 let r2 = self.compile_plan(r);
                 self.or(r1, r2)
             }
-            BddPlan::Iff(ref l, ref r) => {
+            BottomUpPlan::Iff(ref l, ref r) => {
                 let r1 = self.compile_plan(l);
                 let r2 = self.compile_plan(r);
                 self.iff(r1, r2)
             }
-            BddPlan::Ite(ref f, ref g, ref h) => {
+            BottomUpPlan::Ite(ref f, ref g, ref h) => {
                 let f = self.compile_plan(f);
                 let g = self.compile_plan(g);
                 let h = self.compile_plan(h);
                 self.ite(f, g, h)
             }
-            BddPlan::Not(ref f) => {
+            BottomUpPlan::Not(ref f) => {
                 let f = self.compile_plan(f);
                 f.neg()
             }
-            BddPlan::ConstTrue => BddPtr::true_ptr(),
-            BddPlan::ConstFalse => BddPtr::false_ptr(),
+            BottomUpPlan::ConstTrue => BddPtr::true_ptr(),
+            BottomUpPlan::ConstFalse => BddPtr::false_ptr(),
         }
     }
 }
