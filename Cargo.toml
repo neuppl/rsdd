@@ -22,6 +22,7 @@ segment-tree = "2.0.0"
 bumpalo = "3.11.1"
 petgraph = "0.6.2"
 rand_chacha = "0.3.1"
+rational = "1.2.2"
 # optional: only used to build [[bin]]
 clap = { version = "4.2.1", features = ["derive"], optional = true }
 serde_json = { version = "1.0.81", optional = true }
