@@ -4,38 +4,38 @@
 use crate::repr::{dtree::DTree, var_label::VarLabel};
 
 #[derive(Debug, Clone)]
-pub enum BddPlan {
-    And(Box<BddPlan>, Box<BddPlan>),
-    Or(Box<BddPlan>, Box<BddPlan>),
-    Iff(Box<BddPlan>, Box<BddPlan>),
-    Ite(Box<BddPlan>, Box<BddPlan>, Box<BddPlan>),
-    Not(Box<BddPlan>),
+pub enum BottomUpPlan {
+    And(Box<BottomUpPlan>, Box<BottomUpPlan>),
+    Or(Box<BottomUpPlan>, Box<BottomUpPlan>),
+    Iff(Box<BottomUpPlan>, Box<BottomUpPlan>),
+    Ite(Box<BottomUpPlan>, Box<BottomUpPlan>, Box<BottomUpPlan>),
+    Not(Box<BottomUpPlan>),
     ConstTrue,
     ConstFalse,
     Literal(VarLabel, bool),
 }
 
-impl BddPlan {
+impl BottomUpPlan {
     // this is a naming thing; perhaps consider renaming this in the future?
     // (but, both not and neg are std::ops, so you'll hit this clippy with both natural choices)
     #[allow(clippy::should_implement_trait)]
-    pub fn not(p: BddPlan) -> Self {
+    pub fn not(p: BottomUpPlan) -> Self {
         Self::Not(Box::new(p))
     }
 
-    pub fn and(p1: BddPlan, p2: BddPlan) -> Self {
+    pub fn and(p1: BottomUpPlan, p2: BottomUpPlan) -> Self {
         Self::And(Box::new(p1), Box::new(p2))
     }
 
-    pub fn or(p1: BddPlan, p2: BddPlan) -> Self {
+    pub fn or(p1: BottomUpPlan, p2: BottomUpPlan) -> Self {
         Self::Or(Box::new(p1), Box::new(p2))
     }
 
-    pub fn iff(p1: BddPlan, p2: BddPlan) -> Self {
+    pub fn iff(p1: BottomUpPlan, p2: BottomUpPlan) -> Self {
         Self::Iff(Box::new(p1), Box::new(p2))
     }
 
-    pub fn ite(pc: BddPlan, pt: BddPlan, pf: BddPlan) -> Self {
+    pub fn ite(pc: BottomUpPlan, pt: BottomUpPlan, pf: BottomUpPlan) -> Self {
         Self::Ite(Box::new(pc), Box::new(pt), Box::new(pf))
     }
 
@@ -60,7 +60,7 @@ impl BddPlan {
     ///     &&
     ///  /       \
     /// (A ∨ B)  (B ∨ C)
-    pub fn from_dtree(dtree: &DTree) -> BddPlan {
+    pub fn from_dtree(dtree: &DTree) -> BottomUpPlan {
         match dtree {
             DTree::Node {
                 l,

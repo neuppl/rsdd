@@ -6,7 +6,7 @@ use rsdd::{
         bdd::{BddBuilder, RobddBuilder},
         cache::LruIteTable,
     },
-    plan::BddPlan,
+    plan::BottomUpPlan,
     repr::{bdd::BddPtr, cnf::Cnf, dtree::DTree},
     serialize::BDDSerializer,
 };
@@ -55,7 +55,7 @@ fn main() {
     let plan = match args.strategy.as_str() {
         "dtree" => {
             let dtree = DTree::from_cnf(&cnf, &order);
-            BddPlan::from_dtree(&dtree)
+            BottomUpPlan::from_dtree(&dtree)
         }
         _ => panic!(
             "Unknown strategy {} provided, expected one of: `dtree`",

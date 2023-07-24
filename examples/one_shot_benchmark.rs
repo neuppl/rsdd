@@ -5,7 +5,7 @@ use rsdd::builder::cache::LruIteTable;
 use rsdd::builder::decision_nnf::DecisionNNFBuilder;
 use rsdd::builder::decision_nnf::StandardDecisionNNFBuilder;
 use rsdd::builder::sdd::{CompressionSddBuilder, SddBuilder};
-use rsdd::plan::BddPlan;
+use rsdd::plan::BottomUpPlan;
 use rsdd::repr::bdd::BddPtr;
 use rsdd::repr::cnf::Cnf;
 use rsdd::repr::ddnnf::DDNNFPtr;
@@ -170,7 +170,7 @@ fn compile_bdd_dtree(str: String, _args: &Args) -> BenchResult {
     let order = cnf.min_fill_order();
     let dtree = DTree::from_cnf(&cnf, &order);
     let builder = RobddBuilder::<LruIteTable<BddPtr>>::new(order);
-    let plan = BddPlan::from_dtree(&dtree);
+    let plan = BottomUpPlan::from_dtree(&dtree);
     let bdd = builder.compile_plan(&plan);
 
     if let Some(path) = &_args.dump_bdd {
