@@ -61,6 +61,11 @@ name = "bottomup_cnf_to_bdd"
 path = "bin/bottomup_cnf_to_bdd.rs"
 required-features = ["cli"]
 
+[[bin]]
+name = "bottomup_formula_to_bdd"
+path = "bin/bottomup_formula_to_bdd.rs"
+required-features = ["cli"]
+
 [[example]]
 name = "one_shot_benchmark"
 path = "examples/one_shot_benchmark.rs"

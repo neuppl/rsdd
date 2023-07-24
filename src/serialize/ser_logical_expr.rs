@@ -41,7 +41,8 @@ impl LogicalSExpr {
     /// let expr =
     /// serde_sexpr::from_str::<LogicalSExpr>("(Or (Var X) (Or (Not (Var X)) (Var Y)))").unwrap();
     /// let vars = expr.unique_variables();
-
+    /// let mapping = expr.variable_mapping();
+    ///
     /// assert_eq!(*mapping.get(&String::from("X")).unwrap(), 0);
     /// assert_eq!(*mapping.get(&String::from("Y")).unwrap(), 1);
     /// assert_eq!(mapping.get(&String::from("Z")), None);
