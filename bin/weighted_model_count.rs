@@ -85,10 +85,31 @@ fn main() {
 
     let sexpr = serde_sexpr::from_str::<LogicalSExpr>(&file).unwrap();
     let expr = LogicalExpr::from_sexpr(&sexpr);
-    let num_vars = sexpr.unique_variables().len();
-    let mapping = sexpr.variable_mapping();
+    let mut num_vars = sexpr.unique_variables().len();
+    let mut mapping = sexpr.variable_mapping();
 
     let start = Instant::now();
+
+    let params: WmcParams<RealSemiring> =
+        WmcParams::new(HashMap::from_iter(weights.iter().map(|(k, v)| {
+            let label = mapping.get(k);
+
+            match label {
+                None => {
+                    let n = (
+                        VarLabel::new(num_vars as u64),
+                        (RealSemiring(v.low), RealSemiring(v.high)),
+                    );
+                    mapping.insert(k, num_vars);
+                    num_vars += 1;
+                    n
+                }
+                Some(index) => (
+                    VarLabel::new(*index as u64),
+                    (RealSemiring(v.low), RealSemiring(v.high)),
+                ),
+            }
+        })));
 
     let order = match args.ordering.as_str() {
         "linear" => VarOrder::linear_order(num_vars),
@@ -104,14 +125,6 @@ fn main() {
     } else {
         bdd
     };
-
-    let params: WmcParams<RealSemiring> =
-        WmcParams::new(HashMap::from_iter(weights.iter().map(|(k, v)| {
-            (
-                VarLabel::new(*mapping.get(k).unwrap() as u64),
-                (RealSemiring(v.low), RealSemiring(v.high)),
-            )
-        })));
 
     let res = bdd.wmc(&order, &params);
 
