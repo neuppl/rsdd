@@ -290,9 +290,8 @@ impl<'a, const P: u128> SemanticBddNode<'a, P> {
         low_hash: FiniteField<P>,
         high_hash: FiniteField<P>,
         builder: &'a SemanticBddBuilder<'a, P>,
-        map: &WmcParams<FiniteField<P>>,
     ) -> SemanticBddNode<'a, P> {
-        let (low_w, high_w) = map.var_weight(var);
+        let (low_w, high_w) = builder.map().var_weight(var);
         let hash = low_hash * (*low_w) + high_hash * (*high_w);
 
         SemanticBddNode {
@@ -311,6 +310,14 @@ impl<'a, const P: u128> SemanticBddNode<'a, P> {
 
     pub fn high(&self) -> SemanticBddPtr<'a, P> {
         self.builder.deref_semantic_hash(self.high_hash)
+    }
+
+    pub fn var(&self) -> VarLabel {
+        self.var
+    }
+
+    pub fn semantic_hash(&self) -> FiniteField<P> {
+        self.hash
     }
 }
 

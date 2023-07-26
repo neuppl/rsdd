@@ -32,6 +32,7 @@ pub trait BottomUpBuilder<'a, Ptr> {
     fn or(&'a self, a: Ptr, b: Ptr) -> Ptr {
         self.negate(self.and(self.negate(a), self.negate(b)))
     }
+
     fn negate(&'a self, f: Ptr) -> Ptr;
 
     /// if f then g else h
@@ -51,7 +52,14 @@ pub trait BottomUpBuilder<'a, Ptr> {
 
     /// compose g into f for variable v
     /// I.e., computes the logical function (exists v. (g <=> v) /\ f).
-    fn compose(&'a self, f: Ptr, lbl: VarLabel, g: Ptr) -> Ptr;
+    fn compose(&'a self, f: Ptr, lbl: VarLabel, g: Ptr) -> Ptr {
+        // TODO this can be optimized with a specialized implementation to make
+        // it a single traversal
+        let var = self.var(lbl, true);
+        let iff = self.iff(var, g);
+        let a = self.and(iff, f);
+        self.exists(a, lbl)
+    }
 
     // compilation
 
