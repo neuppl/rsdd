@@ -5,6 +5,7 @@ pub mod cache;
 
 pub mod bdd;
 pub mod decision_nnf;
+pub mod parallel;
 pub mod sdd;
 
 use crate::{

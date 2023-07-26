@@ -7,6 +7,7 @@ use std::{
 };
 
 use crate::{
+    builder::parallel::SemanticBddBuilder,
     repr::var_label::VarSet,
     util::semirings::{FiniteField, Semiring},
 };
@@ -24,18 +25,11 @@ use SemanticBddPtr::*;
 pub enum SemanticBddPtr<'a, const P: u128> {
     PtrTrue,
     PtrFalse,
-    Reg(&'a SemanticBddNode<P>),
-    Compl(&'a SemanticBddNode<P>),
+    Reg(&'a SemanticBddNode<'a, P>),
+    Compl(&'a SemanticBddNode<'a, P>),
 }
 
 impl<'a, const P: u128> SemanticBddPtr<'a, P> {
-    pub fn is_const(&self) -> bool {
-        match &self {
-            Reg(_) | Compl(_) => false,
-            PtrTrue | PtrFalse => true,
-        }
-    }
-
     /// Gets the scratch value stored in `&self`
     ///
     /// Panics if not node.
@@ -81,8 +75,8 @@ impl<'a, const P: u128> SemanticBddPtr<'a, P> {
             Compl(x) | Reg(x) => {
                 if x.data.borrow().is_some() {
                     x.data.take();
-                    x.low.clear_scratch();
-                    x.high.clear_scratch();
+                    x.low().clear_scratch();
+                    x.high().clear_scratch();
                 }
             }
             PtrTrue | PtrFalse => (),
@@ -126,9 +120,9 @@ impl<'a, const P: u128> DDNNFPtr<'a> for SemanticBddPtr<'a, P> {
                     // helper performs actual fold-and-cache work
                     let bottomup_helper = |cached| {
                         let (l, h) = if ptr.is_neg() {
-                            (ptr.low_raw().neg(), ptr.high_raw().neg())
+                            (node.low().neg(), node.high().neg())
                         } else {
-                            (ptr.low_raw(), ptr.high_raw())
+                            (node.low(), node.high())
                         };
 
                         let low_v = bottomup_pass_h(l, f);
@@ -219,27 +213,12 @@ impl<'a, const P: u128> DDNNFPtr<'a> for SemanticBddPtr<'a, P> {
     }
 
     fn count_nodes(&self) -> usize {
-        // debug_assert!(self.is_scratch_cleared());
-        // fn count_h(ptr: SemanticBddPtr<P>, count: &mut usize) {
-        //     if ptr.is_const() {
-        //         return;
-        //     }
-        //     match ptr.scratch::<usize>() {
-        //         Some(_) => (),
-        //         None => {
-        //             // found a new node
-        //             *count += 1;
-        //             ptr.set_scratch::<usize>(0);
-        //             count_h(ptr.low_raw(), count);
-        //             count_h(ptr.high_raw(), count);
-        //         }
-        //     }
-        // }
-        // let mut count = 0;
-        // count_h(*self, &mut count);
-        // self.clear_scratch();
-        // count
-        todo!()
+        debug_assert!(self.is_scratch_cleared());
+
+        let mut count = 0;
+        self.count_h(&mut count);
+        self.clear_scratch();
+        count
     }
 }
 
@@ -250,6 +229,24 @@ impl<'a, const P: u128> SemanticBddPtr<'a, P> {
             PtrFalse => FiniteField::zero(),
             Reg(node) => node.hash,
             Compl(node) => node.hash.negate(),
+        }
+    }
+
+    fn count_h(self, count: &mut usize) {
+        match self {
+            PtrTrue | PtrFalse => (),
+            Reg(n) | Compl(n) => {
+                match self.scratch::<usize>() {
+                    Some(_) => (),
+                    None => {
+                        // found a new node
+                        *count += 1;
+                        self.set_scratch::<usize>(0);
+                        n.low().count_h(count);
+                        n.high().count_h(count);
+                    }
+                }
+            }
         }
     }
 }
@@ -275,64 +272,78 @@ impl<'a, const P: u128> Hash for SemanticBddPtr<'a, P> {
 }
 
 #[derive(Debug)]
-pub struct SemanticBddNode<const P: u128> {
+pub struct SemanticBddNode<'a, const P: u128> {
     var: VarLabel,
     hash: FiniteField<P>,
-    low: FiniteField<P>,
-    high: FiniteField<P>,
+    low_hash: FiniteField<P>,
+    high_hash: FiniteField<P>,
+    /// builder ref is needed for dereferencing semantic hashes, to get to low/highs
+    builder: &'a SemanticBddBuilder<'a, P>,
     /// scratch space used for caching data during traversals; ignored during
     /// equality checking and hashing
     data: RefCell<Option<Box<dyn Any>>>,
 }
 
-impl<const P: u128> SemanticBddNode<P> {
+impl<'a, const P: u128> SemanticBddNode<'a, P> {
     pub fn new(
         var: VarLabel,
-        low: FiniteField<P>,
-        high: FiniteField<P>,
+        low_hash: FiniteField<P>,
+        high_hash: FiniteField<P>,
+        builder: &'a SemanticBddBuilder<'a, P>,
         map: &WmcParams<FiniteField<P>>,
-    ) -> SemanticBddNode<P> {
+    ) -> SemanticBddNode<'a, P> {
         let (low_w, high_w) = map.var_weight(var);
-        let hash = low * (*low_w) + high * (*high_w);
+        let hash = low_hash * (*low_w) + high_hash * (*high_w);
 
         SemanticBddNode {
             var,
             hash,
-            low,
-            high,
+            low_hash,
+            high_hash,
+            builder,
             data: RefCell::new(None),
         }
     }
-}
 
-impl<const P: u128> PartialEq for SemanticBddNode<P> {
-    fn eq(&self, other: &Self) -> bool {
-        self.var == other.var && self.low == other.low && self.high == other.high
+    pub fn low(&self) -> SemanticBddPtr<'a, P> {
+        self.builder.deref_semantic_hash(self.low_hash)
+    }
+
+    pub fn high(&self) -> SemanticBddPtr<'a, P> {
+        self.builder.deref_semantic_hash(self.high_hash)
     }
 }
 
-impl<const P: u128> Hash for SemanticBddNode<P> {
+impl<'a, const P: u128> PartialEq for SemanticBddNode<'a, P> {
+    fn eq(&self, other: &Self) -> bool {
+        self.var == other.var
+            && self.low_hash == other.low_hash
+            && self.high_hash == other.high_hash
+    }
+}
+
+impl<'a, const P: u128> Hash for SemanticBddNode<'a, P> {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.var.hash(state);
         self.hash.hash(state);
-        self.low.hash(state);
-        self.high.hash(state);
+        self.low_hash.hash(state);
+        self.high_hash.hash(state);
     }
 }
 
-impl<const P: u128> Eq for SemanticBddNode<P> {}
+impl<'a, const P: u128> Eq for SemanticBddNode<'a, P> {}
 
-impl<const P: u128> PartialOrd for SemanticBddNode<P> {
+impl<'a, const P: u128> PartialOrd for SemanticBddNode<'a, P> {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         match self.var.partial_cmp(&other.var) {
             Some(core::cmp::Ordering::Equal) => {}
             ord => return ord,
         }
-        match self.low.partial_cmp(&other.low) {
+        match self.low_hash.partial_cmp(&other.low_hash) {
             Some(core::cmp::Ordering::Equal) => {}
             ord => return ord,
         }
-        match self.high.partial_cmp(&other.high) {
+        match self.high_hash.partial_cmp(&other.high_hash) {
             Some(core::cmp::Ordering::Equal) => {}
             ord => return ord,
         }
@@ -340,19 +351,20 @@ impl<const P: u128> PartialOrd for SemanticBddNode<P> {
     }
 }
 
-impl<const P: u128> Clone for SemanticBddNode<P> {
+impl<'a, const P: u128> Clone for SemanticBddNode<'a, P> {
     fn clone(&self) -> Self {
         Self {
             var: self.var,
             hash: self.hash,
-            low: self.low,
-            high: self.high,
+            low_hash: self.low_hash,
+            high_hash: self.high_hash,
+            builder: self.builder,
             data: RefCell::new(None),
         }
     }
 }
 
-impl<const P: u128> Ord for SemanticBddNode<P> {
+impl<'a, const P: u128> Ord for SemanticBddNode<'a, P> {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         self.partial_cmp(other).unwrap()
     }

@@ -8,6 +8,7 @@ use rustc_hash::FxHashMap;
 
 /// An Ite structure, assumed to be in standard form.
 /// The top-level data structure that caches applications
+#[derive(Debug)]
 pub struct AllIteTable<T> {
     /// a vector of applications, indexed by the top label of the first pointer.
     table: FxHashMap<(T, T, T), T>,
