@@ -4,7 +4,7 @@ use core::fmt::Debug;
 /// a finite-field abstraction. The parameter `p` is the size of the field.
 use std::{fmt::Display, ops};
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct FiniteField<const P: u128> {
     v: u128,
 }

@@ -16,3 +16,5 @@ pub mod var_label;
 pub mod var_order;
 pub mod vtree;
 pub mod wmc;
+
+pub mod semantic_bdd;
