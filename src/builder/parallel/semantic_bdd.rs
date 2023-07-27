@@ -1,15 +1,15 @@
 use rustc_hash::FxHasher;
 
 use crate::{
-    backing_store::{BackedRobinhoodTable, UniqueTable},
+    backing_store::BackedRobinhoodTable,
     builder::{
-        bdd::{BddBuilder, BddBuilderStats},
+        bdd::BddBuilderStats,
         cache::{AllIteTable, Ite, IteTable},
         BottomUpBuilder,
     },
     repr::{
+        cnf::Cnf,
         ddnnf::DDNNFPtr,
-        model::PartialModel,
         semantic_bdd::{SemanticBddNode, SemanticBddPtr},
         var_label::VarLabel,
         var_order::VarOrder,
@@ -19,6 +19,7 @@ use crate::{
 };
 use std::{
     cell::RefCell,
+    cmp::Ordering,
     hash::{Hash, Hasher},
 };
 
@@ -95,8 +96,63 @@ impl<'a, const P: u128> BottomUpBuilder<'a, SemanticBddPtr<'a, P>> for SemanticB
         self.cond_with_alloc(bdd, lbl, value, &mut Vec::new())
     }
 
-    fn compile_cnf(&'a self, cnf: &crate::repr::cnf::Cnf) -> SemanticBddPtr<'a, P> {
-        todo!()
+    fn compile_cnf(&'a self, cnf: &Cnf) -> SemanticBddPtr<'a, P> {
+        let mut cvec: Vec<SemanticBddPtr<P>> = Vec::with_capacity(cnf.clauses().len());
+        if cnf.clauses().is_empty() {
+            return SemanticBddPtr::true_ptr();
+        }
+        // check if there is an empty clause -- if so, UNSAT
+        if cnf.clauses().iter().any(|x| x.is_empty()) {
+            return SemanticBddPtr::false_ptr();
+        }
+
+        // sort the clauses based on a best-effort bottom-up ordering of clauses
+        let mut cnf_sorted = cnf.clauses().to_vec();
+        cnf_sorted.sort_by(|c1, c2| {
+            // order the clause with the first-most variable last
+            let fst1 = c1
+                .iter()
+                .max_by(|l1, l2| {
+                    if self.less_than(l1.label(), l2.label()) {
+                        Ordering::Less
+                    } else {
+                        Ordering::Equal
+                    }
+                })
+                .unwrap();
+            let fst2 = c2
+                .iter()
+                .max_by(|l1, l2| {
+                    if self.less_than(l1.label(), l2.label()) {
+                        Ordering::Less
+                    } else {
+                        Ordering::Equal
+                    }
+                })
+                .unwrap();
+            if self.less_than(fst1.label(), fst2.label()) {
+                Ordering::Less
+            } else {
+                Ordering::Equal
+            }
+        });
+
+        for lit_vec in cnf_sorted.iter() {
+            let (vlabel, val) = (lit_vec[0].label(), lit_vec[0].polarity());
+            let mut bdd = self.var(vlabel, val);
+            for lit in lit_vec {
+                let (vlabel, val) = (lit.label(), lit.polarity());
+                let var = self.var(vlabel, val);
+                bdd = self.or(bdd, var);
+            }
+            cvec.push(bdd);
+        }
+        // now cvec has a list of all the clauses; collapse it down
+        let r = self.collapse_clauses(&cvec);
+        match r {
+            None => SemanticBddPtr::true_ptr(),
+            Some(x) => x,
+        }
     }
 }
 
@@ -142,7 +198,7 @@ impl<'a, const P: u128> SemanticBddBuilder<'a, P> {
 
         // ok the work!
         // find the first essential variable for f, g, or h
-        let lbl = self.order.borrow().first_essential(f, g, h);
+        let lbl = self.order.borrow().first_essential(&f, &g, &h);
         let fx = self.condition_essential(f, lbl, true);
         let gx = self.condition_essential(g, lbl, true);
         let hx = self.condition_essential(h, lbl, true);
@@ -259,6 +315,23 @@ impl<'a, const P: u128> SemanticBddBuilder<'a, P> {
                 };
                 bdd.set_scratch(idx);
                 res
+            }
+        }
+    }
+
+    fn collapse_clauses(&'a self, vec: &[SemanticBddPtr<'a, P>]) -> Option<SemanticBddPtr<'a, P>> {
+        if vec.is_empty() {
+            None
+        } else if vec.len() == 1 {
+            Some(vec[0])
+        } else {
+            let (l, r) = vec.split_at(vec.len() / 2);
+            let sub_l = self.collapse_clauses(l);
+            let sub_r = self.collapse_clauses(r);
+            match (sub_l, sub_r) {
+                (None, None) => None,
+                (Some(v), None) | (None, Some(v)) => Some(v),
+                (Some(l), Some(r)) => Some(self.and(l, r)),
             }
         }
     }

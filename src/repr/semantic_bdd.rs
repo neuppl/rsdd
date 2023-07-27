@@ -15,8 +15,7 @@ use crate::{
 use super::{
     ddnnf::{DDNNFPtr, DDNNF},
     var_label::VarLabel,
-    var_order::VarOrder,
-    wmc::WmcParams,
+    var_order::{PartialVariableOrder, VarOrder},
 };
 
 use SemanticBddPtr::*;
@@ -267,6 +266,15 @@ impl<'a, const P: u128> Hash for SemanticBddPtr<'a, P> {
         match self {
             Compl(n) | Reg(n) => ptr::hash(*n, state),
             _ => (),
+        }
+    }
+}
+
+impl<'a, const P: u128> PartialVariableOrder for SemanticBddPtr<'a, P> {
+    fn var(&self) -> Option<VarLabel> {
+        match self {
+            PtrTrue | PtrFalse => None,
+            Reg(n) | Compl(n) => Some(n.var),
         }
     }
 }
