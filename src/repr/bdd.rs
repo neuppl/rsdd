@@ -21,6 +21,8 @@ use std::{
 };
 use BddPtr::*;
 
+use super::var_order::PartialVariableOrder;
+
 /// Core BDD pointer datatype
 #[derive(Debug, Clone, Eq, Copy, PartialOrd, Ord)]
 pub enum BddPtr<'a> {
@@ -46,6 +48,15 @@ impl<'a> Hash for BddPtr<'a> {
         match self {
             Compl(n) | Reg(n) => ptr::hash(*n, state),
             _ => (),
+        }
+    }
+}
+
+impl<'a> PartialVariableOrder for BddPtr<'a> {
+    fn var(&self) -> Option<VarLabel> {
+        match self {
+            Compl(n) | Reg(n) => Some(n.var),
+            PtrTrue | PtrFalse => None,
         }
     }
 }

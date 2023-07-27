@@ -122,6 +122,19 @@ impl LogicalExpr {
                     Box::new(helper(l.as_ref(), mapping)),
                     Box::new(helper(r.as_ref(), mapping)),
                 ),
+                LogicalSExpr::Iff(l, r) => LogicalExpr::Iff(
+                    Box::new(helper(l.as_ref(), mapping)),
+                    Box::new(helper(r.as_ref(), mapping)),
+                ),
+                LogicalSExpr::Xor(l, r) => LogicalExpr::Xor(
+                    Box::new(helper(l.as_ref(), mapping)),
+                    Box::new(helper(r.as_ref(), mapping)),
+                ),
+                LogicalSExpr::Ite(guard, thn, els) => LogicalExpr::Ite {
+                    guard: Box::new(helper(guard.as_ref(), mapping)),
+                    thn: Box::new(helper(thn.as_ref(), mapping)),
+                    els: Box::new(helper(els.as_ref(), mapping)),
+                },
             }
         }
 
@@ -253,7 +266,7 @@ impl LogicalExpr {
 }
 
 #[test]
-fn from_sexpr_e2e() {
+fn from_sexpr_e2e_primitive() {
     // this string represents X XOR Y. it exercises each branch of the match statement
     // within the from_sexpr helper
     let x_xor_y = String::from("(And (Or (Var X) (Var Y)) (Or (Not (Var X)) (Not (Var Y))))");
@@ -268,6 +281,28 @@ fn from_sexpr_e2e() {
             Box::new(LogicalExpr::Literal(0, false)),
             Box::new(LogicalExpr::Literal(1, false)),
         )),
+    );
+
+    assert_eq!(LogicalExpr::from_sexpr(&expr), manually_constructed)
+}
+
+#[test]
+fn from_sexpr_e2e_complex() {
+    // this string uses the "complex" non-primitive s-expr items: IFF, XOR, ITE
+    let x_xor_y =
+        String::from("(Xor (Iff (Var X) (Var Y)) (Ite (Var Z) (Not (Var X)) (Not (Var Y))))");
+    let expr = serde_sexpr::from_str::<LogicalSExpr>(&x_xor_y).unwrap();
+
+    let manually_constructed = LogicalExpr::Xor(
+        Box::new(LogicalExpr::Iff(
+            Box::new(LogicalExpr::Literal(0, true)),
+            Box::new(LogicalExpr::Literal(1, true)),
+        )),
+        Box::new(LogicalExpr::Ite {
+            guard: Box::new(LogicalExpr::Literal(2, true)),
+            thn: Box::new(LogicalExpr::Literal(0, false)),
+            els: Box::new(LogicalExpr::Literal(1, false)),
+        }),
     );
 
     assert_eq!(LogicalExpr::from_sexpr(&expr), manually_constructed)

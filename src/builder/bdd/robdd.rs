@@ -67,7 +67,7 @@ impl<'a, T: IteTable<'a, BddPtr<'a>> + Default> BddBuilder<'a> for RobddBuilder<
 
         // ok the work!
         // find the first essential variable for f, g, or h
-        let lbl = self.order.borrow().first_essential(f, g, h);
+        let lbl = self.order.borrow().first_essential(&f, &g, &h);
         let fx = self.condition_essential(f, lbl, true);
         let gx = self.condition_essential(g, lbl, true);
         let hx = self.condition_essential(h, lbl, true);
