@@ -1196,3 +1196,38 @@ mod test_dnnf_builder {
         }
     }
 }
+
+#[cfg(test)]
+mod test_parallel_semantic_builder {
+    use rsdd::{
+        builder::{
+            bdd::RobddBuilder, cache::AllIteTable, parallel::SemanticBddBuilder, BottomUpBuilder,
+        },
+        constants::primes,
+        repr::{bdd::BddPtr, cnf::Cnf, ddnnf::DDNNFPtr, var_order::VarOrder},
+    };
+
+    quickcheck! {
+        fn test_semantic_and_robdd_agree_on_wmc(c: Cnf) -> bool {
+            let order = VarOrder::linear_order(c.num_vars());
+
+            let robdd_builder = RobddBuilder::<AllIteTable<BddPtr>>::new(order.clone());
+            let robdd_cnf = robdd_builder.compile_cnf(&c);
+
+            let semantic_builder = SemanticBddBuilder::<{ primes::U64_LARGEST }>::new(order.clone());
+            let semantic_cnf = semantic_builder.compile_cnf(&c);
+
+            let params = semantic_builder.map();
+
+            let robdd_wmc = robdd_cnf.wmc(&order, params);
+            let semantic_wmc = semantic_cnf.wmc(&order, params);
+
+            let eps = robdd_wmc == semantic_wmc;
+            if !eps {
+              println!("error on input {}: std wmc: {}, sem wmc: {}",
+                c, robdd_wmc, semantic_wmc);
+            }
+            eps
+        }
+    }
+}
