@@ -29,7 +29,11 @@ impl Config {
         self.order.as_ref().map(|o| {
             VarOrder::new(
                 o.iter()
-                    .map(|var| VarLabel::new(*mapping.get(var).unwrap() as u64))
+                    .map(|var| {
+                        VarLabel::new(*mapping.get(var).unwrap_or_else(|| {
+                            panic!("Found unknown variable {} in order configuration", var)
+                        }) as u64)
+                    })
                     .collect(),
             )
         })
@@ -45,7 +49,7 @@ struct Args {
 
     /// variable order for BDD.
     /// options: `linear`, `manual` (requires config in `-c`)
-    #[clap(long, value_parser, default_value_t = String::from("linear"))]
+    #[clap(long, value_parser, default_value_t = String::from("manual"))]
     ordering: String,
 
     /// (optional) config file for variable ordering
@@ -68,23 +72,37 @@ struct Args {
 fn main() {
     let args = Args::parse();
 
-    let file = fs::read_to_string(args.file).unwrap();
+    let file = fs::read_to_string(&args.file)
+        .unwrap_or_else(|e| panic!("Error reading file {}; error: {}", args.file, e));
 
     let config: Option<Config> = if let Some(path_to_config) = args.config {
-        let config = fs::read_to_string(path_to_config).unwrap();
-        Some(serde_json::from_str::<Config>(&config).unwrap())
+        let config = fs::read_to_string(&path_to_config)
+            .unwrap_or_else(|e| panic!("Error reading file {}; error: {}", path_to_config, e));
+        Some(serde_json::from_str::<Config>(&config).unwrap_or_else(|e| {
+            panic!(
+                "Error parsing {} as JSON config option; error: {}",
+                config, e
+            )
+        }))
     } else {
         None
     };
 
     let weights = if let Some(path_to_weights) = args.weights {
-        let config = fs::read_to_string(path_to_weights).unwrap();
-        serde_json::from_str::<HashMap<String, VariableWeight<f64>>>(&config).unwrap()
+        let config = fs::read_to_string(&path_to_weights)
+            .unwrap_or_else(|e| panic!("Error reading file {}; error: {}", path_to_weights, e));
+        serde_json::from_str::<HashMap<String, VariableWeight<f64>>>(&config)
+            .unwrap_or_else(|e| panic!("Error parsing {} as JSON weights; error: {}", config, e))
     } else {
         panic!("no weights file provided");
     };
 
-    let sexpr = serde_sexpr::from_str::<LogicalSExpr>(&file).unwrap();
+    let sexpr = serde_sexpr::from_str::<LogicalSExpr>(&file).unwrap_or_else(|e| {
+        panic!(
+            "Error parsing {} as logical s-expression; error: {}",
+            file, e
+        )
+    });
     let expr = LogicalExpr::from_sexpr(&sexpr);
     let mut num_vars = sexpr.unique_variables().len();
     let mut mapping = sexpr.variable_mapping();
@@ -120,7 +138,18 @@ fn main() {
 
     let order = match args.ordering.as_str() {
         "linear" => VarOrder::linear_order(num_vars),
-        "manual" => config.unwrap().to_var_order(&mapping).unwrap(),
+        "manual" => config
+            .unwrap_or_else(|| {
+                panic!(
+                    "Selected manual option, but could not find valid config with variable order"
+                )
+            })
+            .to_var_order(&mapping)
+            .unwrap_or_else(|| {
+                panic!(
+                    "Selected manual option, but could not find valid config with variable order"
+                )
+            }),
         _ => todo!(),
     };
 
