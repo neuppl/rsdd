@@ -3,12 +3,13 @@ use std::{collections::HashMap, fs, time::Instant};
 use clap::Parser;
 use rsdd::{
     builder::{bdd::RobddBuilder, cache::LruIteTable, BottomUpBuilder},
+    constants::primes,
     repr::{
         bdd::BddPtr, ddnnf::DDNNFPtr, logical_expr::LogicalExpr, var_label::VarLabel,
         var_order::VarOrder, wmc::WmcParams,
     },
     serialize::LogicalSExpr,
-    util::semirings::RealSemiring,
+    util::semirings::{FiniteField, RealSemiring, Semiring},
 };
 use serde::{Deserialize, Serialize};
 
@@ -111,6 +112,12 @@ fn main() {
             }
         })));
 
+    let unweighted_params: WmcParams<FiniteField<{ primes::U64_LARGEST }>> =
+        WmcParams::new(HashMap::from_iter(
+            (0..num_vars as u64)
+                .map(|v| (VarLabel::new(v), (FiniteField::one(), FiniteField::one()))),
+        ));
+
     let order = match args.ordering.as_str() {
         "linear" => VarOrder::linear_order(num_vars),
         "manual" => config.unwrap().to_var_order(&mapping).unwrap(),
@@ -130,7 +137,13 @@ fn main() {
 
     let elapsed = start.elapsed();
 
-    println!("{}", res);
+    println!(
+        "unweighted model count: {}\nweighted model count: {}",
+        builder
+            .smooth(bdd, num_vars)
+            .wmc(&order, &unweighted_params),
+        res
+    );
 
     if args.verbose {
         eprintln!("=== METADATA ===");
