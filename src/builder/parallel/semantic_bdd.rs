@@ -9,7 +9,7 @@ use crate::{
     },
     repr::{
         cnf::Cnf,
-        ddnnf::DDNNFPtr,
+        ddnnf::{create_semantic_hash_map, DDNNFPtr},
         semantic_bdd::{SemanticBddNode, SemanticBddPtr},
         var_label::VarLabel,
         var_order::VarOrder,
@@ -157,12 +157,25 @@ impl<'a, const P: u128> BottomUpBuilder<'a, SemanticBddPtr<'a, P>> for SemanticB
 }
 
 impl<'a, const P: u128> SemanticBddBuilder<'a, P> {
+    pub fn new(order: VarOrder) -> SemanticBddBuilder<'a, P> {
+        let map = create_semantic_hash_map(order.num_vars());
+        SemanticBddBuilder {
+            compute_table: RefCell::new(BackedRobinhoodTable::new()),
+            // compute_table: RefCell::new(HashMap::default()),
+            order: RefCell::new(order),
+            apply_table: RefCell::new(AllIteTable::default()),
+            stats: RefCell::new(BddBuilderStats::new()),
+            map,
+        }
+    }
+
     pub fn map(&'a self) -> &WmcParams<FiniteField<P>> {
         &self.map
     }
 
     pub fn deref_semantic_hash(&'a self, hash: FiniteField<P>) -> SemanticBddPtr<'a, P> {
-        self.get_bdd_ptr(hash, self.hash_field(hash)).unwrap()
+        self.check_cached_hash_and_neg(hash)
+            .unwrap_or_else(|| panic!("Could not find item for hash: {}.", hash))
     }
 
     fn less_than(&self, a: VarLabel, b: VarLabel) -> bool {
@@ -394,5 +407,32 @@ impl<'a, const P: u128> SemanticBddBuilder<'a, P> {
         let mut hasher = FxHasher::default();
         field.value().hash(&mut hasher);
         hasher.finish()
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::{
+        builder::BottomUpBuilder,
+        constants::primes,
+        repr::{var_label::VarLabel, var_order::VarOrder},
+    };
+
+    use super::SemanticBddBuilder;
+
+    #[test]
+    fn trivial_semantic_builder() {
+        let order = VarOrder::linear_order(2);
+        let builder: SemanticBddBuilder<'_, { primes::U64_LARGEST }> =
+            SemanticBddBuilder::new(order);
+
+        println!("{:?}", builder.map());
+
+        let v1 = builder.var(VarLabel::new(0), true);
+        let v2 = builder.var(VarLabel::new(1), true);
+        let r1 = builder.or(v1, v2);
+        let r2 = builder.and(r1, v1);
+
+        assert!(builder.eq(v1, r2), "Not eq:\n {:?}\n{:?}", v1, r2);
     }
 }
