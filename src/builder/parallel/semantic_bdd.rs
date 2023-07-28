@@ -10,7 +10,7 @@ use crate::{
     repr::{
         cnf::Cnf,
         ddnnf::{create_semantic_hash_map, DDNNFPtr},
-        semantic_bdd::{SemanticBddNode, SemanticBddPtr},
+        semantic_bdd::{SemanticBddNode, SemanticBddPtr, WrappedSemanticBddNode},
         var_label::VarLabel,
         var_order::VarOrder,
         wmc::WmcParams,
@@ -25,7 +25,7 @@ use std::{
 
 #[derive(Debug)]
 pub struct SemanticBddBuilder<'a, const P: u128> {
-    compute_table: RefCell<BackedRobinhoodTable<'a, SemanticBddNode<'a, P>>>,
+    compute_table: RefCell<BackedRobinhoodTable<'a, SemanticBddNode<P>>>,
     apply_table: RefCell<AllIteTable<SemanticBddPtr<'a, P>>>,
     stats: RefCell<BddBuilderStats>,
     order: RefCell<VarOrder>,
@@ -42,7 +42,8 @@ impl<'a, const P: u128> BottomUpBuilder<'a, SemanticBddPtr<'a, P>> for SemanticB
     }
 
     fn var(&'a self, label: VarLabel, polarity: bool) -> SemanticBddPtr<'a, P> {
-        let bdd = SemanticBddNode::new(label, FiniteField::zero(), FiniteField::one(), self);
+        let bdd =
+            SemanticBddNode::new_from_builder(label, FiniteField::zero(), FiniteField::one(), self);
         let r = self.get_or_insert(bdd);
         if polarity {
             r
@@ -226,7 +227,8 @@ impl<'a, const P: u128> SemanticBddBuilder<'a, P> {
         };
 
         // now we have a new BDD
-        let node = SemanticBddNode::new(lbl, f.semantic_hash(), t.semantic_hash(), self);
+        let node =
+            SemanticBddNode::new_from_builder(lbl, f.semantic_hash(), t.semantic_hash(), self);
         let r = self.get_or_insert(node);
         self.apply_table.borrow_mut().insert(ite, r, hash);
         r
@@ -302,7 +304,7 @@ impl<'a, const P: u128> SemanticBddBuilder<'a, P> {
                 };
                 let res = if l != node.low() || h != node.high() {
                     // cache and return the new BDD
-                    let new_bdd = SemanticBddNode::new(
+                    let new_bdd = SemanticBddNode::new_from_builder(
                         node.var(),
                         l.semantic_hash(),
                         h.semantic_hash(),
@@ -360,7 +362,9 @@ impl<'a, const P: u128> SemanticBddBuilder<'a, P> {
             _ => unsafe {
                 let tbl = &mut *self.compute_table.as_ptr();
                 if let Some(node) = tbl.get_by_hash(hash) {
-                    return Some(SemanticBddPtr::Reg(node));
+                    return Some(SemanticBddPtr::Reg(&WrappedSemanticBddNode::new_from_node(
+                        node, self,
+                    )));
                 }
                 None
             },
@@ -391,7 +395,7 @@ impl<'a, const P: u128> SemanticBddBuilder<'a, P> {
     }
 
     // Normalizes and fetches a node from the store
-    fn get_or_insert(&'a self, bdd: SemanticBddNode<'a, P>) -> SemanticBddPtr<'a, P> {
+    fn get_or_insert(&'a self, bdd: SemanticBddNode<P>) -> SemanticBddPtr<'a, P> {
         if let Some(ptr) = self.check_cached_hash_and_neg(bdd.semantic_hash()) {
             return ptr;
         }
@@ -399,7 +403,10 @@ impl<'a, const P: u128> SemanticBddBuilder<'a, P> {
         let hash = self.hash_field(bdd.semantic_hash());
         unsafe {
             let tbl = &mut *self.compute_table.as_ptr();
-            SemanticBddPtr::Reg(tbl.get_or_insert_by_hash(hash, bdd, true))
+            SemanticBddPtr::Reg(&WrappedSemanticBddNode::new_from_node(
+                tbl.get_or_insert_by_hash(hash, bdd, true),
+                self,
+            ))
         }
     }
 

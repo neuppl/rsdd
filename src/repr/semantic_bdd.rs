@@ -24,8 +24,8 @@ use SemanticBddPtr::*;
 pub enum SemanticBddPtr<'a, const P: u128> {
     PtrTrue,
     PtrFalse,
-    Reg(&'a SemanticBddNode<'a, P>),
-    Compl(&'a SemanticBddNode<'a, P>),
+    Reg(&'a WrappedSemanticBddNode<'a, P>),
+    Compl(&'a WrappedSemanticBddNode<'a, P>),
 }
 
 impl<'a, const P: u128> SemanticBddPtr<'a, P> {
@@ -126,7 +126,7 @@ impl<'a, const P: u128> DDNNFPtr<'a> for SemanticBddPtr<'a, P> {
 
                         let low_v = bottomup_pass_h(l, f);
                         let high_v = bottomup_pass_h(h, f);
-                        let top = node.var;
+                        let top = node.var();
 
                         let lit_high = f(DDNNF::Lit(top, true));
                         let lit_low = f(DDNNF::Lit(top, false));
@@ -226,8 +226,8 @@ impl<'a, const P: u128> SemanticBddPtr<'a, P> {
         match self {
             PtrTrue => FiniteField::one(),
             PtrFalse => FiniteField::zero(),
-            Reg(node) => node.hash,
-            Compl(node) => node.hash.negate(),
+            Reg(node) => node.semantic_hash(),
+            Compl(node) => node.semantic_hash().negate(),
         }
     }
 
@@ -274,31 +274,40 @@ impl<'a, const P: u128> PartialVariableOrder for SemanticBddPtr<'a, P> {
     fn var(&self) -> Option<VarLabel> {
         match self {
             PtrTrue | PtrFalse => None,
-            Reg(n) | Compl(n) => Some(n.var),
+            Reg(n) | Compl(n) => Some(n.var()),
         }
     }
 }
 
-#[derive(Debug)]
-pub struct SemanticBddNode<'a, const P: u128> {
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy)]
+pub struct SemanticBddNode<const P: u128> {
     var: VarLabel,
     hash: FiniteField<P>,
     low_hash: FiniteField<P>,
     high_hash: FiniteField<P>,
-    /// builder ref is needed for dereferencing semantic hashes, to get to low/highs
-    builder: &'a SemanticBddBuilder<'a, P>,
-    /// scratch space used for caching data during traversals; ignored during
-    /// equality checking and hashing
-    data: RefCell<Option<Box<dyn Any>>>,
 }
 
-impl<'a, const P: u128> SemanticBddNode<'a, P> {
+impl<const P: u128> SemanticBddNode<P> {
     pub fn new(
+        var: VarLabel,
+        hash: FiniteField<P>,
+        low_hash: FiniteField<P>,
+        high_hash: FiniteField<P>,
+    ) -> SemanticBddNode<P> {
+        SemanticBddNode {
+            var,
+            hash,
+            low_hash,
+            high_hash,
+        }
+    }
+
+    pub fn new_from_builder<'a>(
         var: VarLabel,
         low_hash: FiniteField<P>,
         high_hash: FiniteField<P>,
         builder: &'a SemanticBddBuilder<'a, P>,
-    ) -> SemanticBddNode<'a, P> {
+    ) -> SemanticBddNode<P> {
         let (low_w, high_w) = builder.map().var_weight(var);
         let hash = low_hash * (*low_w) + high_hash * (*high_w);
 
@@ -307,21 +316,7 @@ impl<'a, const P: u128> SemanticBddNode<'a, P> {
             hash,
             low_hash,
             high_hash,
-            builder,
-            data: RefCell::new(None),
         }
-    }
-
-    pub fn low(&self) -> SemanticBddPtr<'a, P> {
-        self.builder.deref_semantic_hash(self.low_hash)
-    }
-
-    pub fn high(&self) -> SemanticBddPtr<'a, P> {
-        self.builder.deref_semantic_hash(self.high_hash)
-    }
-
-    pub fn var(&self) -> VarLabel {
-        self.var
     }
 
     pub fn semantic_hash(&self) -> FiniteField<P> {
@@ -329,57 +324,96 @@ impl<'a, const P: u128> SemanticBddNode<'a, P> {
     }
 }
 
-impl<'a, const P: u128> PartialEq for SemanticBddNode<'a, P> {
+#[derive(Debug)]
+pub struct WrappedSemanticBddNode<'a, const P: u128> {
+    node: &'a SemanticBddNode<P>,
+    /// builder ref is needed for dereferencing semantic hashes, to get to low/highs
+    builder: &'a SemanticBddBuilder<'a, P>,
+    /// scratch space used for caching data during traversals; ignored during
+    /// equality checking and hashing
+    data: RefCell<Option<Box<dyn Any>>>,
+}
+
+impl<'a, const P: u128> WrappedSemanticBddNode<'a, P> {
+    // pub fn new(
+    //     var: VarLabel,
+    //     low_hash: FiniteField<P>,
+    //     high_hash: FiniteField<P>,
+    //     builder: &'a SemanticBddBuilder<'a, P>,
+    // ) -> WrappedSemanticBddNode<'a, P> {
+    //     let (low_w, high_w) = builder.map().var_weight(var);
+    //     let hash = low_hash * (*low_w) + high_hash * (*high_w);
+
+    //     WrappedSemanticBddNode {
+    //         node: SemanticBddNode::new(var, hash, low_hash, high_hash),
+    //         builder,
+    //         data: RefCell::new(None),
+    //     }
+    // }
+
+    pub fn new_from_node(
+        node: &'a SemanticBddNode<P>,
+        builder: &'a SemanticBddBuilder<'a, P>,
+    ) -> WrappedSemanticBddNode<'a, P> {
+        WrappedSemanticBddNode {
+            node,
+            builder,
+            data: RefCell::new(None),
+        }
+    }
+
+    pub fn low(&self) -> SemanticBddPtr<'a, P> {
+        self.builder.deref_semantic_hash(self.node.low_hash)
+    }
+
+    pub fn high(&self) -> SemanticBddPtr<'a, P> {
+        self.builder.deref_semantic_hash(self.node.high_hash)
+    }
+
+    pub fn var(&self) -> VarLabel {
+        self.node.var
+    }
+
+    pub fn semantic_hash(&self) -> FiniteField<P> {
+        self.node.hash
+    }
+
+    pub fn node(&self) -> &SemanticBddNode<P> {
+        self.node
+    }
+}
+
+impl<'a, const P: u128> PartialEq for WrappedSemanticBddNode<'a, P> {
     fn eq(&self, other: &Self) -> bool {
-        self.var == other.var
-            && self.low_hash == other.low_hash
-            && self.high_hash == other.high_hash
+        self.node == other.node
     }
 }
 
-impl<'a, const P: u128> Hash for SemanticBddNode<'a, P> {
+impl<'a, const P: u128> Hash for WrappedSemanticBddNode<'a, P> {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.var.hash(state);
-        self.hash.hash(state);
-        self.low_hash.hash(state);
-        self.high_hash.hash(state);
+        self.node.hash(state)
     }
 }
 
-impl<'a, const P: u128> Eq for SemanticBddNode<'a, P> {}
+impl<'a, const P: u128> Eq for WrappedSemanticBddNode<'a, P> {}
 
-impl<'a, const P: u128> PartialOrd for SemanticBddNode<'a, P> {
+impl<'a, const P: u128> PartialOrd for WrappedSemanticBddNode<'a, P> {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        match self.var.partial_cmp(&other.var) {
-            Some(core::cmp::Ordering::Equal) => {}
-            ord => return ord,
-        }
-        match self.low_hash.partial_cmp(&other.low_hash) {
-            Some(core::cmp::Ordering::Equal) => {}
-            ord => return ord,
-        }
-        match self.high_hash.partial_cmp(&other.high_hash) {
-            Some(core::cmp::Ordering::Equal) => {}
-            ord => return ord,
-        }
-        Some(core::cmp::Ordering::Equal)
+        self.node.partial_cmp(&other.node)
     }
 }
 
-impl<'a, const P: u128> Clone for SemanticBddNode<'a, P> {
+impl<'a, const P: u128> Clone for WrappedSemanticBddNode<'a, P> {
     fn clone(&self) -> Self {
         Self {
-            var: self.var,
-            hash: self.hash,
-            low_hash: self.low_hash,
-            high_hash: self.high_hash,
+            node: self.node,
             builder: self.builder,
             data: RefCell::new(None),
         }
     }
 }
 
-impl<'a, const P: u128> Ord for SemanticBddNode<'a, P> {
+impl<'a, const P: u128> Ord for WrappedSemanticBddNode<'a, P> {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         self.partial_cmp(other).unwrap()
     }
