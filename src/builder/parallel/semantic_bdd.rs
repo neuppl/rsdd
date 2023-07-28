@@ -10,7 +10,7 @@ use crate::{
     repr::{
         cnf::Cnf,
         ddnnf::{create_semantic_hash_map, DDNNFPtr},
-        semantic_bdd::{SemanticBddNode, SemanticBddPtr, WrappedSemanticBddNode},
+        semantic_bdd::{SemanticBddNode, SemanticBddPtr},
         var_label::VarLabel,
         var_order::VarOrder,
         wmc::WmcParams,
@@ -194,8 +194,8 @@ impl<'a, const P: u128> SemanticBddBuilder<'a, P> {
             (SemanticBddPtr::PtrTrue, _) | (SemanticBddPtr::PtrFalse, _) => true,
             (_, SemanticBddPtr::PtrTrue) | (_, SemanticBddPtr::PtrFalse) => false,
             (
-                SemanticBddPtr::Reg(node_a) | SemanticBddPtr::Compl(node_a),
-                SemanticBddPtr::Reg(node_b) | SemanticBddPtr::Compl(node_b),
+                SemanticBddPtr::Reg(node_a, _) | SemanticBddPtr::Compl(node_a, _),
+                SemanticBddPtr::Reg(node_b, _) | SemanticBddPtr::Compl(node_b, _),
             ) => self.less_than(node_a.var(), node_b.var()),
         };
 
@@ -243,11 +243,11 @@ impl<'a, const P: u128> SemanticBddBuilder<'a, P> {
     ) -> SemanticBddPtr<'a, P> {
         match f {
             SemanticBddPtr::PtrTrue | SemanticBddPtr::PtrFalse => f,
-            SemanticBddPtr::Reg(node) | SemanticBddPtr::Compl(node) => {
+            SemanticBddPtr::Reg(node, _) | SemanticBddPtr::Compl(node, _) => {
                 if node.var() != lbl {
                     return f;
                 }
-                let r = if v { node.high() } else { node.low() };
+                let r = if v { node.high(self) } else { node.low(self) };
                 if f.is_neg() {
                     r.neg()
                 } else {
@@ -267,14 +267,18 @@ impl<'a, const P: u128> SemanticBddBuilder<'a, P> {
         self.stats.borrow_mut().num_recursive_calls += 1;
         match bdd {
             SemanticBddPtr::PtrTrue | SemanticBddPtr::PtrFalse => bdd,
-            SemanticBddPtr::Reg(node) | SemanticBddPtr::Compl(node) => {
+            SemanticBddPtr::Reg(node, _) | SemanticBddPtr::Compl(node, _) => {
                 if self.order.borrow().lt(lbl, node.var()) {
                     // we passed the variable in the order, we will never find it
                     return bdd;
                 }
 
                 if node.var() == lbl {
-                    let r = if value { node.high() } else { node.low() };
+                    let r = if value {
+                        node.high(self)
+                    } else {
+                        node.low(self)
+                    };
                     return if bdd.is_neg() { r.neg() } else { r };
                 }
 
@@ -291,8 +295,8 @@ impl<'a, const P: u128> SemanticBddBuilder<'a, P> {
                 };
 
                 // recurse on the children
-                let l = self.cond_with_alloc(node.low(), lbl, value, alloc);
-                let h = self.cond_with_alloc(node.high(), lbl, value, alloc);
+                let l = self.cond_with_alloc(node.low(self), lbl, value, alloc);
+                let h = self.cond_with_alloc(node.high(self), lbl, value, alloc);
 
                 if l == h {
                     // reduce the BDD -- two children identical
@@ -302,7 +306,7 @@ impl<'a, const P: u128> SemanticBddBuilder<'a, P> {
                         return l;
                     };
                 };
-                let res = if l != node.low() || h != node.high() {
+                let res = if l != node.low(self) || h != node.high(self) {
                     // cache and return the new BDD
                     let new_bdd = SemanticBddNode::new_from_builder(
                         node.var(),
@@ -352,7 +356,7 @@ impl<'a, const P: u128> SemanticBddBuilder<'a, P> {
     }
 
     fn get_bdd_ptr(
-        &self,
+        &'a self,
         semantic_hash: FiniteField<P>,
         hash: u64,
     ) -> Option<SemanticBddPtr<'a, P>> {
@@ -362,9 +366,7 @@ impl<'a, const P: u128> SemanticBddBuilder<'a, P> {
             _ => unsafe {
                 let tbl = &mut *self.compute_table.as_ptr();
                 if let Some(node) = tbl.get_by_hash(hash) {
-                    return Some(SemanticBddPtr::Reg(&WrappedSemanticBddNode::new_from_node(
-                        node, self,
-                    )));
+                    return Some(SemanticBddPtr::Reg(node, self));
                 }
                 None
             },
@@ -372,7 +374,7 @@ impl<'a, const P: u128> SemanticBddBuilder<'a, P> {
     }
 
     fn check_cached_hash_and_neg(
-        &self,
+        &'a self,
         semantic_hash: FiniteField<P>,
     ) -> Option<SemanticBddPtr<'a, P>> {
         // check regular hash
@@ -403,10 +405,7 @@ impl<'a, const P: u128> SemanticBddBuilder<'a, P> {
         let hash = self.hash_field(bdd.semantic_hash());
         unsafe {
             let tbl = &mut *self.compute_table.as_ptr();
-            SemanticBddPtr::Reg(&WrappedSemanticBddNode::new_from_node(
-                tbl.get_or_insert_by_hash(hash, bdd, true),
-                self,
-            ))
+            SemanticBddPtr::Reg(tbl.get_or_insert_by_hash(hash, bdd, true), self)
         }
     }
 
