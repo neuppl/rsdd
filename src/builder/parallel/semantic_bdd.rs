@@ -429,7 +429,21 @@ impl<'a, const P: u128> SemanticBddBuilder<'a, P> {
         hasher.finish()
     }
 
-    pub fn merge_from(&'a self, other: &Self) {
+    pub fn merge_from<'b>(
+        &'a self,
+        other: &'b Self,
+        ptrs: &[SemanticBddPtr<'b, P>],
+    ) -> Vec<SemanticBddPtr<'a, P>> {
+        let new_roots = ptrs
+            .iter()
+            .map(|ptr| match *ptr {
+                SemanticBddPtr::PtrTrue => SemanticBddPtr::PtrTrue,
+                SemanticBddPtr::PtrFalse => SemanticBddPtr::PtrFalse,
+                SemanticBddPtr::Reg(node, _) => self.get_or_insert(node.clone()),
+                SemanticBddPtr::Compl(node, _) => self.get_or_insert(node.clone()).neg(),
+            })
+            .collect();
+
         // TODO: merge stats
         // TODO: some sort of check that the orders & maps are the same
         unsafe {
@@ -439,6 +453,8 @@ impl<'a, const P: u128> SemanticBddBuilder<'a, P> {
             let tbl = &mut *self.apply_table.as_ptr();
             tbl.merge_from(other.apply_table.take());
         }
+
+        new_roots
     }
 }
 
@@ -469,7 +485,7 @@ mod test {
     }
 
     #[test]
-    fn trivial_merge() {
+    fn e2e_merge() {
         let order = VarOrder::linear_order(2);
         let builder: SemanticBddBuilder<'_, { primes::U64_LARGEST }> =
             SemanticBddBuilder::new(order);
@@ -485,10 +501,10 @@ mod test {
         let builder2: SemanticBddBuilder<'_, { primes::U64_LARGEST }> =
             SemanticBddBuilder::new_with_map(order, builder.map().clone());
 
-        let v3 = builder.var(VarLabel::new(0), true);
-        let v4 = builder.var(VarLabel::new(1), true);
-        let r3 = builder.and(v3, v4);
-        let _r4 = builder.or(r3, v3);
+        let v3 = builder2.var(VarLabel::new(0), true);
+        let v4 = builder2.var(VarLabel::new(1), true);
+        let r3 = builder2.and(v3, v4);
+        let r4 = builder2.and(r3, v3);
 
         // this should always be true...
         assert!(
@@ -497,8 +513,18 @@ mod test {
             v1,
             r2
         );
+        assert!(
+            builder2.eq(r3, r4),
+            "Invariant, pre-merge: Not eq:\n {:?}\n{:?}",
+            r3,
+            r4
+        );
 
-        builder.merge_from(&builder2);
+        println!("starting merge...");
+
+        let res = builder.merge_from(&builder2, &[r3, r4]);
+
+        println!("merge done...");
 
         // and still be true *after* the merge
         assert!(
@@ -506,6 +532,12 @@ mod test {
             "Invariant, post-merge: Not eq:\n {:?}\n{:?}",
             v1,
             r2
+        );
+        assert!(
+            builder.eq(res[0], res[1]),
+            "Invariant, post-merge: Not eq:\n {:?}\n{:?}",
+            res[0],
+            res[1]
         );
     }
 }

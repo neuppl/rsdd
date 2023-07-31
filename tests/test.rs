@@ -1250,9 +1250,7 @@ mod test_parallel_semantic_builder {
             let cnf_2 = builder_2.compile_cnf(&c2);
             let cnf_2_wmc = cnf_2.wmc(&order, &map);
 
-            // drop(cnf_2);
-
-            builder_1.merge_from(& builder_2);
+            builder_1.merge_from(&builder_2, &[]);
 
             let new_cnf_1_wmc = cnf_1.wmc(&order, &map);
 
@@ -1273,6 +1271,36 @@ mod test_parallel_semantic_builder {
             }
 
             eq_1 && eq_2
+        }
+    }
+
+    quickcheck! {
+        fn arbitrary_merge_maintains_pointers(c1: Cnf) -> bool {
+            let num_vars = c1.num_vars();
+            let map = create_semantic_hash_map(num_vars);
+            let order = VarOrder::linear_order(num_vars);
+
+            let builder_1 = SemanticBddBuilder::<{ primes::U64_LARGEST }>::new_with_map(order.clone(), map.clone());
+
+            let builder_2 = SemanticBddBuilder::<{ primes::U64_LARGEST }>::new_with_map(order.clone(), map.clone());
+            let cnf = builder_2.compile_cnf(&c1);
+            let cnf_wmc = cnf.wmc(&order, &map);
+            let cnf_str = format!("{:?}", cnf);
+
+            let new_cnf = builder_1.merge_from(&builder_2, &[cnf])[0];
+            let new_cnf_str = format!("{:?}", cnf);
+
+            let new_cnf_wmc = new_cnf.wmc(&order, &map);
+
+            let eq = cnf_wmc == new_cnf_wmc;
+            if !eq {
+                println!("error on input {}: pre-merge (b2) wmc: {}, post-merge (b1) wmc: {}", c1 , cnf_wmc, new_cnf_wmc);
+                println!("old: {}", cnf_str);
+                println!("new: {}", new_cnf_str);
+                println!("order: {}, map: {:?}", order, map);
+            }
+
+           eq
         }
     }
 }

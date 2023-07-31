@@ -20,7 +20,7 @@ use super::{
 
 use SemanticBddPtr::*;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Clone, Copy)]
 pub enum SemanticBddPtr<'a, const P: u128> {
     PtrTrue,
     PtrFalse,
@@ -268,6 +268,17 @@ impl<'a, const P: u128> Hash for SemanticBddPtr<'a, P> {
         match self {
             Compl(n, _) | Reg(n, _) => ptr::hash(*n, state),
             _ => (),
+        }
+    }
+}
+
+impl<'a, const P: u128> Debug for SemanticBddPtr<'a, P> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::PtrTrue => write!(f, "PtrTrue"),
+            Self::PtrFalse => write!(f, "PtrFalse"),
+            Self::Reg(arg0, _) => f.debug_tuple("Reg").field(arg0).finish(),
+            Self::Compl(arg0, _) => f.debug_tuple("Compl").field(arg0).finish(),
         }
     }
 }
