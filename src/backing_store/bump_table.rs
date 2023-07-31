@@ -288,7 +288,7 @@ impl<'a, T: Eq + Hash + Clone> BackedRobinhoodTable<'a, T> {
             self.tbl[pos] = entry;
         }
 
-        // other.alloc.reset();
+        other.alloc.reset();
     }
 }
 

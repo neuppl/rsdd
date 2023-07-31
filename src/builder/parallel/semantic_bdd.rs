@@ -429,7 +429,7 @@ impl<'a, const P: u128> SemanticBddBuilder<'a, P> {
         hasher.finish()
     }
 
-    pub fn merge_from(&'a self, other: Self) {
+    pub fn merge_from(&'a self, other: &Self) {
         // TODO: merge stats
         // TODO: some sort of check that the orders & maps are the same
         unsafe {
@@ -498,7 +498,7 @@ mod test {
             r2
         );
 
-        builder.merge_from(builder2);
+        builder.merge_from(&builder2);
 
         // and still be true *after* the merge
         assert!(

@@ -1204,7 +1204,12 @@ mod test_parallel_semantic_builder {
             bdd::RobddBuilder, cache::AllIteTable, parallel::SemanticBddBuilder, BottomUpBuilder,
         },
         constants::primes,
-        repr::{bdd::BddPtr, cnf::Cnf, ddnnf::DDNNFPtr, var_order::VarOrder},
+        repr::{
+            bdd::BddPtr,
+            cnf::Cnf,
+            ddnnf::{create_semantic_hash_map, DDNNFPtr},
+            var_order::VarOrder,
+        },
     };
 
     quickcheck! {
@@ -1228,6 +1233,46 @@ mod test_parallel_semantic_builder {
                 c, robdd_wmc, semantic_wmc);
             }
             eps
+        }
+    }
+
+    quickcheck! {
+        fn arbitrary_merge_maintains_wmc(c1: Cnf, c2: Cnf) -> bool {
+            let num_vars = std::cmp::max(c1.num_vars(), c2.num_vars());
+            let map = create_semantic_hash_map(num_vars);
+            let order = VarOrder::linear_order(num_vars);
+
+            let builder_1 = SemanticBddBuilder::<{ primes::U64_LARGEST }>::new_with_map(order.clone(), map.clone());
+            let cnf_1 = builder_1.compile_cnf(&c1);
+            let cnf_1_wmc = cnf_1.wmc(&order, &map);
+
+            let builder_2 = SemanticBddBuilder::<{ primes::U64_LARGEST }>::new_with_map(order.clone(), map.clone());
+            let cnf_2 = builder_2.compile_cnf(&c2);
+            let cnf_2_wmc = cnf_2.wmc(&order, &map);
+
+            // drop(cnf_2);
+
+            builder_1.merge_from(& builder_2);
+
+            let new_cnf_1_wmc = cnf_1.wmc(&order, &map);
+
+            let cnf_2 = builder_1.compile_cnf(&c2);
+            let new_cnf_2_wmc = cnf_2.wmc(&order, &map);
+
+
+            let eq_1 = cnf_1_wmc == new_cnf_1_wmc;
+            if !eq_1 {
+              println!("error on input {}: pre-merge wmc: {}, post-merge wmc: {}",
+                c1, cnf_1_wmc, new_cnf_1_wmc);
+            }
+
+            let eq_2 = cnf_2_wmc == new_cnf_2_wmc;
+            if !eq_2 {
+              println!("error on input {}: pre-merge (b2) wmc: {}, post-merge (b1) wmc: {}",
+                c2, cnf_2_wmc, new_cnf_2_wmc);
+            }
+
+            eq_1 && eq_2
         }
     }
 }
