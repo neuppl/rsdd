@@ -55,6 +55,14 @@ impl<'a, T: DDNNFPtr<'a>> AllIteTable<T> {
             table: FxHashMap::default(),
         }
     }
+
+    pub fn merge_from(&'a mut self, other: Self) {
+        for (key, value) in other.table.iter() {
+            if !self.table.contains_key(key) {
+                self.table.insert(*key, *value);
+            }
+        }
+    }
 }
 
 impl<'a, T: DDNNFPtr<'a>> Default for AllIteTable<T> {

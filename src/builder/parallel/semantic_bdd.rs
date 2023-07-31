@@ -170,6 +170,20 @@ impl<'a, const P: u128> SemanticBddBuilder<'a, P> {
         }
     }
 
+    pub fn new_with_map(
+        order: VarOrder,
+        map: WmcParams<FiniteField<P>>,
+    ) -> SemanticBddBuilder<'a, P> {
+        SemanticBddBuilder {
+            compute_table: RefCell::new(BackedRobinhoodTable::new()),
+            // compute_table: RefCell::new(HashMap::default()),
+            order: RefCell::new(order),
+            apply_table: RefCell::new(AllIteTable::default()),
+            stats: RefCell::new(BddBuilderStats::new()),
+            map,
+        }
+    }
+
     pub fn map(&'a self) -> &WmcParams<FiniteField<P>> {
         &self.map
     }
@@ -414,6 +428,18 @@ impl<'a, const P: u128> SemanticBddBuilder<'a, P> {
         field.value().hash(&mut hasher);
         hasher.finish()
     }
+
+    pub fn merge_from(&'a self, other: Self) {
+        // TODO: merge stats
+        // TODO: some sort of check that the orders & maps are the same
+        unsafe {
+            let tbl = &mut *self.compute_table.as_ptr();
+            tbl.merge_from(other.compute_table.take());
+
+            let tbl = &mut *self.apply_table.as_ptr();
+            tbl.merge_from(other.apply_table.take());
+        }
+    }
 }
 
 #[cfg(test)]
@@ -440,5 +466,46 @@ mod test {
         let r2 = builder.and(r1, v1);
 
         assert!(builder.eq(v1, r2), "Not eq:\n {:?}\n{:?}", v1, r2);
+    }
+
+    #[test]
+    fn trivial_merge() {
+        let order = VarOrder::linear_order(2);
+        let builder: SemanticBddBuilder<'_, { primes::U64_LARGEST }> =
+            SemanticBddBuilder::new(order);
+
+        println!("{:?}", builder.map());
+
+        let v1 = builder.var(VarLabel::new(0), true);
+        let v2 = builder.var(VarLabel::new(1), true);
+        let r1 = builder.or(v1, v2);
+        let r2 = builder.and(r1, v1);
+
+        let order = VarOrder::linear_order(2);
+        let builder2: SemanticBddBuilder<'_, { primes::U64_LARGEST }> =
+            SemanticBddBuilder::new_with_map(order, builder.map().clone());
+
+        let v3 = builder.var(VarLabel::new(0), true);
+        let v4 = builder.var(VarLabel::new(1), true);
+        let r3 = builder.and(v3, v4);
+        let _r4 = builder.or(r3, v3);
+
+        // this should always be true...
+        assert!(
+            builder.eq(v1, r2),
+            "Invariant, pre-merge: Not eq:\n {:?}\n{:?}",
+            v1,
+            r2
+        );
+
+        builder.merge_from(builder2);
+
+        // and still be true *after* the merge
+        assert!(
+            builder.eq(v1, r2),
+            "Invariant, post-merge: Not eq:\n {:?}\n{:?}",
+            v1,
+            r2
+        );
     }
 }

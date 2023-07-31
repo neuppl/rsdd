@@ -247,6 +247,49 @@ impl<'a, T: Eq + Hash + Clone> BackedRobinhoodTable<'a, T> {
             }
         }
     }
+
+    pub fn grow_until_equal(left: &mut Self, right: &mut Self) {
+        if left.cap == right.cap {
+            return;
+        }
+
+        if left.cap < right.cap {
+            left.grow();
+        }
+
+        if right.cap < left.cap {
+            right.grow();
+        }
+
+        Self::grow_until_equal(left, right)
+    }
+
+    pub fn merge_from(&'a mut self, mut other: Self) {
+        Self::grow_until_equal(self, &mut other);
+
+        for (pos, item) in other
+            .tbl
+            .iter()
+            .enumerate()
+            .filter(|(_, x)| x.is_occupied())
+        {
+            let cur_item = self.tbl[pos].clone();
+            if self.is_occupied(pos) {
+                if cur_item.hash == item.hash {
+                    continue;
+                }
+
+                propagate(&mut self.tbl, self.cap, cur_item, pos);
+            }
+
+            let ptr = self.alloc.alloc(item.ptr.unwrap().clone());
+
+            let entry = HashTableElement::new(ptr, item.hash, item.psl);
+            self.tbl[pos] = entry;
+        }
+
+        // other.alloc.reset();
+    }
 }
 
 impl<'a, T: Hash + Eq + Clone> Default for BackedRobinhoodTable<'a, T> {
