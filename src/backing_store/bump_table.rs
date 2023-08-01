@@ -273,19 +273,57 @@ impl<'a, T: Eq + Hash + Clone> BackedRobinhoodTable<'a, T> {
             .enumerate()
             .filter(|(_, x)| x.is_occupied())
         {
-            let cur_item = self.tbl[pos].clone();
-            if self.is_occupied(pos) {
-                if cur_item.hash == item.hash {
-                    continue;
+            // let cur_item = self.tbl[pos].clone();
+            // if self.is_occupied(pos) {
+            //     if cur_item.hash == item.hash {
+            //         continue;
+            //     }
+
+            //     propagate(&mut self.tbl, self.cap, cur_item, pos);
+            // }
+
+            // let ptr = self.alloc.alloc(item.ptr.unwrap().clone());
+
+            // let entry = HashTableElement::new(ptr, item.hash, item.psl);
+            // self.tbl[pos] = entry;
+            let hash = item.hash;
+            // the current index into the array
+            let mut pos: usize = (hash as usize) % self.cap;
+            // the distance this item is from its desired location
+            let mut psl = 0;
+            let elem: T = item.ptr.unwrap().clone();
+            loop {
+                if self.is_occupied(pos) {
+                    let cur_itm = self.tbl[pos].clone();
+                    // first check the hashes to see if these elements could
+                    // possibly be equal; if they are, check if the items are
+                    // equal and return the found pointer if so
+                    if hash == cur_itm.hash {
+                        return;
+                    }
+
+                    // not equal; begin probing
+                    if cur_itm.psl < psl {
+                        // elem is not in the table; insert it at pos and propagate
+                        // the item that is currently here
+                        self.propagate(cur_itm, pos);
+                        let ptr = self.alloc.alloc(elem);
+                        let entry = HashTableElement::new(ptr, hash, psl);
+                        self.len += 1;
+                        self.tbl[pos] = entry;
+                        return;
+                    }
+                    psl += 1;
+                    pos = (pos + 1) % self.cap; // wrap to the beginning of the array
+                } else {
+                    // this element is unique, so place it in the current spot
+                    let ptr = self.alloc.alloc(elem);
+                    let entry = HashTableElement::new(ptr, hash, psl);
+                    self.len += 1;
+                    self.tbl[pos] = entry;
+                    return;
                 }
-
-                propagate(&mut self.tbl, self.cap, cur_item, pos);
             }
-
-            let ptr = self.alloc.alloc(item.ptr.unwrap().clone());
-
-            let entry = HashTableElement::new(ptr, item.hash, item.psl);
-            self.tbl[pos] = entry;
         }
 
         other.alloc.reset();
