@@ -497,7 +497,7 @@ fn test_unit_propagate_1() {
         ],
     ];
 
-    let cnf = Cnf::new(v);
+    let cnf = Cnf::new(&v);
     match UnitPropagate::new(cnf) {
         None => panic!("test failed - no partial model generated"),
         Some((_, assgn)) => {
@@ -521,7 +521,7 @@ fn test_unit_propagate_2() {
         ],
     ];
 
-    let cnf = Cnf::new(v);
+    let cnf = Cnf::new(&v);
     match UnitPropagate::new(cnf) {
         None => panic!("test failed - no partial model generated"),
         Some((_, assgn)) => {
@@ -550,7 +550,7 @@ fn test_unit_propagate_3() {
         ],
     ];
 
-    let cnf = Cnf::new(v);
+    let cnf = Cnf::new(&v);
     match UnitPropagate::new(cnf) {
         None => panic!("test failed - no partial model generated"),
         Some((_, assgn)) => {
