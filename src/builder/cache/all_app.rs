@@ -37,7 +37,6 @@ impl<'a, T: DDNNFPtr<'a>> IteTable<'a, T> for AllIteTable<T> {
         match ite {
             Ite::IteChoice { f, g, h } | Ite::IteComplChoice { f, g, h } => {
                 let r = self.table.get(&(f, g, h));
-                println!("ite cache: {:?}", r);
                 let compl = ite.is_compl_choice();
                 if compl {
                     r.map(|v| v.neg())

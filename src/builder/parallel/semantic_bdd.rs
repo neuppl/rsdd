@@ -211,19 +211,16 @@ impl<'a, const P: u128> SemanticBddBuilder<'a, P> {
         h: SemanticBddPtr<'a, P>,
     ) -> SemanticBddPtr<'a, P> {
         self.stats.borrow_mut().num_recursive_calls += 1;
-        let o = |a: SemanticBddPtr<P>, b: SemanticBddPtr<P>| {
-            println!("a: {:?}, b: {:?}", a, b);
-            match (a, b) {
-                (SemanticBddPtr::PtrTrue, _) | (SemanticBddPtr::PtrFalse, _) => true,
-                (_, SemanticBddPtr::PtrTrue) | (_, SemanticBddPtr::PtrFalse) => false,
-                (
-                    SemanticBddPtr::Reg(ff_a, _) | SemanticBddPtr::Compl(ff_a, _),
-                    SemanticBddPtr::Reg(ff_b, _) | SemanticBddPtr::Compl(ff_b, _),
-                ) => {
-                    let node_a = self.deref_semantic_node(&ff_a).unwrap();
-                    let node_b = self.deref_semantic_node(&ff_b).unwrap();
-                    self.less_than(node_a.var(), node_b.var())
-                }
+        let o = |a: SemanticBddPtr<P>, b: SemanticBddPtr<P>| match (a, b) {
+            (SemanticBddPtr::PtrTrue, _) | (SemanticBddPtr::PtrFalse, _) => true,
+            (_, SemanticBddPtr::PtrTrue) | (_, SemanticBddPtr::PtrFalse) => false,
+            (
+                SemanticBddPtr::Reg(ff_a, _) | SemanticBddPtr::Compl(ff_a, _),
+                SemanticBddPtr::Reg(ff_b, _) | SemanticBddPtr::Compl(ff_b, _),
+            ) => {
+                let node_a = self.deref_semantic_node(&ff_a).unwrap();
+                let node_b = self.deref_semantic_node(&ff_b).unwrap();
+                self.less_than(node_a.var(), node_b.var())
             }
         };
 
