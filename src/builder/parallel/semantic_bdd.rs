@@ -179,7 +179,23 @@ impl<'a, const P: u128> SemanticBddBuilder<'a, P> {
         &self.map
     }
 
-    pub fn deref_semantic_hash(&'a self, hash: FiniteField<P>) -> SemanticBddPtr<'a, P> {
+    pub fn deref_semantic_node(
+        &'a self,
+        semantic_hash: &FiniteField<P>,
+    ) -> Option<SemanticBddNode<P>> {
+        if let Some(bdd) = self.compute_table.borrow().get(semantic_hash) {
+            return Some(bdd.clone());
+        }
+
+        // check negated hash
+        let semantic_hash = semantic_hash.negate();
+        if let Some(bdd) = self.compute_table.borrow().get(&semantic_hash) {
+            return Some(bdd.clone());
+        }
+        None
+    }
+
+    pub fn deref_semantic_hash(&'a self, hash: &FiniteField<P>) -> SemanticBddPtr<'a, P> {
         self.check_cached_hash_and_neg(hash)
             .unwrap_or_else(|| panic!("Could not find item for hash: {}.", hash))
     }
@@ -201,9 +217,13 @@ impl<'a, const P: u128> SemanticBddBuilder<'a, P> {
                 (SemanticBddPtr::PtrTrue, _) | (SemanticBddPtr::PtrFalse, _) => true,
                 (_, SemanticBddPtr::PtrTrue) | (_, SemanticBddPtr::PtrFalse) => false,
                 (
-                    SemanticBddPtr::Reg(node_a, _) | SemanticBddPtr::Compl(node_a, _),
-                    SemanticBddPtr::Reg(node_b, _) | SemanticBddPtr::Compl(node_b, _),
-                ) => self.less_than(node_a.var(), node_b.var()),
+                    SemanticBddPtr::Reg(ff_a, _) | SemanticBddPtr::Compl(ff_a, _),
+                    SemanticBddPtr::Reg(ff_b, _) | SemanticBddPtr::Compl(ff_b, _),
+                ) => {
+                    let node_a = self.deref_semantic_node(&ff_a).unwrap();
+                    let node_b = self.deref_semantic_node(&ff_b).unwrap();
+                    self.less_than(node_a.var(), node_b.var())
+                }
             }
         };
 
@@ -251,7 +271,8 @@ impl<'a, const P: u128> SemanticBddBuilder<'a, P> {
     ) -> SemanticBddPtr<'a, P> {
         match f {
             SemanticBddPtr::PtrTrue | SemanticBddPtr::PtrFalse => f,
-            SemanticBddPtr::Reg(node, _) | SemanticBddPtr::Compl(node, _) => {
+            SemanticBddPtr::Reg(semantic_hash, _) | SemanticBddPtr::Compl(semantic_hash, _) => {
+                let node = self.deref_semantic_node(&semantic_hash).unwrap();
                 if node.var() != lbl {
                     return f;
                 }
@@ -275,7 +296,8 @@ impl<'a, const P: u128> SemanticBddBuilder<'a, P> {
         self.stats.borrow_mut().num_recursive_calls += 1;
         match bdd {
             SemanticBddPtr::PtrTrue | SemanticBddPtr::PtrFalse => bdd,
-            SemanticBddPtr::Reg(node, _) | SemanticBddPtr::Compl(node, _) => {
+            SemanticBddPtr::Reg(semantic_hash, _) | SemanticBddPtr::Compl(semantic_hash, _) => {
+                let node = self.deref_semantic_node(&semantic_hash).unwrap();
                 if self.order.borrow().lt(lbl, node.var()) {
                     // we passed the variable in the order, we will never find it
                     return bdd;
@@ -363,23 +385,22 @@ impl<'a, const P: u128> SemanticBddBuilder<'a, P> {
         }
     }
 
-    fn get_bdd_ptr(&'a self, semantic_hash: FiniteField<P>) -> Option<SemanticBddPtr<'a, P>> {
+    fn get_bdd_ptr(&'a self, semantic_hash: &FiniteField<P>) -> Option<SemanticBddPtr<'a, P>> {
         match semantic_hash.value() {
             0 => Some(SemanticBddPtr::PtrFalse),
             1 => Some(SemanticBddPtr::PtrTrue),
-            _ => unsafe {
-                let tbl = &mut *self.compute_table.as_ptr();
-                if let Some(node) = tbl.get(&semantic_hash) {
-                    return Some(SemanticBddPtr::Reg(node, self));
+            _ => {
+                if self.compute_table.borrow().get(semantic_hash).is_some() {
+                    return Some(SemanticBddPtr::Reg(*semantic_hash, self));
                 }
                 None
-            },
+            }
         }
     }
 
     fn check_cached_hash_and_neg(
         &'a self,
-        semantic_hash: FiniteField<P>,
+        semantic_hash: &FiniteField<P>,
     ) -> Option<SemanticBddPtr<'a, P>> {
         // check regular hash
         if let Some(bdd) = self.get_bdd_ptr(semantic_hash) {
@@ -388,7 +409,7 @@ impl<'a, const P: u128> SemanticBddBuilder<'a, P> {
 
         // check negated hash
         let semantic_hash = semantic_hash.negate();
-        if let Some(bdd) = self.get_bdd_ptr(semantic_hash) {
+        if let Some(bdd) = self.get_bdd_ptr(&semantic_hash) {
             return Some(bdd.neg());
         }
         None
@@ -396,26 +417,28 @@ impl<'a, const P: u128> SemanticBddBuilder<'a, P> {
 
     // Normalizes and fetches a node from the store
     fn get_or_insert(&'a self, bdd: SemanticBddNode<P>) -> SemanticBddPtr<'a, P> {
-        if let Some(ptr) = self.check_cached_hash_and_neg(bdd.semantic_hash()) {
+        if let Some(ptr) = self.check_cached_hash_and_neg(&bdd.semantic_hash()) {
             return ptr;
         }
 
         let semantic_hash = bdd.semantic_hash();
 
-        // self.compute_table.borrow_mut().insert(semantic_hash, bdd);
+        self.compute_table.borrow_mut().insert(semantic_hash, bdd);
+
+        SemanticBddPtr::Reg(semantic_hash, self)
 
         // let node = self.compute_table.borrow().get(&semantic_hash);
 
         // SemanticBddPtr::Reg(node.unwrap(), self)
 
-        unsafe {
-            // let semantic_hash = bdd.semantic_hash();
+        // unsafe {
+        //     // let semantic_hash = bdd.semantic_hash();
 
-            let tbl = &mut *self.compute_table.as_ptr();
+        //     let tbl = &mut *self.compute_table.as_ptr();
 
-            tbl.insert(semantic_hash, bdd);
-            SemanticBddPtr::Reg(tbl.get(&semantic_hash).unwrap(), self)
-        }
+        //     tbl.insert(semantic_hash, bdd);
+        //     SemanticBddPtr::Reg(tbl.get(&semantic_hash).unwrap(), self)
+        // }
     }
 
     pub fn merge_from<'b>(
@@ -428,8 +451,8 @@ impl<'a, const P: u128> SemanticBddBuilder<'a, P> {
             .map(|ptr| match *ptr {
                 SemanticBddPtr::PtrTrue => SemanticBddPtr::PtrTrue,
                 SemanticBddPtr::PtrFalse => SemanticBddPtr::PtrFalse,
-                SemanticBddPtr::Reg(node, _) => self.get_or_insert(node.clone()),
-                SemanticBddPtr::Compl(node, _) => self.get_or_insert(node.clone()).neg(),
+                SemanticBddPtr::Reg(node, _) => SemanticBddPtr::Reg(node, self),
+                SemanticBddPtr::Compl(node, _) => SemanticBddPtr::Compl(node, self),
             })
             .collect();
 

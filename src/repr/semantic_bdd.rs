@@ -3,7 +3,6 @@ use std::{
     cell::RefCell,
     fmt::Debug,
     hash::{Hash, Hasher},
-    ptr,
 };
 
 use crate::{
@@ -24,8 +23,8 @@ use SemanticBddPtr::*;
 pub enum SemanticBddPtr<'a, const P: u128> {
     PtrTrue,
     PtrFalse,
-    Reg(&'a SemanticBddNode<P>, &'a SemanticBddBuilder<'a, P>),
-    Compl(&'a SemanticBddNode<P>, &'a SemanticBddBuilder<'a, P>),
+    Reg(FiniteField<P>, &'a SemanticBddBuilder<'a, P>),
+    Compl(FiniteField<P>, &'a SemanticBddBuilder<'a, P>),
 }
 
 impl<'a, const P: u128> SemanticBddPtr<'a, P> {
@@ -34,18 +33,22 @@ impl<'a, const P: u128> SemanticBddPtr<'a, P> {
     /// Panics if not node.
     pub fn scratch<T: ?Sized + Clone + 'static>(&self) -> Option<T> {
         match self {
-            Compl(n, _) | Reg(n, _) => {
+            Compl(semantic_hash, builder) | Reg(semantic_hash, builder) => {
+                let n = builder.deref_semantic_node(semantic_hash).unwrap();
                 if self.is_scratch_cleared() {
                     return None;
                 }
                 println!("dereferencing {:?}", n.data.as_ptr());
-                n.data
+                let x = n
+                    .data
                     .borrow()
                     .as_ref()
                     .unwrap()
                     .as_ref()
                     .downcast_ref::<T>()
-                    .cloned()
+                    .cloned();
+
+                x
             }
             PtrTrue => None,
             PtrFalse => None,
@@ -61,7 +64,8 @@ impl<'a, const P: u128> SemanticBddPtr<'a, P> {
     /// involves dereferencing a pointer stored in `alloc`)
     pub fn set_scratch<T: 'static>(&self, v: T) {
         match self {
-            Compl(n, _) | Reg(n, _) => {
+            Compl(semantic_hash, builder) | Reg(semantic_hash, builder) => {
+                let n = builder.deref_semantic_node(semantic_hash).unwrap();
                 *n.data.borrow_mut() = Some(Box::new(v));
             }
             _ => panic!("attempting to store scratch on constant"),
@@ -71,11 +75,12 @@ impl<'a, const P: u128> SemanticBddPtr<'a, P> {
     /// Traverses the BDD and clears all scratch memory (sets it equal to 0)
     pub fn clear_scratch(&self) {
         match &self {
-            Compl(x, builder) | Reg(x, builder) => {
-                if x.data.borrow().is_some() {
-                    x.data.take();
-                    x.low(builder).clear_scratch();
-                    x.high(builder).clear_scratch();
+            Compl(semantic_hash, builder) | Reg(semantic_hash, builder) => {
+                let n = builder.deref_semantic_node(semantic_hash).unwrap();
+                if n.data.borrow().is_some() {
+                    n.data.take();
+                    n.low(builder).clear_scratch();
+                    n.high(builder).clear_scratch();
                 }
             }
             PtrTrue | PtrFalse => (),
@@ -85,7 +90,11 @@ impl<'a, const P: u128> SemanticBddPtr<'a, P> {
     /// true if the scratch is current cleared
     pub fn is_scratch_cleared(&self) -> bool {
         match self {
-            Compl(n, _) | Reg(n, _) => n.data.borrow().is_none(),
+            Compl(semantic_hash, builder) | Reg(semantic_hash, builder) => {
+                let n = builder.deref_semantic_node(semantic_hash).unwrap();
+                let x = n.data.borrow().is_none();
+                x
+            }
             PtrTrue => true,
             PtrFalse => true,
         }
@@ -112,7 +121,8 @@ impl<'a, const P: u128> DDNNFPtr<'a> for SemanticBddPtr<'a, P> {
             match ptr {
                 PtrTrue => f(DDNNF::True),
                 PtrFalse => f(DDNNF::False),
-                Compl(node, builder) | Reg(node, builder) => {
+                Compl(semantic_hash, builder) | Reg(semantic_hash, builder) => {
+                    let node = builder.deref_semantic_node(&semantic_hash).unwrap();
                     // inside the cache, store a (compl, non_compl) pair corresponding to the
                     // complemented and uncomplemented pass over this node
 
@@ -177,8 +187,8 @@ impl<'a, const P: u128> DDNNFPtr<'a> for SemanticBddPtr<'a, P> {
         match self {
             PtrTrue => PtrFalse,
             PtrFalse => PtrTrue,
-            Reg(n, b) => Compl(n, b),
-            Compl(n, b) => Reg(n, b),
+            Reg(n, b) => Compl(*n, b),
+            Compl(n, b) => Reg(*n, b),
         }
     }
 
@@ -226,21 +236,22 @@ impl<'a, const P: u128> SemanticBddPtr<'a, P> {
         match self {
             PtrTrue => FiniteField::one(),
             PtrFalse => FiniteField::zero(),
-            Reg(node, _) => node.semantic_hash(),
-            Compl(node, _) => node.semantic_hash().negate(),
+            Reg(node, _) => *node,
+            Compl(node, _) => node.negate(),
         }
     }
 
     fn count_h(self, count: &mut usize) {
         match self {
             PtrTrue | PtrFalse => (),
-            Reg(n, builder) | Compl(n, builder) => {
+            Compl(semantic_hash, builder) | Reg(semantic_hash, builder) => {
                 match self.scratch::<usize>() {
                     Some(_) => (),
                     None => {
                         // found a new node
                         *count += 1;
                         self.set_scratch::<usize>(0);
+                        let n = builder.deref_semantic_node(&semantic_hash).unwrap();
                         n.low(builder).count_h(count);
                         n.high(builder).count_h(count);
                     }
@@ -253,8 +264,8 @@ impl<'a, const P: u128> SemanticBddPtr<'a, P> {
 impl<'a, const P: u128> PartialEq for SemanticBddPtr<'a, P> {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
-            (Self::Compl(l0, _), Self::Compl(r0, _)) => std::ptr::eq(*l0, *r0),
-            (Self::Reg(l0, _), Self::Reg(r0, _)) => std::ptr::eq(*l0, *r0),
+            (Self::Compl(l0, _), Self::Compl(r0, _)) => l0 == r0,
+            (Self::Reg(l0, _), Self::Reg(r0, _)) => l0 == r0,
             _ => core::mem::discriminant(self) == core::mem::discriminant(other),
         }
     }
@@ -266,7 +277,7 @@ impl<'a, const P: u128> Hash for SemanticBddPtr<'a, P> {
     fn hash<H: Hasher>(&self, state: &mut H) {
         core::mem::discriminant(self).hash(state);
         match self {
-            Compl(n, _) | Reg(n, _) => ptr::hash(*n, state),
+            Compl(n, _) | Reg(n, _) => n.hash(state),
             _ => (),
         }
     }
@@ -287,7 +298,10 @@ impl<'a, const P: u128> PartialVariableOrder for SemanticBddPtr<'a, P> {
     fn var(&self) -> Option<VarLabel> {
         match self {
             PtrTrue | PtrFalse => None,
-            Reg(n, _) | Compl(n, _) => Some(n.var()),
+            Compl(semantic_hash, builder) | Reg(semantic_hash, builder) => {
+                let n = builder.deref_semantic_node(semantic_hash).unwrap();
+                Some(n.var())
+            }
         }
     }
 }
@@ -347,11 +361,11 @@ impl<const P: u128> SemanticBddNode<P> {
     }
 
     pub fn low<'a>(&self, builder: &'a SemanticBddBuilder<'a, P>) -> SemanticBddPtr<'a, P> {
-        builder.deref_semantic_hash(self.low_hash)
+        builder.deref_semantic_hash(&self.low_hash)
     }
 
     pub fn high<'a>(&self, builder: &'a SemanticBddBuilder<'a, P>) -> SemanticBddPtr<'a, P> {
-        builder.deref_semantic_hash(self.high_hash)
+        builder.deref_semantic_hash(&self.high_hash)
     }
 
     pub fn var(&self) -> VarLabel {
