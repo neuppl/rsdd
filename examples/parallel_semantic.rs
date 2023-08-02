@@ -39,6 +39,8 @@ fn single_threaded(cnf: &Cnf, num_splits: usize) {
     let num_vars = cnf.num_vars();
     let map = create_semantic_hash_map(num_vars);
     let order = VarOrder::linear_order(num_vars);
+    println!("order: {}", order);
+    println!("map: {:?}", map);
 
     let builders: Vec<_> = (0..num_splits)
         .map(|_| {

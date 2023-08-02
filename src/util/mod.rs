@@ -5,8 +5,6 @@ pub mod hypergraph;
 pub mod lru;
 pub mod semirings;
 
-use std::ptr;
-
 /// A generic bit-field which makes it easier to get and set
 /// bit-level fields
 #[macro_export]
@@ -29,25 +27,4 @@ macro_rules! BITFIELD {
             }
         )+}
     }
-}
-
-/// custom allocations for zeroed vectors
-pub fn zero_vec<T>(sz: usize) -> Vec<T> {
-    let mut v: Vec<T> = Vec::with_capacity(sz);
-    unsafe {
-        let vec_ptr = v.as_mut_ptr();
-        ptr::write_bytes(vec_ptr, 0, sz);
-        v.set_len(sz);
-    }
-    v
-}
-
-/// custom allocation of a non-initialized vector
-#[allow(clippy::uninit_vec)] // intentional!
-pub fn malloc_vec<T>(sz: usize) -> Vec<T> {
-    let mut v: Vec<T> = Vec::with_capacity(sz);
-    unsafe {
-        v.set_len(sz);
-    }
-    v
 }

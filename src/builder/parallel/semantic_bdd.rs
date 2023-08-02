@@ -1,7 +1,4 @@
-use rustc_hash::FxHasher;
-
 use crate::{
-    backing_store::BackedRobinhoodTable,
     builder::{
         bdd::BddBuilderStats,
         cache::{AllIteTable, Ite, IteTable},
@@ -17,15 +14,11 @@ use crate::{
     },
     util::semirings::{FiniteField, Semiring},
 };
-use std::{
-    cell::RefCell,
-    cmp::Ordering,
-    hash::{Hash, Hasher},
-};
+use std::{cell::RefCell, cmp::Ordering, collections::HashMap};
 
 #[derive(Debug)]
 pub struct SemanticBddBuilder<'a, const P: u128> {
-    compute_table: RefCell<BackedRobinhoodTable<'a, SemanticBddNode<P>>>,
+    compute_table: RefCell<HashMap<FiniteField<P>, SemanticBddNode<P>>>,
     apply_table: RefCell<AllIteTable<SemanticBddPtr<'a, P>>>,
     stats: RefCell<BddBuilderStats>,
     order: RefCell<VarOrder>,
@@ -161,8 +154,7 @@ impl<'a, const P: u128> SemanticBddBuilder<'a, P> {
     pub fn new(order: VarOrder) -> SemanticBddBuilder<'a, P> {
         let map = create_semantic_hash_map(order.num_vars());
         SemanticBddBuilder {
-            compute_table: RefCell::new(BackedRobinhoodTable::new()),
-            // compute_table: RefCell::new(HashMap::default()),
+            compute_table: RefCell::new(HashMap::default()),
             order: RefCell::new(order),
             apply_table: RefCell::new(AllIteTable::default()),
             stats: RefCell::new(BddBuilderStats::new()),
@@ -175,8 +167,7 @@ impl<'a, const P: u128> SemanticBddBuilder<'a, P> {
         map: WmcParams<FiniteField<P>>,
     ) -> SemanticBddBuilder<'a, P> {
         SemanticBddBuilder {
-            compute_table: RefCell::new(BackedRobinhoodTable::new()),
-            // compute_table: RefCell::new(HashMap::default()),
+            compute_table: RefCell::new(HashMap::default()),
             order: RefCell::new(order),
             apply_table: RefCell::new(AllIteTable::default()),
             stats: RefCell::new(BddBuilderStats::new()),
@@ -204,13 +195,16 @@ impl<'a, const P: u128> SemanticBddBuilder<'a, P> {
         h: SemanticBddPtr<'a, P>,
     ) -> SemanticBddPtr<'a, P> {
         self.stats.borrow_mut().num_recursive_calls += 1;
-        let o = |a: SemanticBddPtr<P>, b: SemanticBddPtr<P>| match (a, b) {
-            (SemanticBddPtr::PtrTrue, _) | (SemanticBddPtr::PtrFalse, _) => true,
-            (_, SemanticBddPtr::PtrTrue) | (_, SemanticBddPtr::PtrFalse) => false,
-            (
-                SemanticBddPtr::Reg(node_a, _) | SemanticBddPtr::Compl(node_a, _),
-                SemanticBddPtr::Reg(node_b, _) | SemanticBddPtr::Compl(node_b, _),
-            ) => self.less_than(node_a.var(), node_b.var()),
+        let o = |a: SemanticBddPtr<P>, b: SemanticBddPtr<P>| {
+            println!("a: {:?}, b: {:?}", a, b);
+            match (a, b) {
+                (SemanticBddPtr::PtrTrue, _) | (SemanticBddPtr::PtrFalse, _) => true,
+                (_, SemanticBddPtr::PtrTrue) | (_, SemanticBddPtr::PtrFalse) => false,
+                (
+                    SemanticBddPtr::Reg(node_a, _) | SemanticBddPtr::Compl(node_a, _),
+                    SemanticBddPtr::Reg(node_b, _) | SemanticBddPtr::Compl(node_b, _),
+                ) => self.less_than(node_a.var(), node_b.var()),
+            }
         };
 
         let ite = Ite::new(o, f, g, h);
@@ -369,17 +363,13 @@ impl<'a, const P: u128> SemanticBddBuilder<'a, P> {
         }
     }
 
-    fn get_bdd_ptr(
-        &'a self,
-        semantic_hash: FiniteField<P>,
-        hash: u64,
-    ) -> Option<SemanticBddPtr<'a, P>> {
+    fn get_bdd_ptr(&'a self, semantic_hash: FiniteField<P>) -> Option<SemanticBddPtr<'a, P>> {
         match semantic_hash.value() {
             0 => Some(SemanticBddPtr::PtrFalse),
             1 => Some(SemanticBddPtr::PtrTrue),
             _ => unsafe {
                 let tbl = &mut *self.compute_table.as_ptr();
-                if let Some(node) = tbl.get_by_hash(hash) {
+                if let Some(node) = tbl.get(&semantic_hash) {
                     return Some(SemanticBddPtr::Reg(node, self));
                 }
                 None
@@ -392,19 +382,13 @@ impl<'a, const P: u128> SemanticBddBuilder<'a, P> {
         semantic_hash: FiniteField<P>,
     ) -> Option<SemanticBddPtr<'a, P>> {
         // check regular hash
-        let mut hasher = FxHasher::default();
-        semantic_hash.value().hash(&mut hasher);
-        let hash = hasher.finish();
-        if let Some(bdd) = self.get_bdd_ptr(semantic_hash, hash) {
+        if let Some(bdd) = self.get_bdd_ptr(semantic_hash) {
             return Some(bdd);
         }
 
         // check negated hash
         let semantic_hash = semantic_hash.negate();
-        let mut hasher = FxHasher::default();
-        semantic_hash.value().hash(&mut hasher);
-        let hash = hasher.finish();
-        if let Some(bdd) = self.get_bdd_ptr(semantic_hash, hash) {
+        if let Some(bdd) = self.get_bdd_ptr(semantic_hash) {
             return Some(bdd.neg());
         }
         None
@@ -416,17 +400,22 @@ impl<'a, const P: u128> SemanticBddBuilder<'a, P> {
             return ptr;
         }
 
-        let hash = self.hash_field(bdd.semantic_hash());
-        unsafe {
-            let tbl = &mut *self.compute_table.as_ptr();
-            SemanticBddPtr::Reg(tbl.get_or_insert_by_hash(hash, bdd, true), self)
-        }
-    }
+        let semantic_hash = bdd.semantic_hash();
 
-    fn hash_field(&'a self, field: FiniteField<P>) -> u64 {
-        let mut hasher = FxHasher::default();
-        field.value().hash(&mut hasher);
-        hasher.finish()
+        // self.compute_table.borrow_mut().insert(semantic_hash, bdd);
+
+        // let node = self.compute_table.borrow().get(&semantic_hash);
+
+        // SemanticBddPtr::Reg(node.unwrap(), self)
+
+        unsafe {
+            // let semantic_hash = bdd.semantic_hash();
+
+            let tbl = &mut *self.compute_table.as_ptr();
+
+            tbl.insert(semantic_hash, bdd);
+            SemanticBddPtr::Reg(tbl.get(&semantic_hash).unwrap(), self)
+        }
     }
 
     pub fn merge_from<'b>(
@@ -444,14 +433,12 @@ impl<'a, const P: u128> SemanticBddBuilder<'a, P> {
             })
             .collect();
 
-        // TODO: merge stats
-        // TODO: some sort of check that the orders & maps are the same
-        unsafe {
-            let tbl = &mut *self.compute_table.as_ptr();
-            tbl.merge_from(other.compute_table.take());
+        for (k, v) in other.compute_table.borrow().iter() {
+            self.compute_table.borrow_mut().insert(*k, v.clone());
+        }
 
-            let tbl = &mut *self.apply_table.as_ptr();
-            tbl.merge_from(other.apply_table.take());
+        for (k, v) in other.apply_table.borrow().iter() {
+            self.apply_table.borrow_mut().insert_directly(*k, *v);
         }
 
         new_roots

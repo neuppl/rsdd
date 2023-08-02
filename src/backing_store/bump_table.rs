@@ -1,7 +1,7 @@
 //! A unique table based on a bump allocator and robin-hood hashing
 //! this is the primary unique table for storing all nodes
 
-use crate::{backing_store::UniqueTable, util::*};
+use crate::backing_store::UniqueTable;
 use bumpalo::Bump;
 use rustc_hash::FxHasher;
 use std::{
@@ -106,7 +106,7 @@ where
 {
     /// reserve a robin-hood table capable of holding at least `sz` elements
     pub fn new() -> BackedRobinhoodTable<'a, T> {
-        let v: Vec<HashTableElement<T>> = zero_vec(DEFAULT_SIZE);
+        let v: Vec<HashTableElement<T>> = vec![HashTableElement::default(); DEFAULT_SIZE];
 
         BackedRobinhoodTable {
             tbl: v,
@@ -136,7 +136,7 @@ where
     pub fn grow(&mut self) {
         let new_sz = (self.cap + 1).next_power_of_two();
         self.cap = new_sz;
-        let old = mem::replace(&mut self.tbl, zero_vec(new_sz));
+        let old = mem::replace(&mut self.tbl, vec![HashTableElement::default(); new_sz]);
         let c = self.cap;
         for i in old.iter() {
             propagate(&mut self.tbl, self.cap, i.clone(), (i.hash as usize) % c);
@@ -246,87 +246,6 @@ impl<'a, T: Eq + Hash + Clone> BackedRobinhoodTable<'a, T> {
                 return None;
             }
         }
-    }
-
-    pub fn grow_until_equal(left: &mut Self, right: &mut Self) {
-        if left.cap == right.cap {
-            return;
-        }
-
-        if left.cap < right.cap {
-            left.grow();
-        }
-
-        if right.cap < left.cap {
-            right.grow();
-        }
-
-        Self::grow_until_equal(left, right)
-    }
-
-    pub fn merge_from(&'a mut self, mut other: Self) {
-        Self::grow_until_equal(self, &mut other);
-
-        for (pos, item) in other
-            .tbl
-            .iter()
-            .enumerate()
-            .filter(|(_, x)| x.is_occupied())
-        {
-            // let cur_item = self.tbl[pos].clone();
-            // if self.is_occupied(pos) {
-            //     if cur_item.hash == item.hash {
-            //         continue;
-            //     }
-
-            //     propagate(&mut self.tbl, self.cap, cur_item, pos);
-            // }
-
-            // let ptr = self.alloc.alloc(item.ptr.unwrap().clone());
-
-            // let entry = HashTableElement::new(ptr, item.hash, item.psl);
-            // self.tbl[pos] = entry;
-            let hash = item.hash;
-            // the current index into the array
-            let mut pos: usize = (hash as usize) % self.cap;
-            // the distance this item is from its desired location
-            let mut psl = 0;
-            let elem: T = item.ptr.unwrap().clone();
-            loop {
-                if self.is_occupied(pos) {
-                    let cur_itm = self.tbl[pos].clone();
-                    // first check the hashes to see if these elements could
-                    // possibly be equal; if they are, check if the items are
-                    // equal and return the found pointer if so
-                    if hash == cur_itm.hash {
-                        return;
-                    }
-
-                    // not equal; begin probing
-                    if cur_itm.psl < psl {
-                        // elem is not in the table; insert it at pos and propagate
-                        // the item that is currently here
-                        self.propagate(cur_itm, pos);
-                        let ptr = self.alloc.alloc(elem);
-                        let entry = HashTableElement::new(ptr, hash, psl);
-                        self.len += 1;
-                        self.tbl[pos] = entry;
-                        return;
-                    }
-                    psl += 1;
-                    pos = (pos + 1) % self.cap; // wrap to the beginning of the array
-                } else {
-                    // this element is unique, so place it in the current spot
-                    let ptr = self.alloc.alloc(elem);
-                    let entry = HashTableElement::new(ptr, hash, psl);
-                    self.len += 1;
-                    self.tbl[pos] = entry;
-                    return;
-                }
-            }
-        }
-
-        other.alloc.reset();
     }
 }
 

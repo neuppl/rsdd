@@ -37,6 +37,7 @@ impl<'a, T: DDNNFPtr<'a>> IteTable<'a, T> for AllIteTable<T> {
         match ite {
             Ite::IteChoice { f, g, h } | Ite::IteComplChoice { f, g, h } => {
                 let r = self.table.get(&(f, g, h));
+                println!("ite cache: {:?}", r);
                 let compl = ite.is_compl_choice();
                 if compl {
                     r.map(|v| v.neg())
@@ -56,12 +57,12 @@ impl<'a, T: DDNNFPtr<'a>> AllIteTable<T> {
         }
     }
 
-    pub fn merge_from(&'a mut self, other: Self) {
-        for (key, value) in other.table.iter() {
-            if !self.table.contains_key(key) {
-                self.table.insert(*key, *value);
-            }
-        }
+    pub fn iter(&self) -> impl Iterator<Item = (&(T, T, T), &T)> + '_ {
+        self.table.iter()
+    }
+
+    pub fn insert_directly(&mut self, k: (T, T, T), v: T) {
+        self.table.insert(k, v);
     }
 }
 

@@ -11,6 +11,8 @@ pub struct FiniteField<const P: u128> {
 
 impl<const P: u128> FiniteField<P> {
     pub fn new(v: u128) -> FiniteField<P> {
+        assert!(v < P);
+        println!("new: {}", v);
         FiniteField { v: v % P }
     }
     pub fn value(&self) -> u128 {
@@ -19,6 +21,7 @@ impl<const P: u128> FiniteField<P> {
 
     /// computes the additive inverse of self
     pub fn negate(&self) -> FiniteField<P> {
+        println!("{} - {}", P, self.v);
         FiniteField::new(P - self.v + 1)
     }
 }

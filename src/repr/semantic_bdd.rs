@@ -38,7 +38,7 @@ impl<'a, const P: u128> SemanticBddPtr<'a, P> {
                 if self.is_scratch_cleared() {
                     return None;
                 }
-                // println!("dereferencing {:?}", n.data.as_ptr());
+                println!("dereferencing {:?}", n.data.as_ptr());
                 n.data
                     .borrow()
                     .as_ref()
@@ -310,6 +310,8 @@ impl<const P: u128> SemanticBddNode<P> {
         low_hash: FiniteField<P>,
         high_hash: FiniteField<P>,
     ) -> SemanticBddNode<P> {
+        println!("n w/ hash: {}", hash);
+        println!("lh: {}, hh: {}", low_hash, high_hash);
         SemanticBddNode {
             var,
             hash,
@@ -327,6 +329,9 @@ impl<const P: u128> SemanticBddNode<P> {
     ) -> SemanticBddNode<P> {
         let (low_w, high_w) = builder.map().var_weight(var);
         let hash = low_hash * (*low_w) + high_hash * (*high_w);
+
+        println!("nfb w/ hash: {}", hash);
+        println!("lh: {}, hh: {}", low_hash, high_hash);
 
         SemanticBddNode {
             var,
@@ -394,6 +399,10 @@ impl<const P: u128> PartialOrd for SemanticBddNode<P> {
 
 impl<const P: u128> Clone for SemanticBddNode<P> {
     fn clone(&self) -> Self {
+        println!(
+            "cloning... var: {:?}, hash: {}, lh: {}, hh: {}",
+            self.var, self.hash, self.low_hash, self.high_hash
+        );
         Self {
             var: self.var,
             hash: self.hash,
