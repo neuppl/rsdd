@@ -423,19 +423,6 @@ impl<'a, const P: u128> SemanticBddBuilder<'a, P> {
         self.compute_table.borrow_mut().insert(semantic_hash, bdd);
 
         SemanticBddPtr::Reg(semantic_hash, self)
-
-        // let node = self.compute_table.borrow().get(&semantic_hash);
-
-        // SemanticBddPtr::Reg(node.unwrap(), self)
-
-        // unsafe {
-        //     // let semantic_hash = bdd.semantic_hash();
-
-        //     let tbl = &mut *self.compute_table.as_ptr();
-
-        //     tbl.insert(semantic_hash, bdd);
-        //     SemanticBddPtr::Reg(tbl.get(&semantic_hash).unwrap(), self)
-        // }
     }
 
     pub fn merge_from<'b>(

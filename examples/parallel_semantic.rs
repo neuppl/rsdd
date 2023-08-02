@@ -1,4 +1,7 @@
-use std::{fs, time::Instant};
+use std::{
+    fs,
+    time::{Duration, Instant},
+};
 
 use clap::Parser;
 use rsdd::{
@@ -39,8 +42,8 @@ fn single_threaded(cnf: &Cnf, num_splits: usize) {
     let num_vars = cnf.num_vars();
     let map = create_semantic_hash_map(num_vars);
     let order = VarOrder::linear_order(num_vars);
-    println!("order: {}", order);
-    println!("map: {:?}", map);
+    // println!("order: {}", order);
+    // println!("map: {:?}", map);
 
     let builders: Vec<_> = (0..num_splits)
         .map(|_| {
@@ -50,15 +53,20 @@ fn single_threaded(cnf: &Cnf, num_splits: usize) {
 
     let mut ptrs = Vec::new();
 
-    let start = Instant::now();
+    let mut timings = Vec::new();
 
     for (i, subcnf) in split_cnf(cnf, num_splits).iter().enumerate() {
+        let start = Instant::now();
         ptrs.push(builders[i].compile_cnf(subcnf));
+        let end = start.elapsed();
+        timings.push(end);
     }
 
-    let compile_duration = start.elapsed();
+    let compile_duration: Duration = timings.iter().sum();
+    let compile_max = timings.iter().max().unwrap();
 
     println!("DONE COMPILING: {:.4}s", compile_duration.as_secs_f64());
+    println!("MAX COMPILATION: {:.4}s", compile_max.as_secs_f64());
 
     let start = Instant::now();
 
@@ -84,11 +92,16 @@ fn single_threaded(cnf: &Cnf, num_splits: usize) {
 
     println!("=== TIMING ===");
     println!(
-        "Compile: {:4}s, Merge: {:4}s",
+        "Compile: {:4}s (Total {:4}s), Merge: {:4}s",
+        compile_max.as_secs_f64(),
         compile_duration.as_secs_f64(),
         merge_duration.as_secs_f64()
     );
     println!("Single-threaded: {:4}s", single_duration.as_secs_f64());
+    println!(
+        "Speedup ratio: {:4}x",
+        single_duration.as_secs_f64() / (compile_max.as_secs_f64() + merge_duration.as_secs_f64())
+    );
     if wmc != st_wmc {
         println!(
             "BROKEN. Not equal WMC; single: {}, merge: {}",
