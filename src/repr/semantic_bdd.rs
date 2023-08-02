@@ -1,8 +1,8 @@
 use std::{
     any::Any,
-    cell::RefCell,
     fmt::Debug,
     hash::{Hash, Hasher},
+    sync::RwLock,
 };
 
 use crate::{
@@ -40,7 +40,8 @@ impl<'a, const P: u128> SemanticBddPtr<'a, P> {
                 }
                 let x = n
                     .data
-                    .borrow()
+                    .read()
+                    .unwrap()
                     .as_ref()
                     .unwrap()
                     .as_ref()
@@ -65,7 +66,7 @@ impl<'a, const P: u128> SemanticBddPtr<'a, P> {
         match self {
             Compl(semantic_hash, builder) | Reg(semantic_hash, builder) => {
                 let n = builder.deref_semantic_node(semantic_hash).unwrap();
-                *n.data.borrow_mut() = Some(Box::new(v));
+                *n.data.write().unwrap() = Some(Box::new(v));
             }
             _ => panic!("attempting to store scratch on constant"),
         }
@@ -76,8 +77,8 @@ impl<'a, const P: u128> SemanticBddPtr<'a, P> {
         match &self {
             Compl(semantic_hash, builder) | Reg(semantic_hash, builder) => {
                 let n = builder.deref_semantic_node(semantic_hash).unwrap();
-                if n.data.borrow().is_some() {
-                    n.data.take();
+                if n.data.read().unwrap().is_some() {
+                    *n.data.write().unwrap() = None;
                     n.low(builder).clear_scratch();
                     n.high(builder).clear_scratch();
                 }
@@ -91,7 +92,7 @@ impl<'a, const P: u128> SemanticBddPtr<'a, P> {
         match self {
             Compl(semantic_hash, builder) | Reg(semantic_hash, builder) => {
                 let n = builder.deref_semantic_node(semantic_hash).unwrap();
-                let x = n.data.borrow().is_none();
+                let x = n.data.read().unwrap().is_none();
                 x
             }
             PtrTrue => true,
@@ -313,7 +314,7 @@ pub struct SemanticBddNode<const P: u128> {
     high_hash: FiniteField<P>,
     /// scratch space used for caching data during traversals; ignored during
     /// equality checking and hashing
-    data: RefCell<Option<Box<dyn Any>>>,
+    data: RwLock<Option<Box<dyn Any>>>,
 }
 
 impl<const P: u128> SemanticBddNode<P> {
@@ -328,7 +329,7 @@ impl<const P: u128> SemanticBddNode<P> {
             hash,
             low_hash,
             high_hash,
-            data: RefCell::new(None),
+            data: RwLock::new(None),
         }
     }
 
@@ -346,7 +347,7 @@ impl<const P: u128> SemanticBddNode<P> {
             hash,
             low_hash,
             high_hash,
-            data: RefCell::new(None),
+            data: RwLock::new(None),
         }
     }
 
@@ -412,7 +413,7 @@ impl<const P: u128> Clone for SemanticBddNode<P> {
             hash: self.hash,
             low_hash: self.low_hash,
             high_hash: self.high_hash,
-            data: RefCell::new(None),
+            data: RwLock::new(None),
         }
     }
 }
@@ -422,3 +423,6 @@ impl<const P: u128> Ord for SemanticBddNode<P> {
         self.partial_cmp(other).unwrap()
     }
 }
+
+unsafe impl<const P: u128> Send for SemanticBddNode<P> {}
+unsafe impl<const P: u128> Sync for SemanticBddNode<P> {}

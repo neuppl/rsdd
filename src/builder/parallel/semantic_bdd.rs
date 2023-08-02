@@ -14,14 +14,14 @@ use crate::{
     },
     util::semirings::{FiniteField, Semiring},
 };
-use std::{cell::RefCell, cmp::Ordering, collections::HashMap};
+use std::{cmp::Ordering, collections::HashMap, sync::RwLock};
 
 #[derive(Debug)]
 pub struct SemanticBddBuilder<'a, const P: u128> {
-    compute_table: RefCell<HashMap<FiniteField<P>, SemanticBddNode<P>>>,
-    apply_table: RefCell<AllIteTable<SemanticBddPtr<'a, P>>>,
-    stats: RefCell<BddBuilderStats>,
-    order: RefCell<VarOrder>,
+    compute_table: RwLock<HashMap<FiniteField<P>, SemanticBddNode<P>>>,
+    apply_table: RwLock<AllIteTable<SemanticBddPtr<'a, P>>>,
+    stats: RwLock<BddBuilderStats>,
+    order: RwLock<VarOrder>,
     map: WmcParams<FiniteField<P>>,
 }
 
@@ -154,10 +154,10 @@ impl<'a, const P: u128> SemanticBddBuilder<'a, P> {
     pub fn new(order: VarOrder) -> SemanticBddBuilder<'a, P> {
         let map = create_semantic_hash_map(order.num_vars());
         SemanticBddBuilder {
-            compute_table: RefCell::new(HashMap::default()),
-            order: RefCell::new(order),
-            apply_table: RefCell::new(AllIteTable::default()),
-            stats: RefCell::new(BddBuilderStats::new()),
+            compute_table: RwLock::new(HashMap::default()),
+            order: RwLock::new(order),
+            apply_table: RwLock::new(AllIteTable::default()),
+            stats: RwLock::new(BddBuilderStats::new()),
             map,
         }
     }
@@ -167,10 +167,10 @@ impl<'a, const P: u128> SemanticBddBuilder<'a, P> {
         map: WmcParams<FiniteField<P>>,
     ) -> SemanticBddBuilder<'a, P> {
         SemanticBddBuilder {
-            compute_table: RefCell::new(HashMap::default()),
-            order: RefCell::new(order),
-            apply_table: RefCell::new(AllIteTable::default()),
-            stats: RefCell::new(BddBuilderStats::new()),
+            compute_table: RwLock::new(HashMap::default()),
+            order: RwLock::new(order),
+            apply_table: RwLock::new(AllIteTable::default()),
+            stats: RwLock::new(BddBuilderStats::new()),
             map,
         }
     }
@@ -183,13 +183,13 @@ impl<'a, const P: u128> SemanticBddBuilder<'a, P> {
         &'a self,
         semantic_hash: &FiniteField<P>,
     ) -> Option<SemanticBddNode<P>> {
-        if let Some(bdd) = self.compute_table.borrow().get(semantic_hash) {
+        if let Some(bdd) = self.compute_table.read().unwrap().get(semantic_hash) {
             return Some(bdd.clone());
         }
 
         // check negated hash
         let semantic_hash = semantic_hash.negate();
-        if let Some(bdd) = self.compute_table.borrow().get(&semantic_hash) {
+        if let Some(bdd) = self.compute_table.read().unwrap().get(&semantic_hash) {
             return Some(bdd.clone());
         }
         None
@@ -201,7 +201,7 @@ impl<'a, const P: u128> SemanticBddBuilder<'a, P> {
     }
 
     fn less_than(&self, a: VarLabel, b: VarLabel) -> bool {
-        self.order.borrow().lt(a, b)
+        self.order.read().unwrap().lt(a, b)
     }
 
     fn ite_helper(
@@ -210,7 +210,7 @@ impl<'a, const P: u128> SemanticBddBuilder<'a, P> {
         g: SemanticBddPtr<'a, P>,
         h: SemanticBddPtr<'a, P>,
     ) -> SemanticBddPtr<'a, P> {
-        self.stats.borrow_mut().num_recursive_calls += 1;
+        self.stats.write().unwrap().num_recursive_calls += 1;
         let o = |a: SemanticBddPtr<P>, b: SemanticBddPtr<P>| match (a, b) {
             (SemanticBddPtr::PtrTrue, _) | (SemanticBddPtr::PtrFalse, _) => true,
             (_, SemanticBddPtr::PtrTrue) | (_, SemanticBddPtr::PtrFalse) => false,
@@ -230,14 +230,14 @@ impl<'a, const P: u128> SemanticBddBuilder<'a, P> {
             return f;
         }
 
-        let hash = self.apply_table.borrow().hash(&ite);
-        if let Some(v) = self.apply_table.borrow().get(ite, hash) {
+        let hash = self.apply_table.read().unwrap().hash(&ite);
+        if let Some(v) = self.apply_table.read().unwrap().get(ite, hash) {
             return v;
         }
 
         // ok the work!
         // find the first essential variable for f, g, or h
-        let lbl = self.order.borrow().first_essential(&f, &g, &h);
+        let lbl = self.order.read().unwrap().first_essential(&f, &g, &h);
         let fx = self.condition_essential(f, lbl, true);
         let gx = self.condition_essential(g, lbl, true);
         let hx = self.condition_essential(h, lbl, true);
@@ -255,7 +255,7 @@ impl<'a, const P: u128> SemanticBddBuilder<'a, P> {
         let node =
             SemanticBddNode::new_from_builder(lbl, f.semantic_hash(), t.semantic_hash(), self);
         let r = self.get_or_insert(node);
-        self.apply_table.borrow_mut().insert(ite, r, hash);
+        self.apply_table.write().unwrap().insert(ite, r, hash);
         r
     }
 
@@ -290,12 +290,12 @@ impl<'a, const P: u128> SemanticBddBuilder<'a, P> {
         value: bool,
         alloc: &mut Vec<SemanticBddPtr<'a, P>>,
     ) -> SemanticBddPtr<'a, P> {
-        self.stats.borrow_mut().num_recursive_calls += 1;
+        self.stats.write().unwrap().num_recursive_calls += 1;
         match bdd {
             SemanticBddPtr::PtrTrue | SemanticBddPtr::PtrFalse => bdd,
             SemanticBddPtr::Reg(semantic_hash, _) | SemanticBddPtr::Compl(semantic_hash, _) => {
                 let node = self.deref_semantic_node(&semantic_hash).unwrap();
-                if self.order.borrow().lt(lbl, node.var()) {
+                if self.order.read().unwrap().lt(lbl, node.var()) {
                     // we passed the variable in the order, we will never find it
                     return bdd;
                 }
@@ -387,7 +387,13 @@ impl<'a, const P: u128> SemanticBddBuilder<'a, P> {
             0 => Some(SemanticBddPtr::PtrFalse),
             1 => Some(SemanticBddPtr::PtrTrue),
             _ => {
-                if self.compute_table.borrow().get(semantic_hash).is_some() {
+                if self
+                    .compute_table
+                    .read()
+                    .unwrap()
+                    .get(semantic_hash)
+                    .is_some()
+                {
                     return Some(SemanticBddPtr::Reg(*semantic_hash, self));
                 }
                 None
@@ -420,7 +426,10 @@ impl<'a, const P: u128> SemanticBddBuilder<'a, P> {
 
         let semantic_hash = bdd.semantic_hash();
 
-        self.compute_table.borrow_mut().insert(semantic_hash, bdd);
+        self.compute_table
+            .write()
+            .unwrap()
+            .insert(semantic_hash, bdd);
 
         SemanticBddPtr::Reg(semantic_hash, self)
     }
@@ -440,17 +449,20 @@ impl<'a, const P: u128> SemanticBddBuilder<'a, P> {
             })
             .collect();
 
-        for (k, v) in other.compute_table.borrow().iter() {
-            self.compute_table.borrow_mut().insert(*k, v.clone());
+        for (k, v) in other.compute_table.read().unwrap().iter() {
+            self.compute_table.write().unwrap().insert(*k, v.clone());
         }
 
-        for (k, v) in other.apply_table.borrow().iter() {
-            self.apply_table.borrow_mut().insert_directly(*k, *v);
+        for (k, v) in other.apply_table.read().unwrap().iter() {
+            self.apply_table.write().unwrap().insert_directly(*k, *v);
         }
 
         new_roots
     }
 }
+
+unsafe impl<const P: u128> Send for SemanticBddBuilder<'_, P> {}
+unsafe impl<const P: u128> Sync for SemanticBddBuilder<'_, P> {}
 
 #[cfg(test)]
 mod test {

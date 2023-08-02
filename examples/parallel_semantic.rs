@@ -4,6 +4,7 @@ use std::{
 };
 
 use clap::Parser;
+use rayon::prelude::*;
 use rsdd::{
     builder::{parallel::SemanticBddBuilder, BottomUpBuilder},
     constants::primes,
@@ -25,25 +26,28 @@ struct Args {
     #[clap(short, long, value_parser, default_value_t = 4)]
     num_splits: usize,
 
-    /// number of threads to test on;
-    /// a value of 0 will only run single-threaded
-    #[clap(short, long, value_parser, default_value_t = 0)]
-    threads: usize,
+    /// use multithreading!
+    #[clap(short, long, value_parser)]
+    thread: bool,
 }
 
 fn split_cnf(cnf: &Cnf, num_splits: usize) -> Vec<Cnf> {
-    cnf.clauses()
-        .chunks(cnf.clauses().len() / num_splits + 1)
-        .map(Cnf::new)
-        .collect()
+    let chunk_size = cnf.clauses().len() / num_splits
+        + (if cnf.clauses().len() % num_splits == 0 {
+            0
+        } else {
+            1
+        });
+
+    cnf.clauses().chunks(chunk_size).map(Cnf::new).collect()
 }
 
 fn single_threaded(cnf: &Cnf, num_splits: usize) {
+    let num_splits = std::cmp::min(num_splits, cnf.clauses().len());
+
     let num_vars = cnf.num_vars();
     let map = create_semantic_hash_map(num_vars);
     let order = VarOrder::linear_order(num_vars);
-    // println!("order: {}", order);
-    // println!("map: {:?}", map);
 
     let builders: Vec<_> = (0..num_splits)
         .map(|_| {
@@ -73,7 +77,7 @@ fn single_threaded(cnf: &Cnf, num_splits: usize) {
     let builder = &builders[0];
     let mut ptr = ptrs[0];
 
-    for i in 1..num_splits {
+    for i in 1..ptrs.len() {
         let new_ptr = builder.merge_from(&builders[i], &[ptrs[i]])[0];
         ptr = builder.and(ptr, new_ptr);
     }
@@ -92,15 +96,89 @@ fn single_threaded(cnf: &Cnf, num_splits: usize) {
 
     println!("=== TIMING ===");
     println!(
-        "Compile: {:4}s (Total {:4}s), Merge: {:4}s",
+        "Compile: {:.4}s (Total {:.4}s), Merge: {:.4}s",
         compile_max.as_secs_f64(),
         compile_duration.as_secs_f64(),
         merge_duration.as_secs_f64()
     );
-    println!("Single-threaded: {:4}s", single_duration.as_secs_f64());
+    println!("Single-threaded: {:.4}s", single_duration.as_secs_f64());
     println!(
-        "Speedup ratio: {:4}x",
+        "Speedup ratio: {:.4}x",
         single_duration.as_secs_f64() / (compile_max.as_secs_f64() + merge_duration.as_secs_f64())
+    );
+    if wmc != st_wmc {
+        println!(
+            "BROKEN. Not equal WMC; single: {}, merge: {}",
+            st_wmc.value(),
+            wmc.value()
+        );
+    }
+}
+
+fn multi_threaded(cnf: &Cnf, num_splits: usize) {
+    let num_splits = std::cmp::min(num_splits, cnf.clauses().len());
+
+    let num_vars = cnf.num_vars();
+    let map = create_semantic_hash_map(num_vars);
+    let order = VarOrder::linear_order(num_vars);
+
+    let builders: Vec<_> = split_cnf(cnf, num_splits)
+        .into_par_iter()
+        .map(|subcnf| {
+            (
+                SemanticBddBuilder::<{ primes::U64_LARGEST }>::new_with_map(
+                    order.clone(),
+                    map.clone(),
+                ),
+                subcnf,
+            )
+        })
+        .collect();
+
+    let start = Instant::now();
+
+    let ptrs: Vec<_> = builders
+        .par_iter()
+        .map(|(builder, cnf)| builder.compile_cnf(cnf))
+        .collect();
+
+    let compile_duration: Duration = start.elapsed();
+
+    println!("DONE COMPILING: {:.4}s", compile_duration.as_secs_f64());
+
+    let start = Instant::now();
+
+    let builder = &builders[0].0;
+    let mut ptr = ptrs[0];
+
+    for i in 1..ptrs.len() {
+        let new_ptr = builder.merge_from(&builders[i].0, &[ptrs[i]])[0];
+        ptr = builder.and(ptr, new_ptr);
+    }
+
+    let merge_duration = start.elapsed();
+
+    let st_builder =
+        SemanticBddBuilder::<{ primes::U64_LARGEST }>::new_with_map(order.clone(), map.clone());
+
+    let start = Instant::now();
+    let st_ptr = st_builder.compile_cnf(cnf);
+    let single_duration = start.elapsed();
+
+    let wmc = ptr.wmc(&order, &map);
+    let st_wmc = st_ptr.wmc(&order, &map);
+
+    println!("=== TIMING ===");
+    println!(
+        "Compile: {:.4}s, Merge: {:.4}s",
+        compile_duration.as_secs_f64(),
+        merge_duration.as_secs_f64()
+    );
+    println!("Single-threaded: {:.4}s", single_duration.as_secs_f64());
+    println!(
+        "Speedup ratio: {:.4}x",
+        single_duration.as_secs_f64()
+            / (compile_duration.as_secs_f64() + merge_duration.as_secs_f64())
     );
     if wmc != st_wmc {
         println!(
@@ -118,5 +196,8 @@ fn main() {
 
     let cnf = Cnf::from_dimacs(&cnf_input);
 
-    single_threaded(&cnf, args.num_splits)
+    match args.thread {
+        false => single_threaded(&cnf, args.num_splits),
+        true => multi_threaded(&cnf, args.num_splits),
+    }
 }
