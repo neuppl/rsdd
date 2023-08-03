@@ -168,7 +168,7 @@ impl<'a, T: Eq + Hash + Clone> UniqueTable<'a, T> for BackedRobinhoodTable<'a, T
 }
 
 impl<'a, T: Eq + Hash + Clone> BackedRobinhoodTable<'a, T> {
-    /// use a hash to both allocate space in table, *and* form equalitySS
+    /// use a hash to both allocate space in table, *and* form equality
     pub fn get_or_insert_by_hash(
         &'a mut self,
         hash: u64,

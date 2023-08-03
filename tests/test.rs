@@ -751,7 +751,7 @@ mod test_sdd_builder {
         /// test that the same CNF compiled by both an SDD and BDD have the same weighted model count
         /// with an even_split ordering
         fn sdd_wmc_eq_even_split(clauses: Vec<Vec<Literal>>) -> TestResult {
-            let cnf = Cnf::new(clauses);
+            let cnf = Cnf::new(&clauses);
             if cnf.num_vars() < 8 || cnf.num_vars() > 16 { return TestResult::discard() }
             if cnf.clauses().len() > 16 { return TestResult::discard() }
 
@@ -774,7 +774,7 @@ mod test_sdd_builder {
         /// test that the same CNF compiled by both an SDD and BDD have the same weighted model count
         /// with a dtree ordering
         fn sdd_wmc_eq(clauses: Vec<Vec<Literal>>) -> TestResult {
-            let cnf = Cnf::new(clauses);
+            let cnf = Cnf::new(&clauses);
             if cnf.num_vars() < 8 || cnf.num_vars() > 16 { return TestResult::discard() }
             if cnf.clauses().len() > 16 { return TestResult::discard() }
 

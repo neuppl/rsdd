@@ -275,7 +275,7 @@ mod test {
             ],
             vec![Literal::new(VarLabel::new(5), true)],
         ];
-        let cnf = Cnf::new(v);
+        let cnf = Cnf::new(&v);
         let ig = cnf.interaction_graph();
         println!("{:?}", Dot::with_config(&ig, &[Config::EdgeNoLabel]));
         let _nodes = ig
