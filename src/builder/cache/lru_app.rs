@@ -1,7 +1,7 @@
 //! Apply cache for ITEs that uses a dynamically-expanding LRU cache
 use crate::{
     builder::cache::{Ite, IteTable},
-    repr::ddnnf::DDNNFPtr,
+    repr::DDNNFPtr,
     util::lru::*,
 };
 use rustc_hash::FxHasher;

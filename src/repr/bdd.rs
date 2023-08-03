@@ -1,11 +1,11 @@
 //! Binary decision diagram representation
 
 use crate::{
-    repr::ddnnf::{DDNNFPtr, DDNNF},
-    repr::model::PartialModel,
-    repr::var_label::{Literal, VarLabel, VarSet},
-    repr::var_order::VarOrder,
-    repr::wmc::WmcParams,
+    repr::PartialModel,
+    repr::VarOrder,
+    repr::WmcParams,
+    repr::{DDNNFPtr, DDNNF},
+    repr::{Literal, VarLabel, VarSet},
     util::semirings::ExpectedUtility,
     util::semirings::{BBSemiring, FiniteField, JoinSemilattice, RealSemiring},
 };
@@ -141,9 +141,9 @@ impl<'a, T: Clone, U> Fold<'a, T, U> {
     /// A mutable fold. An example of how to use this fold can be seen by collecting all VarLabels in the sub-tree referenced by a given [`BddPtr`]:
     ///
     /// ```rust
-    /// use rsdd::repr::var_label::VarLabel;
-    /// use rsdd::repr::bdd::BddPtr;
-    /// use rsdd::repr::bdd::Fold;
+    /// use rsdd::repr::VarLabel;
+    /// use rsdd::repr::BddPtr;
+    /// use rsdd::repr::Fold;
     ///
     /// pub fn variables(bdd: BddPtr) -> Vec<VarLabel> {
     ///     Fold::new(
@@ -189,8 +189,8 @@ impl<'a> BddPtr<'a> {
     /// but does not change the underlying node.
     /// ```
     /// use rsdd::repr::{
-    ///     bdd::{BddNode, BddPtr},
-    ///     var_label::VarLabel
+    ///     BddNode, BddPtr,
+    ///     VarLabel
     /// };
     ///
     /// assert_eq!(BddPtr::PtrTrue, BddPtr::PtrTrue.to_reg());
@@ -213,8 +213,8 @@ impl<'a> BddPtr<'a> {
 
     /// ```
     /// use rsdd::repr::{
-    ///     bdd::{BddNode, BddPtr},
-    ///     var_label::VarLabel
+    ///     BddNode, BddPtr,
+    ///     VarLabel
     /// };
     ///
     /// // this node represents the positive literal 0
@@ -235,8 +235,8 @@ impl<'a> BddPtr<'a> {
 
     /// ```
     /// use rsdd::repr::{
-    ///     bdd::{BddNode, BddPtr},
-    ///     var_label::VarLabel
+    ///     BddNode, BddPtr,
+    ///     VarLabel
     /// };
     ///
     /// // this node represents the positive literal 0
@@ -257,8 +257,8 @@ impl<'a> BddPtr<'a> {
 
     /// ```
     /// use rsdd::repr::{
-    ///     bdd::{BddNode, BddPtr},
-    ///     var_label::VarLabel
+    ///     BddNode, BddPtr,
+    ///     VarLabel
     /// };
     ///
     /// // this node represents the positive literal 0
@@ -279,8 +279,8 @@ impl<'a> BddPtr<'a> {
 
     /// ```
     /// use rsdd::repr::{
-    ///     bdd::{BddNode, BddPtr},
-    ///     var_label::VarLabel
+    ///     BddNode, BddPtr,
+    ///     VarLabel
     /// };
     ///
     /// // this node represents the positive literal 0
@@ -316,8 +316,8 @@ impl<'a> BddPtr<'a> {
     /// true if the BddPtr points to a constant (i.e., True or False)
     /// ```
     /// use rsdd::repr::{
-    ///     bdd::{BddNode, BddPtr},
-    ///     var_label::VarLabel
+    ///     BddNode, BddPtr,
+    ///     VarLabel
     /// };
     ///
     /// assert!(BddPtr::is_const(&BddPtr::PtrTrue));

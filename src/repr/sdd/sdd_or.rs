@@ -2,7 +2,7 @@ use crate::{
     repr::{
         sdd::SddPtr::{self, Compl, ComplBDD, PtrFalse, PtrTrue, Reg, Var, BDD},
         vtree::{VTreeIndex, VTreeManager},
-        wmc::WmcParams,
+        WmcParams,
     },
     util::semirings::FiniteField,
 };

@@ -1,9 +1,8 @@
 use crate::{
     repr::{
         sdd::SddPtr,
-        var_label::VarLabel,
         vtree::{VTreeIndex, VTreeManager},
-        wmc::WmcParams,
+        VarLabel, WmcParams,
     },
     util::semirings::FiniteField,
 };

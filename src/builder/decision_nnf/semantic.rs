@@ -1,12 +1,7 @@
 use crate::{
     backing_store::BackedRobinhoodTable,
     builder::decision_nnf::builder::{DecisionNNFBuilder, DecisionNNFBuilderStats},
-    repr::{
-        bdd::{BddNode, BddPtr},
-        ddnnf::{create_semantic_hash_map, DDNNFPtr},
-        var_order::VarOrder,
-        wmc::WmcParams,
-    },
+    repr::{create_semantic_hash_map, BddNode, BddPtr, DDNNFPtr, VarOrder, WmcParams},
     util::semirings::FiniteField,
 };
 use rustc_hash::FxHasher;
@@ -115,7 +110,7 @@ mod tests {
             builder::DecisionNNFBuilder, semantic::SemanticDecisionNNFBuilder,
         },
         constants::primes,
-        repr::{cnf::Cnf, ddnnf::DDNNFPtr, var_order::VarOrder},
+        repr::{Cnf, DDNNFPtr, VarOrder},
     };
 
     #[test]

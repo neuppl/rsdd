@@ -5,13 +5,7 @@ use crate::{
         cache::{Ite, IteTable},
         BottomUpBuilder,
     },
-    repr::{
-        bdd::{BddNode, BddPtr},
-        ddnnf::DDNNFPtr,
-        model::PartialModel,
-        var_label::VarLabel,
-        var_order::VarOrder,
-    },
+    repr::{BddNode, BddPtr, DDNNFPtr, PartialModel, VarLabel, VarOrder},
 };
 use std::cell::RefCell;
 
@@ -319,13 +313,13 @@ mod tests {
     use std::collections::HashMap;
 
     use crate::builder::BottomUpBuilder;
-    use crate::repr::wmc::WmcParams;
+    use crate::repr::WmcParams;
     use crate::util::semirings::{FiniteField, RealSemiring};
-    use crate::{builder::cache::AllIteTable, repr::ddnnf::DDNNFPtr};
+    use crate::{builder::cache::AllIteTable, repr::DDNNFPtr};
 
     use crate::{
         builder::bdd::robdd::RobddBuilder,
-        repr::{bdd::BddPtr, cnf::Cnf, var_label::VarLabel},
+        repr::{BddPtr, Cnf, VarLabel},
     };
 
     // check that (a \/ b) /\ a === a

@@ -3,7 +3,7 @@ use std::{fs, time::Instant};
 use clap::Parser;
 use rsdd::{
     builder::{bdd::RobddBuilder, cache::LruIteTable, BottomUpBuilder},
-    repr::{bdd::BddPtr, logical_expr::LogicalExpr, var_label::VarLabel, var_order::VarOrder},
+    repr::{BddPtr, LogicalExpr, VarLabel, VarOrder},
     serialize::{BDDSerializer, LogicalSExpr},
 };
 use serde::{Deserialize, Serialize};
