@@ -8,11 +8,7 @@ use rayon::prelude::*;
 use rsdd::{
     builder::{parallel::SemanticBddBuilder, BottomUpBuilder},
     constants::primes,
-    repr::{
-        cnf::Cnf,
-        ddnnf::{create_semantic_hash_map, DDNNFPtr},
-        var_order::VarOrder,
-    },
+    repr::{create_semantic_hash_map, Cnf, DDNNFPtr, VarOrder},
 };
 
 #[derive(Parser, Debug)]

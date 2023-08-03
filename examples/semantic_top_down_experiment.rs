@@ -6,10 +6,7 @@ use rsdd::{
         DecisionNNFBuilder, SemanticDecisionNNFBuilder, StandardDecisionNNFBuilder,
     },
     constants::primes,
-    repr::{
-        bdd::BddPtr, cnf::Cnf, ddnnf::DDNNFPtr, var_label::VarLabel, var_order::VarOrder,
-        wmc::WmcParams,
-    },
+    repr::{BddPtr, Cnf, DDNNFPtr, VarLabel, VarOrder, WmcParams},
     util::semirings::RealSemiring,
 };
 

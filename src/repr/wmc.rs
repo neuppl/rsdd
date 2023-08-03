@@ -1,5 +1,5 @@
 use crate::{
-    repr::var_label::{Literal, VarLabel},
+    repr::{Literal, VarLabel},
     util::semirings::Semiring,
 };
 use core::fmt::Debug;
@@ -19,8 +19,8 @@ impl<T: Semiring> WmcParams<T> {
     /// Parametrize a weighted model count (over a semiring) with default weights.
     /// The weights are a mapping from variables to (negative, positive) weights.
     /// ```
-    /// use rsdd::repr::var_label::{Literal, VarLabel};
-    /// use rsdd::repr::wmc::WmcParams;
+    /// use rsdd::repr::{Literal, VarLabel};
+    /// use rsdd::repr::WmcParams;
     /// use rsdd::util::semirings::{Semiring, RealSemiring};
     /// use std::collections::HashMap;
     ///
@@ -52,8 +52,8 @@ impl<T: Semiring> WmcParams<T> {
 
     /// get the weight of an asignment
     /// ```
-    /// use rsdd::repr::var_label::{Literal, VarLabel};
-    /// use rsdd::repr::wmc::WmcParams;
+    /// use rsdd::repr::{Literal, VarLabel};
+    /// use rsdd::repr::WmcParams;
     /// use rsdd::util::semirings::{Semiring, RealSemiring};
     /// use std::collections::HashMap;
     ///
@@ -84,8 +84,8 @@ impl<T: Semiring> WmcParams<T> {
     }
 
     /// ```
-    /// use rsdd::repr::var_label::{Literal, VarLabel};
-    /// use rsdd::repr::wmc::WmcParams;
+    /// use rsdd::repr::{Literal, VarLabel};
+    /// use rsdd::repr::WmcParams;
     /// use rsdd::util::semirings::{Semiring, RealSemiring};
     /// use std::collections::HashMap;
     ///
@@ -115,8 +115,8 @@ impl<T: Semiring> WmcParams<T> {
     }
 
     /// ```
-    /// use rsdd::repr::var_label::VarLabel;
-    /// use rsdd::repr::wmc::WmcParams;
+    /// use rsdd::repr::VarLabel;
+    /// use rsdd::repr::WmcParams;
     /// use rsdd::util::semirings::{Semiring, RealSemiring};
     /// use std::collections::HashMap;
     ///
@@ -163,7 +163,7 @@ impl<T: Semiring> Default for WmcParams<T> {
     /// Parametrize a weighted model count (over a semiring) with no default assocations;
     /// requires weights to be set before performing the count.
     /// ```
-    /// use rsdd::repr::wmc::WmcParams;
+    /// use rsdd::repr::WmcParams;
     /// use rsdd::util::semirings::{RealSemiring, FiniteField};
     ///
     /// let params = WmcParams::<RealSemiring>::default();

@@ -23,9 +23,9 @@
 //! get the value 7
 
 use crate::repr::{
-    cnf::Cnf,
     model::PartialModel,
     var_label::{Literal, VarLabel},
+    Cnf,
 };
 use bit_set::BitSet;
 

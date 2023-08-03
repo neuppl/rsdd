@@ -8,10 +8,10 @@ use rsdd::builder::bdd::RobddBuilder;
 use rsdd::builder::cache::AllIteTable;
 use rsdd::builder::sdd::{CompressionSddBuilder, SddBuilder};
 use rsdd::builder::BottomUpBuilder;
-use rsdd::repr::bdd::BddPtr;
-use rsdd::repr::cnf::Cnf;
-use rsdd::repr::var_label::VarLabel;
-use rsdd::repr::vtree::VTree;
+use rsdd::repr::BddPtr;
+use rsdd::repr::Cnf;
+use rsdd::repr::VTree;
+use rsdd::repr::VarLabel;
 use rsdd::*;
 
 /// A list of canonical forms in DIMACS form. The goal of these tests is to ensure that caching
@@ -281,15 +281,15 @@ mod test_bdd_builder {
     use rsdd::builder::sdd::SddBuilder;
     use rsdd::builder::BottomUpBuilder;
     use rsdd::constants::primes;
-    use rsdd::repr::bdd::BddPtr;
-    use rsdd::repr::cnf::Cnf;
-    use rsdd::repr::ddnnf::{create_semantic_hash_map, DDNNFPtr};
-    use rsdd::repr::dtree::DTree;
-    use rsdd::repr::model::PartialModel;
-    use rsdd::repr::var_label::VarLabel;
-    use rsdd::repr::var_order::VarOrder;
-    use rsdd::repr::vtree::VTree;
-    use rsdd::repr::wmc::WmcParams;
+    use rsdd::repr::BddPtr;
+    use rsdd::repr::Cnf;
+    use rsdd::repr::DTree;
+    use rsdd::repr::PartialModel;
+    use rsdd::repr::VTree;
+    use rsdd::repr::VarLabel;
+    use rsdd::repr::VarOrder;
+    use rsdd::repr::WmcParams;
+    use rsdd::repr::{create_semantic_hash_map, DDNNFPtr};
     use rsdd::util::semirings::ExpectedUtility;
     use rsdd::util::semirings::RealSemiring;
     use rsdd::util::semirings::Semiring;
@@ -421,7 +421,7 @@ mod test_bdd_builder {
             let builder2 = StandardDecisionNNFBuilder::new(order);
             let dnnf = builder2.compile_cnf_topdown(&c1);
 
-            let bddwmc = super::repr::wmc::WmcParams::new(weight_map);
+            let bddwmc = super::repr::WmcParams::new(weight_map);
             let bddres = cnf1.wmc(builder.order(),  &bddwmc);
             let dnnfres = dnnf.wmc(builder.order(), &bddwmc);
             let eps = f64::abs(bddres.0 - dnnfres.0) < 0.0001;
@@ -442,7 +442,7 @@ mod test_bdd_builder {
             let weight_map : HashMap<VarLabel, (RealSemiring, RealSemiring)> = HashMap::from_iter(
                 (0..16).map(|x| (VarLabel::new(x as u64), (RealSemiring(0.3), RealSemiring(0.7)))));
 
-            let bddwmc = super::repr::wmc::WmcParams::new(weight_map);
+            let bddwmc = super::repr::WmcParams::new(weight_map);
             let cnf1 = builder1.compile_cnf(&c1);
             let cnf2 = builder2.compile_cnf(&c1);
             let wmc1 = cnf1.wmc(builder1.order(), &bddwmc);
@@ -453,7 +453,7 @@ mod test_bdd_builder {
 
     quickcheck! {
         fn marginal_map(c1: Cnf) -> TestResult {
-            use rsdd::repr::model::PartialModel;
+            use rsdd::repr::PartialModel;
             // constrain the size
             if c1.num_vars() < 5 || c1.num_vars() > 8 { return TestResult::discard() }
             if c1.clauses().len() > 14 { return TestResult::discard() }
@@ -537,7 +537,7 @@ mod test_bdd_builder {
 
     quickcheck! {
         fn meu(c1: Cnf) -> TestResult {
-            use rsdd::repr::model::PartialModel;
+            use rsdd::repr::PartialModel;
             let n = c1.num_vars();
             // constrain the size, make BDD
             if !(5..=8).contains(&n) { return TestResult::discard() }
@@ -676,15 +676,15 @@ mod test_sdd_builder {
     use rsdd::builder::sdd::{CompressionSddBuilder, SddBuilder, SemanticSddBuilder};
     use rsdd::builder::BottomUpBuilder;
     use rsdd::constants::primes;
-    use rsdd::repr::bdd::BddPtr;
-    use rsdd::repr::cnf::Cnf;
-    use rsdd::repr::ddnnf::{create_semantic_hash_map, DDNNFPtr};
-    use rsdd::repr::dtree::DTree;
-    use rsdd::repr::sdd::SddPtr;
-    use rsdd::repr::var_label::{Literal, VarLabel};
-    use rsdd::repr::var_order::VarOrder;
-    use rsdd::repr::vtree::VTree;
-    use rsdd::repr::wmc::WmcParams;
+    use rsdd::repr::BddPtr;
+    use rsdd::repr::Cnf;
+    use rsdd::repr::DTree;
+    use rsdd::repr::SddPtr;
+    use rsdd::repr::VTree;
+    use rsdd::repr::VarOrder;
+    use rsdd::repr::WmcParams;
+    use rsdd::repr::{create_semantic_hash_map, DDNNFPtr};
+    use rsdd::repr::{Literal, VarLabel};
     use rsdd::util::semirings::FiniteField;
     use std::collections::HashMap;
 
@@ -1048,7 +1048,7 @@ mod test_sdd_builder {
 
     quickcheck! {
         fn vtree_validity_from_dtree(cnf: Cnf) -> bool {
-            let dtree = rsdd::repr::dtree::DTree::from_cnf(&cnf, &cnf.min_fill_order());
+            let dtree = rsdd::repr::DTree::from_cnf(&cnf, &cnf.min_fill_order());
             let vtree = VTree::from_dtree(&dtree).unwrap();
             VTree::is_valid_vtree(&vtree)
         }
@@ -1088,9 +1088,7 @@ mod test_dnnf_builder {
             DecisionNNFBuilder, SemanticDecisionNNFBuilder, StandardDecisionNNFBuilder,
         },
         constants::primes,
-        repr::{
-            cnf::Cnf, ddnnf::DDNNFPtr, var_label::VarLabel, var_order::VarOrder, wmc::WmcParams,
-        },
+        repr::{Cnf, DDNNFPtr, VarLabel, VarOrder, WmcParams},
         util::semirings::RealSemiring,
     };
 
@@ -1204,12 +1202,7 @@ mod test_parallel_semantic_builder {
             bdd::RobddBuilder, cache::AllIteTable, parallel::SemanticBddBuilder, BottomUpBuilder,
         },
         constants::primes,
-        repr::{
-            bdd::BddPtr,
-            cnf::Cnf,
-            ddnnf::{create_semantic_hash_map, DDNNFPtr},
-            var_order::VarOrder,
-        },
+        repr::{create_semantic_hash_map, BddPtr, Cnf, DDNNFPtr, VarOrder},
     };
 
     quickcheck! {

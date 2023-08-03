@@ -3,12 +3,7 @@ use rustc_hash::FxHashMap;
 use crate::{
     builder::TopDownBuilder,
     repr::{
-        bdd::{BddNode, BddPtr},
-        cnf::Cnf,
-        ddnnf::DDNNFPtr,
-        unit_prop::{DecisionResult, SATSolver},
-        var_label::{Literal, VarLabel},
-        var_order::VarOrder,
+        BddNode, BddPtr, Cnf, DDNNFPtr, DecisionResult, Literal, SATSolver, VarLabel, VarOrder,
     },
 };
 

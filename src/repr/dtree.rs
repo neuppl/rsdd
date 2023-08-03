@@ -42,7 +42,7 @@
 //! The *cut-width* of a dtree is the size of the largest cutset. An effective
 //! dtree is one that does not have large cutwidth.
 
-use crate::repr::{cnf::Cnf, var_label::Literal, var_label::VarSet, var_order::VarOrder};
+use crate::repr::{var_label::Literal, var_label::VarSet, Cnf, VarOrder};
 use serde::Serialize;
 
 #[derive(Clone, Debug, Serialize)]
@@ -234,6 +234,6 @@ fn test_dtree() {
     let order = VarOrder::linear_order(cnf.num_vars());
     let dtree = DTree::from_cnf(&cnf, &order);
     println!("{:#?}", dtree);
-    println!("{:#?}", crate::repr::vtree::VTree::from_dtree(&dtree));
+    println!("{:#?}", crate::repr::VTree::from_dtree(&dtree));
     // assert!(false);
 }

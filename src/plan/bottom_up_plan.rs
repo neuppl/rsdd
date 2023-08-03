@@ -1,7 +1,7 @@
 //! Represents a deferred BDD computation
 //! BDD plans are executed according to an in-order left-first depth-first traversal of the tree
 
-use crate::repr::{dtree::DTree, var_label::VarLabel};
+use crate::repr::{DTree, VarLabel};
 
 #[derive(Debug, Clone)]
 pub enum BottomUpPlan {

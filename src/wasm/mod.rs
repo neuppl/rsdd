@@ -6,10 +6,7 @@ use crate::{
         BottomUpBuilder,
     },
     constants::primes,
-    repr::{
-        bdd::BddPtr, cnf::Cnf, ddnnf::DDNNFPtr, dtree::DTree, var_label::VarLabel,
-        var_order::VarOrder, vtree::VTree, wmc::WmcParams,
-    },
+    repr::{BddPtr, Cnf, DDNNFPtr, DTree, VTree, VarLabel, VarOrder, WmcParams},
     serialize::{BDDSerializer, SDDSerializer, VTreeSerializer},
     util::semirings::FiniteField,
 };

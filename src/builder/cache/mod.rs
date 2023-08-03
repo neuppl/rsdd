@@ -1,4 +1,4 @@
-use crate::repr::ddnnf::DDNNFPtr;
+use crate::repr::DDNNFPtr;
 
 mod all_app;
 mod ite;

@@ -5,12 +5,8 @@ use crate::{
         BottomUpBuilder,
     },
     repr::{
-        cnf::Cnf,
-        ddnnf::{create_semantic_hash_map, DDNNFPtr},
-        semantic_bdd::{SemanticBddNode, SemanticBddPtr},
-        var_label::VarLabel,
-        var_order::VarOrder,
-        wmc::WmcParams,
+        create_semantic_hash_map, Cnf, DDNNFPtr, SemanticBddNode, SemanticBddPtr, VarLabel,
+        VarOrder, WmcParams,
     },
     util::semirings::{FiniteField, Semiring},
 };
@@ -469,7 +465,7 @@ mod test {
     use crate::{
         builder::BottomUpBuilder,
         constants::primes,
-        repr::{var_label::VarLabel, var_order::VarOrder},
+        repr::{VarLabel, VarOrder},
     };
 
     use super::SemanticBddBuilder;

@@ -41,7 +41,7 @@
 //! // }
 //! ```
 
-use crate::repr::vtree::VTree;
+use crate::repr::VTree;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum SerVTree {

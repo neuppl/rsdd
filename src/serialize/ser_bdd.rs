@@ -2,10 +2,7 @@
 
 use std::collections::HashMap;
 
-use crate::repr::{
-    bdd::{BddNode, BddPtr},
-    ddnnf::DDNNFPtr,
-};
+use crate::repr::{BddNode, BddPtr, DDNNFPtr};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum SerBDDPtr {

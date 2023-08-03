@@ -2,7 +2,7 @@
 
 use crate::{
     builder::cache::{Ite, IteTable},
-    repr::ddnnf::DDNNFPtr,
+    repr::DDNNFPtr,
 };
 use rustc_hash::FxHashMap;
 
