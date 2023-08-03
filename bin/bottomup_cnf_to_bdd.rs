@@ -4,7 +4,7 @@ use clap::Parser;
 use rsdd::{
     builder::{bdd::RobddBuilder, cache::LruIteTable, BottomUpBuilder},
     plan::BottomUpPlan,
-    repr::{bdd::BddPtr, cnf::Cnf, dtree::DTree},
+    repr::{BddPtr, Cnf, DTree},
     serialize::BDDSerializer,
 };
 

@@ -9,7 +9,7 @@ pub mod sdd;
 
 use crate::{
     plan::BottomUpPlan,
-    repr::{cnf::Cnf, logical_expr::LogicalExpr, var_label::VarLabel},
+    repr::{Cnf, LogicalExpr, VarLabel},
 };
 
 pub trait BottomUpBuilder<'a, Ptr> {

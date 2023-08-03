@@ -9,7 +9,7 @@ use crate::{
         ddnnf::{DDNNFPtr, DDNNF},
         var_label::{VarLabel, VarSet},
         vtree::{VTreeIndex, VTreeManager},
-        wmc::WmcParams,
+        WmcParams,
     },
     util::semirings::FiniteField,
 };
@@ -408,10 +408,8 @@ fn is_compressed_trivial() {
 
 #[test]
 fn is_compressed_simple_bdd() {
-    let vtree = crate::repr::vtree::VTree::even_split(
-        &[VarLabel::new(0), VarLabel::new(1), VarLabel::new(2)],
-        1,
-    );
+    let vtree =
+        crate::repr::VTree::even_split(&[VarLabel::new(0), VarLabel::new(1), VarLabel::new(2)], 1);
     let vtree_manager = VTreeManager::new(vtree);
     let a = SddPtr::Var(VarLabel::new(0), true);
     let b = SddPtr::Var(VarLabel::new(1), false);
@@ -429,10 +427,8 @@ fn is_compressed_simple_bdd() {
 
 #[test]
 fn is_compressed_simple_bdd_duplicate() {
-    let vtree = crate::repr::vtree::VTree::even_split(
-        &[VarLabel::new(0), VarLabel::new(1), VarLabel::new(2)],
-        1,
-    );
+    let vtree =
+        crate::repr::VTree::even_split(&[VarLabel::new(0), VarLabel::new(1), VarLabel::new(2)], 1);
     let vtree_manager = VTreeManager::new(vtree);
     let a = SddPtr::Var(VarLabel::new(0), true);
     let mut binary_sdd = BinarySDD::new(
@@ -459,7 +455,7 @@ fn is_trimmed_trivial() {
 fn is_trimmed_simple_demorgan() {
     use crate::builder::sdd::CompressionSddBuilder;
     use crate::builder::BottomUpBuilder;
-    let builder = CompressionSddBuilder::new(crate::repr::vtree::VTree::even_split(
+    let builder = CompressionSddBuilder::new(crate::repr::VTree::even_split(
         &[
             VarLabel::new(0),
             VarLabel::new(1),
@@ -491,7 +487,7 @@ fn is_canonical_trivial() {
 fn is_canonical_simple_demorgan() {
     use crate::builder::sdd::CompressionSddBuilder;
     use crate::builder::BottomUpBuilder;
-    let builder = CompressionSddBuilder::new(crate::repr::vtree::VTree::even_split(
+    let builder = CompressionSddBuilder::new(crate::repr::VTree::even_split(
         &[
             VarLabel::new(0),
             VarLabel::new(1),

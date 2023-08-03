@@ -4,7 +4,7 @@ use clap::Parser;
 use rand::Rng;
 use rsdd::{
     builder::{bdd::RobddBuilder, cache::AllIteTable, BottomUpBuilder},
-    repr::{bdd::BddPtr, cnf::Cnf, var_label::VarLabel, wmc::WmcParams},
+    repr::{BddPtr, Cnf, VarLabel, WmcParams},
     util::semirings::RealSemiring,
 };
 

@@ -4,11 +4,7 @@
 use crate::{
     builder::{cache::Ite, BottomUpBuilder},
     repr::{
-        cnf::Cnf,
-        ddnnf::DDNNFPtr,
-        sdd::{BinarySDD, SddAnd, SddOr, SddPtr},
-        var_label::VarLabel,
-        vtree::{VTree, VTreeIndex, VTreeManager},
+        BinarySDD, Cnf, DDNNFPtr, SddAnd, SddOr, SddPtr, VTree, VTreeIndex, VTreeManager, VarLabel,
     },
 };
 use std::cmp::Ordering;

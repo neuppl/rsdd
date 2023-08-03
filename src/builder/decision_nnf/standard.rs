@@ -2,11 +2,7 @@ use crate::{
     backing_store::{BackedRobinhoodTable, UniqueTable},
     builder::decision_nnf::builder::{DecisionNNFBuilder, DecisionNNFBuilderStats},
     constants::primes,
-    repr::{
-        bdd::{BddNode, BddPtr},
-        ddnnf::{create_semantic_hash_map, DDNNFPtr},
-        var_order::VarOrder,
-    },
+    repr::{create_semantic_hash_map, BddNode, BddPtr, DDNNFPtr, VarOrder},
 };
 use std::{cell::RefCell, collections::HashSet};
 
@@ -72,7 +68,7 @@ mod tests {
         builder::decision_nnf::{
             builder::DecisionNNFBuilder, standard::StandardDecisionNNFBuilder,
         },
-        repr::{cnf::Cnf, ddnnf::DDNNFPtr, var_order::VarOrder},
+        repr::{Cnf, DDNNFPtr, VarOrder},
     };
 
     #[test]
