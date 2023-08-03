@@ -579,7 +579,7 @@ fn test_unit_propagate_3() {
 //         ],
 //     ];
 
-//     let cnf = Cnf::new(v);
+//     let cnf = Cnf::new(&v);
 //     let up = UnitPropagate::new(&cnf).unwrap();
 //     let assgn = up.get_assgn().get_vec();
 //     assert_eq!(assgn[0], Some(false));
@@ -596,7 +596,7 @@ fn test_unit_propagate_3() {
 //         ],
 //     ];
 
-//     let cnf = Cnf::new(v);
+//     let cnf = Cnf::new(&v);
 //     let mut up = UnitPropagate::new(&cnf).unwrap();
 //     let v1 = up.decide(Literal::new(VarLabel::new(0), false));
 //     assert!(v1);
@@ -611,7 +611,7 @@ fn test_unit_propagate_3() {
 // fn test_unit_propagate_5() {
 //     let v = vec![vec![Literal::new(VarLabel::new(1), true), Literal::new(VarLabel::new(3), true)],
 //                  vec![Literal::new(VarLabel::new(3), false), Literal::new(VarLabel::new(2), true), Literal::new(VarLabel::new(4), true)]];
-//     let cnf = Cnf::new(v);
+//     let cnf = Cnf::new(&v);
 //     let mut up = UnitPropagate::new(&cnf).unwrap();
 //     let v1 = up.decide(Literal::new(VarLabel::new(3), true));
 //     assert!(v1);

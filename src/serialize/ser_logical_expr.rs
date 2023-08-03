@@ -8,6 +8,9 @@ pub enum LogicalSExpr {
     Not(Box<LogicalSExpr>),
     Or(Box<LogicalSExpr>, Box<LogicalSExpr>),
     And(Box<LogicalSExpr>, Box<LogicalSExpr>),
+    Iff(Box<LogicalSExpr>, Box<LogicalSExpr>),
+    Xor(Box<LogicalSExpr>, Box<LogicalSExpr>),
+    Ite(Box<LogicalSExpr>, Box<LogicalSExpr>, Box<LogicalSExpr>),
 }
 
 impl LogicalSExpr {
@@ -27,9 +30,20 @@ impl LogicalSExpr {
             LogicalSExpr::True | LogicalSExpr::False => HashSet::new(),
             LogicalSExpr::Var(s) => HashSet::from([s]),
             LogicalSExpr::Not(l) => l.unique_variables(),
-            LogicalSExpr::Or(a, b) | LogicalSExpr::And(a, b) => a
+            LogicalSExpr::Or(a, b)
+            | LogicalSExpr::And(a, b)
+            | LogicalSExpr::Iff(a, b)
+            | LogicalSExpr::Xor(a, b) => a
                 .unique_variables()
                 .union(&b.unique_variables())
+                .cloned()
+                .collect::<HashSet<&String>>(),
+            LogicalSExpr::Ite(a, b, c) => a
+                .unique_variables()
+                .union(&b.unique_variables())
+                .cloned()
+                .collect::<HashSet<&String>>()
+                .union(&c.unique_variables())
                 .cloned()
                 .collect::<HashSet<&String>>(),
         }
@@ -114,6 +128,31 @@ fn logical_expression_deserialization_boxed() {
             Box::new(LogicalSExpr::Var(String::from("Y")))
         )
     );
+
+    assert_eq!(
+        serde_sexpr::from_str::<LogicalSExpr>("(Iff (Var X) (Var Y))").unwrap(),
+        LogicalSExpr::Iff(
+            Box::new(LogicalSExpr::Var(String::from("X"))),
+            Box::new(LogicalSExpr::Var(String::from("Y")))
+        )
+    );
+
+    assert_eq!(
+        serde_sexpr::from_str::<LogicalSExpr>("(Xor (Var X) (Var Y))").unwrap(),
+        LogicalSExpr::Xor(
+            Box::new(LogicalSExpr::Var(String::from("X"))),
+            Box::new(LogicalSExpr::Var(String::from("Y")))
+        )
+    );
+
+    assert_eq!(
+        serde_sexpr::from_str::<LogicalSExpr>("(Ite (Var X) (Var Y) (Var Z))").unwrap(),
+        LogicalSExpr::Ite(
+            Box::new(LogicalSExpr::Var(String::from("X"))),
+            Box::new(LogicalSExpr::Var(String::from("Y"))),
+            Box::new(LogicalSExpr::Var(String::from("Z")))
+        )
+    );
 }
 
 #[test]
@@ -128,7 +167,7 @@ fn logical_expression_unique_variables_trivial() {
 #[test]
 fn logical_expression_unique_variables_handles_duplicates_and_nesting() {
     let expr =
-        serde_sexpr::from_str::<LogicalSExpr>("(Or (Var X) (Or (Not (Var X)) (Var Y)))").unwrap();
+        serde_sexpr::from_str::<LogicalSExpr>("(Or (Var X) (Or (Not (Var X)) (Xor (Iff (Var X) (Var Y)) (Ite (Var Y) (Not (Var X)) (Not (Var Y))))))").unwrap();
     let vars = expr.unique_variables();
 
     assert!(vars.len() == 2);

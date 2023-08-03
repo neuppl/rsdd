@@ -58,6 +58,7 @@ pub trait BottomUpBuilder<'a, Ptr> {
         let var = self.var(lbl, true);
         let iff = self.iff(var, g);
         let a = self.and(iff, f);
+
         self.exists(a, lbl)
     }
 
