@@ -3,7 +3,7 @@
 use crate::{
     repr::{
         var_label::{VarLabel, VarSet},
-        wmc::WmcParams,
+        WmcParams,
     },
     util::semirings::{BooleanSemiring, FiniteField, Semiring},
 };

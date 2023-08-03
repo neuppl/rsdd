@@ -5,10 +5,8 @@ use crate::{
         sdd::{SddBuilder, SddBuilderStats},
     },
     repr::{
-        ddnnf::{create_semantic_hash_map, DDNNFPtr},
-        sdd::{BinarySDD, SddAnd, SddOr, SddPtr},
-        vtree::{VTree, VTreeIndex, VTreeManager},
-        wmc::WmcParams,
+        create_semantic_hash_map, BinarySDD, DDNNFPtr, SddAnd, SddOr, SddPtr, VTree, VTreeIndex,
+        VTreeManager, WmcParams,
     },
     util::semirings::FiniteField,
 };
@@ -238,7 +236,7 @@ impl<'a, const P: u128> SemanticSddBuilder<'a, P> {
 fn prob_equiv_sdd_demorgan() {
     use crate::builder::BottomUpBuilder;
     use crate::constants::primes;
-    use crate::repr::var_label::VarLabel;
+    use crate::repr::VarLabel;
     use crate::util::semirings::FiniteField;
 
     let mut builder = SemanticSddBuilder::<{ primes::U32_SMALL }>::new(VTree::even_split(

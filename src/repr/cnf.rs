@@ -4,8 +4,7 @@ use crate::{
     repr::{
         model::PartialModel,
         var_label::{Literal, VarLabel},
-        var_order::VarOrder,
-        wmc::WmcParams,
+        VarOrder, WmcParams,
     },
     util::semirings::Semiring,
 };

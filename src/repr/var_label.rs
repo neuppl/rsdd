@@ -43,7 +43,7 @@ BITFIELD!(Literal data : u64 [
 impl Literal {
     /// create a new Literal, which is a logical variable initialized with a polarity.
     /// ```
-    /// use rsdd::repr::var_label::{Literal, VarLabel};
+    /// use rsdd::repr::{Literal, VarLabel};
     ///
     /// let lit = Literal::new(VarLabel::new(0), true);
     /// ```
@@ -55,7 +55,7 @@ impl Literal {
     }
 
     /// ```
-    /// use rsdd::repr::var_label::{Literal, VarLabel};
+    /// use rsdd::repr::{Literal, VarLabel};
     ///
     /// let lit = Literal::new(VarLabel::new(0), true);
     ///
@@ -66,7 +66,7 @@ impl Literal {
     }
 
     /// ```
-    /// use rsdd::repr::var_label::{Literal, VarLabel};
+    /// use rsdd::repr::{Literal, VarLabel};
     ///
     /// let lit1 = Literal::new(VarLabel::new(0), true);
     /// let lit2 = Literal::new(VarLabel::new(0), false);
@@ -79,7 +79,7 @@ impl Literal {
     }
 
     /// ```
-    /// use rsdd::repr::var_label::{Literal, VarLabel};
+    /// use rsdd::repr::{Literal, VarLabel};
     ///
     /// let lit1 = Literal::new(VarLabel::new(0), true);
     /// let lit2 = Literal::new(VarLabel::new(0), true);
@@ -91,7 +91,7 @@ impl Literal {
     }
 
     /// ```
-    /// use rsdd::repr::var_label::{Literal, VarLabel};
+    /// use rsdd::repr::{Literal, VarLabel};
     ///
     /// let lit1 = Literal::new(VarLabel::new(0), true);
     /// let lit2 = Literal::new(VarLabel::new(0), false);
@@ -103,7 +103,7 @@ impl Literal {
     }
 
     /// ```
-    /// use rsdd::repr::var_label::{Literal, VarLabel};
+    /// use rsdd::repr::{Literal, VarLabel};
     ///
     /// let lit1 = Literal::new(VarLabel::new(0), true);
     /// let lit2 = Literal::new(VarLabel::new(0), false);
@@ -155,7 +155,7 @@ impl Display for VarSet {
 impl VarSet {
     /// create a new VarSet with no items in it
     /// ```
-    /// use rsdd::repr::var_label::VarSet;
+    /// use rsdd::repr::VarSet;
     ///
     /// let s = VarSet::new();
     ///
@@ -173,7 +173,7 @@ impl VarSet {
 
     /// unions self with other in-place
     /// ```
-    /// use rsdd::repr::var_label::{VarLabel, VarSet};
+    /// use rsdd::repr::{VarLabel, VarSet};
     ///
     /// let mut s1 = VarSet::new();
     /// let mut s2 = VarSet::new();
@@ -199,7 +199,7 @@ impl VarSet {
 
     /// unions self with other, returning a new VarSet
     /// ```
-    /// use rsdd::repr::var_label::{VarLabel, VarSet};
+    /// use rsdd::repr::{VarLabel, VarSet};
     ///
     /// let mut s1 = VarSet::new();
     /// let mut s2 = VarSet::new();
@@ -222,7 +222,7 @@ impl VarSet {
 
     /// returns a new VarSet = self \ other, where "\"" is the "set minus" operator
     /// ```
-    /// use rsdd::repr::var_label::{VarLabel, VarSet};
+    /// use rsdd::repr::{VarLabel, VarSet};
     ///
     /// let mut s1 = VarSet::new();
     /// let mut s2 = VarSet::new();
@@ -244,7 +244,7 @@ impl VarSet {
     }
 
     /// ```
-    /// use rsdd::repr::var_label::{VarLabel, VarSet};
+    /// use rsdd::repr::{VarLabel, VarSet};
     ///
     /// let mut s1 = VarSet::new();
     ///
@@ -259,7 +259,7 @@ impl VarSet {
     }
 
     /// ```
-    /// use rsdd::repr::var_label::{VarLabel, VarSet};
+    /// use rsdd::repr::{VarLabel, VarSet};
     ///
     /// let mut s1 = VarSet::new();
     ///
@@ -292,7 +292,7 @@ impl VarSet {
     }
 
     /// ```
-    /// use rsdd::repr::var_label::VarSet;
+    /// use rsdd::repr::VarSet;
     ///
     /// let s = VarSet::new();
     ///

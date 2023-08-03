@@ -5,10 +5,7 @@ use rsdd::{
         BottomUpBuilder,
     },
     constants::primes,
-    repr::{
-        cnf::Cnf, ddnnf::DDNNFPtr, dtree::DTree, sdd::SddPtr, var_label::VarLabel,
-        var_order::VarOrder, vtree::VTree,
-    },
+    repr::{Cnf, DDNNFPtr, DTree, SddPtr, VTree, VarLabel, VarOrder},
 };
 use std::{
     fmt::Display,

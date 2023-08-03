@@ -1,6 +1,6 @@
 //! A representation of an arbitrary logical formula
 
-use crate::{repr::var_label::VarLabel, serialize::LogicalSExpr};
+use crate::{repr::VarLabel, serialize::LogicalSExpr};
 use dimacs::*;
 use rand::{self, rngs::ThreadRng, Rng};
 use std::collections::HashMap;
@@ -30,7 +30,7 @@ impl LogicalExpr {
     /// ...
     /// Where negative indicates a false variable, 0 is line end
     /// ```
-    /// use rsdd::repr::logical_expr::LogicalExpr;
+    /// use rsdd::repr::LogicalExpr;
     ///
     /// static CNF: &str = r#"
     /// p cnf 3 1
@@ -81,7 +81,7 @@ impl LogicalExpr {
     }
 
     /// ```
-    /// use rsdd::repr::logical_expr::LogicalExpr;
+    /// use rsdd::repr::LogicalExpr;
     /// use rsdd::serialize::LogicalSExpr;
     ///
     /// // this string represents X XOR Y. it exercises each branch of the match statement
@@ -183,8 +183,8 @@ impl LogicalExpr {
 
     /// Evaluates a boolean expression.
     /// ```
-    /// use rsdd::repr::logical_expr::LogicalExpr;
-    /// use rsdd::repr::var_label::VarLabel;
+    /// use rsdd::repr::LogicalExpr;
+    /// use rsdd::repr::VarLabel;
     /// use std::collections::HashMap;
     ///
     /// static CNF: &str = r#"

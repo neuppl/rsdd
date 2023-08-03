@@ -2,13 +2,13 @@
 // Minsung's submission to DRAGSTERS 2023.
 
 extern crate rsdd;
-use crate::repr::var_label::VarLabel;
+use crate::repr::VarLabel;
 use rsdd::builder::bdd::{BddBuilder, RobddBuilder};
 use rsdd::builder::cache::AllIteTable;
 use rsdd::builder::BottomUpBuilder;
-use rsdd::repr::bdd::BddPtr;
-use rsdd::repr::ddnnf::DDNNFPtr;
-use rsdd::repr::wmc::WmcParams;
+use rsdd::repr::BddPtr;
+use rsdd::repr::DDNNFPtr;
+use rsdd::repr::WmcParams;
 use rsdd::util::semirings::{ExpectedUtility, Semiring};
 use rsdd::*;
 use std::collections::HashMap;

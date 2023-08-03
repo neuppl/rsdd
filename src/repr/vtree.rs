@@ -58,9 +58,9 @@ impl VTree {
 
     /// produces a left-linear vtree with the variable order given by `order`
     /// ```
-    /// # use rsdd::repr::var_label::VarLabel;
-    /// # use rsdd::repr::var_order::VarOrder;
-    /// # use rsdd::repr::vtree::VTree;
+    /// # use rsdd::repr::VarLabel;
+    /// # use rsdd::repr::VarOrder;
+    /// # use rsdd::repr::VTree;
     ///
     /// let v0 = VarLabel::new_usize(0);
     /// let v1 = VarLabel::new_usize(1);
@@ -91,9 +91,9 @@ impl VTree {
 
     /// produces a right-linear vtree with the variable order given by `order`
     /// ```
-    /// # use rsdd::repr::var_label::VarLabel;
-    /// # use rsdd::repr::var_order::VarOrder;
-    /// # use rsdd::repr::vtree::VTree;
+    /// # use rsdd::repr::VarLabel;
+    /// # use rsdd::repr::VarOrder;
+    /// # use rsdd::repr::VTree;
     ///
     /// let v0 = VarLabel::new_usize(0);
     /// let v1 = VarLabel::new_usize(1);
@@ -402,7 +402,7 @@ fn from_dtree_is_valid_vtree() {
     1 2 3 4 0
     -2 -3 4 5 0
     -4 -5 6 6 0";
-    let cnf = super::cnf::Cnf::from_dimacs(cnf_input);
+    let cnf = super::Cnf::from_dimacs(cnf_input);
     let dtree = DTree::from_cnf(&cnf, &cnf.min_fill_order());
     let vtree = VTree::from_dtree(&dtree).unwrap();
     println!("{:?}", VTree::flatten_vtree(&vtree));
