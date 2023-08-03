@@ -116,7 +116,7 @@ fn multi_threaded(cnf: &Cnf, num_splits: usize) {
 
     let num_vars = cnf.num_vars();
     let map = create_semantic_hash_map(num_vars);
-    let order = VarOrder::linear_order(num_vars);
+    let order = cnf.min_fill_order();
 
     let builders: Vec<_> = split_cnf(cnf, num_splits)
         .into_par_iter()
