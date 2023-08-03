@@ -2,7 +2,7 @@
 //! in the order occur first in the BDD, starting from the root.
 //! Lower numbers occur first in the order (i.e., closer to the root)
 
-use crate::{repr::VarLabel, util};
+use crate::repr::VarLabel;
 use std::fmt::{Debug, Display};
 
 #[derive(Debug, Clone)]
@@ -19,7 +19,7 @@ impl VarOrder {
     /// Creates a new variable order (elements that occur first in the vector
     /// occur first in the order)
     pub fn new(order: Vec<VarLabel>) -> VarOrder {
-        let mut v = util::malloc_vec(order.len());
+        let mut v = vec![0; order.len()];
         let mut pos_to_var = Vec::new();
         for i in 0..order.len() {
             v[order[i].value() as usize] = i;

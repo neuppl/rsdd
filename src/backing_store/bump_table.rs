@@ -1,7 +1,7 @@
 //! A unique table based on a bump allocator and robin-hood hashing
 //! this is the primary unique table for storing all nodes
 
-use crate::{backing_store::UniqueTable, util::*};
+use crate::backing_store::UniqueTable;
 use bumpalo::Bump;
 use rustc_hash::FxHasher;
 use std::{
@@ -105,7 +105,7 @@ where
 {
     /// reserve a robin-hood table capable of holding at least `sz` elements
     pub fn new() -> BackedRobinhoodTable<'a, T> {
-        let v: Vec<HashTableElement<T>> = zero_vec(DEFAULT_SIZE);
+        let v: Vec<HashTableElement<T>> = vec![HashTableElement::default(); DEFAULT_SIZE];
 
         BackedRobinhoodTable {
             tbl: v,
@@ -135,7 +135,7 @@ where
     pub fn grow(&mut self) {
         let new_sz = (self.cap + 1).next_power_of_two();
         self.cap = new_sz;
-        let old = mem::replace(&mut self.tbl, zero_vec(new_sz));
+        let old = mem::replace(&mut self.tbl, vec![HashTableElement::default(); new_sz]);
         let c = self.cap;
         for i in old.iter() {
             propagate(&mut self.tbl, self.cap, i.clone(), (i.hash as usize) % c);
