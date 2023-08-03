@@ -591,16 +591,6 @@ where
         self.or(v1, v2)
     }
 
-    /// Compose `g` into `f` by substituting for `lbl`
-    fn compose(&'a self, f: SddPtr<'a>, lbl: VarLabel, g: SddPtr<'a>) -> SddPtr<'a> {
-        // TODO this can be optimized with a specialized implementation to make
-        // it a single traversal
-        let var = self.var(lbl, true);
-        let iff = self.iff(var, g);
-        let a = self.and(iff, f);
-        self.exists(a, lbl)
-    }
-
     /// compile an SDD from an input CNF
     fn compile_cnf(&'a self, cnf: &Cnf) -> SddPtr<'a> {
         let mut cvec: Vec<SddPtr> = Vec::with_capacity(cnf.clauses().len());

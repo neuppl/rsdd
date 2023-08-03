@@ -175,17 +175,6 @@ where
         r
     }
 
-    /// Compose `g` into `f` by substituting for `lbl`
-    fn compose(&'a self, f: BddPtr<'a>, lbl: VarLabel, g: BddPtr<'a>) -> BddPtr<'a> {
-        // TODO this can be optimized with a specialized implementation to make
-        // it a single traversal
-        let var = self.var(lbl, true);
-        let iff = self.iff(var, g);
-        let a = self.and(iff, f);
-
-        self.exists(a, lbl)
-    }
-
     /// Compile a BDD from a CNF
     fn compile_cnf(&'a self, cnf: &Cnf) -> BddPtr<'a> {
         let mut cvec: Vec<BddPtr> = Vec::with_capacity(cnf.clauses().len());
