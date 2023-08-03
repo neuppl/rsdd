@@ -24,3 +24,6 @@ pub mod serialize;
 
 #[cfg(target_arch = "wasm32")]
 pub mod wasm;
+
+mod ffi;
+pub use self::ffi::*;
