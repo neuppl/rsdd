@@ -8,7 +8,7 @@ use rayon::prelude::*;
 use rsdd::{
     builder::{parallel::SemanticBddBuilder, BottomUpBuilder},
     constants::primes,
-    repr::{create_semantic_hash_map, Cnf, DDNNFPtr, VarOrder},
+    repr::{create_semantic_hash_map, Cnf, DDNNFPtr},
 };
 
 #[derive(Parser, Debug)]
@@ -43,7 +43,7 @@ fn single_threaded(cnf: &Cnf, num_splits: usize) {
 
     let num_vars = cnf.num_vars();
     let map = create_semantic_hash_map(num_vars);
-    let order = VarOrder::linear_order(num_vars);
+    let order = cnf.min_fill_order();
 
     let builders: Vec<_> = (0..num_splits)
         .map(|_| {
@@ -156,6 +156,7 @@ fn multi_threaded(cnf: &Cnf, num_splits: usize) {
         let start = Instant::now();
         ptr = builder.and(ptr, new_ptr);
         merge_and += start.elapsed().as_secs_f64();
+        println!("completed one AND; total time spent: {:.2}s", merge_and);
     }
 
     let merge_duration = merge_ds + merge_and;
