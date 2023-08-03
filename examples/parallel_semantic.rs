@@ -69,8 +69,8 @@ fn single_threaded(cnf: &Cnf, num_splits: usize) {
     let compile_duration: Duration = timings.iter().sum();
     let compile_max = timings.iter().max().unwrap();
 
-    println!("DONE COMPILING: {:.4}s", compile_duration.as_secs_f64());
-    println!("MAX COMPILATION: {:.4}s", compile_max.as_secs_f64());
+    println!("DONE COMPILING: {:.2}s", compile_duration.as_secs_f64());
+    println!("MAX COMPILATION: {:.2}s", compile_max.as_secs_f64());
 
     let start = Instant::now();
 
@@ -96,14 +96,14 @@ fn single_threaded(cnf: &Cnf, num_splits: usize) {
 
     println!("=== TIMING ===");
     println!(
-        "Compile: {:.4}s (Total {:.4}s), Merge: {:.4}s",
+        "Compile: {:.2}s (Total {:.2}s), Merge: {:.2}s",
         compile_max.as_secs_f64(),
         compile_duration.as_secs_f64(),
         merge_duration.as_secs_f64()
     );
-    println!("Single-threaded: {:.4}s", single_duration.as_secs_f64());
+    println!("Single-threaded: {:.2}s", single_duration.as_secs_f64());
     println!(
-        "Speedup ratio: {:.4}x",
+        "Speedup ratio: {:.2}x",
         single_duration.as_secs_f64() / (compile_max.as_secs_f64() + merge_duration.as_secs_f64())
     );
     if wmc != st_wmc {
@@ -144,19 +144,25 @@ fn multi_threaded(cnf: &Cnf, num_splits: usize) {
 
     let compile_duration: Duration = start.elapsed();
 
-    println!("DONE COMPILING: {:.4}s", compile_duration.as_secs_f64());
+    println!("DONE COMPILING: {:.2}s", compile_duration.as_secs_f64());
 
-    let start = Instant::now();
+    let mut merge_ds = 0.0;
+    let mut merge_and = 0.0;
 
     let builder = &builders[0].0;
     let mut ptr = ptrs[0];
 
     for i in 1..ptrs.len() {
+        let start = Instant::now();
         let new_ptr = builder.merge_from(&builders[i].0, &[ptrs[i]])[0];
+        merge_ds += start.elapsed().as_secs_f64();
+
+        let start = Instant::now();
         ptr = builder.and(ptr, new_ptr);
+        merge_and += start.elapsed().as_secs_f64();
     }
 
-    let merge_duration = start.elapsed();
+    let merge_duration = merge_ds + merge_and;
 
     let st_builder =
         SemanticBddBuilder::<{ primes::U64_LARGEST }>::new_with_map(order.clone(), map.clone());
@@ -170,15 +176,16 @@ fn multi_threaded(cnf: &Cnf, num_splits: usize) {
 
     println!("=== TIMING ===");
     println!(
-        "Compile: {:.4}s, Merge: {:.4}s",
+        "Compile: {:.2}s, Merge: {:.2}s (ds: {:.2}s, ands: {:.2}s)",
         compile_duration.as_secs_f64(),
-        merge_duration.as_secs_f64()
+        merge_duration,
+        merge_ds,
+        merge_and
     );
-    println!("Single-threaded: {:.4}s", single_duration.as_secs_f64());
+    println!("Single-threaded: {:.2}s", single_duration.as_secs_f64());
     println!(
-        "Speedup ratio: {:.4}x",
-        single_duration.as_secs_f64()
-            / (compile_duration.as_secs_f64() + merge_duration.as_secs_f64())
+        "Speedup ratio: {:.2}x",
+        single_duration.as_secs_f64() / (compile_duration.as_secs_f64() + merge_duration)
     );
     if wmc != st_wmc {
         println!(
