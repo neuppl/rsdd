@@ -5,8 +5,8 @@ use rsdd::{
     builder::{bdd::RobddBuilder, cache::LruIteTable, BottomUpBuilder},
     constants::primes,
     repr::{
-        bdd::BddPtr, ddnnf::DDNNFPtr, logical_expr::LogicalExpr, var_label::VarLabel,
-        var_order::VarOrder, wmc::WmcParams,
+        bdd::BddPtr, ddnnf::DDNNFPtr, logical_expr::LogicalExpr, model::PartialModel,
+        var_label::VarLabel, var_order::VarOrder, wmc::WmcParams,
     },
     serialize::LogicalSExpr,
     util::semirings::{FiniteField, RealSemiring, Semiring},
@@ -22,6 +22,7 @@ struct VariableWeight<T> {
 #[derive(Serialize, Deserialize)]
 struct Config {
     order: Option<Vec<String>>,
+    partials: Option<Vec<HashMap<String, bool>>>,
 }
 
 impl Config {
@@ -38,6 +39,32 @@ impl Config {
             )
         })
     }
+
+    fn generate_partial_assignments(
+        partials: &[HashMap<String, bool>],
+        mapping: &HashMap<&String, usize>,
+        num_vars: usize,
+    ) -> Vec<PartialModel> {
+        let inverse_mapping: HashMap<usize, &String> =
+            HashMap::from_iter(mapping.iter().map(|(k, v)| (*v, *k)));
+        partials
+            .iter()
+            .map(|assignments| {
+                PartialModel::from_vec(
+                    (0..num_vars)
+                        .map(|index| {
+                            if let Some(str) = inverse_mapping.get(&index) {
+                                if let Some(polarity) = assignments.get(*str) {
+                                    return Some(*polarity);
+                                }
+                            }
+                            None
+                        })
+                        .collect::<Vec<_>>(),
+                )
+            })
+            .collect()
+    }
 }
 
 #[derive(Parser, Debug)]
@@ -47,9 +74,13 @@ struct Args {
     #[clap(short, long, value_parser)]
     file: String,
 
+    /// output file to write results to
+    #[clap(short, long, value_parser)]
+    output: Option<String>,
+
     /// variable order for BDD.
     /// options: `linear`, `manual` (requires config in `-c`)
-    #[clap(long, value_parser, default_value_t = String::from("manual"))]
+    #[clap(long, value_parser, default_value_t = String::from("linear"))]
     ordering: String,
 
     /// (optional) config file for variable ordering
@@ -60,13 +91,93 @@ struct Args {
     #[clap(short, long, value_parser)]
     weights: Option<String>,
 
-    /// whether or not to perform a smooth WMC
-    #[clap(long, value_parser)]
-    smooth: bool,
-
     /// show verbose output (including timing information, cache profiling, etc.)
     #[clap(short, long, value_parser)]
     verbose: bool,
+}
+
+fn single_wmc(
+    expr: LogicalExpr,
+    num_vars: usize,
+    order: VarOrder,
+    params: WmcParams<RealSemiring>,
+    verbose: bool,
+) {
+    let builder = RobddBuilder::<LruIteTable<BddPtr>>::new(order.clone());
+
+    let unweighted_params: WmcParams<FiniteField<{ primes::U64_LARGEST }>> =
+        WmcParams::new(HashMap::from_iter(
+            (0..num_vars as u64)
+                .map(|v| (VarLabel::new(v), (FiniteField::one(), FiniteField::one()))),
+        ));
+
+    let start = Instant::now();
+
+    let bdd = builder.compile_logical_expr(&expr);
+
+    let bdd = builder.smooth(bdd, num_vars);
+
+    let res = bdd.wmc(&order, &params);
+
+    let elapsed = start.elapsed();
+
+    println!(
+        "unweighted model count: {}\nweighted model count: {}",
+        builder
+            .smooth(bdd, num_vars)
+            .wmc(&order, &unweighted_params),
+        res
+    );
+
+    if verbose {
+        eprintln!("=== STATS ===");
+
+        let stats = builder.stats();
+        eprintln!("compilation time: {:.4}s", elapsed.as_secs_f64());
+        eprintln!("recursive calls: {}", stats.num_recursive_calls);
+    }
+}
+
+fn partial_wmcs(
+    expr: LogicalExpr,
+    num_vars: usize,
+    order: &VarOrder,
+    params: &WmcParams<RealSemiring>,
+    partials: &[PartialModel],
+    verbose: bool,
+) {
+    let builder = RobddBuilder::<LruIteTable<BddPtr>>::new(order.clone());
+
+    let start = Instant::now();
+
+    let bdd = builder.compile_logical_expr(&expr);
+
+    let init_compilation = start.elapsed();
+
+    for model in partials {
+        let conditioned = builder.condition_model(bdd, model);
+        let wmc = builder.smooth(conditioned, num_vars).wmc(order, params);
+
+        println!("WMC for {}: {}", model, wmc);
+    }
+
+    let elapsed = start.elapsed();
+
+    if verbose {
+        eprintln!("=== STATS ===");
+
+        let stats = builder.stats();
+        eprintln!(
+            "initial compilation time: {:.4}s",
+            init_compilation.as_secs_f64()
+        );
+        eprintln!("total compilation time: {:.4}s", elapsed.as_secs_f64());
+        eprintln!(
+            "amortized partial model time: {:.4}s",
+            elapsed.as_secs_f64() / partials.len() as f64
+        );
+        eprintln!("recursive calls: {}", stats.num_recursive_calls);
+    }
 }
 
 fn main() {
@@ -75,17 +186,20 @@ fn main() {
     let file = fs::read_to_string(&args.file)
         .unwrap_or_else(|e| panic!("Error reading file {}; error: {}", args.file, e));
 
-    let config: Option<Config> = if let Some(path_to_config) = args.config {
+    let config = if let Some(path_to_config) = args.config {
         let config = fs::read_to_string(&path_to_config)
             .unwrap_or_else(|e| panic!("Error reading file {}; error: {}", path_to_config, e));
-        Some(serde_json::from_str::<Config>(&config).unwrap_or_else(|e| {
+        serde_json::from_str::<Config>(&config).unwrap_or_else(|e| {
             panic!(
                 "Error parsing {} as JSON config option; error: {}",
                 config, e
             )
-        }))
+        })
     } else {
-        None
+        Config {
+            order: None,
+            partials: None,
+        }
     };
 
     let weights = if let Some(path_to_weights) = args.weights {
@@ -106,8 +220,6 @@ fn main() {
     let expr = LogicalExpr::from_sexpr(&sexpr);
     let mut num_vars = sexpr.unique_variables().len();
     let mut mapping = sexpr.variable_mapping();
-
-    let start = Instant::now();
 
     let params: WmcParams<RealSemiring> =
         WmcParams::new(HashMap::from_iter(weights.iter().map(|(k, v)| {
@@ -130,58 +242,24 @@ fn main() {
             }
         })));
 
-    let unweighted_params: WmcParams<FiniteField<{ primes::U64_LARGEST }>> =
-        WmcParams::new(HashMap::from_iter(
-            (0..num_vars as u64)
-                .map(|v| (VarLabel::new(v), (FiniteField::one(), FiniteField::one()))),
-        ));
-
     let order = match args.ordering.as_str() {
         "linear" => VarOrder::linear_order(num_vars),
-        "manual" => config
-            .unwrap_or_else(|| {
-                panic!(
-                    "Selected manual option, but could not find valid config with variable order"
-                )
-            })
-            .to_var_order(&mapping)
-            .unwrap_or_else(|| {
-                panic!(
-                    "Selected manual option, but could not find valid config with variable order"
-                )
-            }),
+        "manual" => config.to_var_order(&mapping).unwrap_or_else(|| {
+            panic!("Selected manual option, but could not find valid config with variable order")
+        }),
         _ => todo!(),
     };
 
-    let builder = RobddBuilder::<LruIteTable<BddPtr>>::new(order.clone());
-    let bdd = builder.compile_logical_expr(&expr);
-
-    let bdd = if args.smooth {
-        builder.smooth(bdd, num_vars)
+    if let Some(partials) = config.partials {
+        let partials = Config::generate_partial_assignments(&partials, &mapping, num_vars);
+        partial_wmcs(expr, num_vars, &order, &params, &partials, args.verbose);
     } else {
-        bdd
-    };
-
-    let res = bdd.wmc(&order, &params);
-
-    let elapsed = start.elapsed();
-
-    println!(
-        "unweighted model count: {}\nweighted model count: {}",
-        builder
-            .smooth(bdd, num_vars)
-            .wmc(&order, &unweighted_params),
-        res
-    );
+        single_wmc(expr, num_vars, order.clone(), params, args.verbose);
+    }
 
     if args.verbose {
         eprintln!("=== METADATA ===");
         eprintln!("variable mapping: {:?}", sexpr.variable_mapping());
         eprintln!("variable ordering: {}", order);
-        eprintln!("=== STATS ===");
-
-        let stats = builder.stats();
-        eprintln!("compilation time: {:.4}s", elapsed.as_secs_f64());
-        eprintln!("recursive calls: {}", stats.num_recursive_calls);
     }
 }
