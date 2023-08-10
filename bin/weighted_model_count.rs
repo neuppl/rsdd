@@ -318,7 +318,7 @@ fn main() {
 
         if let Some(path) = args.output {
             let mut file = File::create(path).unwrap();
-            let r = file.write_all(serde_json::to_string(&output).unwrap().as_bytes());
+            let r = file.write_all(serde_json::to_string_pretty(&output).unwrap().as_bytes());
             assert!(r.is_ok(), "Error writing file");
         }
     } else {
