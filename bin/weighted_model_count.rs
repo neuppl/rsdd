@@ -4,10 +4,7 @@ use clap::Parser;
 use rsdd::{
     builder::{bdd::RobddBuilder, cache::LruIteTable, BottomUpBuilder},
     constants::primes,
-    repr::{
-        bdd::BddPtr, ddnnf::DDNNFPtr, logical_expr::LogicalExpr, model::PartialModel,
-        var_label::VarLabel, var_order::VarOrder, wmc::WmcParams,
-    },
+    repr::{BddPtr, DDNNFPtr, LogicalExpr, PartialModel, VarLabel, VarOrder, WmcParams},
     serialize::LogicalSExpr,
     util::semirings::{FiniteField, RealSemiring, Semiring},
 };
