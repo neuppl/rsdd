@@ -7,10 +7,20 @@ use std::fmt::Display;
 pub struct PartialModel {
     /// None if variable is unset
     pub true_assignments: VarSet,
-    false_assignments: VarSet, // assignments: Vec<Option<bool>>,
+    pub false_assignments: VarSet,
 }
 
 impl PartialModel {
+    /// Creates a partial model for num_vars variables,
+    /// where all are unset (i.e. free)
+    /// ```
+    /// use rsdd::repr::PartialModel;
+    ///
+    /// let partial = PartialModel::new(10);
+    ///
+    /// assert!(partial.true_assignments.is_empty());
+    /// assert!(partial.false_assignments.is_empty());
+    /// ```
     pub fn new(num_vars: usize) -> PartialModel {
         PartialModel {
             true_assignments: VarSet::new_with_num_vars(num_vars),
@@ -18,7 +28,24 @@ impl PartialModel {
         }
     }
 
-    pub fn from_vec(assignments: Vec<Option<bool>>) -> PartialModel {
+    /// Creates a partial model from partial assignments; a Some value
+    /// indicates the assignment for that variable, while a None
+    /// value indicates that the variable is unset (i.e. free)
+    /// ```
+    /// use rsdd::repr::{PartialModel, VarLabel};
+    ///
+    /// let partial = PartialModel::from_assignments(&[Some(true), Some(false), None]);
+    ///
+    /// assert!(partial.true_assignments.contains(VarLabel::new(0)));
+    /// assert!(!partial.false_assignments.contains(VarLabel::new(0)));
+    ///
+    /// assert!(!partial.true_assignments.contains(VarLabel::new(1)));
+    /// assert!(partial.false_assignments.contains(VarLabel::new(1)));
+    ///
+    /// assert!(!partial.true_assignments.contains(VarLabel::new(2)));
+    /// assert!(!partial.false_assignments.contains(VarLabel::new(2)));
+    /// ```
+    pub fn from_assignments(assignments: &[Option<bool>]) -> PartialModel {
         let mut true_v = VarSet::new_with_num_vars(assignments.len());
         let mut false_v = VarSet::new_with_num_vars(assignments.len());
         for (i, assignment) in assignments.iter().enumerate() {
@@ -35,8 +62,8 @@ impl PartialModel {
     }
 
     /// Creates a partial model from a total model (assignment to all vars)
-    pub fn from_total_model(assignments: Vec<bool>) -> PartialModel {
-        Self::from_vec(assignments.into_iter().map(Some).collect())
+    pub fn from_total_model(assignments: &[bool]) -> PartialModel {
+        Self::from_assignments(&assignments.iter().map(|x| Some(*x)).collect::<Vec<_>>())
     }
 
     pub fn from_litvec(assignments: &[Literal], num_vars: usize) -> PartialModel {
@@ -44,7 +71,7 @@ impl PartialModel {
         for assgn in assignments {
             init_assgn[assgn.label().value_usize()] = Some(assgn.polarity());
         }
-        Self::from_vec(init_assgn)
+        Self::from_assignments(&init_assgn)
     }
 
     /// Unsets a variable's value in the model
