@@ -122,7 +122,7 @@ impl Iterator for RandomVarOrders {
 
         order.shuffle(&mut thread_rng());
 
-        Some(VarOrder::new(order))
+        Some(VarOrder::new(&order))
     }
 }
 

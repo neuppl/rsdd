@@ -58,10 +58,10 @@ fn main() {
             let config = config.unwrap();
             let order = config.order.unwrap();
             VarOrder::new(
-                order
+                &order
                     .iter()
                     .map(|var| VarLabel::new(*mapping.get(var).unwrap() as u64))
-                    .collect(),
+                    .collect::<Vec<_>>(),
             )
         }
         _ => todo!(),
