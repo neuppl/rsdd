@@ -7,7 +7,7 @@ use std::fmt::Display;
 pub struct PartialModel {
     /// None if variable is unset
     pub true_assignments: VarSet,
-    false_assignments: VarSet, // assignments: Vec<Option<bool>>,
+    pub false_assignments: VarSet, // assignments: Vec<Option<bool>>,
 }
 
 impl PartialModel {

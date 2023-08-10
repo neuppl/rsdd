@@ -1,4 +1,10 @@
-use std::{collections::HashMap, fs, time::Instant};
+use std::{
+    collections::HashMap,
+    fmt::Debug,
+    fs::{self, File},
+    io::Write,
+    time::Instant,
+};
 
 use clap::Parser;
 use rsdd::{
@@ -22,6 +28,18 @@ struct Config {
     partials: Option<Vec<HashMap<String, bool>>>,
 }
 
+#[derive(Serialize, Debug)]
+struct PartialWmcResult<T: Semiring + Serialize + Debug> {
+    partial_model: HashMap<String, bool>,
+    wmc: T,
+}
+
+#[derive(Serialize)]
+struct PartialWmcOutput<T: Semiring + Serialize + Debug> {
+    bdd_size: usize,
+    results: Vec<PartialWmcResult<T>>,
+}
+
 impl Config {
     fn to_var_order(&self, mapping: &HashMap<&String, usize>) -> Option<VarOrder> {
         self.order.as_ref().map(|o| {
@@ -35,32 +53,6 @@ impl Config {
                     .collect(),
             )
         })
-    }
-
-    fn generate_partial_assignments(
-        partials: &[HashMap<String, bool>],
-        mapping: &HashMap<&String, usize>,
-        num_vars: usize,
-    ) -> Vec<PartialModel> {
-        let inverse_mapping: HashMap<usize, &String> =
-            HashMap::from_iter(mapping.iter().map(|(k, v)| (*v, *k)));
-        partials
-            .iter()
-            .map(|assignments| {
-                PartialModel::from_vec(
-                    (0..num_vars)
-                        .map(|index| {
-                            if let Some(str) = inverse_mapping.get(&index) {
-                                if let Some(polarity) = assignments.get(*str) {
-                                    return Some(*polarity);
-                                }
-                            }
-                            None
-                        })
-                        .collect::<Vec<_>>(),
-                )
-            })
-            .collect()
     }
 }
 
@@ -91,6 +83,57 @@ struct Args {
     /// show verbose output (including timing information, cache profiling, etc.)
     #[clap(short, long, value_parser)]
     verbose: bool,
+}
+
+fn generate_partial_assignments(
+    partials: &[HashMap<String, bool>],
+    mapping: &HashMap<&String, usize>,
+    num_vars: usize,
+) -> Vec<PartialModel> {
+    let inverse_mapping: HashMap<usize, &String> =
+        HashMap::from_iter(mapping.iter().map(|(k, v)| (*v, *k)));
+    partials
+        .iter()
+        .map(|assignments| {
+            PartialModel::from_vec(
+                (0..num_vars)
+                    .map(|index| {
+                        if let Some(str) = inverse_mapping.get(&index) {
+                            if let Some(polarity) = assignments.get(*str) {
+                                return Some(*polarity);
+                            }
+                        }
+                        None
+                    })
+                    .collect::<Vec<_>>(),
+            )
+        })
+        .collect()
+}
+
+fn serialize_partial_model(
+    model: &PartialModel,
+    mapping: &HashMap<&String, usize>,
+) -> HashMap<String, bool> {
+    let inverse_mapping: HashMap<usize, &String> =
+        HashMap::from_iter(mapping.iter().map(|(k, v)| (*v, *k)));
+    let mut h = HashMap::new();
+
+    model.true_assignments.iter().for_each(|v| {
+        h.insert(
+            (*inverse_mapping.get(&(v.value() as usize)).unwrap()).clone(),
+            true,
+        );
+    });
+
+    model.false_assignments.iter().for_each(|v| {
+        h.insert(
+            (*inverse_mapping.get(&(v.value() as usize)).unwrap()).clone(),
+            false,
+        );
+    });
+
+    h
 }
 
 fn single_wmc(
@@ -141,9 +184,11 @@ fn partial_wmcs(
     order: &VarOrder,
     params: &WmcParams<RealSemiring>,
     partials: &[PartialModel],
+    mapping: &HashMap<&String, usize>,
     verbose: bool,
-) {
+) -> PartialWmcOutput<RealSemiring> {
     let builder = RobddBuilder::<LruIteTable<BddPtr>>::new(order.clone());
+    let mut results = Vec::new();
 
     let start = Instant::now();
 
@@ -155,7 +200,14 @@ fn partial_wmcs(
         let conditioned = builder.condition_model(bdd, model);
         let wmc = builder.smooth(conditioned, num_vars).wmc(order, params);
 
-        println!("WMC for {}: {}", model, wmc);
+        let res = PartialWmcResult {
+            partial_model: serialize_partial_model(model, mapping),
+            wmc,
+        };
+
+        println!("{:?}", res);
+
+        results.push(res);
     }
 
     let elapsed = start.elapsed();
@@ -174,6 +226,11 @@ fn partial_wmcs(
             elapsed.as_secs_f64() / partials.len() as f64
         );
         eprintln!("recursive calls: {}", stats.num_recursive_calls);
+    }
+
+    PartialWmcOutput {
+        bdd_size: bdd.count_nodes(),
+        results,
     }
 }
 
@@ -248,8 +305,22 @@ fn main() {
     };
 
     if let Some(partials) = config.partials {
-        let partials = Config::generate_partial_assignments(&partials, &mapping, num_vars);
-        partial_wmcs(expr, num_vars, &order, &params, &partials, args.verbose);
+        let partials = generate_partial_assignments(&partials, &mapping, num_vars);
+        let output = partial_wmcs(
+            expr,
+            num_vars,
+            &order,
+            &params,
+            &partials,
+            &mapping,
+            args.verbose,
+        );
+
+        if let Some(path) = args.output {
+            let mut file = File::create(path).unwrap();
+            let r = file.write_all(serde_json::to_string(&output).unwrap().as_bytes());
+            assert!(r.is_ok(), "Error writing file");
+        }
     } else {
         single_wmc(expr, num_vars, order.clone(), params, args.verbose);
     }
