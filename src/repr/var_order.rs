@@ -18,7 +18,7 @@ pub struct VarOrder {
 impl VarOrder {
     /// Creates a new variable order (elements that occur first in the vector
     /// occur first in the order)
-    pub fn new(order: Vec<VarLabel>) -> VarOrder {
+    pub fn new(order: &[VarLabel]) -> VarOrder {
         let mut v = vec![0; order.len()];
         let mut pos_to_var = Vec::new();
         for i in 0..order.len() {
@@ -31,18 +31,15 @@ impl VarOrder {
         }
     }
 
-    /// Generate a linear variable ordering of size `num_var_to_pos`
+    /// Generate a linear variable ordering of size `num_vars`
     /// ```
     /// # use rsdd::repr::VarOrder;
     /// let o = VarOrder::linear_order(10);
     /// assert_eq!(o.num_vars(), 10);
     /// ```
-    pub fn linear_order(num_var_to_pos: usize) -> VarOrder {
-        let mut v = Vec::new();
-        for i in 0..num_var_to_pos {
-            v.push(VarLabel::new(i as u64))
-        }
-        VarOrder::new(v)
+    pub fn linear_order(num_vars: usize) -> VarOrder {
+        let v: Vec<VarLabel> = (0..num_vars).map(|i| VarLabel::new(i as u64)).collect();
+        VarOrder::new(&v)
     }
 
     /// Gives the number of variables in the order

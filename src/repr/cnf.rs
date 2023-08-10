@@ -491,10 +491,7 @@ impl Cnf {
     }
 
     pub fn linear_order(&self) -> VarOrder {
-        let v = (0..(self.num_vars))
-            .map(|x| VarLabel::new(x as u64))
-            .collect();
-        VarOrder::new(v)
+        VarOrder::linear_order(self.num_vars)
     }
 
     /// heuristically generate a variable ordering which minimizes the average
@@ -551,7 +548,7 @@ impl Cnf {
             .into_iter()
             .map(|v| VarLabel::new(v as u64))
             .collect();
-        VarOrder::new(final_order)
+        VarOrder::new(&final_order)
     }
 
     /// Updates the CNF to a new CNF that results from conditioning on the supplied literal
@@ -620,7 +617,7 @@ impl Cnf {
         // assert that ord contains each variable exactly once.
         debug_assert!((0..(self.num_vars())).all(|v| ord.contains(&VarLabel::new_usize(v))));
         debug_assert!(ord.len() == self.num_vars);
-        VarOrder::new(ord)
+        VarOrder::new(&ord)
     }
 
     pub fn to_dimacs(&self) -> String {
