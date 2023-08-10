@@ -1,4 +1,4 @@
-use crate::repr::bdd::BddPtr;
+use crate::repr::BddPtr;
 use std::cmp::Ordering;
 
 mod builder;

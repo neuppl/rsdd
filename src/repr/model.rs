@@ -1,6 +1,6 @@
 //! Models and partial models of logical sentences
 
-use crate::repr::var_label::{Literal, VarLabel, VarSet};
+use crate::repr::{Literal, VarLabel, VarSet};
 use std::fmt::Display;
 
 #[derive(Debug, Clone, Eq, PartialEq)]

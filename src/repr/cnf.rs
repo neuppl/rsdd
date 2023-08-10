@@ -4,8 +4,7 @@ use crate::{
     repr::{
         model::PartialModel,
         var_label::{Literal, VarLabel},
-        var_order::VarOrder,
-        wmc::WmcParams,
+        VarOrder, WmcParams,
     },
     util::semirings::Semiring,
 };
@@ -263,7 +262,7 @@ impl Iterator for AssignmentIter {
 }
 
 impl Cnf {
-    pub fn new(clauses: Vec<Vec<Literal>>) -> Cnf {
+    pub fn new(clauses: &[Vec<Literal>]) -> Cnf {
         let clauses: Vec<Vec<Literal>> = clauses
             .iter()
             .filter(|clause| !clause.is_empty())
@@ -320,7 +319,7 @@ impl Cnf {
             }
             clause_vec.push(lit_vec);
         }
-        Cnf::new(clause_vec)
+        Cnf::new(&clause_vec)
     }
 
     /// Parses a CNF string into a CNF
@@ -354,7 +353,7 @@ impl Cnf {
             }
             clause_vec.push(c);
         }
-        Cnf::new(clause_vec)
+        Cnf::new(&clause_vec)
     }
 
     pub fn rand_cnf(rng: &mut ThreadRng, num_vars: usize, num_clauses: usize) -> Cnf {
@@ -380,7 +379,7 @@ impl Cnf {
                 clause_vec.push(vec![var]);
             }
         }
-        Cnf::new(clause_vec)
+        Cnf::new(&clause_vec)
     }
 
     pub fn num_vars(&self) -> usize {
@@ -580,7 +579,7 @@ impl Cnf {
                 }
             })
             .collect();
-        Cnf::new(new_cnf)
+        Cnf::new(&new_cnf)
     }
 
     pub fn interaction_graph(&self) -> UnGraph<VarLabel, ()> {
@@ -680,7 +679,7 @@ impl Arbitrary for Cnf {
             }
             clauses.push(clause);
         }
-        Cnf::new(clauses)
+        Cnf::new(&clauses)
     }
 }
 
@@ -721,7 +720,7 @@ fn test_cnf_wmc() {
         Literal::new(VarLabel::new(0), true),
         Literal::new(VarLabel::new(1), false),
     ]];
-    let cnf = Cnf::new(v);
+    let cnf = Cnf::new(&v);
     let weights: std::collections::HashMap<
         VarLabel,
         (

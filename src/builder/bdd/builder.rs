@@ -1,12 +1,6 @@
 use crate::{
     builder::{bdd::CompiledCNF, BottomUpBuilder},
-    repr::{
-        bdd::{BddNode, BddPtr},
-        cnf::Cnf,
-        ddnnf::DDNNFPtr,
-        model::PartialModel,
-        var_label::VarLabel,
-    },
+    repr::{BddNode, BddPtr, Cnf, DDNNFPtr, PartialModel, VarLabel},
 };
 use std::{cmp::Ordering, collections::BinaryHeap};
 
@@ -128,10 +122,10 @@ where
     /// ```
     /// # use rsdd::builder::bdd::RobddBuilder;
     /// # use rsdd::builder::BottomUpBuilder;
-    /// # use rsdd::repr::var_label::VarLabel;
-    /// # use rsdd::repr::ddnnf::DDNNFPtr;
+    /// # use rsdd::repr::VarLabel;
+    /// # use rsdd::repr::DDNNFPtr;
     /// # use rsdd::builder::cache::AllIteTable;
-    /// # use rsdd::repr::bdd::BddPtr;
+    /// # use rsdd::repr::BddPtr;
     /// let mut builder = RobddBuilder::<AllIteTable<BddPtr>>::new_with_linear_order(10);
     /// let lbl_a = builder.new_label();
     /// let a = builder.var(lbl_a, true);
@@ -173,17 +167,6 @@ where
         let r = self.cond_helper(bdd, lbl, value);
         bdd.clear_scratch();
         r
-    }
-
-    /// Compose `g` into `f` by substituting for `lbl`
-    fn compose(&'a self, f: BddPtr<'a>, lbl: VarLabel, g: BddPtr<'a>) -> BddPtr<'a> {
-        // TODO this can be optimized with a specialized implementation to make
-        // it a single traversal
-        let var = self.var(lbl, true);
-        let iff = self.iff(var, g);
-        let a = self.and(iff, f);
-
-        self.exists(a, lbl)
     }
 
     /// Compile a BDD from a CNF

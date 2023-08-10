@@ -1,4 +1,4 @@
-use crate::repr::{cnf::Cnf, var_label::VarLabel};
+use crate::repr::{Cnf, VarLabel};
 use core::{fmt::Debug, hash::Hash};
 use std::collections::{HashMap, HashSet};
 
@@ -249,8 +249,8 @@ pub fn from_cnf(cnf: &Cnf) -> Hypergraph<VarLabel> {
 mod test {
     #[test]
     fn cnf_to_hg() {
-        use crate::repr::cnf::Cnf;
-        use crate::repr::var_label::{Literal, VarLabel};
+        use crate::repr::Cnf;
+        use crate::repr::{Literal, VarLabel};
         use crate::util::hypergraph::from_cnf;
         use petgraph::dot::{Config, Dot};
         use std::collections::HashSet;
@@ -275,7 +275,7 @@ mod test {
             ],
             vec![Literal::new(VarLabel::new(5), true)],
         ];
-        let cnf = Cnf::new(v);
+        let cnf = Cnf::new(&v);
         let ig = cnf.interaction_graph();
         println!("{:?}", Dot::with_config(&ig, &[Config::EdgeNoLabel]));
         let _nodes = ig

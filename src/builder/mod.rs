@@ -9,7 +9,7 @@ pub mod sdd;
 
 use crate::{
     plan::BottomUpPlan,
-    repr::{cnf::Cnf, logical_expr::LogicalExpr, var_label::VarLabel},
+    repr::{Cnf, LogicalExpr, VarLabel},
 };
 
 pub trait BottomUpBuilder<'a, Ptr> {
@@ -50,7 +50,15 @@ pub trait BottomUpBuilder<'a, Ptr> {
 
     /// compose g into f for variable v
     /// I.e., computes the logical function (exists v. (g <=> v) /\ f).
-    fn compose(&'a self, f: Ptr, lbl: VarLabel, g: Ptr) -> Ptr;
+    fn compose(&'a self, f: Ptr, lbl: VarLabel, g: Ptr) -> Ptr {
+        // TODO this can be optimized with a specialized implementation to make
+        // it a single traversal
+        let var = self.var(lbl, true);
+        let iff = self.iff(var, g);
+        let a = self.and(iff, f);
+
+        self.exists(a, lbl)
+    }
 
     // compilation
 

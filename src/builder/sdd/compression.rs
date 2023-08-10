@@ -5,11 +5,7 @@ use crate::{
         sdd::{SddBuilder, SddBuilderStats},
         BottomUpBuilder,
     },
-    repr::{
-        ddnnf::DDNNFPtr,
-        sdd::{BinarySDD, SddAnd, SddOr, SddPtr},
-        vtree::{VTree, VTreeIndex, VTreeManager},
-    },
+    repr::{BinarySDD, DDNNFPtr, SddAnd, SddOr, SddPtr, VTree, VTreeIndex, VTreeManager},
 };
 use std::{cell::RefCell, collections::HashMap};
 
@@ -198,7 +194,7 @@ impl<'a> CompressionSddBuilder<'a> {
 // check that (a \/ b) /\ a === a
 #[test]
 fn simple_equality() {
-    use crate::repr::var_label::VarLabel;
+    use crate::repr::VarLabel;
     let builder = CompressionSddBuilder::new(VTree::even_split(
         &[
             VarLabel::new(0),
@@ -220,7 +216,7 @@ fn simple_equality() {
 // check that (a \/ b) | !b === a
 #[test]
 fn sdd_simple_cond() {
-    use crate::repr::var_label::VarLabel;
+    use crate::repr::VarLabel;
     let builder = CompressionSddBuilder::new(VTree::even_split(
         &[
             VarLabel::new(0),
@@ -247,7 +243,7 @@ fn sdd_simple_cond() {
 
 #[test]
 fn sdd_test_exist() {
-    use crate::repr::var_label::VarLabel;
+    use crate::repr::VarLabel;
     let builder = CompressionSddBuilder::new(VTree::even_split(
         &[
             VarLabel::new(0),
@@ -276,7 +272,7 @@ fn sdd_test_exist() {
 
 #[test]
 fn sdd_bigand() {
-    use crate::repr::var_label::VarLabel;
+    use crate::repr::VarLabel;
     let builder = CompressionSddBuilder::new(VTree::right_linear(&[
         VarLabel::new(0),
         VarLabel::new(1),
@@ -313,7 +309,7 @@ fn sdd_bigand() {
 
 #[test]
 fn sdd_ite1() {
-    use crate::repr::var_label::VarLabel;
+    use crate::repr::VarLabel;
     let builder = CompressionSddBuilder::new(VTree::even_split(
         &[
             VarLabel::new(0),
@@ -343,7 +339,7 @@ fn sdd_ite1() {
 
 #[test]
 fn sdd_demorgan() {
-    use crate::repr::var_label::VarLabel;
+    use crate::repr::VarLabel;
     let builder = CompressionSddBuilder::new(VTree::even_split(
         &[
             VarLabel::new(0),
@@ -368,7 +364,7 @@ fn sdd_demorgan() {
 
 #[test]
 fn sdd_circuit1() {
-    use crate::repr::var_label::VarLabel;
+    use crate::repr::VarLabel;
     let builder = CompressionSddBuilder::new(VTree::even_split(
         &[
             VarLabel::new(0),
@@ -401,7 +397,7 @@ fn sdd_circuit1() {
 
 #[test]
 fn sdd_circuit2() {
-    use crate::repr::var_label::VarLabel;
+    use crate::repr::VarLabel;
     // same as circuit1, but with a different variable order
     let builder = CompressionSddBuilder::new(VTree::even_split(
         &[
@@ -432,7 +428,7 @@ fn sdd_circuit2() {
 
 #[test]
 fn sdd_wmc1() {
-    use crate::repr::var_label::VarLabel;
+    use crate::repr::VarLabel;
     use crate::util::semirings::RealSemiring;
     // modeling the formula (x<=>fx) && (y<=>fy), with f weight of 0.5
 
@@ -455,7 +451,7 @@ fn sdd_wmc1() {
         1,
     );
     let builder = CompressionSddBuilder::new(vtree);
-    let mut wmc_map = crate::repr::wmc::WmcParams::default();
+    let mut wmc_map = crate::repr::WmcParams::default();
     let x = SddPtr::Var(VarLabel::new(0), true);
     wmc_map.set_weight(VarLabel::new(0), RealSemiring(1.0), RealSemiring(1.0));
     let y = SddPtr::Var(VarLabel::new(1), true);

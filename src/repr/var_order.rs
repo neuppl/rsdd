@@ -2,7 +2,7 @@
 //! in the order occur first in the BDD, starting from the root.
 //! Lower numbers occur first in the order (i.e., closer to the root)
 
-use crate::{repr::var_label::VarLabel, util};
+use crate::repr::VarLabel;
 use std::fmt::{Debug, Display};
 
 #[derive(Debug, Clone)]
@@ -19,7 +19,7 @@ impl VarOrder {
     /// Creates a new variable order (elements that occur first in the vector
     /// occur first in the order)
     pub fn new(order: Vec<VarLabel>) -> VarOrder {
-        let mut v = util::malloc_vec(order.len());
+        let mut v = vec![0; order.len()];
         let mut pos_to_var = Vec::new();
         for i in 0..order.len() {
             v[order[i].value() as usize] = i;
@@ -33,7 +33,7 @@ impl VarOrder {
 
     /// Generate a linear variable ordering of size `num_var_to_pos`
     /// ```
-    /// # use rsdd::repr::var_order::VarOrder;
+    /// # use rsdd::repr::VarOrder;
     /// let o = VarOrder::linear_order(10);
     /// assert_eq!(o.num_vars(), 10);
     /// ```
@@ -47,7 +47,7 @@ impl VarOrder {
 
     /// Gives the number of variables in the order
     /// ```
-    /// # use rsdd::repr::var_order::VarOrder;
+    /// # use rsdd::repr::VarOrder;
     /// let o = VarOrder::linear_order(10);
     /// assert_eq!(o.num_vars(), 10);
     /// ```
@@ -62,8 +62,8 @@ impl VarOrder {
 
     /// Fetches the variable that it as the specified position in the order
     /// ```
-    /// # use rsdd::repr::var_order::VarOrder;
-    /// # use rsdd::repr::var_label::VarLabel;
+    /// # use rsdd::repr::VarOrder;
+    /// # use rsdd::repr::VarLabel;
     /// let o = VarOrder::linear_order(10);
     /// assert_eq!(o.var_at_level(4), VarLabel::new(4));
     /// ```
@@ -73,8 +73,8 @@ impl VarOrder {
 
     /// True if `a` is before `b` in this ordering
     /// ```
-    /// # use rsdd::repr::var_order::VarOrder;
-    /// # use rsdd::repr::var_label::VarLabel;
+    /// # use rsdd::repr::VarOrder;
+    /// # use rsdd::repr::VarLabel;
     /// let o = VarOrder::linear_order(10);
     /// assert!(o.lt(VarLabel::new(3), VarLabel::new(4)));
     /// ```
@@ -84,8 +84,8 @@ impl VarOrder {
 
     /// True if `a` is before or equal to `b` in the ordering
     /// ```
-    /// # use rsdd::repr::var_order::VarOrder;
-    /// # use rsdd::repr::var_label::VarLabel;
+    /// # use rsdd::repr::VarOrder;
+    /// # use rsdd::repr::VarLabel;
     /// let o = VarOrder::linear_order(10);
     /// assert!(o.lte(VarLabel::new(3), VarLabel::new(4)));
     /// assert!(o.lte(VarLabel::new(5), VarLabel::new(5)));
@@ -97,9 +97,9 @@ impl VarOrder {
     /// Returns the item (with a partial label) whose top variable
     /// occurs first in a given ordering (ties broken by returning `a`)
     /// ```
-    /// # use rsdd::repr::bdd::{BddNode, BddPtr};
-    /// # use rsdd::repr::var_order::VarOrder;
-    /// # use rsdd::repr::var_label::VarLabel;
+    /// # use rsdd::repr::{BddNode, BddPtr};
+    /// # use rsdd::repr::VarOrder;
+    /// # use rsdd::repr::VarLabel;
     /// let o = VarOrder::linear_order(2);
     /// let n1 = BddNode::new(VarLabel::new(0), BddPtr::PtrTrue, BddPtr::PtrFalse);
     /// let n2 = BddNode::new(VarLabel::new(1), BddPtr::PtrFalse, BddPtr::PtrTrue);
@@ -131,9 +131,9 @@ impl VarOrder {
     /// Returns a sorted pair where the item (with a partial label) whose top variable
     /// is first occurs first in the pair.
     /// ```
-    /// # use rsdd::repr::bdd::{BddNode, BddPtr};
-    /// # use rsdd::repr::var_order::VarOrder;
-    /// # use rsdd::repr::var_label::VarLabel;
+    /// # use rsdd::repr::{BddNode, BddPtr};
+    /// # use rsdd::repr::VarOrder;
+    /// # use rsdd::repr::VarLabel;
     /// let o = VarOrder::linear_order(2);
     /// let n1 = BddNode::new(VarLabel::new(0), BddPtr::PtrTrue, BddPtr::PtrFalse);
     /// let n2 = BddNode::new(VarLabel::new(1), BddPtr::PtrFalse, BddPtr::PtrTrue);
@@ -198,9 +198,9 @@ impl VarOrder {
     /// get the first essential variable
     /// (i.e., the variable that comes first in the order) among `a`, `b`, `c`
     /// ```
-    /// # use rsdd::repr::bdd::{BddNode, BddPtr};
-    /// # use rsdd::repr::var_order::VarOrder;
-    /// # use rsdd::repr::var_label::VarLabel;
+    /// # use rsdd::repr::{BddNode, BddPtr};
+    /// # use rsdd::repr::VarOrder;
+    /// # use rsdd::repr::VarLabel;
     /// let o = VarOrder::linear_order(3);
     /// let n1 = BddNode::new(VarLabel::new(0), BddPtr::PtrTrue, BddPtr::PtrFalse);
     /// let n2 = BddNode::new(VarLabel::new(1), BddPtr::PtrFalse, BddPtr::PtrTrue);
@@ -231,7 +231,7 @@ impl VarOrder {
 
     /// Gets the variable that occurs last in the order
     /// ```
-    /// # use rsdd::repr::var_order::VarOrder;
+    /// # use rsdd::repr::VarOrder;
     /// let o = VarOrder::linear_order(10);
     /// assert_eq!(o.last_var().value(), 9) // labels are 0-indexed
     /// ```
@@ -241,7 +241,7 @@ impl VarOrder {
 
     /// Push a new variable to the end of the order
     /// ```
-    /// # use rsdd::repr::var_order::VarOrder;
+    /// # use rsdd::repr::VarOrder;
     /// let mut o = VarOrder::linear_order(10);
     /// o.new_last();
     /// assert_eq!(o.num_vars(), 11);
