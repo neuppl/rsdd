@@ -60,7 +60,7 @@ pub fn bdd(cnf_input: String) -> String {
 pub fn bdd_with_var_order(cnf_input: String, order: &[u64]) -> String {
     let cnf = Cnf::from_dimacs(&cnf_input);
 
-    let var_order = VarOrder::new(order.iter().map(|v| VarLabel::new(*v)).collect());
+    let var_order = VarOrder::new(&order.iter().map(|v| VarLabel::new(*v)).collect::<Vec<_>>());
 
     let builder = RobddBuilder::<AllIteTable<BddPtr>>::new(var_order);
     let bdd = builder.compile_cnf(&cnf);

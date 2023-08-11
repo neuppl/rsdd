@@ -1109,7 +1109,7 @@ mod test_dnnf_builder {
 
             CnfAndOrdering {
                 cnf,
-                order: VarOrder::new(order),
+                order: VarOrder::new(&order),
             }
         }
     }
