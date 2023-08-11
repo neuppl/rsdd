@@ -44,13 +44,13 @@ impl Config {
     fn to_var_order(&self, mapping: &HashMap<&String, usize>) -> Option<VarOrder> {
         self.order.as_ref().map(|o| {
             VarOrder::new(
-                o.iter()
+                &o.iter()
                     .map(|var| {
                         VarLabel::new(*mapping.get(var).unwrap_or_else(|| {
                             panic!("Found unknown variable {} in order configuration", var)
                         }) as u64)
                     })
-                    .collect(),
+                    .collect::<Vec<_>>(),
             )
         })
     }
@@ -87,16 +87,14 @@ struct Args {
 
 fn generate_partial_assignments(
     partials: &[HashMap<String, bool>],
-    mapping: &HashMap<&String, usize>,
+    inverse_mapping: &HashMap<usize, &String>,
     num_vars: usize,
 ) -> Vec<PartialModel> {
-    let inverse_mapping: HashMap<usize, &String> =
-        HashMap::from_iter(mapping.iter().map(|(k, v)| (*v, *k)));
     partials
         .iter()
         .map(|assignments| {
-            PartialModel::from_vec(
-                (0..num_vars)
+            PartialModel::from_assignments(
+                &(0..num_vars)
                     .map(|index| {
                         if let Some(str) = inverse_mapping.get(&index) {
                             if let Some(polarity) = assignments.get(*str) {
@@ -113,10 +111,8 @@ fn generate_partial_assignments(
 
 fn serialize_partial_model(
     model: &PartialModel,
-    mapping: &HashMap<&String, usize>,
+    inverse_mapping: &HashMap<usize, &String>,
 ) -> HashMap<String, bool> {
-    let inverse_mapping: HashMap<usize, &String> =
-        HashMap::from_iter(mapping.iter().map(|(k, v)| (*v, *k)));
     let mut h = HashMap::new();
 
     model.true_assignments.iter().for_each(|v| {
@@ -184,7 +180,7 @@ fn partial_wmcs(
     order: &VarOrder,
     params: &WmcParams<RealSemiring>,
     partials: &[PartialModel],
-    mapping: &HashMap<&String, usize>,
+    inverse_mapping: &HashMap<usize, &String>,
     verbose: bool,
 ) -> PartialWmcOutput<RealSemiring> {
     let builder = RobddBuilder::<LruIteTable<BddPtr>>::new(order.clone());
@@ -201,7 +197,7 @@ fn partial_wmcs(
         let wmc = builder.smooth(conditioned, num_vars).wmc(order, params);
 
         let res = PartialWmcResult {
-            partial_model: serialize_partial_model(model, mapping),
+            partial_model: serialize_partial_model(model, inverse_mapping),
             wmc,
         };
 
@@ -273,28 +269,46 @@ fn main() {
     });
     let expr = LogicalExpr::from_sexpr(&sexpr);
     let mut num_vars = sexpr.unique_variables().len();
+
     let mut mapping = sexpr.variable_mapping();
 
-    let params: WmcParams<RealSemiring> =
-        WmcParams::new(HashMap::from_iter(weights.iter().map(|(k, v)| {
-            let label = mapping.get(k);
+    let mut var_to_val = HashMap::from_iter(weights.iter().map(|(k, v)| {
+        let label = mapping.get(k);
 
-            match label {
-                None => {
-                    let n = (
-                        VarLabel::new(num_vars as u64),
-                        (RealSemiring(v.low), RealSemiring(v.high)),
-                    );
-                    mapping.insert(k, num_vars);
-                    num_vars += 1;
-                    n
-                }
-                Some(index) => (
-                    VarLabel::new(*index as u64),
+        match label {
+            None => {
+                let n = (
+                    VarLabel::new(num_vars as u64),
                     (RealSemiring(v.low), RealSemiring(v.high)),
-                ),
+                );
+                mapping.insert(k, num_vars);
+                num_vars += 1;
+                n
             }
-        })));
+            Some(index) => (
+                VarLabel::new(*index as u64),
+                (RealSemiring(v.low), RealSemiring(v.high)),
+            ),
+        }
+    }));
+
+    let inverse_mapping: HashMap<usize, &String> =
+        HashMap::from_iter(mapping.iter().map(|(k, v)| (*v, *k)));
+
+    for index in 0..num_vars as u64 {
+        let label = VarLabel::new(index);
+        if var_to_val.get(&label).is_none() {
+            println!(
+                "Encountered variable {:?} with no weight. Setting them to ({}, {})",
+                inverse_mapping.get(&(index as usize)),
+                RealSemiring::zero(),
+                RealSemiring::zero()
+            );
+            var_to_val.insert(label, (RealSemiring::zero(), RealSemiring::zero()));
+        }
+    }
+
+    let params: WmcParams<RealSemiring> = WmcParams::new(var_to_val);
 
     let order = match args.ordering.as_str() {
         "linear" => VarOrder::linear_order(num_vars),
@@ -305,14 +319,14 @@ fn main() {
     };
 
     if let Some(partials) = config.partials {
-        let partials = generate_partial_assignments(&partials, &mapping, num_vars);
+        let partials = generate_partial_assignments(&partials, &inverse_mapping, num_vars);
         let output = partial_wmcs(
             expr,
             num_vars,
             &order,
             &params,
             &partials,
-            &mapping,
+            &inverse_mapping,
             args.verbose,
         );
 
