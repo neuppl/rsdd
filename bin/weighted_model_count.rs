@@ -67,11 +67,6 @@ struct Args {
     #[clap(short, long, value_parser)]
     output: Option<String>,
 
-    /// variable order for BDD.
-    /// options: `linear`, `manual` (requires config in `-c`)
-    #[clap(long, value_parser, default_value_t = String::from("linear"))]
-    ordering: String,
-
     /// (optional) config file for variable ordering
     #[clap(short, long, value_parser)]
     config: Option<String>,
@@ -311,7 +306,7 @@ fn main() {
         if var_to_val.get(&label).is_none() {
             if !args.silent {
                 println!(
-                    "Encountered variable {:?} with no weight. Setting them to ({}, {})",
+                    "Encountered variable {:?} with no associated weights. Assigning default: ({}, {})",
                     inverse_mapping.get(&(index as usize)),
                     RealSemiring::zero(),
                     RealSemiring::zero()
@@ -323,13 +318,12 @@ fn main() {
 
     let params: WmcParams<RealSemiring> = WmcParams::new(var_to_val);
 
-    let order = match args.ordering.as_str() {
-        "linear" => VarOrder::linear_order(num_vars),
-        "manual" => config.to_var_order(&mapping).unwrap_or_else(|| {
-            panic!("Selected manual option, but could not find valid config with variable order")
-        }),
-        _ => todo!(),
-    };
+    let order = config.to_var_order(&mapping).unwrap_or_else(|| {
+        if !args.silent {
+            println!("No ordering in config; defaulting to linear order.")
+        }
+        VarOrder::linear_order(num_vars)
+    });
 
     if let Some(partials) = config.partials {
         let partials = generate_partial_assignments(&partials, &inverse_mapping, num_vars);
