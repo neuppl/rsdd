@@ -265,7 +265,7 @@ impl<'a, T: IteTable<'a, BddPtr<'a>> + Default> RobddBuilder<'a, T> {
 
     fn smooth_helper(&'a self, bdd: BddPtr<'a>, current: usize, total: usize) -> BddPtr<'a> {
         debug_assert!(current <= total);
-        if current >= self.num_vars() {
+        if current >= total {
             return bdd;
         }
 

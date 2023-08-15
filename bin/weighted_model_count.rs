@@ -32,6 +32,7 @@ struct Config {
 struct PartialWmcResult<T: Semiring + Serialize + Debug> {
     partial_model: HashMap<String, bool>,
     wmc: T,
+    mc: u128,
 }
 
 #[derive(Serialize)]
@@ -188,6 +189,12 @@ fn partial_wmcs(
     silent: bool,
 ) -> PartialWmcOutput<RealSemiring> {
     let builder = RobddBuilder::<LruIteTable<BddPtr>>::new(order.clone());
+    let unweighted_params: WmcParams<FiniteField<{ primes::U64_LARGEST }>> =
+        WmcParams::new(HashMap::from_iter(
+            (0..num_vars as u64)
+                .map(|v| (VarLabel::new(v), (FiniteField::one(), FiniteField::one()))),
+        ));
+
     let mut results = Vec::new();
 
     let start = Instant::now();
@@ -197,11 +204,16 @@ fn partial_wmcs(
     let init_compilation = start.elapsed();
 
     for model in partials {
+        let num_conditioned = model.true_assignments.len() + model.false_assignments.len();
         let conditioned = builder.condition_model(bdd, model);
-        let wmc = builder.smooth(conditioned, num_vars).wmc(order, params);
+        let smoothed = builder.smooth(conditioned, num_vars - num_conditioned);
+
+        let mc = smoothed.wmc(order, &unweighted_params).value();
+        let wmc = smoothed.wmc(order, params);
 
         let res = PartialWmcResult {
             partial_model: serialize_partial_model(model, inverse_mapping),
+            mc,
             wmc,
         };
 
