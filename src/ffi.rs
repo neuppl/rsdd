@@ -64,6 +64,7 @@ unsafe fn bdd_ptr_from_ptr<'_0>(ptr: *mut PhantomContext) -> &'_0 mut BddPtr<'st
     &mut *(ptr.cast())
 }
 
+#[no_mangle]
 #[allow(clippy::missing_safety_doc)]
 pub unsafe extern "C" fn robdd_builder_compile_cnf(
     builder: *mut PhantomContext,
@@ -80,6 +81,7 @@ pub unsafe extern "C" fn robdd_builder_compile_cnf(
     Box::into_raw(Box::new(ptr))
 }
 
+#[no_mangle]
 #[allow(clippy::missing_safety_doc)]
 pub unsafe extern "C" fn robdd_model_count(
     builder: *mut PhantomContext,

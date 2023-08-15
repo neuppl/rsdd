@@ -1,0 +1,4 @@
+language = "C"
+
+# [export]
+# item_types = ["enums", "structs", "unions", "typedefs", "opaque", "functions"]
