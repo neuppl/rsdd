@@ -83,6 +83,10 @@ struct Args {
     /// show verbose output (including timing information, cache profiling, etc.)
     #[clap(short, long, value_parser)]
     verbose: bool,
+
+    /// silence all output; takes precedence over verbose
+    #[clap(short, long, value_parser)]
+    silent: bool,
 }
 
 fn generate_partial_assignments(
@@ -138,6 +142,7 @@ fn single_wmc(
     order: VarOrder,
     params: WmcParams<RealSemiring>,
     verbose: bool,
+    silent: bool,
 ) {
     let builder = RobddBuilder::<LruIteTable<BddPtr>>::new(order.clone());
 
@@ -157,15 +162,17 @@ fn single_wmc(
 
     let elapsed = start.elapsed();
 
-    println!(
-        "unweighted model count: {}\nweighted model count: {}",
-        builder
-            .smooth(bdd, num_vars)
-            .wmc(&order, &unweighted_params),
-        res
-    );
+    if !silent {
+        println!(
+            "unweighted model count: {}\nweighted model count: {}",
+            builder
+                .smooth(bdd, num_vars)
+                .wmc(&order, &unweighted_params),
+            res
+        );
+    }
 
-    if verbose {
+    if verbose && !silent {
         eprintln!("=== STATS ===");
 
         let stats = builder.stats();
@@ -174,6 +181,7 @@ fn single_wmc(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn partial_wmcs(
     expr: LogicalExpr,
     num_vars: usize,
@@ -182,6 +190,7 @@ fn partial_wmcs(
     partials: &[PartialModel],
     inverse_mapping: &HashMap<usize, &String>,
     verbose: bool,
+    silent: bool,
 ) -> PartialWmcOutput<RealSemiring> {
     let builder = RobddBuilder::<LruIteTable<BddPtr>>::new(order.clone());
     let mut results = Vec::new();
@@ -201,14 +210,16 @@ fn partial_wmcs(
             wmc,
         };
 
-        println!("{:?}", res);
+        if !silent {
+            println!("{:?}", res);
+        }
 
         results.push(res);
     }
 
     let elapsed = start.elapsed();
 
-    if verbose {
+    if verbose && !silent {
         eprintln!("=== STATS ===");
 
         let stats = builder.stats();
@@ -298,12 +309,14 @@ fn main() {
     for index in 0..num_vars as u64 {
         let label = VarLabel::new(index);
         if var_to_val.get(&label).is_none() {
-            println!(
-                "Encountered variable {:?} with no weight. Setting them to ({}, {})",
-                inverse_mapping.get(&(index as usize)),
-                RealSemiring::zero(),
-                RealSemiring::zero()
-            );
+            if !args.silent {
+                println!(
+                    "Encountered variable {:?} with no weight. Setting them to ({}, {})",
+                    inverse_mapping.get(&(index as usize)),
+                    RealSemiring::zero(),
+                    RealSemiring::zero()
+                );
+            }
             var_to_val.insert(label, (RealSemiring::zero(), RealSemiring::zero()));
         }
     }
@@ -328,6 +341,7 @@ fn main() {
             &partials,
             &inverse_mapping,
             args.verbose,
+            args.silent,
         );
 
         if let Some(path) = args.output {
@@ -336,10 +350,17 @@ fn main() {
             assert!(r.is_ok(), "Error writing file");
         }
     } else {
-        single_wmc(expr, num_vars, order.clone(), params, args.verbose);
+        single_wmc(
+            expr,
+            num_vars,
+            order.clone(),
+            params,
+            args.verbose,
+            args.silent,
+        );
     }
 
-    if args.verbose {
+    if args.verbose && !args.silent {
         eprintln!("=== METADATA ===");
         eprintln!("variable mapping: {:?}", sexpr.variable_mapping());
         eprintln!("variable ordering: {}", order);
