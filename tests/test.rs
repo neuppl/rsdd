@@ -278,7 +278,6 @@ mod test_bdd_builder {
     use rsdd::builder::cache::LruIteTable;
     use rsdd::builder::decision_nnf::DecisionNNFBuilder;
     use rsdd::builder::decision_nnf::StandardDecisionNNFBuilder;
-    use rsdd::builder::sdd::SddBuilder;
     use rsdd::builder::BottomUpBuilder;
     use rsdd::constants::primes;
     use rsdd::repr::BddPtr;
@@ -372,7 +371,7 @@ mod test_bdd_builder {
             let builder = super::RobddBuilder::<AllIteTable<BddPtr>>::new_with_linear_order(c1.num_vars());
             let weight = create_semantic_hash_map::<{primes::U32_SMALL}>(c1.num_vars());
             let cnf1 = builder.compile_cnf(&c1);
-            let bddres = cnf1.unsmoothed_wmc(builder.order(), &weight);
+            let bddres = cnf1.unsmoothed_wmc(&weight);
             let cnfres = c1.wmc(&weight);
             TestResult::from_bool(bddres == cnfres)
         }
@@ -386,7 +385,7 @@ mod test_bdd_builder {
             let map : WmcParams<rsdd::util::semirings::FiniteField<{primes::U32_SMALL}>>= create_semantic_hash_map(c1.num_vars());
             let bdd = bdd_builder.compile_cnf(&c1);
             let sdd = sdd_builder.compile_cnf(&c1);
-            bdd.semantic_hash(bdd_builder.order(), &map) == sdd.semantic_hash(sdd_builder.vtree_manager(), &map)
+            bdd.semantic_hash( &map) == sdd.semantic_hash(&map)
         }
     }
 
@@ -402,7 +401,7 @@ mod test_bdd_builder {
             let map : WmcParams<rsdd::util::semirings::FiniteField<{primes::U32_SMALL}>>= create_semantic_hash_map(c1.num_vars());
             let bdd = bdd_builder.compile_cnf(&c1);
             let sdd = sdd_builder.compile_cnf(&c1);
-            bdd.semantic_hash(bdd_builder.order(), &map) == sdd.semantic_hash(sdd_builder.vtree_manager(), &map)
+            bdd.semantic_hash( &map) == sdd.semantic_hash(&map)
         }
     }
 
@@ -422,8 +421,8 @@ mod test_bdd_builder {
             let dnnf = builder2.compile_cnf_topdown(&c1);
 
             let bddwmc = super::repr::WmcParams::new(weight_map);
-            let bddres = cnf1.unsmoothed_wmc(builder.order(),  &bddwmc);
-            let dnnfres = dnnf.unsmoothed_wmc(builder.order(), &bddwmc);
+            let bddres = cnf1.unsmoothed_wmc( &bddwmc);
+            let dnnfres = dnnf.unsmoothed_wmc(&bddwmc);
             let eps = f64::abs(bddres.0 - dnnfres.0) < 0.0001;
             if !eps {
               println!("error on input {}: bddres {}, cnfres {}\n topdown bdd: {}\nbottom-up bdd: {}",
@@ -445,8 +444,8 @@ mod test_bdd_builder {
             let bddwmc = super::repr::WmcParams::new(weight_map);
             let cnf1 = builder1.compile_cnf(&c1);
             let cnf2 = builder2.compile_cnf(&c1);
-            let wmc1 = cnf1.unsmoothed_wmc(builder1.order(), &bddwmc);
-            let wmc2 = cnf2.unsmoothed_wmc(builder2.order(), &bddwmc);
+            let wmc1 = cnf1.unsmoothed_wmc(&bddwmc);
+            let wmc2 = cnf2.unsmoothed_wmc( &bddwmc);
             TestResult::from_bool(f64::abs(wmc1.0 - wmc2.0) < 0.00001)
         }
     }
@@ -484,7 +483,7 @@ mod test_bdd_builder {
                 let mut conj = builder.and(x, y);
                 conj = builder.and(conj, z);
                 conj = builder.and(conj, cnf);
-                let poss_max = conj.unsmoothed_wmc(builder.order(), &wmc);
+                let poss_max = conj.unsmoothed_wmc(&wmc);
                 if poss_max.0 > max {
                     max = poss_max.0;
                     max_assgn.set(VarLabel::new(0), *v1);
@@ -514,7 +513,7 @@ mod test_bdd_builder {
             let mut conj = builder.and(v0, v1);
             conj = builder.and(conj, v2);
             conj = builder.and(conj, cnf);
-            let poss_max = conj.unsmoothed_wmc(builder.order(), &wmc);
+            let poss_max = conj.unsmoothed_wmc(&wmc);
             if f64::abs(poss_max.0 - max) > 0.0001 {
                 pm_check = false;
             }
@@ -524,7 +523,7 @@ mod test_bdd_builder {
             let mut conj2 = builder.and(w0, w1);
             conj2 = builder.and(conj2, w2);
             builder.and(conj2, cnf);
-            let poss_max2 = conj.unsmoothed_wmc(builder.order(), &wmc);
+            let poss_max2 = conj.unsmoothed_wmc(&wmc);
             if f64::abs(poss_max2.0 - max) > 0.0001 {
                 pm_check = false;
             }
@@ -594,7 +593,7 @@ mod test_bdd_builder {
                 let mut conj = builder.and(x, y);
                 conj = builder.and(conj, z);
                 conj = builder.and(conj, cnf);
-                let poss_max = conj.unsmoothed_wmc(builder.order(), &wmc);
+                let poss_max = conj.unsmoothed_wmc(&wmc);
                 if poss_max.1 > max {
                     max = poss_max.1;
                     max_assgn.set(decisions[0], *v1);
@@ -629,7 +628,7 @@ mod test_bdd_builder {
             let mut conj = builder.and(v0, v1);
             conj = builder.and(conj, v2);
             conj = builder.and(conj, cnf);
-            let poss_max = conj.unsmoothed_wmc(builder.order(), &wmc);
+            let poss_max = conj.unsmoothed_wmc(&wmc);
             if f64::abs(poss_max.1 - max) > 0.0001 {
                 pm_check = false;
             }
@@ -639,7 +638,7 @@ mod test_bdd_builder {
             let mut conj2 = builder.and(w0, w1);
             conj2 = builder.and(conj2, w2);
             builder.and(conj2, cnf);
-            let poss_max2 = conj.unsmoothed_wmc(builder.order(), &wmc);
+            let poss_max2 = conj.unsmoothed_wmc(&wmc);
             if f64::abs(poss_max2.1 - max) > 0.0001 {
                 pm_check = false;
             }
@@ -660,7 +659,7 @@ mod test_bdd_builder {
             // they are with the property that pos_weight + neg_weight = 1
             let map = create_semantic_hash_map::<{primes::U32_SMALL}>(cnf.num_vars());
 
-            bdd.semantic_hash(builder.order(), &map) == smoothed.semantic_hash(builder.order(), &map)
+            bdd.semantic_hash( &map) == smoothed.semantic_hash( &map)
         }
     }
 }
@@ -759,12 +758,12 @@ mod test_sdd_builder {
            let order : Vec<VarLabel> = (0..cnf.num_vars()).map(|x| VarLabel::new(x as u64)).collect();
            let builder = super::CompressionSddBuilder::new(VTree::even_split(&order, 3));
            let cnf_sdd = builder.compile_cnf(&cnf);
-           let sdd_res = cnf_sdd.semantic_hash(builder.vtree_manager(), &weight_map);
+           let sdd_res = cnf_sdd.semantic_hash(&weight_map);
 
 
             let bdd_builder = RobddBuilder::<AllIteTable<BddPtr>>::new_with_linear_order(cnf.num_vars());
             let cnf_bdd = bdd_builder.compile_cnf(&cnf);
-            let bdd_res = cnf_bdd.semantic_hash(bdd_builder.order(), &weight_map);
+            let bdd_res = cnf_bdd.semantic_hash( &weight_map);
             assert_eq!(bdd_res, sdd_res);
             TestResult::passed()
         }
@@ -784,12 +783,12 @@ mod test_sdd_builder {
             let weight_map = create_semantic_hash_map::<{primes::U32_SMALL}>(cnf.num_vars());
             let builder = super::CompressionSddBuilder::new(vtree);
             let cnf_sdd = builder.compile_cnf(&cnf);
-            let sdd_res = cnf_sdd.semantic_hash(builder.vtree_manager(), &weight_map);
+            let sdd_res = cnf_sdd.semantic_hash(&weight_map);
 
 
             let bdd_builder = RobddBuilder::<AllIteTable<BddPtr>>::new_with_linear_order(cnf.num_vars());
             let cnf_bdd = bdd_builder.compile_cnf(&cnf);
-            let bdd_res = cnf_bdd.semantic_hash(bdd_builder.order(), &weight_map);
+            let bdd_res = cnf_bdd.semantic_hash( &weight_map);
             assert_eq!(bdd_res, sdd_res);
             TestResult::passed()
         }
@@ -872,8 +871,8 @@ mod test_sdd_builder {
 
             let map : WmcParams<FiniteField<{primes::U32_SMALL}>> = create_semantic_hash_map(builder1.num_vars());
 
-            let h1 = c1.semantic_hash(builder1.vtree_manager(), &map);
-            let h2 = c2.semantic_hash(builder2.vtree_manager(), &map);
+            let h1 = c1.semantic_hash(&map);
+            let h2 = c2.semantic_hash(&map);
 
             h1 == h2
         }
@@ -899,8 +898,8 @@ mod test_sdd_builder {
 
             let map : WmcParams<FiniteField<{primes::U32_SMALL}>> = create_semantic_hash_map(compr_builder.num_vars());
 
-            let compr_h = compr_cnf.semantic_hash(compr_builder.vtree_manager(), &map);
-            let uncompr_h = uncompr_cnf.semantic_hash(uncompr_builder.vtree_manager(), &map);
+            let compr_h = compr_cnf.semantic_hash(&map);
+            let uncompr_h = uncompr_cnf.semantic_hash(&map);
 
             if compr_h != uncompr_h {
                 println!("not equal! hashes: compr: {compr_h}, uncompr: {uncompr_h}");
@@ -985,7 +984,7 @@ mod test_sdd_builder {
             let map : WmcParams<FiniteField<{primes::U32_SMALL}>>= create_semantic_hash_map(builder.num_vars());
             let mut seen_hashes : HashMap<u128, SddPtr> = HashMap::new();
             for sdd in builder.node_iter() {
-                let hash = sdd.semantic_hash(builder.vtree_manager(), &map);
+                let hash = sdd.semantic_hash(&map);
                 if seen_hashes.contains_key(&hash.value()) {
                     let c = seen_hashes.get(&hash.value()).unwrap();
                     println!("cnf: {}", c1);
@@ -1011,7 +1010,7 @@ mod test_sdd_builder {
             let map : WmcParams<FiniteField<{primes::U32_SMALL}>>= create_semantic_hash_map(builder.num_vars());
             let mut seen_hashes : HashMap<u128, SddPtr> = HashMap::new();
             for sdd in builder.node_iter() {
-                let hash = sdd.semantic_hash(builder.vtree_manager(), &map);
+                let hash = sdd.semantic_hash(&map);
 
                 // see the hash itself
                 if seen_hashes.contains_key(&hash.value()) {
@@ -1063,8 +1062,8 @@ mod test_sdd_builder {
             let sdd = builder.compile_cnf(&c1);
             let compl = sdd.neg();
 
-            let sdd_hash = sdd.semantic_hash(builder.vtree_manager(), &map);
-            let compl_hash = compl.semantic_hash(builder.vtree_manager(), &map);
+            let sdd_hash = sdd.semantic_hash(&map);
+            let compl_hash = compl.semantic_hash(&map);
 
             let sum = (sdd_hash + compl_hash).value();
 
@@ -1146,7 +1145,7 @@ mod test_dnnf_builder {
             let std_builder = StandardDecisionNNFBuilder::new(linear_order.clone());
             let std_dnnf = std_builder.compile_cnf_topdown(&cnf);
 
-            let sem_builder = SemanticDecisionNNFBuilder::<{primes::U64_LARGEST}>::new(linear_order.clone());
+            let sem_builder = SemanticDecisionNNFBuilder::<{primes::U64_LARGEST}>::new(linear_order);
             let sem_dnnf = sem_builder.compile_cnf_topdown(&cnf);
 
 
@@ -1154,8 +1153,8 @@ mod test_dnnf_builder {
                 (0..16).map(|x| (VarLabel::new(x as u64), (RealSemiring(0.3), RealSemiring(0.7)))));
             let params = WmcParams::new(weight_map);
 
-            let std_wmc = std_dnnf.unsmoothed_wmc(&linear_order, &params);
-            let sem_wmc = sem_dnnf.unsmoothed_wmc(&linear_order, &params);
+            let std_wmc = std_dnnf.unsmoothed_wmc(&params);
+            let sem_wmc = sem_dnnf.unsmoothed_wmc(&params);
 
             let eps = f64::abs(std_wmc.0 - sem_wmc.0) < 0.0001;
             if !eps {
@@ -1174,7 +1173,7 @@ mod test_dnnf_builder {
             let std_builder = StandardDecisionNNFBuilder::new(order.clone());
             let std_dnnf = std_builder.compile_cnf_topdown(&cnf);
 
-            let sem_builder = SemanticDecisionNNFBuilder::<{primes::U64_LARGEST}>::new(order.clone());
+            let sem_builder = SemanticDecisionNNFBuilder::<{primes::U64_LARGEST}>::new(order);
             let sem_dnnf = sem_builder.compile_cnf_topdown(&cnf);
 
 
@@ -1182,8 +1181,8 @@ mod test_dnnf_builder {
                 (0..cnf.num_vars()).map(|x| (VarLabel::new(x as u64), (RealSemiring(0.3), RealSemiring(0.7)))));
             let params = WmcParams::new(weight_map);
 
-            let std_wmc = std_dnnf.unsmoothed_wmc(&order, &params);
-            let sem_wmc = sem_dnnf.unsmoothed_wmc(&order, &params);
+            let std_wmc = std_dnnf.unsmoothed_wmc(&params);
+            let sem_wmc = sem_dnnf.unsmoothed_wmc(&params);
 
             let eps = f64::abs(std_wmc.0 - sem_wmc.0) < 0.0001;
             if !eps {

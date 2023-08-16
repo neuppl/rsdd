@@ -49,7 +49,7 @@ impl<'a, const P: u128> DecisionNNFBuilder<'a> for SemanticDecisionNNFBuilder<'a
         let mut seen_hashes = HashSet::new();
         let map = create_semantic_hash_map::<P>(self.order.num_vars());
         for bdd in self.compute_table.borrow().iter() {
-            let h = BddPtr::Reg(bdd).semantic_hash(&self.order, &map);
+            let h = BddPtr::Reg(bdd).semantic_hash(&map);
             if seen_hashes.contains(&(h.value())) {
                 num_collisions += 1;
             } else {
@@ -124,13 +124,12 @@ mod tests {
 
         let linear_order = VarOrder::linear_order(cnf.num_vars());
 
-        let builder =
-            SemanticDecisionNNFBuilder::<{ primes::U32_SMALL }>::new(linear_order.clone());
+        let builder = SemanticDecisionNNFBuilder::<{ primes::U32_SMALL }>::new(linear_order);
         let dnnf = builder.compile_cnf_topdown(&cnf);
 
-        assert!(dnnf.evaluate(&linear_order, &[true, true]));
-        assert!(dnnf.evaluate(&linear_order, &[false, true]));
-        assert!(dnnf.evaluate(&linear_order, &[true, false]));
-        assert!(!dnnf.evaluate(&linear_order, &[false, false]));
+        assert!(dnnf.evaluate(&[true, true]));
+        assert!(dnnf.evaluate(&[false, true]));
+        assert!(dnnf.evaluate(&[true, false]));
+        assert!(!dnnf.evaluate(&[false, false]));
     }
 }
