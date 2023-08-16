@@ -67,8 +67,8 @@ pub trait DDNNFPtr<'a>: Clone + Debug + PartialEq + Eq + Hash + Copy {
     where
         T: 'static;
 
-    /// Weighted-model count
-    fn wmc<T: Semiring + std::ops::Add<Output = T> + std::ops::Mul<Output = T>>(
+    /// Unsmoothed weighted-model count
+    fn unsmoothed_wmc<T: Semiring + std::ops::Add<Output = T> + std::ops::Mul<Output = T>>(
         &self,
         o: &Self::Order,
         params: &WmcParams<T>,
@@ -96,7 +96,7 @@ pub trait DDNNFPtr<'a>: Clone + Debug + PartialEq + Eq + Hash + Copy {
     }
 
     fn evaluate(&self, o: &Self::Order, instantations: &[bool]) -> bool {
-        self.wmc(
+        self.unsmoothed_wmc(
             o,
             &WmcParams::new(HashMap::from_iter(instantations.iter().enumerate().map(
                 |(index, polarity)| {
@@ -116,7 +116,7 @@ pub trait DDNNFPtr<'a>: Clone + Debug + PartialEq + Eq + Hash + Copy {
         order: &Self::Order,
         map: &WmcParams<FiniteField<P>>,
     ) -> FiniteField<P> {
-        self.wmc(order, map)
+        self.unsmoothed_wmc(order, map)
     }
 
     /// Negate the pointer

@@ -39,8 +39,8 @@ fn diff_by_wmc(num_vars: usize, order: &VarOrder, std_dnnf: BddPtr, sem_dnnf: Bd
         }));
     let params = WmcParams::new(weight_map);
 
-    let std_wmc = std_dnnf.wmc(order, &params);
-    let sem_wmc = sem_dnnf.wmc(order, &params);
+    let std_wmc = std_dnnf.unsmoothed_wmc(order, &params);
+    let sem_wmc = sem_dnnf.unsmoothed_wmc(order, &params);
 
     f64::abs(std_wmc.0 - sem_wmc.0)
 }

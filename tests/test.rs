@@ -372,7 +372,7 @@ mod test_bdd_builder {
             let builder = super::RobddBuilder::<AllIteTable<BddPtr>>::new_with_linear_order(c1.num_vars());
             let weight = create_semantic_hash_map::<{primes::U32_SMALL}>(c1.num_vars());
             let cnf1 = builder.compile_cnf(&c1);
-            let bddres = cnf1.wmc(builder.order(), &weight);
+            let bddres = cnf1.unsmoothed_wmc(builder.order(), &weight);
             let cnfres = c1.wmc(&weight);
             TestResult::from_bool(bddres == cnfres)
         }
@@ -422,8 +422,8 @@ mod test_bdd_builder {
             let dnnf = builder2.compile_cnf_topdown(&c1);
 
             let bddwmc = super::repr::WmcParams::new(weight_map);
-            let bddres = cnf1.wmc(builder.order(),  &bddwmc);
-            let dnnfres = dnnf.wmc(builder.order(), &bddwmc);
+            let bddres = cnf1.unsmoothed_wmc(builder.order(),  &bddwmc);
+            let dnnfres = dnnf.unsmoothed_wmc(builder.order(), &bddwmc);
             let eps = f64::abs(bddres.0 - dnnfres.0) < 0.0001;
             if !eps {
               println!("error on input {}: bddres {}, cnfres {}\n topdown bdd: {}\nbottom-up bdd: {}",
@@ -445,8 +445,8 @@ mod test_bdd_builder {
             let bddwmc = super::repr::WmcParams::new(weight_map);
             let cnf1 = builder1.compile_cnf(&c1);
             let cnf2 = builder2.compile_cnf(&c1);
-            let wmc1 = cnf1.wmc(builder1.order(), &bddwmc);
-            let wmc2 = cnf2.wmc(builder2.order(), &bddwmc);
+            let wmc1 = cnf1.unsmoothed_wmc(builder1.order(), &bddwmc);
+            let wmc2 = cnf2.unsmoothed_wmc(builder2.order(), &bddwmc);
             TestResult::from_bool(f64::abs(wmc1.0 - wmc2.0) < 0.00001)
         }
     }
@@ -484,7 +484,7 @@ mod test_bdd_builder {
                 let mut conj = builder.and(x, y);
                 conj = builder.and(conj, z);
                 conj = builder.and(conj, cnf);
-                let poss_max = conj.wmc(builder.order(), &wmc);
+                let poss_max = conj.unsmoothed_wmc(builder.order(), &wmc);
                 if poss_max.0 > max {
                     max = poss_max.0;
                     max_assgn.set(VarLabel::new(0), *v1);
@@ -514,7 +514,7 @@ mod test_bdd_builder {
             let mut conj = builder.and(v0, v1);
             conj = builder.and(conj, v2);
             conj = builder.and(conj, cnf);
-            let poss_max = conj.wmc(builder.order(), &wmc);
+            let poss_max = conj.unsmoothed_wmc(builder.order(), &wmc);
             if f64::abs(poss_max.0 - max) > 0.0001 {
                 pm_check = false;
             }
@@ -524,7 +524,7 @@ mod test_bdd_builder {
             let mut conj2 = builder.and(w0, w1);
             conj2 = builder.and(conj2, w2);
             builder.and(conj2, cnf);
-            let poss_max2 = conj.wmc(builder.order(), &wmc);
+            let poss_max2 = conj.unsmoothed_wmc(builder.order(), &wmc);
             if f64::abs(poss_max2.0 - max) > 0.0001 {
                 pm_check = false;
             }
@@ -594,7 +594,7 @@ mod test_bdd_builder {
                 let mut conj = builder.and(x, y);
                 conj = builder.and(conj, z);
                 conj = builder.and(conj, cnf);
-                let poss_max = conj.wmc(builder.order(), &wmc);
+                let poss_max = conj.unsmoothed_wmc(builder.order(), &wmc);
                 if poss_max.1 > max {
                     max = poss_max.1;
                     max_assgn.set(decisions[0], *v1);
@@ -629,7 +629,7 @@ mod test_bdd_builder {
             let mut conj = builder.and(v0, v1);
             conj = builder.and(conj, v2);
             conj = builder.and(conj, cnf);
-            let poss_max = conj.wmc(builder.order(), &wmc);
+            let poss_max = conj.unsmoothed_wmc(builder.order(), &wmc);
             if f64::abs(poss_max.1 - max) > 0.0001 {
                 pm_check = false;
             }
@@ -639,7 +639,7 @@ mod test_bdd_builder {
             let mut conj2 = builder.and(w0, w1);
             conj2 = builder.and(conj2, w2);
             builder.and(conj2, cnf);
-            let poss_max2 = conj.wmc(builder.order(), &wmc);
+            let poss_max2 = conj.unsmoothed_wmc(builder.order(), &wmc);
             if f64::abs(poss_max2.1 - max) > 0.0001 {
                 pm_check = false;
             }
@@ -1154,8 +1154,8 @@ mod test_dnnf_builder {
                 (0..16).map(|x| (VarLabel::new(x as u64), (RealSemiring(0.3), RealSemiring(0.7)))));
             let params = WmcParams::new(weight_map);
 
-            let std_wmc = std_dnnf.wmc(&linear_order, &params);
-            let sem_wmc = sem_dnnf.wmc(&linear_order, &params);
+            let std_wmc = std_dnnf.unsmoothed_wmc(&linear_order, &params);
+            let sem_wmc = sem_dnnf.unsmoothed_wmc(&linear_order, &params);
 
             let eps = f64::abs(std_wmc.0 - sem_wmc.0) < 0.0001;
             if !eps {
@@ -1182,8 +1182,8 @@ mod test_dnnf_builder {
                 (0..cnf.num_vars()).map(|x| (VarLabel::new(x as u64), (RealSemiring(0.3), RealSemiring(0.7)))));
             let params = WmcParams::new(weight_map);
 
-            let std_wmc = std_dnnf.wmc(&order, &params);
-            let sem_wmc = sem_dnnf.wmc(&order, &params);
+            let std_wmc = std_dnnf.unsmoothed_wmc(&order, &params);
+            let sem_wmc = sem_dnnf.unsmoothed_wmc(&order, &params);
 
             let eps = f64::abs(std_wmc.0 - sem_wmc.0) < 0.0001;
             if !eps {

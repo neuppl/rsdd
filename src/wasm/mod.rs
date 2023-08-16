@@ -107,7 +107,7 @@ pub fn demo_model_count_sdd(cnf_input: String) -> Result<JsValue, JsValue> {
         )
     }
 
-    let model_count = sdd.wmc(builder.vtree_manager(), &params);
+    let model_count = sdd.unsmoothed_wmc(builder.vtree_manager(), &params);
 
     let res = SddModelCountResult {
         model_count: model_count.value(),
