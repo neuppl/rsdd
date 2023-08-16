@@ -463,7 +463,7 @@ fn sdd_wmc1() {
     let x_fx = builder.iff(x, fx);
     let y_fy = builder.iff(y, fy);
     let ptr = builder.and(x_fx, y_fy);
-    let wmc_res: RealSemiring = ptr.wmc(builder.vtree_manager(), &wmc_map);
+    let wmc_res: RealSemiring = ptr.unsmoothed_wmc(builder.vtree_manager(), &wmc_map);
     let expected = RealSemiring(1.0);
     let diff = (wmc_res - expected).0.abs();
     println!("sdd: {}", builder.print_sdd(ptr));

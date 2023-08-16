@@ -154,7 +154,7 @@ fn single_wmc(
 
     let bdd = builder.smooth(bdd, num_vars);
 
-    let res = bdd.wmc(&order, &params);
+    let res = bdd.unsmoothed_wmc(&order, &params);
 
     let elapsed = start.elapsed();
 
@@ -163,7 +163,7 @@ fn single_wmc(
             "unweighted model count: {}\nweighted model count: {}",
             builder
                 .smooth(bdd, num_vars)
-                .wmc(&order, &unweighted_params),
+                .unsmoothed_wmc(&order, &unweighted_params),
             res
         );
     }
@@ -208,8 +208,8 @@ fn partial_wmcs(
         let conditioned = builder.condition_model(bdd, model);
         let smoothed = builder.smooth(conditioned, num_vars - num_conditioned);
 
-        let mc = smoothed.wmc(order, &unweighted_params).value();
-        let wmc = smoothed.wmc(order, params);
+        let mc = smoothed.unsmoothed_wmc(order, &unweighted_params).value();
+        let wmc = smoothed.unsmoothed_wmc(order, params);
 
         let res = PartialWmcResult {
             partial_model: serialize_partial_model(model, inverse_mapping),
