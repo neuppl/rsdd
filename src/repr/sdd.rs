@@ -272,7 +272,6 @@ impl<'a> DDNNFPtr<'a> for SddPtr<'a> {
 
     fn fold<T: 'static + Clone + Copy + std::fmt::Debug, F: Fn(super::ddnnf::DDNNF<T>) -> T>(
         &self,
-        _v: &VTreeManager,
         f: F,
     ) -> T {
         debug_assert!(self.is_scratch_cleared());

@@ -926,7 +926,7 @@ impl<'a> DDNNFPtr<'a> for BddPtr<'a> {
         }
     }
 
-    fn fold<T: Clone + Copy + Debug, F: Fn(DDNNF<T>) -> T>(&self, _o: &VarOrder, f: F) -> T
+    fn fold<T: Clone + Copy + Debug, F: Fn(DDNNF<T>) -> T>(&self, f: F) -> T
     where
         T: 'static,
     {

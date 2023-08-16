@@ -140,7 +140,7 @@ fn single_wmc(
     verbose: bool,
     silent: bool,
 ) {
-    let builder = RobddBuilder::<LruIteTable<BddPtr>>::new(order.clone());
+    let builder = RobddBuilder::<LruIteTable<BddPtr>>::new(order);
 
     let unweighted_params: WmcParams<FiniteField<{ primes::U64_LARGEST }>> =
         WmcParams::new(HashMap::from_iter(
@@ -154,7 +154,7 @@ fn single_wmc(
 
     let bdd = builder.smooth(bdd, num_vars);
 
-    let res = bdd.unsmoothed_wmc(&order, &params);
+    let res = bdd.unsmoothed_wmc(&params);
 
     let elapsed = start.elapsed();
 
@@ -163,7 +163,7 @@ fn single_wmc(
             "unweighted model count: {}\nweighted model count: {}",
             builder
                 .smooth(bdd, num_vars)
-                .unsmoothed_wmc(&order, &unweighted_params),
+                .unsmoothed_wmc(&unweighted_params),
             res
         );
     }
@@ -208,8 +208,8 @@ fn partial_wmcs(
         let conditioned = builder.condition_model(bdd, model);
         let smoothed = builder.smooth(conditioned, num_vars - num_conditioned);
 
-        let mc = smoothed.unsmoothed_wmc(order, &unweighted_params).value();
-        let wmc = smoothed.unsmoothed_wmc(order, params);
+        let mc = smoothed.unsmoothed_wmc(&unweighted_params).value();
+        let wmc = smoothed.unsmoothed_wmc(params);
 
         let res = PartialWmcResult {
             partial_model: serialize_partial_model(model, inverse_mapping),
