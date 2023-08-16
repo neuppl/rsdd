@@ -1,7 +1,7 @@
 use super::semiring_traits::*;
 use std::{fmt::Display, ops};
 
-#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Serialize, Deserialize)]
 pub struct RealSemiring(pub f64);
 
 impl Display for RealSemiring {

@@ -29,7 +29,7 @@ struct Args {
     random_order: bool,
 }
 
-fn diff_by_wmc(num_vars: usize, order: &VarOrder, std_dnnf: BddPtr, sem_dnnf: BddPtr) -> f64 {
+fn diff_by_wmc(num_vars: usize, std_dnnf: BddPtr, sem_dnnf: BddPtr) -> f64 {
     let weight_map: HashMap<VarLabel, (RealSemiring, RealSemiring)> =
         HashMap::from_iter((0..num_vars).map(|x| {
             (
@@ -39,8 +39,8 @@ fn diff_by_wmc(num_vars: usize, order: &VarOrder, std_dnnf: BddPtr, sem_dnnf: Bd
         }));
     let params = WmcParams::new(weight_map);
 
-    let std_wmc = std_dnnf.wmc(order, &params);
-    let sem_wmc = sem_dnnf.wmc(order, &params);
+    let std_wmc = std_dnnf.unsmoothed_wmc(&params);
+    let sem_wmc = sem_dnnf.unsmoothed_wmc(&params);
 
     f64::abs(std_wmc.0 - sem_wmc.0)
 }
@@ -58,7 +58,7 @@ fn compare_sem_and_std(cnf: &Cnf, order: &VarOrder) -> (usize, usize) {
     let sem_dnnf = sem_builder.compile_cnf_topdown(cnf);
     let sem_time = start.elapsed().as_secs_f64();
 
-    if diff_by_wmc(cnf.num_vars(), order, std_dnnf, sem_dnnf) > 0.0001 {
+    if diff_by_wmc(cnf.num_vars(), std_dnnf, sem_dnnf) > 0.0001 {
         println!(
             "error on input {}\n std bdd: {}\nsem bdd: {}",
             cnf,

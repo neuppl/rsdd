@@ -56,27 +56,20 @@ pub enum DDNNF<T> {
 }
 
 pub trait DDNNFPtr<'a>: Clone + Debug + PartialEq + Eq + Hash + Copy {
-    /// A generic Ordering type
-    /// For BDDs, this is a VarOrder
-    /// For SDDs, this is a VTree
-    /// For decisionDNNF, this is a DTree
-    type Order;
-
     /// performs a memoized bottom-up pass with aggregating function `f` calls
-    fn fold<T: Semiring, F: Fn(DDNNF<T>) -> T>(&self, o: &Self::Order, f: F) -> T
+    fn fold<T: Semiring, F: Fn(DDNNF<T>) -> T>(&self, f: F) -> T
     where
         T: 'static;
 
-    /// Weighted-model count
-    fn wmc<T: Semiring + std::ops::Add<Output = T> + std::ops::Mul<Output = T>>(
+    /// Unsmoothed weighted-model count
+    fn unsmoothed_wmc<T: Semiring + std::ops::Add<Output = T> + std::ops::Mul<Output = T>>(
         &self,
-        o: &Self::Order,
         params: &WmcParams<T>,
     ) -> T
     where
         T: 'static,
     {
-        self.fold(o, |ddnnf| {
+        self.fold(|ddnnf| {
             use DDNNF::*;
             match ddnnf {
                 Or(l, r, _) => l + r,
@@ -95,28 +88,21 @@ pub trait DDNNFPtr<'a>: Clone + Debug + PartialEq + Eq + Hash + Copy {
         })
     }
 
-    fn evaluate(&self, o: &Self::Order, instantations: &[bool]) -> bool {
-        self.wmc(
-            o,
-            &WmcParams::new(HashMap::from_iter(instantations.iter().enumerate().map(
-                |(index, polarity)| {
-                    (
-                        VarLabel::new(index as u64),
-                        (BooleanSemiring(!polarity), BooleanSemiring(*polarity)),
-                    )
-                },
-            ))),
-        )
+    fn evaluate(&self, instantations: &[bool]) -> bool {
+        self.unsmoothed_wmc(&WmcParams::new(HashMap::from_iter(
+            instantations.iter().enumerate().map(|(index, polarity)| {
+                (
+                    VarLabel::new(index as u64),
+                    (BooleanSemiring(!polarity), BooleanSemiring(*polarity)),
+                )
+            }),
+        )))
         .0
     }
 
     /// compute the semantic hash for this pointer
-    fn semantic_hash<const P: u128>(
-        &self,
-        order: &Self::Order,
-        map: &WmcParams<FiniteField<P>>,
-    ) -> FiniteField<P> {
-        self.wmc(order, map)
+    fn semantic_hash<const P: u128>(&self, map: &WmcParams<FiniteField<P>>) -> FiniteField<P> {
+        self.unsmoothed_wmc(map)
     }
 
     /// Negate the pointer
