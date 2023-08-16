@@ -100,9 +100,7 @@ pub unsafe extern "C" fn robdd_model_count(
                 .map(|v| (VarLabel::new(v), (FiniteField::one(), FiniteField::one()))),
         ));
 
-    let mc = smoothed
-        .wmc(&VarOrder::linear_order(num_vars), &unweighted_params)
-        .value();
+    let mc = smoothed.unsmoothed_wmc(&unweighted_params).value();
 
     mc as u64
 }
