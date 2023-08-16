@@ -56,12 +56,6 @@ pub enum DDNNF<T> {
 }
 
 pub trait DDNNFPtr<'a>: Clone + Debug + PartialEq + Eq + Hash + Copy {
-    /// A generic Ordering type
-    /// For BDDs, this is a VarOrder
-    /// For SDDs, this is a VTree
-    /// For decisionDNNF, this is a DTree
-    type Order;
-
     /// performs a memoized bottom-up pass with aggregating function `f` calls
     fn fold<T: Semiring, F: Fn(DDNNF<T>) -> T>(&self, f: F) -> T
     where

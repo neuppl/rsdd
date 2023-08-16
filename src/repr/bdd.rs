@@ -892,8 +892,6 @@ impl<'a> BddPtr<'a> {
 type DDNNFCache<T> = (Option<T>, Option<T>);
 
 impl<'a> DDNNFPtr<'a> for BddPtr<'a> {
-    type Order = VarOrder;
-
     fn true_ptr() -> BddPtr<'a> {
         PtrTrue
     }
