@@ -42,21 +42,6 @@ unsafe fn robdd_builder_from_ptr<'_0>(
     &mut *(ptr.cast())
 }
 
-// directly inspired by https://users.rust-lang.org/t/how-to-deal-with-lifetime-when-need-to-expose-through-ffi/39583
-// and the follow-up at https://users.rust-lang.org/t/can-someone-explain-why-this-is-working/82324/6
-#[repr(C)]
-pub struct RsddBddPtr {
-    _priv: [u8; 0],
-}
-
-// unsafe fn bdd_ptr_from_ptr<'_0>(ptr: *mut BddPtr<'static>) -> &'_0 mut BddPtr<'static> {
-//     if ptr.is_null() {
-//         eprintln!("Fatal error, got NULL `Context` pointer");
-//         ::std::process::abort();
-//     }
-//     &mut *(ptr.cast())
-// }
-
 /// # Safety
 ///
 /// Requires a valid VarOrder pointer; the constructor will copy the moved value.
