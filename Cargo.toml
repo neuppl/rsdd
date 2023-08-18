@@ -40,7 +40,7 @@ clap = { version = "4.2.1", features = ["derive"] }
 [lib]
 name = "rsdd"
 path = "src/lib.rs"
-crate-type = ["cdylib", "lib"]
+crate-type = ["cdylib", "lib", "staticlib"]
 
 [profile.release]
 opt-level = 3
