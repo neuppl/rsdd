@@ -42,10 +42,8 @@ unsafe fn robdd_builder_from_ptr<'_0>(
     &mut *(ptr.cast())
 }
 
-/// # Safety
-///
-/// Requires a valid VarOrder pointer; the constructor will copy the moved value.
 #[no_mangle]
+#[allow(clippy::missing_safety_doc)]
 pub unsafe extern "C" fn robdd_builder_all_table(order: *mut VarOrder) -> *mut RsddBddBuilder {
     if order.is_null() {
         eprintln!("Fatal error, got NULL `order` pointer");
@@ -80,11 +78,8 @@ pub unsafe extern "C" fn robdd_model_count(
     bdd: *mut BddPtr<'static>,
 ) -> u64 {
     let builder = robdd_builder_from_ptr(builder);
-
     let num_vars = builder.num_vars();
-
     let smoothed = builder.smooth(*bdd, num_vars);
-
     let unweighted_params: WmcParams<FiniteField<{ primes::U64_LARGEST }>> =
         WmcParams::new(HashMap::from_iter(
             (0..num_vars as u64)
@@ -92,7 +87,6 @@ pub unsafe extern "C" fn robdd_model_count(
         ));
 
     let mc = smoothed.unsmoothed_wmc(&unweighted_params).value();
-
     mc as u64
 }
 
@@ -114,9 +108,7 @@ pub unsafe extern "C" fn bdd_new_var(
     polarity: bool,
 ) -> *mut BddPtr<'static> {
     let builder = robdd_builder_from_ptr(builder);
-
     let (_, ptr) = builder.new_var(polarity);
-
     Box::into_raw(Box::new(ptr))
 }
 
@@ -129,7 +121,6 @@ pub unsafe extern "C" fn bdd_ite(
     h: *mut BddPtr<'static>,
 ) -> *mut BddPtr<'static> {
     let builder = robdd_builder_from_ptr(builder);
-
     let and = builder.ite(*f, *g, *h);
     Box::into_raw(Box::new(and))
 }
@@ -142,7 +133,6 @@ pub unsafe extern "C" fn bdd_and(
     right: *mut BddPtr<'static>,
 ) -> *mut BddPtr<'static> {
     let builder = robdd_builder_from_ptr(builder);
-
     let and = builder.and(*left, *right);
     Box::into_raw(Box::new(and))
 }
@@ -155,7 +145,6 @@ pub unsafe extern "C" fn bdd_or(
     right: *mut BddPtr<'static>,
 ) -> *mut BddPtr<'static> {
     let builder = robdd_builder_from_ptr(builder);
-
     let or = builder.and(*left, *right);
     Box::into_raw(Box::new(or))
 }
@@ -167,7 +156,6 @@ pub unsafe extern "C" fn bdd_negate(
     bdd: *mut BddPtr<'static>,
 ) -> *mut BddPtr<'static> {
     let builder = robdd_builder_from_ptr(builder);
-
     let negate = builder.negate(*bdd);
     Box::into_raw(Box::new(negate))
 }
@@ -214,17 +202,12 @@ pub unsafe extern "C" fn bdd_eq(
     right: *mut BddPtr<'static>,
 ) -> bool {
     let builder = robdd_builder_from_ptr(builder);
-    // let left = bdd_ptr_from_ptr(left);
-    // let right = bdd_ptr_from_ptr(right);
-
     builder.eq(*left, *right)
 }
 
 #[no_mangle]
 #[allow(clippy::missing_safety_doc)]
 pub unsafe extern "C" fn bdd_topvar(bdd: *mut BddPtr<'static>) -> u64 {
-    // let bdd = bdd_ptr_from_ptr(bdd);
-
     match (*bdd).var_safe() {
         Some(x) => x.value(),
         None => 0, // TODO: fix this
