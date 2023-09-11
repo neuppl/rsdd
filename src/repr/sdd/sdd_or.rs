@@ -165,7 +165,7 @@ impl<'a> SddNodeIter<'a> {
 }
 
 impl<'a> Iterator for SddNodeIter<'a> {
-    type Item = SddAnd<'a> where Self: 'a;
+    type Item = SddAnd<'a>;
 
     fn next(&mut self) -> Option<Self::Item> {
         match self.sdd {

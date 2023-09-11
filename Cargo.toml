@@ -20,7 +20,7 @@ rustc-hash = "1.1.0"
 bit-set = "0.5.3"
 segment-tree = "2.0.0"
 bumpalo = "3.11.1"
-petgraph = "0.6.2"
+petgraph = "0.5.1"
 rand_chacha = "0.3.1"
 # optional: only used to build [[bin]]
 clap = { version = "4.2.1", features = ["derive"], optional = true }
