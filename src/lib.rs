@@ -25,5 +25,9 @@ pub mod serialize;
 #[cfg(target_arch = "wasm32")]
 pub mod wasm;
 
+// added feature flags to prevent double-exporting
+// when using rsdd-ocaml
+#[cfg(feature = "ffi")]
 mod ffi;
+#[cfg(feature = "ffi")]
 pub use self::ffi::*;
