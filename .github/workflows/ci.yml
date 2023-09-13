@@ -44,6 +44,28 @@ jobs:
     - name: Run tests
       run: cargo test --verbose
 
+  ffi:
+    name: ffi
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Install cbindgen
+        run: cargo install cbindgen
+      - name: Generate C header file
+        run: cbindgen --config cbindgen.toml --crate rsdd --output rsdd.h
+      - name: Build (with feature flag)
+        run: cargo build --verbose --features="ffi" --release
+      - name: Move sample .c file
+        run: mv scripts/main.c main.c
+      - name: Compile sample .c file
+        run: gcc main.c -o main -lrsdd -L./target/release
+        env:
+          LD_LIBRARY_PATH: "./target/release" # necessary for dynamic linking to resolve
+      - name: Compile sample .c file
+        run: ./main
+        env:
+          LD_LIBRARY_PATH: "./target/release" # necessary for dynamic linking to resolve
+
   wasm:
     name: wasm
     runs-on: ubuntu-latest

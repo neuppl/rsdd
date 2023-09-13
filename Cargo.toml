@@ -55,6 +55,7 @@ rpath = false
 
 [features]
 cli = ["clap", "serde_json"]
+ffi = []
 
 [[bin]]
 name = "bottomup_cnf_to_bdd"

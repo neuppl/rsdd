@@ -1,1 +1,4 @@
 language = "C"
+
+[parse.expand]
+features = ["ffi"] # required to emit FFI (see: lib.rs)
