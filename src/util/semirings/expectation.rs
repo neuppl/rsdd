@@ -1,5 +1,4 @@
 // Expected Utility Semiring.
-
 use super::semiring_traits::*;
 use std::{cmp::Ordering, fmt::Display, ops};
 
@@ -96,4 +95,19 @@ impl MeetSemilattice for ExpectedUtility {
 
 impl Lattice for ExpectedUtility {}
 
+impl LatticeWithChoose for ExpectedUtility {}
+
 impl EdgeboundingRing for ExpectedUtility {}
+
+impl ops::Div<ExpectedUtility> for ExpectedUtility {
+    type Output = ExpectedUtility;
+
+    fn div(self, rhs: ExpectedUtility) -> Self::Output {
+        let y = rhs.0;
+        if y != 0.0 {
+            ExpectedUtility(self.0 / y, self.1 / y)
+        } else {
+            ExpectedUtility::zero()
+        }
+    }
+}

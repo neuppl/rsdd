@@ -6,8 +6,8 @@ use crate::{
     repr::WmcParams,
     repr::{DDNNFPtr, DDNNF},
     repr::{Literal, VarLabel, VarSet},
-    util::semirings::ExpectedUtility,
     util::semirings::{BBSemiring, FiniteField, JoinSemilattice, RealSemiring},
+    util::semirings::{ExpectedUtility, LatticeWithChoose, MeetSemilattice},
 };
 use bit_set::BitSet;
 use core::fmt::Debug;
@@ -655,6 +655,7 @@ impl<'a> BddPtr<'a> {
 
     fn meu_h(
         &self,
+        evidence: BddPtr,
         cur_lb: ExpectedUtility,
         cur_best: PartialModel,
         decision_vars: &[VarLabel],
@@ -666,7 +667,8 @@ impl<'a> BddPtr<'a> {
             [] => {
                 // Run the eu ub
                 let decision_bitset = BitSet::new();
-                let possible_best = self.eu_ub(&cur_assgn, &decision_bitset, wmc);
+                let possible_best = self.eu_ub(&cur_assgn, &decision_bitset, wmc)
+                    / evidence.bb_lb(&cur_assgn, &decision_bitset, wmc);
                 // If it's a better lb, update.
                 if possible_best.1 > cur_lb.1 {
                     (possible_best, cur_assgn)
@@ -687,8 +689,14 @@ impl<'a> BddPtr<'a> {
                 false_model.set(*x, false);
 
                 // and calculate their respective upper bounds.
-                let true_ub = self.eu_ub(&true_model, &margvar_bits, wmc);
-                let false_ub = self.eu_ub(&false_model, &margvar_bits, wmc);
+                let true_ub_num = self.eu_ub(&true_model, &margvar_bits, wmc);
+                let false_ub_num = self.eu_ub(&false_model, &margvar_bits, wmc);
+
+                let true_ub_dec = evidence.bb_lb(&true_model, &margvar_bits, wmc);
+                let false_ub_dec = evidence.bb_lb(&false_model, &margvar_bits, wmc);
+
+                let true_ub = true_ub_num / true_ub_dec;
+                let false_ub = false_ub_num / false_ub_dec;
 
                 // branch on the greater upper-bound first
                 let order = if true_ub.1 > false_ub.1 {
@@ -699,9 +707,14 @@ impl<'a> BddPtr<'a> {
                 for (upper_bound, partialmodel) in order {
                     // branch + bound
                     if upper_bound.1 > best_lb.1 {
-                        (best_lb, best_model) =
-                            self.meu_h(best_lb, best_model, end, wmc, partialmodel.clone())
-                    } else {
+                        (best_lb, best_model) = self.meu_h(
+                            evidence,
+                            best_lb,
+                            best_model,
+                            end,
+                            wmc,
+                            partialmodel.clone(),
+                        )
                     }
                 }
                 (best_lb, best_model)
@@ -709,22 +722,26 @@ impl<'a> BddPtr<'a> {
         }
     }
 
-    /// maximum expected utility calc
+    /// maximum expected utility calc, scaled for evidence.
+    /// introduced in Section 5 of the daPPL paper
     pub fn meu(
         &self,
+        evidence: BddPtr,
         decision_vars: &[VarLabel],
         num_vars: usize,
         wmc: &WmcParams<ExpectedUtility>,
     ) -> (ExpectedUtility, PartialModel) {
-        // Initialize all the decision variables to be true, partially instantianted resp. to this
+        // Initialize all the decision variables to be true
         let all_true: Vec<Literal> = decision_vars
             .iter()
             .map(|x| Literal::new(*x, true))
             .collect();
         let cur_assgn = PartialModel::from_litvec(&all_true, num_vars);
         // Calculate bound wrt the partial instantiation.
-        let lower_bound = self.eu_ub(&cur_assgn, &BitSet::new(), wmc);
+        let lower_bound = self.eu_ub(&cur_assgn, &BitSet::new(), wmc)
+            / evidence.bb_lb(&cur_assgn, &BitSet::new(), wmc);
         self.meu_h(
+            evidence,
             lower_bound,
             cur_assgn,
             decision_vars,
@@ -767,6 +784,56 @@ impl<'a> BddPtr<'a> {
                             let lhs = *w_l * low;
                             let rhs = *w_h * high;
                             JoinSemilattice::join(&lhs, &rhs)
+                        // Otherwise it is a sum variables, so
+                        } else {
+                            (*w_l * low) + (*w_h * high)
+                        }
+                    }
+                    // If our node has already been assigned, then we
+                    // reached a base case. We return the accumulated value.
+                    Some(true) => high,
+                    Some(false) => low,
+                }
+            },
+            wmc.zero,
+            wmc.one,
+        );
+        partial_join_acc * v
+    }
+
+    /// lower-bounding the expected utility, for meu_h
+    fn bb_lb<T: LatticeWithChoose>(
+        &self,
+        partial_join_assgn: &PartialModel,
+        join_vars: &BitSet,
+        wmc: &WmcParams<T>,
+    ) -> T
+    where
+        T: 'static,
+    {
+        let mut partial_join_acc = T::one();
+        for lit in partial_join_assgn.assignment_iter() {
+            let (l, h) = wmc.var_weight(lit.label());
+            if lit.polarity() {
+                partial_join_acc = partial_join_acc * (*h);
+            } else {
+                partial_join_acc = partial_join_acc * (*l);
+            }
+        }
+        // top-down LB calculation via bdd_fold
+        let v = self.bdd_fold(
+            &|varlabel, low: T, high: T| {
+                // get True and False weights for node VarLabel
+                let (w_l, w_h) = wmc.var_weight(varlabel);
+                // Check if our partial model has already assigned the node.
+                match partial_join_assgn.get(varlabel) {
+                    // If not...
+                    None => {
+                        // If it's a meet variable, (w_l * low) n (w_h * high)
+                        if join_vars.contains(varlabel.value_usize()) {
+                            let lhs = *w_l * low;
+                            let rhs = *w_h * high;
+                            MeetSemilattice::meet(&lhs, &rhs)
                         // Otherwise it is a sum variables, so
                         } else {
                             (*w_l * low) + (*w_h * high)

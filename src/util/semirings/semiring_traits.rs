@@ -42,4 +42,6 @@ pub trait MeetSemilattice: PartialOrd {
 
 pub trait Lattice: JoinSemilattice + MeetSemilattice {}
 
+pub trait LatticeWithChoose: BBSemiring + MeetSemilattice {}
+
 pub trait EdgeboundingRing: Lattice + BBRing {}

@@ -186,12 +186,10 @@ fn gen() {
     let wmc = WmcParams::new(eu_map);
 
     let now = Instant::now();
-    let (meu_num, pm) = end.meu(&vars, builder.num_vars(), &wmc);
-    let (meu_dec, _) = network_fail.meu(&vars, builder.num_vars(), &wmc);
+    let (meu_num, pm) = end.meu(network_fail, &vars, builder.num_vars(), &wmc);
     println!(
         "Regular MEU: {} \nPM : {:?}",
-        meu_num.1 / meu_dec.0,
-        pm.true_assignments
+        meu_num.1, pm.true_assignments
     );
     let elapsed = now.elapsed();
     println!("Elapsed: {:.2?}", elapsed);
