@@ -6,7 +6,7 @@ use crate::{
     repr::WmcParams,
     repr::{DDNNFPtr, DDNNF},
     repr::{Literal, VarLabel, VarSet},
-    util::semirings::ExpectedUtility,
+    util::semirings::{ExpectedUtility, MeetSemilattice, LatticeWithChoose},
     util::semirings::{BBSemiring, FiniteField, JoinSemilattice, RealSemiring},
 };
 use bit_set::BitSet;
@@ -784,6 +784,56 @@ impl<'a> BddPtr<'a> {
         partial_join_acc * v
     }
 
+    /// lower-bounding the expected utility, for meu_h
+    fn bb_lb<T: MeetSemilattice>(
+        &self,
+        partial_join_assgn: &PartialModel,
+        join_vars: &BitSet,
+        wmc: &WmcParams<T>,
+    ) -> T
+    where
+        T: 'static,
+    {
+        let mut partial_join_acc = T::one();
+        for lit in partial_join_assgn.assignment_iter() {
+            let (l, h) = wmc.var_weight(lit.label());
+            if lit.polarity() {
+                partial_join_acc = partial_join_acc * (*h);
+            } else {
+                partial_join_acc = partial_join_acc * (*l);
+            }
+        }
+        // top-down LB calculation via bdd_fold
+        let v = self.bdd_fold(
+            &|varlabel, low: T, high: T| {
+                // get True and False weights for node VarLabel
+                let (w_l, w_h) = wmc.var_weight(varlabel);
+                // Check if our partial model has already assigned the node.
+                match partial_join_assgn.get(varlabel) {
+                    // If not...
+                    None => {
+                        // If it's a meet variable, (w_l * low) n (w_h * high)
+                        if join_vars.contains(varlabel.value_usize()) {
+                            let lhs = *w_l * low;
+                            let rhs = *w_h * high;
+                            MeetSemilattice::meet(&lhs, &rhs)
+                        // Otherwise it is a sum variables, so
+                        } else {
+                            (*w_l * low) + (*w_h * high)
+                        }
+                    }
+                    // If our node has already been assigned, then we
+                    // reached a base case. We return the accumulated value.
+                    Some(true) => high,
+                    Some(false) => low,
+                }
+            },
+            wmc.zero,
+            wmc.one,
+        );
+        partial_join_acc * v
+    }
+
     fn bb_h<T: BBSemiring>(
         &self,
         cur_lb: T,
@@ -874,6 +924,20 @@ impl<'a> BddPtr<'a> {
         )
     }
 
+    /// branch and bound with incremental evidence gain.
+    pub fn bb_with_evidence<T : LatticeWithChoose>(
+      &self,
+      evidence : BddPtr,
+      vars: &[VarLabel],
+      num_vars: usize,
+      wmc: &WmcParams<T>,
+    ) -> (T, PartialModel)
+    where
+      T: 'static,
+    {
+
+    }
+    
     /// performs a semantic hash and caches the result on the node
     pub fn cached_semantic_hash<const P: u128>(
         &self,

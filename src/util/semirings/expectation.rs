@@ -96,4 +96,6 @@ impl MeetSemilattice for ExpectedUtility {
 
 impl Lattice for ExpectedUtility {}
 
+impl LatticeWithChoose for ExpectedUtility { }
+
 impl EdgeboundingRing for ExpectedUtility {}
