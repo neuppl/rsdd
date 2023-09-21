@@ -6,7 +6,7 @@ use crate::{
     repr::WmcParams,
     repr::{DDNNFPtr, DDNNF},
     repr::{Literal, VarLabel, VarSet},
-    util::semirings::{ExpectedUtility, MeetSemilattice, LatticeWithChoose},
+    util::semirings::{ExpectedUtility, MeetSemilattice, LatticeWithChoose, Lattice},
     util::semirings::{BBSemiring, FiniteField, JoinSemilattice, RealSemiring},
 };
 use bit_set::BitSet;
@@ -17,7 +17,7 @@ use std::{
     collections::HashMap,
     hash::{Hash, Hasher},
     iter::FromIterator,
-    ptr,
+    ptr, thread,
 };
 use BddPtr::*;
 
@@ -655,6 +655,7 @@ impl<'a> BddPtr<'a> {
 
     fn meu_h(
         &self,
+        evidence : BddPtr,
         cur_lb: ExpectedUtility,
         cur_best: PartialModel,
         decision_vars: &[VarLabel],
@@ -666,7 +667,8 @@ impl<'a> BddPtr<'a> {
             [] => {
                 // Run the eu ub
                 let decision_bitset = BitSet::new();
-                let possible_best = self.eu_ub(&cur_assgn, &decision_bitset, wmc);
+                let possible_best = 
+                  self.eu_ub(&cur_assgn, &decision_bitset, wmc) / evidence.bb_lb(&cur_assgn, &decision_bitset, wmc);
                 // If it's a better lb, update.
                 if possible_best.1 > cur_lb.1 {
                     (possible_best, cur_assgn)
@@ -687,8 +689,14 @@ impl<'a> BddPtr<'a> {
                 false_model.set(*x, false);
 
                 // and calculate their respective upper bounds.
-                let true_ub = self.eu_ub(&true_model, &margvar_bits, wmc);
-                let false_ub = self.eu_ub(&false_model, &margvar_bits, wmc);
+                let true_ub_num = self.eu_ub(&true_model, &margvar_bits, wmc);
+                let false_ub_num = self.eu_ub(&false_model, &margvar_bits, wmc);
+
+                let true_ub_dec = evidence.bb_lb(&true_model, &margvar_bits, wmc);
+                let false_ub_dec = evidence.bb_lb(&false_model, &margvar_bits, wmc);
+
+                let true_ub = true_ub_num / true_ub_dec;
+                let false_ub = false_ub_num / false_ub_dec;
 
                 // branch on the greater upper-bound first
                 let order = if true_ub.1 > false_ub.1 {
@@ -700,7 +708,7 @@ impl<'a> BddPtr<'a> {
                     // branch + bound
                     if upper_bound.1 > best_lb.1 {
                         (best_lb, best_model) =
-                            self.meu_h(best_lb, best_model, end, wmc, partialmodel.clone())
+                            self.meu_h(evidence, best_lb, best_model, end, wmc, partialmodel.clone())
                     } else {
                     }
                 }
@@ -709,22 +717,26 @@ impl<'a> BddPtr<'a> {
         }
     }
 
-    /// maximum expected utility calc
+    /// maximum expected utility calc, scaled for evidence. 
+    /// introduced in Section 5 of the daPPL paper
     pub fn meu(
         &self,
+        evidence : BddPtr,
         decision_vars: &[VarLabel],
         num_vars: usize,
         wmc: &WmcParams<ExpectedUtility>,
     ) -> (ExpectedUtility, PartialModel) {
-        // Initialize all the decision variables to be true, partially instantianted resp. to this
+        // Initialize all the decision variables to be true
         let all_true: Vec<Literal> = decision_vars
             .iter()
             .map(|x| Literal::new(*x, true))
             .collect();
         let cur_assgn = PartialModel::from_litvec(&all_true, num_vars);
         // Calculate bound wrt the partial instantiation.
-        let lower_bound = self.eu_ub(&cur_assgn, &BitSet::new(), wmc);
+        let lower_bound = 
+          self.eu_ub(&cur_assgn, &BitSet::new(), wmc) / evidence.bb_lb(&cur_assgn, &BitSet::new(), wmc);
         self.meu_h(
+            evidence,
             lower_bound,
             cur_assgn,
             decision_vars,
@@ -785,7 +797,7 @@ impl<'a> BddPtr<'a> {
     }
 
     /// lower-bounding the expected utility, for meu_h
-    fn bb_lb<T: MeetSemilattice>(
+    fn bb_lb<T: LatticeWithChoose>(
         &self,
         partial_join_assgn: &PartialModel,
         join_vars: &BitSet,
@@ -828,115 +840,101 @@ impl<'a> BddPtr<'a> {
                     Some(false) => low,
                 }
             },
-            wmc.zero,
-            wmc.one,
-        );
-        partial_join_acc * v
-    }
+              wmc.zero,
+              wmc.one,
+          );
+          partial_join_acc * v
+      }
 
-    fn bb_h<T: BBSemiring>(
-        &self,
-        cur_lb: T,
-        cur_best: PartialModel,
-        join_vars: &[VarLabel],
-        wmc: &WmcParams<T>,
-        cur_assgn: PartialModel,
-    ) -> (T, PartialModel)
-    where
-        T: 'static,
-    {
-        match join_vars {
-            // If all join variables are assigned,
-            [] => {
-                // Run the bb_ub
-                let empty_join_vars = BitSet::new();
-                let possible_best = self.bb_ub(&cur_assgn, &empty_join_vars, wmc);
-                // If it's a better lb, update.
-                let best = BBSemiring::choose(&cur_lb, &possible_best);
-                if cur_lb == best {
-                    (cur_lb, cur_best)
-                } else {
-                    (possible_best, cur_assgn)
-                }
-            }
-            // If there exists an unassigned decision variable,
-            [x, end @ ..] => {
-                let mut best_model = cur_best.clone();
-                let mut best_lb = cur_lb;
-                let join_vars_bits = BitSet::from_iter(end.iter().map(|x| x.value_usize()));
-                // Consider the assignment of it to true...
-                let mut true_model = cur_assgn.clone();
-                true_model.set(*x, true);
-                // ... and false...
-                let mut false_model = cur_assgn;
-                false_model.set(*x, false);
+      fn bb_h<T: BBSemiring>(
+          &self,
+          cur_lb: T,
+          cur_best: PartialModel,
+          join_vars: &[VarLabel],
+          wmc: &WmcParams<T>,
+          cur_assgn: PartialModel,
+      ) -> (T, PartialModel)
+      where
+          T: 'static,
+      {
+          match join_vars {
+              // If all join variables are assigned,
+              [] => {
+                  // Run the bb_ub
+                  let empty_join_vars = BitSet::new();
+                  let possible_best = self.bb_ub(&cur_assgn, &empty_join_vars, wmc);
+                  // If it's a better lb, update.
+                  let best = BBSemiring::choose(&cur_lb, &possible_best);
+                  if cur_lb == best {
+                      (cur_lb, cur_best)
+                  } else {
+                      (possible_best, cur_assgn)
+                  }
+              }
+              // If there exists an unassigned decision variable,
+              [x, end @ ..] => {
+                  let mut best_model = cur_best.clone();
+                  let mut best_lb = cur_lb;
+                  let join_vars_bits = BitSet::from_iter(end.iter().map(|x| x.value_usize()));
+                  // Consider the assignment of it to true...
+                  let mut true_model = cur_assgn.clone();
+                  true_model.set(*x, true);
+                  // ... and false...
+                  let mut false_model = cur_assgn;
+                  false_model.set(*x, false);
 
-                // and calculate their respective upper bounds.
-                let true_ub = self.bb_ub(&true_model, &join_vars_bits, wmc);
-                let false_ub = self.bb_ub(&false_model, &join_vars_bits, wmc);
+                  // and calculate their respective upper bounds.
+                  let true_ub = self.bb_ub(&true_model, &join_vars_bits, wmc);
+                  let false_ub = self.bb_ub(&false_model, &join_vars_bits, wmc);
 
-                // arbitrarily order the T/F bounds
-                let order = if true_ub == BBSemiring::choose(&true_ub, &false_ub) {
-                    [(true_ub, true_model), (false_ub, false_model)]
-                } else {
-                    [(false_ub, false_model), (true_ub, true_model)]
-                };
-                // the actual branching and bounding
-                for (upper_bound, partialmodel) in order {
-                    // if upper_bound == BBAlgebra::choose(&upper_bound, &best_lb) {
-                    if !PartialOrd::le(&upper_bound, &cur_lb) {
-                        let (rec, rec_pm) =
-                            self.bb_h(best_lb, best_model.clone(), end, wmc, partialmodel.clone());
-                        let new_lb = BBSemiring::choose(&cur_lb, &rec);
-                        if new_lb == rec {
-                            (best_lb, best_model) = (rec, rec_pm);
-                        } else {
-                            (best_lb, best_model) = (cur_lb, cur_best.clone());
-                        }
-                    }
-                }
-                (best_lb, best_model)
-            }
-        }
-    }
+                  // arbitrarily order the T/F bounds
+                  let order = if true_ub == BBSemiring::choose(&true_ub, &false_ub) {
+                      [(true_ub, true_model), (false_ub, false_model)]
+                  } else {
+                      [(false_ub, false_model), (true_ub, true_model)]
+                  };
+                  // the actual branching and bounding
+                  for (upper_bound, partialmodel) in order {
+                      // if upper_bound == BBAlgebra::choose(&upper_bound, &best_lb) {
+                      if !PartialOrd::le(&upper_bound, &cur_lb) {
+                          let (rec, rec_pm) =
+                              self.bb_h(best_lb, best_model.clone(), end, wmc, partialmodel.clone());
+                          let new_lb = BBSemiring::choose(&cur_lb, &rec);
+                          if new_lb == rec {
+                              (best_lb, best_model) = (rec, rec_pm);
+                          } else {
+                              (best_lb, best_model) = (cur_lb, cur_best.clone());
+                          }
+                      }
+                  }
+                  (best_lb, best_model)
+              }
+          }
+      }
 
-    /// branch and bound generic over T a BBAlgebra.
-    pub fn bb<T: BBSemiring>(
-        &self,
-        join_vars: &[VarLabel],
-        num_vars: usize,
-        wmc: &WmcParams<T>,
-    ) -> (T, PartialModel)
-    where
-        T: 'static,
-    {
-        // Initialize all the decision variables to be true, partially instantianted resp. to this
-        let all_true: Vec<Literal> = join_vars.iter().map(|x| Literal::new(*x, true)).collect();
-        let cur_assgn = PartialModel::from_litvec(&all_true, num_vars);
-        // Calculate bound wrt the partial instantiation.
-        let lower_bound = self.bb_ub(&cur_assgn, &BitSet::new(), wmc);
-        self.bb_h(
-            lower_bound,
-            cur_assgn,
-            join_vars,
-            wmc,
-            PartialModel::from_litvec(&[], num_vars),
-        )
-    }
-
-    /// branch and bound with incremental evidence gain.
-    pub fn bb_with_evidence<T : LatticeWithChoose>(
-      &self,
-      evidence : BddPtr,
-      vars: &[VarLabel],
-      num_vars: usize,
-      wmc: &WmcParams<T>,
-    ) -> (T, PartialModel)
-    where
-      T: 'static,
-    {
-
-    }
+      /// branch and bound generic over T a BBAlgebra.
+      pub fn bb<T: BBSemiring>(
+          &self,
+          join_vars: &[VarLabel],
+          num_vars: usize,
+          wmc: &WmcParams<T>,
+      ) -> (T, PartialModel)
+      where
+          T: 'static,
+      {
+          // Initialize all the decision variables to be true, partially instantianted resp. to this
+          let all_true: Vec<Literal> = join_vars.iter().map(|x| Literal::new(*x, true)).collect();
+          let cur_assgn = PartialModel::from_litvec(&all_true, num_vars);
+          // Calculate bound wrt the partial instantiation.
+          let lower_bound = self.bb_ub(&cur_assgn, &BitSet::new(), wmc);
+          self.bb_h(
+              lower_bound,
+              cur_assgn,
+              join_vars,
+              wmc,
+              PartialModel::from_litvec(&[], num_vars),
+          )
+      }
     
     /// performs a semantic hash and caches the result on the node
     pub fn cached_semantic_hash<const P: u128>(
