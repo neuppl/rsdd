@@ -104,7 +104,7 @@ impl ops::Div<ExpectedUtility> for ExpectedUtility {
   
   fn div(self, rhs: ExpectedUtility) -> Self::Output {
     let y = rhs.0;
-    if y == 0.0 {
+    if y != 0.0 {
       ExpectedUtility(self.0 / y, self.1 / y)
     } else {
       ExpectedUtility::zero()
