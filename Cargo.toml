@@ -27,7 +27,7 @@ bit-set = "0.5.3"
 segment-tree = "2.0.0"
 dot = "0.1.4"
 petgraph = "0.6.2"
-rsgm = { git = "https://github.com/pmall-neu/rsgm" }
+rsgm = { git = "https://github.com/pmall-neu/rsgm", rev = "9edf93ef996a1e57d65c3b3701df1a2ba5a34af0" }
 
 
 [lib]
