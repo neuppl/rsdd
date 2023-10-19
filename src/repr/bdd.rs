@@ -701,7 +701,6 @@ impl<'a> BddPtr<'a> {
                     if upper_bound.1 > best_lb.1 {
                         (best_lb, best_model) =
                             self.meu_h(best_lb, best_model, end, wmc, partialmodel.clone())
-                    } else {
                     }
                 }
                 (best_lb, best_model)
@@ -1097,19 +1096,7 @@ impl<'a> Eq for BddNode<'a> {}
 
 impl<'a> PartialOrd for BddNode<'a> {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        match self.var.partial_cmp(&other.var) {
-            Some(core::cmp::Ordering::Equal) => {}
-            ord => return ord,
-        }
-        match self.low.partial_cmp(&other.low) {
-            Some(core::cmp::Ordering::Equal) => {}
-            ord => return ord,
-        }
-        match self.high.partial_cmp(&other.high) {
-            Some(core::cmp::Ordering::Equal) => {}
-            ord => return ord,
-        }
-        Some(core::cmp::Ordering::Equal)
+        Some(self.cmp(other))
     }
 }
 
@@ -1127,6 +1114,18 @@ impl<'a> Clone for BddNode<'a> {
 
 impl<'a> Ord for BddNode<'a> {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.partial_cmp(other).unwrap()
+        match self.var.cmp(&other.var) {
+            core::cmp::Ordering::Equal => {}
+            ord => return ord, // observe: this is not equal!
+        }
+        match self.low.cmp(&other.low) {
+            core::cmp::Ordering::Equal => {}
+            ord => return ord, // observe: this is not equal!
+        }
+        match self.high.cmp(&other.high) {
+            core::cmp::Ordering::Equal => {}
+            ord => return ord, // observe: this is not equal!
+        }
+        core::cmp::Ordering::Equal
     }
 }
