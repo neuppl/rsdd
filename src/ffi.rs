@@ -145,7 +145,7 @@ pub unsafe extern "C" fn bdd_or(
     right: *mut BddPtr<'static>,
 ) -> *mut BddPtr<'static> {
     let builder = robdd_builder_from_ptr(builder);
-    let or = builder.and(*left, *right);
+    let or = builder.or(*left, *right);
     Box::into_raw(Box::new(or))
 }
 
