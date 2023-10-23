@@ -198,7 +198,7 @@ pub trait SddBuilder<'a>: BottomUpBuilder<'a, SddPtr<'a>> {
         // return self.unique_or(v, r.vtree());
 
         // TODO optimize this for special cases
-        let b = vec![
+        let b = [
             SddAnd::new(d, SddPtr::true_ptr()),
             SddAnd::new(d.neg(), SddPtr::false_ptr()),
         ];

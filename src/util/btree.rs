@@ -121,7 +121,6 @@ where
                 BTree::Leaf(ref l) => {
                     if f(l) {
                         return Some(idx);
-                    } else {
                     }
                 }
             }
