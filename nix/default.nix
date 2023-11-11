@@ -5,22 +5,18 @@
 }:
 rustPlatform.buildRustPackage rec {
   pname = "rsdd";
-  version = "0.1.0";
+  version = "unstable-2023-11-11";
 
   src = ../.;
 
-  #cargoHash = "sha256-GYO554P3VHilJm2z/BM8noiPKG/HQM5jSELwuXAHJAA=";
-  cargoHash = "sha256-dl1R1VHPPwa2RVZw3as7zbmKUSrWvjTrMYn/YEYw/38=";
-
   cargoPatches = [./0001-Cargo.lock.patch];
-
-
-  buildFeatures = [ "ffi" "cli" ];
+  cargoHash = "sha256-yIGvJRSW1qCf4giVZkj2rW7g0CG69nd5Ystle6cG5nU=";
+  buildFeatures = [ "ffi" ];
 
   meta = with lib; {
     description = "Rust decision diagrams";
     homepage = "https://github.com/neuppl/rsdd";
     license = licenses.mit;
-    maintainers = with maintainers; [ stites ];
+    maintainers = with maintainers; [];
   };
 }
