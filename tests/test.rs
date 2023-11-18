@@ -282,6 +282,7 @@ mod test_bdd_builder {
     use rsdd::constants::primes;
     use rsdd::repr::BddPtr;
     use rsdd::repr::Cnf;
+    use rsdd::repr::DDNNF;
     use rsdd::repr::DTree;
     use rsdd::repr::PartialModel;
     use rsdd::repr::VTree;
@@ -290,9 +291,11 @@ mod test_bdd_builder {
     use rsdd::repr::WmcParams;
     use rsdd::repr::{create_semantic_hash_map, DDNNFPtr};
     use rsdd::util::semirings::ExpectedUtility;
+    use rsdd::util::semirings::FiniteField;
     use rsdd::util::semirings::RealSemiring;
     use rsdd::util::semirings::Semiring;
     use std::collections::HashMap;
+    use std::collections::HashSet;
     use std::iter::FromIterator;
 
     quickcheck! {
@@ -306,6 +309,39 @@ mod test_bdd_builder {
             let bdd3 = builder.condition(cnf, v1, false);
             let bdd4 = builder.or(bdd2, bdd3);
             bdd4 == bdd1
+        }
+    }
+
+    quickcheck! {
+        /// check that every node in the BDD has a unique semantic hash
+        fn qc_bdd_canonicity(c1: Cnf) -> TestResult {
+            let builder = super::RobddBuilder::<AllIteTable<BddPtr>>::new_with_linear_order(16);
+            let bdd = builder.compile_cnf(&c1);
+            let map : WmcParams<FiniteField<{primes::U32_SMALL}>>= create_semantic_hash_map(builder.num_vars());
+            
+            // traverse the BDD checking for nodes with duplicate hash values
+            fn recurse_bdd<'a>(w: &WmcParams<FiniteField<{primes::U32_SMALL}>>, ptr: BddPtr<'a>, seen_bdd: &mut HashSet<BddPtr<'a>>, seen_hashes: &mut HashSet<u128>) -> bool {
+                // check if we have visited this node; if so, terminate
+                if ptr.is_const() { 
+                    return true;
+                }
+                if seen_bdd.contains(&ptr) {
+                    return true;
+                }
+                seen_bdd.insert(ptr);
+                let hash_v = ptr.semantic_hash(w);
+                if seen_hashes.contains(&hash_v.value()) {
+                    return false;
+                } else {
+                    seen_hashes.insert(hash_v.value());
+                    let l = recurse_bdd(w, ptr.low(), seen_bdd, seen_hashes);
+                    let h = recurse_bdd(w, ptr.high(), seen_bdd, seen_hashes);
+                    return l && h
+                }
+            }
+            let mut seen_hashes : HashSet<u128> = HashSet::new();
+            let mut seen_bdd : HashSet<BddPtr> = HashSet::new();
+            return TestResult::from_bool(recurse_bdd(&map, bdd, &mut seen_bdd, &mut seen_hashes));
         }
     }
 
