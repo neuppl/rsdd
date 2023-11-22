@@ -282,13 +282,13 @@ mod test_bdd_builder {
     use rsdd::constants::primes;
     use rsdd::repr::BddPtr;
     use rsdd::repr::Cnf;
-    use rsdd::repr::DDNNF;
     use rsdd::repr::DTree;
     use rsdd::repr::PartialModel;
     use rsdd::repr::VTree;
     use rsdd::repr::VarLabel;
     use rsdd::repr::VarOrder;
     use rsdd::repr::WmcParams;
+    use rsdd::repr::DDNNF;
     use rsdd::repr::{create_semantic_hash_map, DDNNFPtr};
     use rsdd::util::semirings::ExpectedUtility;
     use rsdd::util::semirings::FiniteField;
@@ -318,11 +318,11 @@ mod test_bdd_builder {
             let builder = super::RobddBuilder::<AllIteTable<BddPtr>>::new_with_linear_order(16);
             let bdd = builder.compile_cnf(&c1);
             let map : WmcParams<FiniteField<{primes::U32_SMALL}>>= create_semantic_hash_map(builder.num_vars());
-            
+
             // traverse the BDD checking for nodes with duplicate hash values
             fn recurse_bdd<'a>(w: &WmcParams<FiniteField<{primes::U32_SMALL}>>, ptr: BddPtr<'a>, seen_bdd: &mut HashSet<BddPtr<'a>>, seen_hashes: &mut HashSet<u128>) -> bool {
                 // check if we have visited this node; if so, terminate
-                if ptr.is_const() { 
+                if ptr.is_const() {
                     return true;
                 }
                 if seen_bdd.contains(&ptr) {
