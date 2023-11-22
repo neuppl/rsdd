@@ -288,7 +288,6 @@ mod test_bdd_builder {
     use rsdd::repr::VarLabel;
     use rsdd::repr::VarOrder;
     use rsdd::repr::WmcParams;
-    use rsdd::repr::DDNNF;
     use rsdd::repr::{create_semantic_hash_map, DDNNFPtr};
     use rsdd::util::semirings::ExpectedUtility;
     use rsdd::util::semirings::FiniteField;
@@ -332,12 +331,12 @@ mod test_bdd_builder {
                 let hash_v = ptr.semantic_hash(w);
                 if seen_hashes.contains(&hash_v.value()) {
                     return false;
-                } else {
-                    seen_hashes.insert(hash_v.value());
-                    let l = recurse_bdd(w, ptr.low(), seen_bdd, seen_hashes);
-                    let h = recurse_bdd(w, ptr.high(), seen_bdd, seen_hashes);
-                    return l && h
                 }
+
+                seen_hashes.insert(hash_v.value());
+                let l = recurse_bdd(w, ptr.low(), seen_bdd, seen_hashes);
+                let h = recurse_bdd(w, ptr.high(), seen_bdd, seen_hashes);
+                l && h
             }
             let mut seen_hashes : HashSet<u128> = HashSet::new();
             let mut seen_bdd : HashSet<BddPtr> = HashSet::new();
@@ -507,7 +506,7 @@ mod test_bdd_builder {
 
             let (marg_prob, marg_assgn) = cnf.marginal_map(&vars, builder.num_vars(), &wmc);
             let (marg_prob_bb, marg_assgn_bb) = cnf.bb(&vars, builder.num_vars(), &wmc);
-            let assignments = vec![(true, true, true), (true, true, false), (true, false, true), (true, false, false),
+            let assignments = [(true, true, true), (true, true, false), (true, false, true), (true, false, false),
                                    (false, true, true), (false, true, false), (false, false, true), (false, false, false)];
 
             let mut max : f64 = -10.0;
@@ -618,7 +617,7 @@ mod test_bdd_builder {
             let (meu_bb, meu_assgn_bb) = cnf.bb(&vars, builder.num_vars(), &wmc);
 
             // brute-force meu
-            let assignments = vec![(true, true, true), (true, true, false), (true, false, true), (true, false, false),
+            let assignments = [(true, true, true), (true, true, false), (true, false, true), (true, false, false),
                                    (false, true, true), (false, true, false), (false, false, true), (false, false, false)];
             let mut max : f64 = -10000.0;
             let mut max_assgn : PartialModel = PartialModel::from_litvec(&[], c1.num_vars());
