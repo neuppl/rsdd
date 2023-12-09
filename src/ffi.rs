@@ -101,7 +101,6 @@ pub unsafe extern "C" fn mk_bdd_manager_default_order(num_vars: u64) -> *mut Rsd
     .cast()
 }
 
-
 #[no_mangle]
 #[allow(clippy::missing_safety_doc)]
 pub unsafe extern "C" fn bdd_new_label(builder: *mut RsddBddBuilder) -> u64 {
