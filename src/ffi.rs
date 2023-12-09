@@ -101,6 +101,7 @@ pub unsafe extern "C" fn mk_bdd_manager_default_order(num_vars: u64) -> *mut Rsd
     .cast()
 }
 
+
 #[no_mangle]
 #[allow(clippy::missing_safety_doc)]
 pub unsafe extern "C" fn bdd_new_label(builder: *mut RsddBddBuilder) -> u64 {
@@ -117,6 +118,17 @@ pub unsafe extern "C" fn bdd_var(
 ) -> *mut BddPtr<'static> {
     let builder = robdd_builder_from_ptr(builder);
     let ptr = builder.var(VarLabel::new(label), polarity);
+    Box::into_raw(Box::new(ptr))
+}
+
+#[no_mangle]
+#[allow(clippy::missing_safety_doc)]
+pub unsafe extern "C" fn bdd_new_var(
+    builder: *mut RsddBddBuilder,
+    polarity: bool,
+) -> *mut BddPtr<'static> {
+    let builder = robdd_builder_from_ptr(builder);
+    let (_, ptr) = builder.new_var(polarity);
     Box::into_raw(Box::new(ptr))
 }
 
