@@ -6,6 +6,7 @@ use core::fmt::Debug;
 use std::collections::HashMap;
 /// Weighted model counting parameters for a BDD. It primarily is a storage for
 /// the weight on each variable.
+#[repr(C)]
 #[derive(Clone)]
 pub struct WmcParams<T: Semiring> {
     pub zero: T,
