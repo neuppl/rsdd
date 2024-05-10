@@ -1,14 +1,12 @@
-use std::os::raw::c_char;
-use std::{collections::HashMap, ffi::CStr};
-
-use crate::repr::DDNNFPtr;
-use crate::util::semirings::{RealSemiring, Semiring};
 use crate::{
     builder::{bdd::RobddBuilder, cache::AllIteTable, BottomUpBuilder},
     constants::primes,
-    repr::{BddPtr, Cnf, VarLabel, VarOrder, WmcParams},
-    util::semirings::FiniteField,
+    repr::{self, Cnf, DDNNFPtr, VarLabel, VarOrder, WmcParams},
+    util::semirings::{FiniteField, RealSemiring, Semiring},
 };
+use std::{collections::HashMap, ffi::CStr, os::raw::c_char};
+
+pub type BddPtr = repr::BddPtr<'static>;
 
 #[no_mangle]
 pub extern "C" fn var_order_linear(num_vars: usize) -> *const VarOrder {
@@ -34,7 +32,7 @@ pub struct RsddBddBuilder {
 
 unsafe fn robdd_builder_from_ptr<'_0>(
     ptr: *mut RsddBddBuilder,
-) -> &'_0 mut RobddBuilder<'static, AllIteTable<BddPtr<'static>>> {
+) -> &'_0 mut RobddBuilder<'static, AllIteTable<BddPtr>> {
     if ptr.is_null() {
         eprintln!("Fatal error, got NULL `Context` pointer");
         ::std::process::abort();
@@ -59,7 +57,7 @@ pub unsafe extern "C" fn robdd_builder_all_table(order: *mut VarOrder) -> *mut R
 pub unsafe extern "C" fn robdd_builder_compile_cnf(
     builder: *mut RsddBddBuilder,
     cnf: *mut Cnf,
-) -> *mut BddPtr<'static> {
+) -> *mut BddPtr {
     if cnf.is_null() {
         eprintln!("Fatal error, got NULL `cnf` pointer");
         std::process::abort();
@@ -73,10 +71,7 @@ pub unsafe extern "C" fn robdd_builder_compile_cnf(
 
 #[no_mangle]
 #[allow(clippy::missing_safety_doc)]
-pub unsafe extern "C" fn robdd_model_count(
-    builder: *mut RsddBddBuilder,
-    bdd: *mut BddPtr<'static>,
-) -> u64 {
+pub unsafe extern "C" fn robdd_model_count(builder: *mut RsddBddBuilder, bdd: *mut BddPtr) -> u64 {
     let builder = robdd_builder_from_ptr(builder);
     let num_vars = builder.num_vars();
     let smoothed = builder.smooth(*bdd, num_vars);
@@ -114,7 +109,7 @@ pub unsafe extern "C" fn bdd_var(
     builder: *mut RsddBddBuilder,
     label: u64,
     polarity: bool,
-) -> *mut BddPtr<'static> {
+) -> *mut BddPtr {
     let builder = robdd_builder_from_ptr(builder);
     let ptr = builder.var(VarLabel::new(label), polarity);
     Box::into_raw(Box::new(ptr))
@@ -122,10 +117,7 @@ pub unsafe extern "C" fn bdd_var(
 
 #[no_mangle]
 #[allow(clippy::missing_safety_doc)]
-pub unsafe extern "C" fn bdd_new_var(
-    builder: *mut RsddBddBuilder,
-    polarity: bool,
-) -> *mut BddPtr<'static> {
+pub unsafe extern "C" fn bdd_new_var(builder: *mut RsddBddBuilder, polarity: bool) -> *mut BddPtr {
     let builder = robdd_builder_from_ptr(builder);
     let (_, ptr) = builder.new_var(polarity);
     Box::into_raw(Box::new(ptr))
@@ -135,10 +127,10 @@ pub unsafe extern "C" fn bdd_new_var(
 #[allow(clippy::missing_safety_doc)]
 pub unsafe extern "C" fn bdd_ite(
     builder: *mut RsddBddBuilder,
-    f: *mut BddPtr<'static>,
-    g: *mut BddPtr<'static>,
-    h: *mut BddPtr<'static>,
-) -> *mut BddPtr<'static> {
+    f: *mut BddPtr,
+    g: *mut BddPtr,
+    h: *mut BddPtr,
+) -> *mut BddPtr {
     let builder = robdd_builder_from_ptr(builder);
     let and = builder.ite(*f, *g, *h);
     Box::into_raw(Box::new(and))
@@ -148,9 +140,9 @@ pub unsafe extern "C" fn bdd_ite(
 #[allow(clippy::missing_safety_doc)]
 pub unsafe extern "C" fn bdd_and(
     builder: *mut RsddBddBuilder,
-    left: *mut BddPtr<'static>,
-    right: *mut BddPtr<'static>,
-) -> *mut BddPtr<'static> {
+    left: *mut BddPtr,
+    right: *mut BddPtr,
+) -> *mut BddPtr {
     let builder = robdd_builder_from_ptr(builder);
     let and = builder.and(*left, *right);
     Box::into_raw(Box::new(and))
@@ -160,9 +152,9 @@ pub unsafe extern "C" fn bdd_and(
 #[allow(clippy::missing_safety_doc)]
 pub unsafe extern "C" fn bdd_or(
     builder: *mut RsddBddBuilder,
-    left: *mut BddPtr<'static>,
-    right: *mut BddPtr<'static>,
-) -> *mut BddPtr<'static> {
+    left: *mut BddPtr,
+    right: *mut BddPtr,
+) -> *mut BddPtr {
     let builder = robdd_builder_from_ptr(builder);
     let or = builder.or(*left, *right);
     Box::into_raw(Box::new(or))
@@ -170,10 +162,7 @@ pub unsafe extern "C" fn bdd_or(
 
 #[no_mangle]
 #[allow(clippy::missing_safety_doc)]
-pub unsafe extern "C" fn bdd_negate(
-    builder: *mut RsddBddBuilder,
-    bdd: *mut BddPtr<'static>,
-) -> *mut BddPtr<'static> {
+pub unsafe extern "C" fn bdd_negate(builder: *mut RsddBddBuilder, bdd: *mut BddPtr) -> *mut BddPtr {
     let builder = robdd_builder_from_ptr(builder);
     let negate = builder.negate(*bdd);
     Box::into_raw(Box::new(negate))
@@ -181,25 +170,25 @@ pub unsafe extern "C" fn bdd_negate(
 
 #[no_mangle]
 #[allow(clippy::missing_safety_doc)]
-pub unsafe extern "C" fn bdd_is_true(bdd: *mut BddPtr<'static>) -> bool {
+pub unsafe extern "C" fn bdd_is_true(bdd: *mut BddPtr) -> bool {
     (*bdd).is_true()
 }
 
 #[no_mangle]
 #[allow(clippy::missing_safety_doc)]
-pub unsafe extern "C" fn bdd_is_false(bdd: *mut BddPtr<'static>) -> bool {
+pub unsafe extern "C" fn bdd_is_false(bdd: *mut BddPtr) -> bool {
     (*bdd).is_false()
 }
 
 #[no_mangle]
 #[allow(clippy::missing_safety_doc)]
-pub unsafe extern "C" fn bdd_is_const(bdd: *mut BddPtr<'static>) -> bool {
+pub unsafe extern "C" fn bdd_is_const(bdd: *mut BddPtr) -> bool {
     (*bdd).is_const()
 }
 
 #[no_mangle]
 #[allow(clippy::missing_safety_doc)]
-pub unsafe extern "C" fn bdd_true(builder: *mut RsddBddBuilder) -> *mut BddPtr<'static> {
+pub unsafe extern "C" fn bdd_true(builder: *mut RsddBddBuilder) -> *mut BddPtr {
     let builder = robdd_builder_from_ptr(builder);
     let bdd = builder.true_ptr();
     Box::into_raw(Box::new(bdd))
@@ -207,7 +196,7 @@ pub unsafe extern "C" fn bdd_true(builder: *mut RsddBddBuilder) -> *mut BddPtr<'
 
 #[no_mangle]
 #[allow(clippy::missing_safety_doc)]
-pub unsafe extern "C" fn bdd_false(builder: *mut RsddBddBuilder) -> *mut BddPtr<'static> {
+pub unsafe extern "C" fn bdd_false(builder: *mut RsddBddBuilder) -> *mut BddPtr {
     let builder = robdd_builder_from_ptr(builder);
     let bdd = builder.false_ptr();
     Box::into_raw(Box::new(bdd))
@@ -217,8 +206,8 @@ pub unsafe extern "C" fn bdd_false(builder: *mut RsddBddBuilder) -> *mut BddPtr<
 #[allow(clippy::missing_safety_doc)]
 pub unsafe extern "C" fn bdd_eq(
     builder: *mut RsddBddBuilder,
-    left: *mut BddPtr<'static>,
-    right: *mut BddPtr<'static>,
+    left: *mut BddPtr,
+    right: *mut BddPtr,
 ) -> bool {
     let builder = robdd_builder_from_ptr(builder);
     builder.eq(*left, *right)
@@ -226,7 +215,7 @@ pub unsafe extern "C" fn bdd_eq(
 
 #[no_mangle]
 #[allow(clippy::missing_safety_doc)]
-pub unsafe extern "C" fn bdd_topvar(bdd: *mut BddPtr<'static>) -> u64 {
+pub unsafe extern "C" fn bdd_topvar(bdd: *mut BddPtr) -> u64 {
     match (*bdd).var_safe() {
         Some(x) => x.value(),
         None => 0, // TODO: fix this
@@ -235,19 +224,19 @@ pub unsafe extern "C" fn bdd_topvar(bdd: *mut BddPtr<'static>) -> u64 {
 
 #[no_mangle]
 #[allow(clippy::missing_safety_doc)]
-pub unsafe extern "C" fn bdd_low(bdd: *mut BddPtr<'static>) -> *mut BddPtr<'static> {
+pub unsafe extern "C" fn bdd_low(bdd: *mut BddPtr) -> *mut BddPtr {
     Box::into_raw(Box::new((*bdd).low()))
 }
 
 #[no_mangle]
 #[allow(clippy::missing_safety_doc)]
-pub unsafe extern "C" fn bdd_high(bdd: *mut BddPtr<'static>) -> *mut BddPtr<'static> {
+pub unsafe extern "C" fn bdd_high(bdd: *mut BddPtr) -> *mut BddPtr {
     Box::into_raw(Box::new((*bdd).high()))
 }
 
 #[no_mangle]
 #[allow(clippy::missing_safety_doc)]
-pub unsafe extern "C" fn print_bdd(bdd: *mut BddPtr<'static>) -> *const c_char {
+pub unsafe extern "C" fn print_bdd(bdd: *mut BddPtr) -> *const c_char {
     let s = std::ffi::CString::new((*bdd).print_bdd()).unwrap();
     let p = s.as_ptr();
     std::mem::forget(s);
@@ -256,9 +245,6 @@ pub unsafe extern "C" fn print_bdd(bdd: *mut BddPtr<'static>) -> *const c_char {
 
 #[no_mangle]
 #[allow(clippy::missing_safety_doc)]
-pub unsafe extern "C" fn bdd_wmc(
-    bdd: *mut BddPtr<'static>,
-    wmc: *mut WmcParams<RealSemiring>,
-) -> f64 {
+pub unsafe extern "C" fn bdd_wmc(bdd: *mut BddPtr, wmc: *mut WmcParams<RealSemiring>) -> f64 {
     DDNNFPtr::unsmoothed_wmc(&(*bdd), &(*wmc)).0
 }
