@@ -16,7 +16,7 @@ pub unsafe extern "C" fn sdd_builder_new(vtree: *mut VTree) -> *mut SddBuilder {
 
 #[allow(clippy::missing_safety_doc)]
 #[no_mangle]
-pub unsafe extern "C" fn sdd_compile_cnf(
+pub unsafe extern "C" fn sdd_builder_compile_cnf(
     builder: *const SddBuilder,
     cnf: *const Cnf,
 ) -> *mut SddPtr {
