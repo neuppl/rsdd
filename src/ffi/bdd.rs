@@ -14,7 +14,6 @@ pub extern "C" fn var_order_linear(num_vars: usize) -> *const VarOrder {
 }
 
 #[no_mangle]
-#[allow(clippy::missing_safety_doc)]
 pub unsafe extern "C" fn cnf_from_dimacs(dimacs_str: *const c_char) -> *const Cnf {
     let cstr = CStr::from_ptr(dimacs_str);
 
@@ -41,7 +40,6 @@ unsafe fn robdd_builder_from_ptr<'_0>(
 }
 
 #[no_mangle]
-#[allow(clippy::missing_safety_doc)]
 pub unsafe extern "C" fn robdd_builder_all_table(order: *mut VarOrder) -> *mut RsddBddBuilder {
     if order.is_null() {
         eprintln!("Fatal error, got NULL `order` pointer");
@@ -53,7 +51,6 @@ pub unsafe extern "C" fn robdd_builder_all_table(order: *mut VarOrder) -> *mut R
 }
 
 #[no_mangle]
-#[allow(clippy::missing_safety_doc)]
 pub unsafe extern "C" fn robdd_builder_compile_cnf(
     builder: *mut RsddBddBuilder,
     cnf: *mut Cnf,
@@ -70,7 +67,6 @@ pub unsafe extern "C" fn robdd_builder_compile_cnf(
 }
 
 #[no_mangle]
-#[allow(clippy::missing_safety_doc)]
 pub unsafe extern "C" fn robdd_model_count(builder: *mut RsddBddBuilder, bdd: *mut BddPtr) -> u64 {
     let builder = robdd_builder_from_ptr(builder);
     let num_vars = builder.num_vars();
@@ -88,7 +84,6 @@ pub unsafe extern "C" fn robdd_model_count(builder: *mut RsddBddBuilder, bdd: *m
 // implementing the disc interface
 
 #[no_mangle]
-#[allow(clippy::missing_safety_doc)]
 pub unsafe extern "C" fn mk_bdd_manager_default_order(num_vars: u64) -> *mut RsddBddBuilder {
     Box::into_raw(Box::new(RobddBuilder::<AllIteTable<BddPtr>>::new(
         VarOrder::linear_order(num_vars as usize),
@@ -97,14 +92,12 @@ pub unsafe extern "C" fn mk_bdd_manager_default_order(num_vars: u64) -> *mut Rsd
 }
 
 #[no_mangle]
-#[allow(clippy::missing_safety_doc)]
 pub unsafe extern "C" fn bdd_new_label(builder: *mut RsddBddBuilder) -> u64 {
     let builder = robdd_builder_from_ptr(builder);
     builder.new_label().value()
 }
 
 #[no_mangle]
-#[allow(clippy::missing_safety_doc)]
 pub unsafe extern "C" fn bdd_var(
     builder: *mut RsddBddBuilder,
     label: u64,
@@ -116,7 +109,6 @@ pub unsafe extern "C" fn bdd_var(
 }
 
 #[no_mangle]
-#[allow(clippy::missing_safety_doc)]
 pub unsafe extern "C" fn bdd_new_var(builder: *mut RsddBddBuilder, polarity: bool) -> *mut BddPtr {
     let builder = robdd_builder_from_ptr(builder);
     let (_, ptr) = builder.new_var(polarity);
@@ -124,7 +116,6 @@ pub unsafe extern "C" fn bdd_new_var(builder: *mut RsddBddBuilder, polarity: boo
 }
 
 #[no_mangle]
-#[allow(clippy::missing_safety_doc)]
 pub unsafe extern "C" fn bdd_ite(
     builder: *mut RsddBddBuilder,
     f: *mut BddPtr,
@@ -137,7 +128,6 @@ pub unsafe extern "C" fn bdd_ite(
 }
 
 #[no_mangle]
-#[allow(clippy::missing_safety_doc)]
 pub unsafe extern "C" fn bdd_and(
     builder: *mut RsddBddBuilder,
     left: *mut BddPtr,
@@ -149,7 +139,6 @@ pub unsafe extern "C" fn bdd_and(
 }
 
 #[no_mangle]
-#[allow(clippy::missing_safety_doc)]
 pub unsafe extern "C" fn bdd_or(
     builder: *mut RsddBddBuilder,
     left: *mut BddPtr,
@@ -161,7 +150,6 @@ pub unsafe extern "C" fn bdd_or(
 }
 
 #[no_mangle]
-#[allow(clippy::missing_safety_doc)]
 pub unsafe extern "C" fn bdd_negate(builder: *mut RsddBddBuilder, bdd: *mut BddPtr) -> *mut BddPtr {
     let builder = robdd_builder_from_ptr(builder);
     let negate = builder.negate(*bdd);
@@ -169,25 +157,21 @@ pub unsafe extern "C" fn bdd_negate(builder: *mut RsddBddBuilder, bdd: *mut BddP
 }
 
 #[no_mangle]
-#[allow(clippy::missing_safety_doc)]
 pub unsafe extern "C" fn bdd_is_true(bdd: *mut BddPtr) -> bool {
     (*bdd).is_true()
 }
 
 #[no_mangle]
-#[allow(clippy::missing_safety_doc)]
 pub unsafe extern "C" fn bdd_is_false(bdd: *mut BddPtr) -> bool {
     (*bdd).is_false()
 }
 
 #[no_mangle]
-#[allow(clippy::missing_safety_doc)]
 pub unsafe extern "C" fn bdd_is_const(bdd: *mut BddPtr) -> bool {
     (*bdd).is_const()
 }
 
 #[no_mangle]
-#[allow(clippy::missing_safety_doc)]
 pub unsafe extern "C" fn bdd_true(builder: *mut RsddBddBuilder) -> *mut BddPtr {
     let builder = robdd_builder_from_ptr(builder);
     let bdd = builder.true_ptr();
@@ -195,7 +179,6 @@ pub unsafe extern "C" fn bdd_true(builder: *mut RsddBddBuilder) -> *mut BddPtr {
 }
 
 #[no_mangle]
-#[allow(clippy::missing_safety_doc)]
 pub unsafe extern "C" fn bdd_false(builder: *mut RsddBddBuilder) -> *mut BddPtr {
     let builder = robdd_builder_from_ptr(builder);
     let bdd = builder.false_ptr();
@@ -203,7 +186,6 @@ pub unsafe extern "C" fn bdd_false(builder: *mut RsddBddBuilder) -> *mut BddPtr 
 }
 
 #[no_mangle]
-#[allow(clippy::missing_safety_doc)]
 pub unsafe extern "C" fn bdd_eq(
     builder: *mut RsddBddBuilder,
     left: *mut BddPtr,
@@ -214,7 +196,6 @@ pub unsafe extern "C" fn bdd_eq(
 }
 
 #[no_mangle]
-#[allow(clippy::missing_safety_doc)]
 pub unsafe extern "C" fn bdd_topvar(bdd: *mut BddPtr) -> u64 {
     match (*bdd).var_safe() {
         Some(x) => x.value(),
@@ -223,19 +204,16 @@ pub unsafe extern "C" fn bdd_topvar(bdd: *mut BddPtr) -> u64 {
 }
 
 #[no_mangle]
-#[allow(clippy::missing_safety_doc)]
 pub unsafe extern "C" fn bdd_low(bdd: *mut BddPtr) -> *mut BddPtr {
     Box::into_raw(Box::new((*bdd).low()))
 }
 
 #[no_mangle]
-#[allow(clippy::missing_safety_doc)]
 pub unsafe extern "C" fn bdd_high(bdd: *mut BddPtr) -> *mut BddPtr {
     Box::into_raw(Box::new((*bdd).high()))
 }
 
 #[no_mangle]
-#[allow(clippy::missing_safety_doc)]
 pub unsafe extern "C" fn print_bdd(bdd: *mut BddPtr) -> *const c_char {
     let s = std::ffi::CString::new((*bdd).print_bdd()).unwrap();
     let p = s.as_ptr();
@@ -244,7 +222,6 @@ pub unsafe extern "C" fn print_bdd(bdd: *mut BddPtr) -> *const c_char {
 }
 
 #[no_mangle]
-#[allow(clippy::missing_safety_doc)]
 pub unsafe extern "C" fn bdd_wmc(bdd: *mut BddPtr, wmc: *mut WmcParams<RealSemiring>) -> f64 {
     DDNNFPtr::unsmoothed_wmc(&(*bdd), &(*wmc)).0
 }

@@ -6,13 +6,11 @@ use crate::{
 
 pub type DDNNFBuilder = StandardDecisionNNFBuilder<'static>;
 
-#[allow(clippy::missing_safety_doc)]
 #[no_mangle]
 pub unsafe extern "C" fn ddnnf_builder_new(order: *mut VarOrder) -> *mut DDNNFBuilder {
     Box::into_raw(Box::new(DDNNFBuilder::new(*Box::from_raw(order))))
 }
 
-#[allow(clippy::missing_safety_doc)]
 #[no_mangle]
 pub unsafe extern "C" fn ddnnf_builder_compile_cnf_topdown(
     builder: *const DDNNFBuilder,

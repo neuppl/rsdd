@@ -7,7 +7,6 @@ pub struct Clause {
     pub len: usize,
 }
 
-#[allow(clippy::missing_safety_doc)]
 #[no_mangle]
 pub unsafe extern "C" fn cnf_new(clauses: *const Clause, len: usize) -> *mut Cnf {
     let clauses = slice::from_raw_parts(clauses, len)
