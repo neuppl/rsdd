@@ -1,8 +1,7 @@
-use crate::repr::{VTree, VarLabel};
-use core::slice;
+use crate::repr::{DTree, VTree};
+use std::ptr;
 
 #[no_mangle]
-pub unsafe extern "C" fn vtree_left_linear(order: *const VarLabel, len: usize) -> *mut VTree {
-    let order = slice::from_raw_parts(order, len);
-    Box::into_raw(Box::new(VTree::left_linear(order)))
+unsafe extern "C" fn vtree_from_dtree(dtree: *const DTree) -> *mut VTree {
+    VTree::from_dtree(&*dtree).map_or(ptr::null_mut(), |v| Box::into_raw(Box::new(v)))
 }
