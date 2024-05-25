@@ -4,15 +4,15 @@ use crate::{
     repr::{Cnf, VarOrder},
 };
 
-pub type DDNNFBuilder = StandardDecisionNNFBuilder<'static>;
+type DDNNFBuilder = StandardDecisionNNFBuilder<'static>;
 
 #[no_mangle]
-pub unsafe extern "C" fn ddnnf_builder_new(order: *mut VarOrder) -> *mut DDNNFBuilder {
+unsafe extern "C" fn ddnnf_builder_new(order: *mut VarOrder) -> *mut DDNNFBuilder {
     Box::into_raw(Box::new(DDNNFBuilder::new(*Box::from_raw(order))))
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn ddnnf_builder_compile_cnf_topdown(
+unsafe extern "C" fn ddnnf_builder_compile_cnf_topdown(
     builder: *const DDNNFBuilder,
     cnf: *const Cnf,
 ) -> *mut BddPtr {

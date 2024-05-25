@@ -5,12 +5,12 @@ use crate::{
 use std::collections::HashMap;
 
 #[no_mangle]
-pub unsafe extern "C" fn new_wmc_params_f64() -> *mut WmcParams<RealSemiring> {
+unsafe extern "C" fn new_wmc_params_f64() -> *mut WmcParams<RealSemiring> {
     Box::into_raw(Box::new(WmcParams::new(HashMap::from([]))))
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn wmc_param_f64_set_weight(
+unsafe extern "C" fn wmc_param_f64_set_weight(
     weights: *mut WmcParams<RealSemiring>,
     var: u64,
     low: f64,
@@ -21,10 +21,10 @@ pub unsafe extern "C" fn wmc_param_f64_set_weight(
 
 #[derive(Clone, Copy)]
 #[repr(C)]
-pub struct WeightF64(pub f64, pub f64);
+struct WeightF64(pub f64, pub f64);
 
 #[no_mangle]
-pub unsafe extern "C" fn wmc_param_f64_var_weight(
+unsafe extern "C" fn wmc_param_f64_var_weight(
     weights: *mut WmcParams<RealSemiring>,
     var: u64,
 ) -> WeightF64 {
@@ -33,11 +33,11 @@ pub unsafe extern "C" fn wmc_param_f64_var_weight(
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn weight_f64_lo(w: WeightF64) -> f64 {
+unsafe extern "C" fn weight_f64_lo(w: WeightF64) -> f64 {
     w.0
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn weight_f64_hi(w: WeightF64) -> f64 {
+unsafe extern "C" fn weight_f64_hi(w: WeightF64) -> f64 {
     w.1
 }
