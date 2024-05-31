@@ -6,6 +6,7 @@ use std::fmt::{self, Display};
 
 /// a label for each distinct variable in the BDD
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Hash, Copy, PartialOrd, Ord)]
+#[repr(transparent)]
 pub struct VarLabel(u64);
 
 impl VarLabel {
@@ -31,6 +32,7 @@ impl VarLabel {
 
 /// Literal, a variable label and its corresponding truth assignment
 #[derive(Clone, PartialEq, Eq, Hash, Copy, Serialize, Deserialize, PartialOrd, Ord)]
+#[repr(transparent)]
 pub struct Literal {
     data: u64,
 }
