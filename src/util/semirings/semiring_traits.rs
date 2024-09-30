@@ -9,7 +9,13 @@ use std::fmt::{Debug, Display};
 use std::ops;
 
 pub trait Semiring:
-    Debug + Clone + Copy + Display + ops::Add<Self, Output = Self> + ops::Mul<Self, Output = Self>
+    Debug
+    + Clone
+    + Copy
+    + Display
+    + ops::Add<Self, Output = Self>
+    + ops::Mul<Self, Output = Self>
+    + PartialEq
 {
     fn one() -> Self;
     fn zero() -> Self;
