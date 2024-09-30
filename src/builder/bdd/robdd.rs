@@ -190,10 +190,12 @@ impl<'a, T: IteTable<'a, BddPtr<'a>> + Default> RobddBuilder<'a, T> {
                 match bdd.scratch::<usize>() {
                     None => (),
                     Some(v) => {
-                        return if bdd.is_neg() {
-                            alloc[v].neg()
-                        } else {
-                            alloc[v]
+                        if alloc.len() > v {
+                            return if bdd.is_neg() {
+                                alloc[v].neg()
+                            } else {
+                                alloc[v]
+                            };
                         }
                     }
                 };
