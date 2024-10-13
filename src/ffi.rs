@@ -256,6 +256,13 @@ pub unsafe extern "C" fn print_bdd(bdd: *mut BddPtr<'static>) -> *const c_char {
 
 #[no_mangle]
 #[allow(clippy::missing_safety_doc)]
+pub unsafe extern "C" fn bdd_num_recursive_calls(builder: *mut RsddBddBuilder) -> usize {
+    let builder = robdd_builder_from_ptr(builder);
+    builder.num_recursive_calls()
+}
+
+#[no_mangle]
+#[allow(clippy::missing_safety_doc)]
 pub unsafe extern "C" fn bdd_wmc(
     bdd: *mut BddPtr<'static>,
     wmc: *mut WmcParams<RealSemiring>,
