@@ -364,8 +364,3 @@ pub unsafe extern "C" fn weight_complex_lo(w: WeightComplex) -> Complex {
 pub unsafe extern "C" fn weight_complex_hi(w: WeightComplex) -> Complex {
     w.1
 }
-
-#[no_mangle]
-unsafe extern "C" fn bdd_num_recursive_calls(builder: *mut RsddBddBuilder) -> usize {
-    robdd_builder_from_ptr(builder).num_recursive_calls()
-}
