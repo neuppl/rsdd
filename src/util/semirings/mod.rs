@@ -1,4 +1,5 @@
 mod boolean;
+mod complex;
 mod expectation;
 mod finitefield;
 mod rational;
@@ -7,6 +8,7 @@ mod semiring_traits;
 mod tropical;
 
 pub use self::boolean::*;
+pub use self::complex::*;
 pub use self::expectation::*;
 pub use self::finitefield::*;
 pub use self::rational::*;
