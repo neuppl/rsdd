@@ -84,6 +84,7 @@ fn propagate<'a, T: Clone>(
 
 /// Implements a mutable vector-backed robin-hood linear probing hash table,
 /// whose keys are given by BDD pointers.
+#[derive(Debug)]
 pub struct BackedRobinhoodTable<'a, T>
 where
     T: Hash + PartialEq + Clone,
