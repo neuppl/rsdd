@@ -7,6 +7,7 @@ use crate::{
     builder::{bdd::RobddBuilder, cache::AllIteTable, BottomUpBuilder},
     constants::primes,
     repr::{BddPtr, Cnf, VarLabel, VarOrder, WmcParams},
+    serialize::{BDDSerializer},
     util::semirings::FiniteField,
 };
 
@@ -251,6 +252,17 @@ pub unsafe extern "C" fn print_bdd(bdd: *mut BddPtr<'static>) -> *const c_char {
     let s = std::ffi::CString::new((*bdd).print_bdd()).unwrap();
     let p = s.as_ptr();
     std::mem::forget(s);
+    p
+}
+
+#[no_mangle]
+#[allow(clippy::missing_safety_doc)]
+pub unsafe extern "C" fn bdd_to_json(bdd: *mut BddPtr<'static>) -> *const c_char {
+    let json = BDDSerializer::from_bdd(*bdd);
+    let str = serde_json::to_string(&json).unwrap();
+    let cstr = std::ffi::CString::new(str).unwrap();
+    let p = cstr.as_ptr();
+    std::mem::forget(cstr);
     p
 }
 
