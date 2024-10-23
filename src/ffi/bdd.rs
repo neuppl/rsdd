@@ -233,9 +233,6 @@ unsafe extern "C" fn bdd_wmc(bdd: *mut BddPtr, wmc: *mut WmcParams<RealSemiring>
 }
 
 #[no_mangle]
-unsafe extern "C" fn bdd_wmc_complex(
-    bdd: *mut BddPtr,
-    wmc: *mut WmcParams<Complex>,
-) -> Complex {
+unsafe extern "C" fn bdd_wmc_complex(bdd: *mut BddPtr, wmc: *mut WmcParams<Complex>) -> Complex {
     DDNNFPtr::unsmoothed_wmc(&(*bdd), &(*wmc))
 }
