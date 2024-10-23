@@ -2,7 +2,7 @@ use crate::{
     builder::{bdd::RobddBuilder, cache::AllIteTable, BottomUpBuilder},
     constants::primes,
     repr::{self, Cnf, DDNNFPtr, VarLabel, VarOrder, WmcParams},
-    util::semirings::{FiniteField, RealSemiring, Semiring},
+    util::semirings::{Complex, FiniteField, RealSemiring, Semiring},
 };
 use std::{collections::HashMap, ffi::CStr, os::raw::c_char};
 
@@ -222,6 +222,20 @@ unsafe extern "C" fn print_bdd(bdd: *mut BddPtr) -> *const c_char {
 }
 
 #[no_mangle]
+unsafe extern "C" fn bdd_num_recursive_calls(builder: *mut RsddBddBuilder) -> usize {
+    let builder = robdd_builder_from_ptr(builder);
+    builder.num_recursive_calls()
+}
+
+#[no_mangle]
 unsafe extern "C" fn bdd_wmc(bdd: *mut BddPtr, wmc: *mut WmcParams<RealSemiring>) -> f64 {
     DDNNFPtr::unsmoothed_wmc(&(*bdd), &(*wmc)).0
+}
+
+#[no_mangle]
+unsafe extern "C" fn bdd_wmc_complex(
+    bdd: *mut BddPtr,
+    wmc: *mut WmcParams<Complex>,
+) -> Complex {
+    DDNNFPtr::unsmoothed_wmc(&(*bdd), &(*wmc))
 }
