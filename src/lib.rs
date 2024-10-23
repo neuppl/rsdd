@@ -29,5 +29,3 @@ pub mod wasm;
 // when using rsdd-ocaml
 #[cfg(feature = "ffi")]
 mod ffi;
-#[cfg(feature = "ffi")]
-pub use self::ffi::*;
