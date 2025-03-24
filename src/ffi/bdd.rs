@@ -158,6 +158,18 @@ unsafe extern "C" fn bdd_negate(builder: *mut RsddBddBuilder, bdd: *mut BddPtr) 
 }
 
 #[no_mangle]
+unsafe extern "C" fn bdd_compose(
+    builder: *mut RsddBddBuilder,
+    f: *mut BddPtr,
+    l: VarLabel,
+    g: *mut BddPtr,
+) -> *mut BddPtr {
+    let builder = robdd_builder_from_ptr(builder);
+    let composed = builder.compose(*f, l, *g);
+    Box::into_raw(Box::new(composed))
+}
+
+#[no_mangle]
 unsafe extern "C" fn bdd_is_true(bdd: *mut BddPtr) -> bool {
     (*bdd).is_true()
 }
@@ -175,6 +187,21 @@ unsafe extern "C" fn bdd_is_const(bdd: *mut BddPtr) -> bool {
 #[no_mangle]
 unsafe extern "C" fn bdd_count_nodes(bdd: *mut BddPtr) -> usize {
     (*bdd).count_nodes()
+}
+
+#[no_mangle]
+unsafe extern "C" fn bdd_scratch(bdd: *mut BddPtr, default: usize) -> usize {
+    (*bdd).scratch::<usize>().unwrap_or(default)
+}
+
+#[no_mangle]
+unsafe extern "C" fn bdd_set_scratch(bdd: *mut BddPtr, val: usize) {
+    (*bdd).set_scratch::<usize>(val);
+}
+
+#[no_mangle]
+unsafe extern "C" fn bdd_clear_scratch(bdd: *mut BddPtr) {
+    (*bdd).clear_scratch();
 }
 
 #[no_mangle]
