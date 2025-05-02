@@ -2,6 +2,7 @@ use crate::{
     builder::{bdd::RobddBuilder, cache::AllIteTable, BottomUpBuilder},
     constants::primes,
     repr::{self, Cnf, DDNNFPtr, VarLabel, VarOrder, WmcParams},
+    serialize::BDDSerializer,
     util::semirings::{Complex, FiniteField, RealSemiring, Semiring},
 };
 use std::{collections::HashMap, ffi::CStr, os::raw::c_char};
@@ -157,6 +158,18 @@ unsafe extern "C" fn bdd_negate(builder: *mut RsddBddBuilder, bdd: *mut BddPtr) 
 }
 
 #[no_mangle]
+unsafe extern "C" fn bdd_compose(
+    builder: *mut RsddBddBuilder,
+    f: *mut BddPtr,
+    l: VarLabel,
+    g: *mut BddPtr,
+) -> *mut BddPtr {
+    let builder = robdd_builder_from_ptr(builder);
+    let composed = builder.compose(*f, l, *g);
+    Box::into_raw(Box::new(composed))
+}
+
+#[no_mangle]
 unsafe extern "C" fn bdd_is_true(bdd: *mut BddPtr) -> bool {
     (*bdd).is_true()
 }
@@ -169,6 +182,26 @@ unsafe extern "C" fn bdd_is_false(bdd: *mut BddPtr) -> bool {
 #[no_mangle]
 unsafe extern "C" fn bdd_is_const(bdd: *mut BddPtr) -> bool {
     (*bdd).is_const()
+}
+
+#[no_mangle]
+unsafe extern "C" fn bdd_count_nodes(bdd: *mut BddPtr) -> usize {
+    (*bdd).count_nodes()
+}
+
+#[no_mangle]
+unsafe extern "C" fn bdd_scratch(bdd: *mut BddPtr, default: usize) -> usize {
+    (*bdd).scratch::<usize>().unwrap_or(default)
+}
+
+#[no_mangle]
+unsafe extern "C" fn bdd_set_scratch(bdd: *mut BddPtr, val: usize) {
+    (*bdd).set_scratch::<usize>(val);
+}
+
+#[no_mangle]
+unsafe extern "C" fn bdd_clear_scratch(bdd: *mut BddPtr) {
+    (*bdd).clear_scratch();
 }
 
 #[no_mangle]
@@ -225,6 +258,16 @@ unsafe extern "C" fn print_bdd(bdd: *mut BddPtr) -> *const c_char {
 unsafe extern "C" fn bdd_num_recursive_calls(builder: *mut RsddBddBuilder) -> usize {
     let builder = robdd_builder_from_ptr(builder);
     builder.num_recursive_calls()
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn bdd_to_json(bdd: *mut BddPtr) -> *const c_char {
+    let json = BDDSerializer::from_bdd(*bdd);
+    let str = serde_json::to_string(&json).unwrap();
+    let cstr = std::ffi::CString::new(str).unwrap();
+    let p = cstr.as_ptr();
+    std::mem::forget(cstr);
+    p
 }
 
 #[no_mangle]
