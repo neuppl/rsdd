@@ -1,0 +1,61 @@
+name: lib
+
+on: workflow_dispatch
+
+jobs:
+  lib_mac_windows:
+    strategy:
+      matrix:
+        include:
+          - os: macos-13
+            name: x86_64-macosx.dylib
+            path: target/release/librsdd.dylib
+          - os: macos-14
+            name: aarch64-macosx.dylib
+            path: target/release/librsdd.dylib
+          - os: windows-latest
+            name: x86_64-windows.dll
+            path: target/release/rsdd.dll
+    runs-on: ${{ matrix.os }}
+    container: ${{ matrix.container }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build (with feature flag)
+        run: |
+          cargo build --verbose --features=ffi --release
+          mv ${{ matrix.path }} ${{ matrix.name }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.name }}
+          path: ${{ matrix.name }}
+
+  # See the following for information on how this works:
+  # * https://kobzol.github.io/rust/ci/2021/05/07/building-rust-binaries-in-ci-that-work-with-older-glibc.html
+  # * https://github.com/actions/checkout/issues/1474#issuecomment-2604308106
+  lib_linux:
+    runs-on: ubuntu-latest
+    container:
+      image: quay.io/pypa/manylinux2014_x86_64
+      volumes:
+        - /tmp:/__e/node20
+    steps:
+      - name: Install old NodeJS
+        run: |
+          NODE_VERSION=v20.18.1
+          NODE_TAR_FILE=node-$NODE_VERSION-linux-x64-glibc-217.tar.gz
+          NODE_URL=https://unofficial-builds.nodejs.org/download/release/$NODE_VERSION/$NODE_TAR_FILE
+          curl -Lo /tmp/$NODE_TAR_FILE $NODE_URL
+          tar -C /__e/node20 -x --strip-components=1 -f /tmp/$NODE_TAR_FILE
+      - name: Install Rust
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+          echo "${HOME}/.cargo/bin" >> $GITHUB_PATH
+      - uses: actions/checkout@v4
+      - name: Build (with feature flag)
+        run: |
+          cargo build --verbose --features=ffi --release
+          mv target/release/librsdd.so x86_64-linux.so
+      - uses: actions/upload-artifact@v4
+        with:
+          name: x86_64-linux.so
+          path: x86_64-linux.so
