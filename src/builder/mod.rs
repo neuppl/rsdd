@@ -5,6 +5,7 @@ pub mod cache;
 
 pub mod bdd;
 pub mod decision_nnf;
+pub mod parallel;
 pub mod sdd;
 
 use crate::{
@@ -31,6 +32,7 @@ pub trait BottomUpBuilder<'a, Ptr> {
     fn or(&'a self, a: Ptr, b: Ptr) -> Ptr {
         self.negate(self.and(self.negate(a), self.negate(b)))
     }
+
     fn negate(&'a self, f: Ptr) -> Ptr;
 
     /// if f then g else h

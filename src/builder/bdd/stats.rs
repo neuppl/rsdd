@@ -1,5 +1,6 @@
 /// An auxiliary data structure for tracking statistics about BDD manager
 /// performance (for fine-tuning)
+#[derive(Debug)]
 pub struct BddBuilderStats {
     /// For now, always track the number of recursive calls. In the future,
     /// this should probably be gated behind a debug build (since I suspect

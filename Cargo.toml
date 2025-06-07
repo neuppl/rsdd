@@ -37,6 +37,7 @@ wasm-bindgen = { version = "0.2.84" }
 [dev-dependencies]
 serde_json = { version = "1.0.81" }
 clap = { version = "4.2.1", features = ["derive"] }
+rayon = "1.7.0"
 
 [lib]
 name = "rsdd"
@@ -88,3 +89,7 @@ path = "examples/semantic_top_down_experiment.rs"
 [[example]]
 name = "marginal_map_experiment"
 path = "examples/marginal_map_experiment.rs"
+
+[[example]]
+name = "parallel_semantic"
+path = "examples/parallel_semantic.rs"
