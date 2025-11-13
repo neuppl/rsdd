@@ -409,6 +409,45 @@ mod tests {
     }
 
     #[test]
+    fn condition_negate_or_ite() {
+        let builder = RobddBuilder::<AllIteTable<BddPtr>>::new_with_linear_order(3);
+
+        let v0 = builder.var(VarLabel::new(0), true);
+        let v1 = builder.var(VarLabel::new(1), true);
+        let v2 = builder.var(VarLabel::new(2), true);
+
+        let bdd = builder.negate(v2);
+        let bdd = builder.or(v1, bdd);
+        let bdd = builder.ite(v0, bdd, v1);
+
+        let cond_bdd = builder.condition(bdd, VarLabel::new(2), true);
+        assert!(builder.eq(cond_bdd, builder.var(VarLabel::new(1), true)));
+        let cond_q0 = builder.condition(v0, VarLabel::new(2), true);
+        let cond_q1 = builder.condition(v1, VarLabel::new(2), true);
+        assert!(builder.eq(cond_q0, builder.var(VarLabel::new(0), true)));
+        assert!(builder.eq(cond_q1, builder.var(VarLabel::new(1), true)));
+    }
+
+    #[test]
+    fn exists_negate_or_ite() {
+        let builder = RobddBuilder::<AllIteTable<BddPtr>>::new_with_linear_order(3);
+
+        let v0 = builder.var(VarLabel::new(0), true);
+        let v1 = builder.var(VarLabel::new(1), true);
+        let v2 = builder.var(VarLabel::new(2), true);
+
+        let bdd = builder.negate(v2);
+        let bdd = builder.or(v1, bdd);
+        let bdd = builder.ite(v0, bdd, v1);
+
+        let cond_q0 = builder.exists(v0, VarLabel::new(2));
+        let cond_q1 = builder.exists(v1, VarLabel::new(2));
+        assert!(builder.eq(cond_q0, builder.var(VarLabel::new(0), true)));
+        assert!(builder.eq(cond_q1, builder.var(VarLabel::new(1), true)));
+        let cond_bdd = builder.exists(bdd, VarLabel::new(2));
+        assert!(builder.eq(cond_bdd, builder.var(VarLabel::new(1), true)));
+    }
+    #[test]
     fn test_exist() {
         let builder = RobddBuilder::<AllIteTable<BddPtr>>::new_with_linear_order(3);
         // 1 /\ 2 /\ 3
