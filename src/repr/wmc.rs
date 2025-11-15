@@ -134,6 +134,39 @@ impl<T: Semiring> WmcParams<T> {
     pub fn var_weight(&self, label: VarLabel) -> &(T, T) {
         return (self.var_to_val[label.value_usize()]).as_ref().unwrap();
     }
+
+    /// ```
+    /// use rsdd::repr::VarLabel;
+    /// use rsdd::repr::WmcParams;
+    /// use rsdd::util::semirings::{Semiring, RealSemiring};
+    /// use std::collections::HashMap;
+    ///
+    /// let weights = HashMap::from([
+    ///     (VarLabel::new(0), (RealSemiring(0.0), RealSemiring(1.0))),
+    ///     (VarLabel::new(1), (RealSemiring(0.3), RealSemiring(0.7)))
+    /// ]);
+    ///
+    /// let params = WmcParams::<RealSemiring>::new(weights);
+    ///
+    /// assert!(params.has_smoothed_weights());
+    ///
+    /// let weights = HashMap::from([
+    ///     (VarLabel::new(0), (RealSemiring(1.0), RealSemiring(1.0))),
+    ///     (VarLabel::new(1), (RealSemiring(1.0), RealSemiring(1.0)))
+    /// ]);
+    ///
+    /// let params = WmcParams::<RealSemiring>::new(weights);
+    ///
+    /// assert!(!params.has_smoothed_weights());
+    /// ```
+    /// returns whether or not the weights within the parameters are normalized,
+    /// i.e. each true/false weight pair sums to the `One` defined in the Semiring
+    pub fn has_smoothed_weights(&self) -> bool {
+        self.var_to_val.iter().all(|v| match v {
+            Some((low, high)) => *low + *high == T::one(),
+            None => todo!(),
+        })
+    }
 }
 
 impl<T: Semiring> Debug for WmcParams<T> {

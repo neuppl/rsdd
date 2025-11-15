@@ -69,6 +69,7 @@ pub trait DDNNFPtr<'a>: Clone + Debug + PartialEq + Eq + Hash + Copy {
     where
         T: 'static,
     {
+        debug_assert!(params.has_smoothed_weights());
         self.fold(|ddnnf| {
             use DDNNF::*;
             match ddnnf {
