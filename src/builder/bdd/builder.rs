@@ -165,6 +165,7 @@ where
     /// Compute the Boolean function `f | var = value`
     fn condition(&'a self, bdd: BddPtr<'a>, lbl: VarLabel, value: bool) -> BddPtr<'a> {
         let r = self.cond_helper(bdd, lbl, value);
+        r.clear_scratch();
         bdd.clear_scratch();
         r
     }

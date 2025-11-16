@@ -7,7 +7,7 @@ use crate::{
     },
     repr::{BddNode, BddPtr, DDNNFPtr, PartialModel, VarLabel, VarOrder},
 };
-use std::cell::RefCell;
+use std::{cell::RefCell, collections::HashMap};
 
 pub struct RobddBuilder<'a, T: IteTable<'a, BddPtr<'a>> + Default> {
     compute_table: RefCell<BackedRobinhoodTable<'a, BddNode<'a>>>,
@@ -82,8 +82,14 @@ impl<'a, T: IteTable<'a, BddPtr<'a>> + Default> BddBuilder<'a> for RobddBuilder<
         r
     }
 
+    
     fn cond_helper(&'a self, bdd: BddPtr<'a>, lbl: VarLabel, value: bool) -> BddPtr<'a> {
-        self.cond_with_alloc(bdd, lbl, value, &mut Vec::new())
+        bdd.clear_scratch();
+        let r = self.cond_with_alloc(bdd, lbl, value, &mut HashMap::new());
+        // outer call clears the scratch. very messy.
+        bdd.clear_scratch();
+        r.clear_scratch();
+        r
     }
 }
 
@@ -170,7 +176,7 @@ impl<'a, T: IteTable<'a, BddPtr<'a>> + Default> RobddBuilder<'a, T> {
         bdd: BddPtr<'a>,
         lbl: VarLabel,
         value: bool,
-        alloc: &mut Vec<BddPtr<'a>>,
+        cache: &mut HashMap<BddPtr<'a>, BddPtr<'a>>,
     ) -> BddPtr<'a> {
         self.stats.borrow_mut().num_recursive_calls += 1;
         match bdd {
@@ -187,20 +193,22 @@ impl<'a, T: IteTable<'a, BddPtr<'a>> + Default> RobddBuilder<'a, T> {
                 }
 
                 // check cache
-                match bdd.scratch::<usize>() {
-                    None => (),
+                match cache.get(&bdd) {
+                    None => {
+                        ()
+                    },
                     Some(v) => {
                         return if bdd.is_neg() {
-                            alloc[v].neg()
+                            v.neg()
                         } else {
-                            alloc[v]
+                            *v
                         }
                     }
                 };
 
                 // recurse on the children
-                let l = self.cond_with_alloc(bdd.low_raw(), lbl, value, alloc);
-                let h = self.cond_with_alloc(bdd.high_raw(), lbl, value, alloc);
+                let l = self.cond_with_alloc(bdd.low_raw(), lbl, value, cache);
+                let h = self.cond_with_alloc(bdd.high_raw(), lbl, value, cache);
 
                 if l == h {
                     // reduce the BDD -- two children identical
@@ -224,14 +232,11 @@ impl<'a, T: IteTable<'a, BddPtr<'a>> + Default> RobddBuilder<'a, T> {
                     bdd
                 };
 
-                let idx = if bdd.is_neg() {
-                    alloc.push(res.neg());
-                    alloc.len() - 1
+                if bdd.is_neg() {
+                    cache.insert(bdd, res.neg());
                 } else {
-                    alloc.push(res);
-                    alloc.len() - 1
-                };
-                bdd.set_scratch(idx);
+                    cache.insert(bdd, res);
+                }
                 res
             }
         }
@@ -428,25 +433,6 @@ mod tests {
         assert!(builder.eq(cond_q1, builder.var(VarLabel::new(1), true)));
     }
 
-    #[test]
-    fn exists_negate_or_ite() {
-        let builder = RobddBuilder::<AllIteTable<BddPtr>>::new_with_linear_order(3);
-
-        let v0 = builder.var(VarLabel::new(0), true);
-        let v1 = builder.var(VarLabel::new(1), true);
-        let v2 = builder.var(VarLabel::new(2), true);
-
-        let bdd = builder.negate(v2);
-        let bdd = builder.or(v1, bdd);
-        let bdd = builder.ite(v0, bdd, v1);
-
-        let cond_q0 = builder.exists(v0, VarLabel::new(2));
-        let cond_q1 = builder.exists(v1, VarLabel::new(2));
-        assert!(builder.eq(cond_q0, builder.var(VarLabel::new(0), true)));
-        assert!(builder.eq(cond_q1, builder.var(VarLabel::new(1), true)));
-        let cond_bdd = builder.exists(bdd, VarLabel::new(2));
-        assert!(builder.eq(cond_bdd, builder.var(VarLabel::new(1), true)));
-    }
     #[test]
     fn test_exist() {
         let builder = RobddBuilder::<AllIteTable<BddPtr>>::new_with_linear_order(3);

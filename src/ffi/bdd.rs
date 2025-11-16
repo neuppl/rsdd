@@ -228,6 +228,13 @@ unsafe extern "C" fn bdd_eq(
     builder.eq(*left, *right)
 }
 
+/// free the BDD manager `mgr`
+#[no_mangle]
+unsafe extern "C" fn free_bdd_manager(mgr : *mut RsddBddBuilder) -> () {
+    drop(Box::from_raw(mgr));
+}
+
+
 #[no_mangle]
 unsafe extern "C" fn bdd_topvar(bdd: *mut BddPtr) -> u64 {
     match (*bdd).var_safe() {
@@ -279,3 +286,4 @@ unsafe extern "C" fn bdd_wmc(bdd: *mut BddPtr, wmc: *mut WmcParams<RealSemiring>
 unsafe extern "C" fn bdd_wmc_complex(bdd: *mut BddPtr, wmc: *mut WmcParams<Complex>) -> Complex {
     DDNNFPtr::unsmoothed_wmc(&(*bdd), &(*wmc))
 }
+

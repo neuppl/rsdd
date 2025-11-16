@@ -299,12 +299,13 @@ impl<'a> BddPtr<'a> {
         }
     }
 
-    /// Traverses the BDD and clears all scratch memory (sets it equal to 0)
+    /// Traverses the BDD and clears all scratch memory (sets it equal to None)
     pub fn clear_scratch(&self) {
         match &self {
             Compl(x) | Reg(x) => {
                 if x.data.borrow().is_some() {
-                    x.data.take();
+                    *x.data.borrow_mut() = None;
+                    // x.data.take();
                     x.low.clear_scratch();
                     x.high.clear_scratch();
                 }
@@ -402,7 +403,7 @@ impl<'a> BddPtr<'a> {
                     };
                     let l_s = print_bdd_helper(l_p);
                     let h_s = print_bdd_helper(h_p);
-                    format!("({}, {}, {})", node.var.value(), h_s, l_s)
+                    format!("({}, scratch: {:?}, {}, {})", node.var.value(), node.data, h_s, l_s)
                 }
             }
         }
