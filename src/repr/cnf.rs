@@ -265,7 +265,6 @@ impl Cnf {
     pub fn new(clauses: &[Vec<Literal>]) -> Cnf {
         let clauses: Vec<Vec<Literal>> = clauses
             .iter()
-            .filter(|clause| !clause.is_empty())
             .map(|clause| {
                 let mut clause = clause.clone();
                 clause.sort_by_key(|a| a.label().value());
@@ -552,30 +551,24 @@ impl Cnf {
     }
 
     /// Updates the CNF to a new CNF that results from conditioning on the supplied literal
-    pub fn condition(&mut self, lit: Literal) -> Cnf {
-        let new_cnf: Vec<Vec<Literal>> = self
-            .clauses()
-            .iter()
-            .filter_map(|clause| {
-                // first, check if there is a true literal -- if there is, filter out this clause
-                if clause
-                    .iter()
-                    .any(|outer| outer.label() == lit.label() && outer.polarity() == lit.polarity())
-                {
-                    None
+    pub fn condition(&self, lit: Literal) -> Cnf {
+        let mut new_cnf  : Vec<Vec<Literal>> = Vec::new();
+        'cnf: for clause in self.clauses.iter() {
+            let mut new_clause = Vec::new();
+            'clause: for l in clause.iter() {
+                if l.label() == lit.label() && l.polarity() == lit.polarity() {
+                    // skip over this whole clause
+                    continue 'cnf
+                } else if l.label() == lit.label() && l.polarity() != lit.polarity() {
+                    // skip over this literal 
+                    continue 'clause
                 } else {
-                    // next, filter out clauses with false literals
-                    let filtered: Vec<Literal> = clause
-                        .iter()
-                        .filter(|outer| {
-                            !(lit.label() == outer.label() && lit.polarity() != outer.polarity())
-                        })
-                        .copied()
-                        .collect();
-                    Some(filtered)
+                    // push the literal
+                    new_clause.push(*l);
                 }
-            })
-            .collect();
+            }
+            new_cnf.push(new_clause);
+        }
         Cnf::new(&new_cnf)
     }
 
@@ -729,4 +722,13 @@ fn test_cnf_wmc() {
         (VarLabel::new(1), (FiniteField::new(1), FiniteField::new(1))),
     ]);
     assert_eq!(cnf.wmc(&WmcParams::new(weights)), FiniteField::new(3));
+}
+
+#[test]
+fn test_cond() {
+    let v = vec![vec![
+        Literal::new(VarLabel::new(0), false),
+    ]];
+    let cnf = Cnf::new(&v);
+    println!("{:?}", cnf.condition(Literal::new(VarLabel::new(0), true)));
 }

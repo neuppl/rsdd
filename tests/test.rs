@@ -283,6 +283,7 @@ mod test_bdd_builder {
     use rsdd::repr::BddPtr;
     use rsdd::repr::Cnf;
     use rsdd::repr::DTree;
+    use rsdd::repr::Literal;
     use rsdd::repr::PartialModel;
     use rsdd::repr::VTree;
     use rsdd::repr::VarLabel;
@@ -310,6 +311,21 @@ mod test_bdd_builder {
             bdd4 == bdd1
         }
     }
+
+    quickcheck! {
+        fn test_cond(c: Cnf, i : u64) -> bool {
+            let builder = super::RobddBuilder::<AllIteTable<BddPtr>>::new_with_linear_order(16);
+            let cnf = builder.compile_cnf(&c);
+            let cond_var = VarLabel::new(i % 4);
+            let cnf_cond = c.condition(Literal::new(cond_var, true));
+            let bdd1 = builder.condition(cnf, cond_var, true);
+            let bdd2 = builder.compile_cnf(&cnf_cond);
+            println!("cnf: {}\ncond var: {:?}\ncond cnf: {}\ncond cnf debug: {:?}\ncond bdd: {}\ncond cnf bdd: {}\neq? {}\n", 
+                c, cond_var, cnf_cond, cnf_cond, bdd1.to_string_debug(), bdd2.to_string_debug(), bdd1 == bdd2);
+            bdd1 == bdd2
+        }
+    }
+
 
     quickcheck! {
         /// check that every node in the BDD has a unique semantic hash

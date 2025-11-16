@@ -84,11 +84,11 @@ impl<'a, T: IteTable<'a, BddPtr<'a>> + Default> BddBuilder<'a> for RobddBuilder<
 
     
     fn cond_helper(&'a self, bdd: BddPtr<'a>, lbl: VarLabel, value: bool) -> BddPtr<'a> {
-        bdd.clear_scratch();
+        // bdd.clear_scratch();
         let r = self.cond_with_alloc(bdd, lbl, value, &mut HashMap::new());
         // outer call clears the scratch. very messy.
-        bdd.clear_scratch();
-        r.clear_scratch();
+        // bdd.clear_scratch();
+        // r.clear_scratch();
         r
     }
 }

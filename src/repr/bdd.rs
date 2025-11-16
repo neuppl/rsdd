@@ -403,7 +403,7 @@ impl<'a> BddPtr<'a> {
                     };
                     let l_s = print_bdd_helper(l_p);
                     let h_s = print_bdd_helper(h_p);
-                    format!("({}, scratch: {:?}, {}, {})", node.var.value(), node.data, h_s, l_s)
+                    format!("({}, {}, {})", node.var.value(),  h_s, l_s)
                 }
             }
         }
