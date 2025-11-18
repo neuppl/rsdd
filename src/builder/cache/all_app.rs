@@ -8,6 +8,7 @@ use rustc_hash::FxHashMap;
 
 /// An Ite structure, assumed to be in standard form.
 /// The top-level data structure that caches applications
+#[derive(Debug)]
 pub struct AllIteTable<T> {
     /// a vector of applications, indexed by the top label of the first pointer.
     table: FxHashMap<(T, T, T), T>,
@@ -53,6 +54,14 @@ impl<'a, T: DDNNFPtr<'a>> AllIteTable<T> {
         AllIteTable {
             table: FxHashMap::default(),
         }
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = (&(T, T, T), &T)> + '_ {
+        self.table.iter()
+    }
+
+    pub fn insert_directly(&mut self, k: (T, T, T), v: T) {
+        self.table.insert(k, v);
     }
 }
 
