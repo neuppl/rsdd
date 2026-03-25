@@ -45,7 +45,7 @@ impl<'a, const P: u128> SddBuilder<'a> for SemanticSddBuilder<'a, P> {
         self.should_compress = b
     }
 
-    fn node_iter(&self) -> Vec<SddPtr> {
+    fn node_iter(&self) -> Vec<SddPtr<'_>> {
         let binding = self.bdd_tbl.borrow_mut();
         let bdds = binding.iter().map(SddPtr::BDD);
         let binding = self.sdd_tbl.borrow_mut();
@@ -73,7 +73,7 @@ impl<'a, const P: u128> SddBuilder<'a> for SemanticSddBuilder<'a, P> {
         todo!()
     }
 
-    fn ite_cache_get(&self, _ite: Ite<SddPtr<'a>>, _hash: u64) -> Option<SddPtr> {
+    fn ite_cache_get(&self, _ite: Ite<SddPtr<'a>>, _hash: u64) -> Option<SddPtr<'_>> {
         todo!()
     }
 
@@ -191,7 +191,7 @@ impl<'a, const P: u128> SemanticSddBuilder<'a, P> {
         hasher.finish()
     }
 
-    fn get_shared_sdd_ptr(&self, semantic_hash: FiniteField<P>, hash: u64) -> Option<SddPtr> {
+    fn get_shared_sdd_ptr(&self, semantic_hash: FiniteField<P>, hash: u64) -> Option<SddPtr<'_>> {
         match semantic_hash.value() {
             0 => Some(SddPtr::PtrFalse),
             1 => Some(SddPtr::PtrTrue),
@@ -211,7 +211,7 @@ impl<'a, const P: u128> SemanticSddBuilder<'a, P> {
         }
     }
 
-    fn check_cached_hash_and_neg(&self, semantic_hash: FiniteField<P>) -> Option<SddPtr> {
+    fn check_cached_hash_and_neg(&self, semantic_hash: FiniteField<P>) -> Option<SddPtr<'_>> {
         // check regular hash
         let mut hasher = FxHasher::default();
         semantic_hash.value().hash(&mut hasher);

@@ -1,98 +1,9 @@
-use crate::{
-    // DDNNFPtr is required for the wmc method
-    repr::{VarLabel, WmcParams, BddPtr, DDNNFPtr},
-    util::semirings::{Complex, RealSemiring, Semiring},
-    // We import Polynomial and MAX_COEFFS from your implementation file
-    util::semirings::polynomial_semiring_implementation::{Polynomial, MAX_COEFFS},
-};
-use std::collections::HashMap;
-use std::slice;
+use super::polynomial_semiring_implementation::{Polynomial, MAX_COEFFS};
+use crate::util::semirings::{RealSemiring, Semiring};
+// CHANGE: Added DDNNFPtr to imports so we can call unsmoothed_wmc
+use crate::repr::{WmcParams, VarLabel, BddPtr, DDNNFPtr};
+use std::{collections::HashMap, slice};
 
-// =========================================================================
-// 1. Existing f64 / Complex Functions (Preserved)
-// =========================================================================
-
-#[no_mangle]
-unsafe extern "C" fn new_wmc_params_f64() -> *mut WmcParams<RealSemiring> {
-    Box::into_raw(Box::new(WmcParams::new(HashMap::from([]))))
-}
-
-#[no_mangle]
-unsafe extern "C" fn new_wmc_params_complex() -> *mut WmcParams<Complex> {
-    Box::into_raw(Box::new(WmcParams::new(HashMap::from([]))))
-}
-
-#[no_mangle]
-unsafe extern "C" fn wmc_param_f64_set_weight(
-    weights: *mut WmcParams<RealSemiring>,
-    var: u64,
-    low: f64,
-    high: f64,
-) {
-    (*weights).set_weight(VarLabel::new(var), RealSemiring(low), RealSemiring(high))
-}
-
-#[no_mangle]
-unsafe extern "C" fn wmc_param_complex_set_weight(
-    weights: *mut WmcParams<Complex>,
-    var: u64,
-    low: Complex,
-    high: Complex,
-) {
-    (*weights).set_weight(VarLabel::new(var), low, high)
-}
-
-#[derive(Clone, Copy)]
-#[repr(C)]
-struct WeightF64(pub f64, pub f64);
-
-#[no_mangle]
-unsafe extern "C" fn wmc_param_f64_var_weight(
-    weights: *mut WmcParams<RealSemiring>,
-    var: u64,
-) -> WeightF64 {
-    let (l, h) = (*weights).var_weight(VarLabel::new(var));
-    WeightF64(l.0, h.0)
-}
-
-#[no_mangle]
-unsafe extern "C" fn weight_f64_lo(w: WeightF64) -> f64 {
-    w.0
-}
-
-#[no_mangle]
-unsafe extern "C" fn weight_f64_hi(w: WeightF64) -> f64 {
-    w.1
-}
-
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct WeightComplex(pub Complex, pub Complex);
-
-#[no_mangle]
-unsafe extern "C" fn wmc_param_complex_var_weight(
-    weights: *mut WmcParams<Complex>,
-    var: u64,
-) -> WeightComplex {
-    let (l, h) = (*weights).var_weight(VarLabel::new(var));
-    WeightComplex(*l, *h)
-}
-
-#[no_mangle]
-unsafe extern "C" fn weight_complex_lo(w: WeightComplex) -> Complex {
-    w.0
-}
-
-#[no_mangle]
-unsafe extern "C" fn weight_complex_hi(w: WeightComplex) -> Complex {
-    w.1
-}
-
-// =========================================================================
-// 2. New Polynomial Extensions (Cleaned)
-// =========================================================================
-
-// Type Alias
 type PolyWeight = Polynomial<RealSemiring>;
 type PolyWmcParams = WmcParams<PolyWeight>;
 
@@ -102,21 +13,20 @@ pub struct WeightPoly {
     high: *mut PolyWeight,
 }
 
-// --- Helper: Safely create a Polynomial from C pointers ---
-// This replaces the .collect() logic that was causing syntax errors
+// --- Helper: safely create a Polynomial from C pointers ---
 unsafe fn from_c_parts(coeffs: *const f64, len: usize) -> PolyWeight {
     if coeffs.is_null() || len == 0 {
         return PolyWeight::zero();
     }
 
-    // Copy at most MAX_COEFFS items to fit in our fixed-size array
+    // Copy at most MAX_COEFFS items
     let actual_len = len.min(MAX_COEFFS);
     let slice = slice::from_raw_parts(coeffs, actual_len);
 
-    // Start with zero polynomial
+    // Initialize with zeros
     let mut poly = PolyWeight::zero();
 
-    // Manually fill the array fields
+    // Fill the buffer
     for (i, &val) in slice.iter().enumerate() {
         poly.coefficients[i] = RealSemiring(val);
     }
@@ -124,6 +34,8 @@ unsafe fn from_c_parts(coeffs: *const f64, len: usize) -> PolyWeight {
 
     poly
 }
+
+// --- FFI Functions ---
 
 #[no_mangle]
 unsafe extern "C" fn new_polynomial(coeffs: *const f64, len: usize) -> *mut PolyWeight {
@@ -178,7 +90,6 @@ unsafe extern "C" fn wmc_param_poly_var_weight(
 
     let (l, h) = (*weights).var_weight(VarLabel::new(var));
 
-    // Clone to heap and pass ownership to C/Racket
     let low_ptr = Box::into_raw(Box::new(*l));
     let high_ptr = Box::into_raw(Box::new(*h));
 
@@ -209,6 +120,7 @@ unsafe extern "C" fn polynomial_get_coeffs(
     count
 }
 
+// CHANGE: Updated to use DDNNFPtr::unsmoothed_wmc
 #[no_mangle]
 unsafe extern "C" fn bdd_wmc_poly(
     bdd: *mut BddPtr,
@@ -218,7 +130,7 @@ unsafe extern "C" fn bdd_wmc_poly(
         return std::ptr::null_mut();
     }
 
-    // Fix: Use DDNNFPtr::unsmoothed_wmc to perform the count
+    // Correct way to invoke WMC in this version of rsdd
     let result = DDNNFPtr::unsmoothed_wmc(&(*bdd), &(*weights));
 
     Box::into_raw(Box::new(result))
