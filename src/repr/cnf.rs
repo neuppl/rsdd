@@ -11,7 +11,7 @@ use crate::{
 use petgraph::graph::NodeIndex;
 use petgraph::prelude::UnGraph;
 use quickcheck::{Arbitrary, Gen};
-use rand::{self, rngs::ThreadRng, Rng};
+use rand::{self, rngs::ThreadRng, RngExt};
 use std::{
     cmp::{max, min},
     collections::HashSet,
@@ -369,12 +369,12 @@ impl Cnf {
             if num_vars > 1 {
                 let mut var_vec: Vec<Literal> = Vec::new();
                 for _ in 0..clause_size {
-                    let var = *vars.get(rng.gen_range(0..vars.len())).unwrap();
+                    let var = *vars.get(rng.random_range(0..vars.len())).unwrap();
                     var_vec.push(var);
                 }
                 clause_vec.push(var_vec);
             } else {
-                let var = *vars.get(rng.gen_range(0..vars.len())).unwrap();
+                let var = *vars.get(rng.random_range(0..vars.len())).unwrap();
                 clause_vec.push(vec![var]);
             }
         }

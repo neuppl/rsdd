@@ -9,7 +9,7 @@ use crate::{
     util::btree::{BTree, LeastCommonAncestor},
 };
 use quickcheck::{Arbitrary, Gen};
-use rand::{rngs::SmallRng, seq::SliceRandom, Rng, SeedableRng};
+use rand::{rngs::SmallRng, seq::SliceRandom, RngExt, SeedableRng};
 use rand_chacha::ChaCha8Rng;
 use std::collections::HashSet;
 
@@ -222,11 +222,11 @@ impl VTree {
             ),
             len => {
                 // clamps so we're guaranteed at least one item in l_s, r_s
-                let mut rng = ChaCha8Rng::from_entropy();
+                let mut rng = ChaCha8Rng::from_rng(&mut rand::rng());
 
                 // let mut split_index = rng.gen_range(1..(len/2+1));
                 let weighted_index =
-                    (rng.gen_range(0..len - 1) as f64 * (1.0 - rightness_bias)) as usize;
+                    (rng.random_range(0..len - 1) as f64 * (1.0 - rightness_bias)) as usize;
                 let split_index = weighted_index + 1;
 
                 let (l_s, r_s) = order.split_at(split_index);

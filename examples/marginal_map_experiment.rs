@@ -1,7 +1,7 @@
 use std::{collections::HashMap, fs};
 
 use clap::Parser;
-use rand::Rng;
+use rand::RngExt;
 use rsdd::{
     builder::{bdd::RobddBuilder, cache::AllIteTable, BottomUpBuilder},
     repr::{BddPtr, Cnf, VarLabel, WmcParams},
@@ -37,10 +37,10 @@ fn gen_all_weights(
         );
     }
 
-    let mut rng = rand::thread_rng();
+    let mut rng = rand::rng();
 
     for index in prev_weights.len()..num_vars {
-        let weight = rng.gen_range(0.0..1.0);
+        let weight = rng.random_range(0.0..1.0);
         var_to_val.insert(
             VarLabel::new(index as u64),
             (RealSemiring(weight), RealSemiring(1.0 - weight)),

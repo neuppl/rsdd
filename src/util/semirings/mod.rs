@@ -16,3 +16,4 @@ pub use self::polynomial_semiring_implementation::*;
 pub use self::rational::*;
 pub use self::realsemiring::*;
 pub use self::semiring_traits::*;
+pub use self::tropical::*;
