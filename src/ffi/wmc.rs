@@ -1,9 +1,9 @@
 use crate::{
     // DDNNFPtr is required for the wmc method
-    repr::{VarLabel, WmcParams, BddPtr, DDNNFPtr},
-    util::semirings::{Complex, RealSemiring, Semiring},
+    repr::{BddPtr, DDNNFPtr, VarLabel, WmcParams},
     // We import Polynomial and MAX_COEFFS from your implementation file
     util::semirings::polynomial_semiring_implementation::{Polynomial, MAX_COEFFS},
+    util::semirings::{Complex, RealSemiring, Semiring},
 };
 use std::collections::HashMap;
 use std::slice;
@@ -169,7 +169,9 @@ unsafe extern "C" fn wmc_param_poly_set_weight(
     high_coeffs: *const f64,
     high_len: usize,
 ) {
-    if weights.is_null() { return; }
+    if weights.is_null() {
+        return;
+    }
 
     let low_poly = from_c_parts(low_coeffs, low_len);
     let high_poly = from_c_parts(high_coeffs, high_len);
@@ -183,7 +185,10 @@ unsafe extern "C" fn wmc_param_poly_var_weight(
     var: u64,
 ) -> WeightPoly {
     if weights.is_null() {
-        return WeightPoly { low: std::ptr::null_mut(), high: std::ptr::null_mut() };
+        return WeightPoly {
+            low: std::ptr::null_mut(),
+            high: std::ptr::null_mut(),
+        };
     }
 
     let (l, h) = (*weights).var_weight(VarLabel::new(var));
@@ -192,12 +197,19 @@ unsafe extern "C" fn wmc_param_poly_var_weight(
     let low_ptr = Box::into_raw(Box::new(*l));
     let high_ptr = Box::into_raw(Box::new(*h));
 
-    WeightPoly { low: low_ptr, high: high_ptr }
+    WeightPoly {
+        low: low_ptr,
+        high: high_ptr,
+    }
 }
 
 #[no_mangle]
 unsafe extern "C" fn polynomial_len(p: *mut PolyWeight) -> usize {
-    if p.is_null() { 0 } else { (*p).len }
+    if p.is_null() {
+        0
+    } else {
+        (*p).len
+    }
 }
 
 #[no_mangle]
@@ -206,7 +218,9 @@ unsafe extern "C" fn polynomial_get_coeffs(
     buffer: *mut f64,
     max_len: usize,
 ) -> usize {
-    if p.is_null() || buffer.is_null() { return 0; }
+    if p.is_null() || buffer.is_null() {
+        return 0;
+    }
 
     let poly = &(*p);
     let count = poly.len.min(max_len);

@@ -320,12 +320,11 @@ mod test_bdd_builder {
             let cnf_cond = c.condition(Literal::new(cond_var, true));
             let bdd1 = builder.condition(cnf, cond_var, true);
             let bdd2 = builder.compile_cnf(&cnf_cond);
-            println!("cnf: {}\ncond var: {:?}\ncond cnf: {}\ncond cnf debug: {:?}\ncond bdd: {}\ncond cnf bdd: {}\neq? {}\n", 
+            println!("cnf: {}\ncond var: {:?}\ncond cnf: {}\ncond cnf debug: {:?}\ncond bdd: {}\ncond cnf bdd: {}\neq? {}\n",
                 c, cond_var, cnf_cond, cnf_cond, bdd1.to_string_debug(), bdd2.to_string_debug(), bdd1 == bdd2);
             bdd1 == bdd2
         }
     }
-
 
     quickcheck! {
         /// check that every node in the BDD has a unique semantic hash
