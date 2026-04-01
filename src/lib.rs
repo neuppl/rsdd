@@ -22,6 +22,7 @@ pub mod plan;
 pub mod repr;
 pub mod serialize;
 
+
 #[cfg(target_arch = "wasm32")]
 pub mod wasm;
 

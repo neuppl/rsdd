@@ -24,7 +24,6 @@ pub use self::dtree::*;
 pub use self::logical_expr::*;
 pub use self::model::*;
 pub use self::sdd::*;
-pub use self::sdd::*;
 pub use self::unit_prop::*;
 pub use self::var_label::*;
 pub use self::var_order::*;

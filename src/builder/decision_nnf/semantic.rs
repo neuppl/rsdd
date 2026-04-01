@@ -75,7 +75,7 @@ impl<'a, const P: u128> SemanticDecisionNNFBuilder<'a, P> {
         }
     }
 
-    fn check_cached_hash_and_neg(&self, semantic_hash: FiniteField<P>) -> Option<BddPtr> {
+    fn check_cached_hash_and_neg(&self, semantic_hash: FiniteField<P>) -> Option<BddPtr<'_>> {
         // check regular hash
         let mut hasher = FxHasher::default();
         semantic_hash.value().hash(&mut hasher);
