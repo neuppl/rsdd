@@ -48,7 +48,7 @@ impl<'a> SddBuilder<'a> for CompressionSddBuilder<'a> {
     }
 
     #[inline]
-    fn ite_cache_get(&self, ite: Ite<SddPtr<'a>>, hash: u64) -> Option<SddPtr> {
+    fn ite_cache_get(&self, ite: Ite<SddPtr<'a>>, hash: u64) -> Option<SddPtr<'_>> {
         self.ite_cache.borrow().get(ite, hash)
     }
 
@@ -124,7 +124,7 @@ impl<'a> SddBuilder<'a> for CompressionSddBuilder<'a> {
         self.unique_or(node, table)
     }
 
-    fn node_iter(&self) -> Vec<SddPtr> {
+    fn node_iter(&self) -> Vec<SddPtr<'_>> {
         let binding = self.bdd_tbl.borrow_mut();
         let bdds = binding.iter().map(SddPtr::BDD);
         let binding = self.sdd_tbl.borrow_mut();

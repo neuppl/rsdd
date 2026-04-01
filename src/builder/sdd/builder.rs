@@ -28,12 +28,12 @@ pub trait SddBuilder<'a>: BottomUpBuilder<'a, SddPtr<'a>> {
     fn app_cache_insert(&self, and: SddAnd<'a>, ptr: SddPtr<'a>);
 
     fn ite_cache_hash(&self, ite: &Ite<SddPtr>) -> u64;
-    fn ite_cache_get(&self, ite: Ite<SddPtr<'a>>, hash: u64) -> Option<SddPtr>;
+    fn ite_cache_get(&self, ite: Ite<SddPtr<'a>>, hash: u64) -> Option<SddPtr<'_>>;
     fn ite_cache_insert(&self, ite: Ite<SddPtr<'a>>, res: SddPtr<'a>, hash: u64);
 
     fn get_or_insert_bdd(&'a self, bdd: BinarySDD<'a>) -> SddPtr<'a>;
     fn get_or_insert_sdd(&'a self, or: SddOr<'a>) -> SddPtr<'a>;
-    fn node_iter(&self) -> Vec<SddPtr>;
+    fn node_iter(&self) -> Vec<SddPtr<'_>>;
 
     // equality
     fn sdd_eq(&'a self, a: SddPtr<'a>, b: SddPtr<'a>) -> bool;

@@ -202,7 +202,7 @@ impl<'a> BddPtr<'a> {
     /// assert_eq!(BddPtr::Reg(&node), BddPtr::Compl(&node).to_reg());
     /// assert_eq!(BddPtr::Reg(&node), BddPtr::Reg(&node).to_reg());
     /// ```
-    pub fn to_reg(&self) -> BddPtr {
+    pub fn to_reg(&self) -> BddPtr<'_> {
         match &self {
             Compl(x) => Reg(x),
             Reg(x) => Reg(x),
