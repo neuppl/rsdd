@@ -18,8 +18,18 @@ unsafe extern "C" fn new_wmc_params_f64() -> *mut WmcParams<RealSemiring> {
 }
 
 #[no_mangle]
+unsafe extern "C" fn free_wmc_params_f64(weights: *mut WmcParams<RealSemiring>) {
+    drop(Box::from_raw(weights))
+}
+
+#[no_mangle]
 unsafe extern "C" fn new_wmc_params_complex() -> *mut WmcParams<Complex> {
     Box::into_raw(Box::new(WmcParams::new(HashMap::from([]))))
+}
+
+#[no_mangle]
+unsafe extern "C" fn free_wmc_params_complex(weights: *mut WmcParams<Complex>) {
+    drop(Box::from_raw(weights))
 }
 
 #[no_mangle]

@@ -231,7 +231,7 @@ unsafe extern "C" fn bdd_eq(
 /// free the BDD manager `mgr`
 #[no_mangle]
 unsafe extern "C" fn free_bdd_manager(mgr : *mut RsddBddBuilder) -> () {
-    drop(Box::from_raw(mgr));
+    drop(Box::from_raw(mgr.cast::<RobddBuilder<'static, AllIteTable<BddPtr>>>()))
 }
 
 
@@ -286,4 +286,3 @@ unsafe extern "C" fn bdd_wmc(bdd: *mut BddPtr, wmc: *mut WmcParams<RealSemiring>
 unsafe extern "C" fn bdd_wmc_complex(bdd: *mut BddPtr, wmc: *mut WmcParams<Complex>) -> Complex {
     DDNNFPtr::unsmoothed_wmc(&(*bdd), &(*wmc))
 }
-
