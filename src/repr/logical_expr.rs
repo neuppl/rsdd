@@ -2,7 +2,7 @@
 
 use crate::{repr::VarLabel, serialize::LogicalSExpr};
 use dimacs::*;
-use rand::{self, rngs::ThreadRng, Rng};
+use rand::{self, rngs::ThreadRng, RngExt};
 use std::collections::HashMap;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -156,7 +156,7 @@ impl LogicalExpr {
             if num_vars > 1 {
                 let mut var_vec: Vec<LogicalExpr> = Vec::new();
                 for _ in 0..clause_size {
-                    let var = vars.get(rng.gen_range(0..vars.len())).unwrap().clone();
+                    let var = vars.get(rng.random_range(0..vars.len())).unwrap().clone();
                     var_vec.push(var);
                 }
                 let l1 = var_vec.pop().unwrap();
@@ -168,7 +168,7 @@ impl LogicalExpr {
                     });
                 clause_vec.push(new_expr);
             } else {
-                let var = vars.get(rng.gen_range(0..vars.len())).unwrap().clone();
+                let var = vars.get(rng.random_range(0..vars.len())).unwrap().clone();
                 clause_vec.push(var);
             }
         }

@@ -271,7 +271,7 @@ fn test_sdd_is_canonical() {
 #[cfg(test)]
 mod test_bdd_builder {
     use quickcheck::TestResult;
-    use rand::Rng;
+    use rand::RngExt;
     use rsdd::builder::bdd::BddBuilder;
     use rsdd::builder::bdd::RobddBuilder;
     use rsdd::builder::cache::AllIteTable;
@@ -320,12 +320,11 @@ mod test_bdd_builder {
             let cnf_cond = c.condition(Literal::new(cond_var, true));
             let bdd1 = builder.condition(cnf, cond_var, true);
             let bdd2 = builder.compile_cnf(&cnf_cond);
-            println!("cnf: {}\ncond var: {:?}\ncond cnf: {}\ncond cnf debug: {:?}\ncond bdd: {}\ncond cnf bdd: {}\neq? {}\n", 
+            println!("cnf: {}\ncond var: {:?}\ncond cnf: {}\ncond cnf debug: {:?}\ncond bdd: {}\ncond cnf bdd: {}\neq? {}\n",
                 c, cond_var, cnf_cond, cnf_cond, bdd1.to_string_debug(), bdd2.to_string_debug(), bdd1 == bdd2);
             bdd1 == bdd2
         }
     }
-
 
     quickcheck! {
         /// check that every node in the BDD has a unique semantic hash
@@ -596,8 +595,8 @@ mod test_bdd_builder {
             let cnf = builder.compile_cnf(&c1);
 
             // randomizing the decisions
-            let mut rng = rand::thread_rng();
-            let decisions : Vec<VarLabel> = (0..3).map(|_| VarLabel::new(rng.gen_range(0..(n-2)) as u64)).collect();
+            let mut rng = rand::rng();
+            let decisions : Vec<VarLabel> = (0..3).map(|_| VarLabel::new(rng.random_range(0..(n-2)) as u64)).collect();
             if decisions[0] == decisions[1] || decisions[1] == decisions[2] || decisions[0] == decisions[2] {
                 return TestResult::discard()
             }
@@ -608,7 +607,7 @@ mod test_bdd_builder {
             }
 
             // weight function and weight map
-            let probs : Vec<f64> = (0..n).map(|_| rng.gen_range(0.0..1.0)).collect();
+            let probs : Vec<f64> = (0..n).map(|_| rng.random_range(0.0..1.0)).collect();
             let weight_fn = |x : usize| -> (VarLabel, (ExpectedUtility, ExpectedUtility)) {
                 let vx = VarLabel::new(x as u64);
                 if vx == decisions[0] || vx == decisions[1] || vx == decisions[2] {

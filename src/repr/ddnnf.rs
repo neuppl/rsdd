@@ -7,8 +7,8 @@ use crate::{
     },
     util::semirings::{BooleanSemiring, FiniteField, Semiring},
 };
-use rand::{Rng, SeedableRng};
-use rand_chacha::ChaCha8Rng;
+use rand::RngExt;
+use rand_chacha::{rand_core::SeedableRng, ChaCha8Rng};
 use std::{collections::HashMap, fmt::Debug, hash::Hash};
 
 /// creates a weighting that can be used for semantically hashing a DDNNF node
@@ -29,7 +29,7 @@ pub fn create_semantic_hash_map<const P: u128>(num_vars: usize) -> WmcParams<Fin
 
     let value_range: Vec<(FiniteField<P>, FiniteField<P>)> = (0..vars.len() as u128)
         .map(|_| {
-            let h = FiniteField::new(rng.gen_range(2..P));
+            let h = FiniteField::new(rng.random_range(2..P));
             let l = FiniteField::new(P - h.value() + 1);
             (l, h)
         })

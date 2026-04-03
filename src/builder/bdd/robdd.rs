@@ -82,7 +82,6 @@ impl<'a, T: IteTable<'a, BddPtr<'a>> + Default> BddBuilder<'a> for RobddBuilder<
         r
     }
 
-    
     fn cond_helper(&'a self, bdd: BddPtr<'a>, lbl: VarLabel, value: bool) -> BddPtr<'a> {
         // bdd.clear_scratch();
         let r = self.cond_with_alloc(bdd, lbl, value, &mut HashMap::new());
@@ -194,16 +193,8 @@ impl<'a, T: IteTable<'a, BddPtr<'a>> + Default> RobddBuilder<'a, T> {
 
                 // check cache
                 match cache.get(&bdd) {
-                    None => {
-                        ()
-                    },
-                    Some(v) => {
-                        return if bdd.is_neg() {
-                            v.neg()
-                        } else {
-                            *v
-                        }
-                    }
+                    None => (),
+                    Some(v) => return if bdd.is_neg() { v.neg() } else { *v },
                 };
 
                 // recurse on the children

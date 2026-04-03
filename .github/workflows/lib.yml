@@ -7,10 +7,10 @@ jobs:
     strategy:
       matrix:
         include:
-          - os: macos-13
+          - os: macos-15-intel
             name: x86_64-macosx.dylib
             path: target/release/librsdd.dylib
-          - os: macos-14
+          - os: macos-15
             name: aarch64-macosx.dylib
             path: target/release/librsdd.dylib
           - os: windows-latest

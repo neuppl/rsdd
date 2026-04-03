@@ -11,7 +11,6 @@ use rsdd::{
 };
 
 use rand::seq::SliceRandom;
-use rand::thread_rng;
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
@@ -120,7 +119,7 @@ impl Iterator for RandomVarOrders {
 
         let mut order: Vec<VarLabel> = (0..self.vars).map(VarLabel::new).collect();
 
-        order.shuffle(&mut thread_rng());
+        order.shuffle(&mut rand::rng());
 
         Some(VarOrder::new(&order))
     }

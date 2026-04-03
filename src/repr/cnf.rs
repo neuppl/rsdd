@@ -11,7 +11,7 @@ use crate::{
 use petgraph::graph::NodeIndex;
 use petgraph::prelude::UnGraph;
 use quickcheck::{Arbitrary, Gen};
-use rand::{self, rngs::ThreadRng, Rng};
+use rand::{self, rngs::ThreadRng, RngExt};
 use std::{
     cmp::{max, min},
     collections::HashSet,
@@ -369,12 +369,12 @@ impl Cnf {
             if num_vars > 1 {
                 let mut var_vec: Vec<Literal> = Vec::new();
                 for _ in 0..clause_size {
-                    let var = *vars.get(rng.gen_range(0..vars.len())).unwrap();
+                    let var = *vars.get(rng.random_range(0..vars.len())).unwrap();
                     var_vec.push(var);
                 }
                 clause_vec.push(var_vec);
             } else {
-                let var = *vars.get(rng.gen_range(0..vars.len())).unwrap();
+                let var = *vars.get(rng.random_range(0..vars.len())).unwrap();
                 clause_vec.push(vec![var]);
             }
         }
@@ -552,16 +552,16 @@ impl Cnf {
 
     /// Updates the CNF to a new CNF that results from conditioning on the supplied literal
     pub fn condition(&self, lit: Literal) -> Cnf {
-        let mut new_cnf  : Vec<Vec<Literal>> = Vec::new();
+        let mut new_cnf: Vec<Vec<Literal>> = Vec::new();
         'cnf: for clause in self.clauses.iter() {
             let mut new_clause = Vec::new();
             'clause: for l in clause.iter() {
                 if l.label() == lit.label() && l.polarity() == lit.polarity() {
                     // skip over this whole clause
-                    continue 'cnf
+                    continue 'cnf;
                 } else if l.label() == lit.label() && l.polarity() != lit.polarity() {
-                    // skip over this literal 
-                    continue 'clause
+                    // skip over this literal
+                    continue 'clause;
                 } else {
                     // push the literal
                     new_clause.push(*l);
@@ -726,9 +726,7 @@ fn test_cnf_wmc() {
 
 #[test]
 fn test_cond() {
-    let v = vec![vec![
-        Literal::new(VarLabel::new(0), false),
-    ]];
+    let v = vec![vec![Literal::new(VarLabel::new(0), false)]];
     let cnf = Cnf::new(&v);
     println!("{:?}", cnf.condition(Literal::new(VarLabel::new(0), true)));
 }

@@ -1,6 +1,6 @@
 use crate::util::semirings::Semiring;
-use std::ops;
 use core::fmt::{self, Debug, Display};
+use std::ops;
 
 // Define a maximum degree (e.g., 32 coefficients).
 // This makes the struct size predictable and allows 'Copy'.
@@ -88,7 +88,8 @@ impl<C: Semiring + Copy> ops::Mul for Polynomial<C> {
         for i in 0..self.len {
             for j in 0..rhs.len {
                 if i + j < MAX_COEFFS {
-                    new_coeffs[i + j] = new_coeffs[i + j] + (self.coefficients[i] * rhs.coefficients[j]);
+                    new_coeffs[i + j] =
+                        new_coeffs[i + j] + (self.coefficients[i] * rhs.coefficients[j]);
                 }
             }
         }
