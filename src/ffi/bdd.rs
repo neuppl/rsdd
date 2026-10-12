@@ -180,6 +180,11 @@ unsafe extern "C" fn bdd_is_false(bdd: *mut BddPtr) -> bool {
 }
 
 #[no_mangle]
+unsafe extern "C" fn bdd_is_neg(bdd: *mut BddPtr) -> bool {
+    (*bdd).is_neg()
+}
+
+#[no_mangle]
 unsafe extern "C" fn bdd_is_const(bdd: *mut BddPtr) -> bool {
     (*bdd).is_const()
 }
